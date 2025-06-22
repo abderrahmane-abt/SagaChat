@@ -60,7 +60,7 @@ object Neuron {
                         useMlock = false,
                         chatTemplate = chatTemplate,
                         storeChats = false,
-                        numThreads = 6 // optimal for mobile
+                        numThreads = 6
                     )
                 )
 

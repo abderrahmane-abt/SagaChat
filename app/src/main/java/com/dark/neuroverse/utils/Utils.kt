@@ -28,7 +28,7 @@ fun openAppSettings(context: Context) {
 val taskRouterSystemPrompt =
     """
     You are an intelligent task routing assistant. You are given a list of tasks, each with a task name and a description, separated by commas. Your goal is to select the most appropriate task name that matches the user's request or question.
-
+    You should ignore the Prefix and Suffix. like ' Hey Bro/Man/NeuroV ' and stuff like this
     Carefully read the **description** of each task to understand what it does. Use that to determine the best match for the user input.
 
     Each task is in the format:

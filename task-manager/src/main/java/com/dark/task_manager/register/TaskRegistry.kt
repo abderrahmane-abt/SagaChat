@@ -26,7 +26,7 @@ object TaskRegistry {
         }
     }
 
-    fun startTask(taskName: String) {
+    fun startTask(taskName: String, data: Any) {
         val taskModel = tasks.find { it.taskInfo.taskName == taskName }
         if (taskModel == null) {
             println("Task '$taskName' not found.")
@@ -39,7 +39,7 @@ object TaskRegistry {
         }
 
         val job = scope.launch {
-            taskModel.taskApi.onRun("")
+            taskModel.taskApi.onRun(data)
         }
         jobMap[taskName] = job
     }

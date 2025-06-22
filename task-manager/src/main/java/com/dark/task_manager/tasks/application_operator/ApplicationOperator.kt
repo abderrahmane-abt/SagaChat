@@ -13,9 +13,14 @@ import kotlin.math.min
 class ApplicationOperator(context: Context) : TaskApi(context) {
 
     override fun getTaskInfo(): TaskInfo {
+
+        val apps = listApps(context)
+
+        val appListString = apps.joinToString(separator = ", ") { task -> task.appName }
+
         return TaskInfo(
             taskName = "Application Operator",
-            description = "Opens an app mentioned in the user's request",
+            description = "Opens apps mentioned by the user. Use this task when the user says things like 'Open Gmail', 'Launch YouTube', or simply 'Open an app'.",
             systemPrompt = """
                 System: You are an intent parser. Whenever the user’s message matches the pattern
 
@@ -32,18 +37,35 @@ class ApplicationOperator(context: Context) : TaskApi(context) {
 
     override fun onStart() {
         Log.d(getTaskInfo().taskName, "ApplicationTask started")
+
     }
 
     override fun onRun(any: Any) {
-        val input = any.toString()
-        val appInfo = findAppByName(context, input)
-        if (appInfo != null) {
-            launchApp(context, appInfo.packageName) {
-                Log.e(getTaskInfo().taskName, "Error launching app: $it")
+        Log.d(getTaskInfo().taskName, "Apps List = ${listApps(context)}")
+        val input = any.toString().lowercase()
+        val appNames = extractAppNames(input)
+
+        if (appNames.isEmpty()) {
+            Log.w(getTaskInfo().taskName, "No app names detected in input: $input")
+            return
+        }
+
+        val installedApps = listApps(context)
+
+        appNames.forEach { rawName ->
+            val matchedApp = fuzzyFindApp(installedApps, rawName)
+            if (matchedApp != null) {
+                launchApp(context, matchedApp.packageName) {
+                    Log.e(getTaskInfo().taskName, "Error launching app ${matchedApp.appName}: $it")
+                }
+            } else {
+                Log.w(getTaskInfo().taskName, "No match found for app name: $rawName")
             }
         }
-        Log.d(getTaskInfo().taskName, "ApplicationTask running")
+
+        Log.d(getTaskInfo().taskName, "ApplicationTask completed")
     }
+
 
     override fun onStop() {
         Log.d(getTaskInfo().taskName, "ApplicationTask stopped")
@@ -71,6 +93,36 @@ class ApplicationOperator(context: Context) : TaskApi(context) {
         }
     }
 
+    private fun extractAppNames(input: String): List<String> {
+        val openIndex = input.indexOf("open")
+        if (openIndex == -1) return emptyList()
+
+        val afterOpen = input.substring(openIndex + 4).trim()
+
+        // Split on "and", "&", "then", ",", and normalize
+        return afterOpen
+            .lowercase()
+            .replace("&", ",")
+            .replace(" and ", ",")
+            .replace(" then ", ",")
+            .replace(",", ", ")
+            .replace(" or ", ",")
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+    }
+
+
+    private fun fuzzyFindApp(apps: List<AppInfo>, name: String): AppInfo? {
+        val cleanedName = name.trim().lowercase()
+        return apps.minByOrNull {
+            levenshtein(it.appName.lowercase(), cleanedName)
+        }?.takeIf {
+            // Optional: threshold filter
+            levenshtein(it.appName.lowercase(), cleanedName) <= 3
+        }
+    }
+
     fun launchApp(context: Context, packageName: String, onError: (err: String) -> Unit) {
         val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
         if (launchIntent != null) {
@@ -78,21 +130,6 @@ class ApplicationOperator(context: Context) : TaskApi(context) {
         } else {
             onError("App not found")
         }
-    }
-
-    fun findAppByName(context: Context, inputName: String): AppInfo? {
-        val apps = listApps(context)
-        val cleanedInput = inputName.trim().lowercase()
-
-        // First try exact or contains match
-        val directMatch = apps.find {
-            it.appName.equals(cleanedInput, true) || it.appName.lowercase().contains(cleanedInput)
-        }
-
-        if (directMatch != null) return directMatch
-
-        // Then use Levenshtein distance for approximate match
-        return apps.minByOrNull { levenshtein(it.appName.lowercase(), cleanedInput) }
     }
 
     private fun levenshtein(lhs: String, rhs: String): Int {
