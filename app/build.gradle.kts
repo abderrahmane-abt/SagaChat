@@ -57,6 +57,7 @@ android {
 dependencies {
 
     //PROJECTS
+    implementation(project(":task-manager"))
     implementation(project(":ai-manager"))
     implementation(project(":smollm"))
 
@@ -88,7 +89,7 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.animation)
     implementation(libs.material)
-    
+
     //TESTING
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
