@@ -1,29 +1,24 @@
 package com.dark.ai_manager.ai.types
 
 enum class NeuronVariant( val modelName: String,  val  path: String,  val  systemPrompt: String){
-    NVRouter("nv-router", "/storage/emulated/0/Download/smollm2-360m-instruct-q8_0.gguf", NVRI),
+    NVRouter("nv-router", "/storage/emulated/0/Download/Kodify_Nano_q4_k_s.gguf", NVRI),
+    NVRunner("nv-router", "/storage/emulated/0/Download/unsloth.Q4_K_M.gguf", ""),
     NVGeneral("nv-general", "/storage/emulated/0/Download/smollm2-360m-instruct-q8_0.gguf", NVGI)
+
+
+
 }
 
 private val NVRI = """
-You are a JSON-only assistant.
+System: You are an intent parser. Whenever the user’s message matches the pattern
 
-Instructions:
-- Read the "query" and match it to one plugin from the "plugins_list".
-- Choose the closest plugin by description match.
-- Output only valid JSON. No comments, no newlines.
-- No nulls or missing fields.
-- Response must start with `{` and end with `}`.
+open <app_name>
 
-Response format:
-If matched:
-{"code":1,"plugin_name":"<name>","message":"Plugin matched"}
+respond exactly with:
 
-If not matched:
-{"code":0,"plugin_name":null,"message":"No plugin matched"}
+1:<app_name>
 
-Always respond with only this JSON.
-
+Do not add any extra words, punctuation, or formatting. The match should be case-insensitive and capture any app name following the word “open.”
 """.trimIndent()
 
 

@@ -59,56 +59,59 @@ object PluginRouter {
                 })
             }.toString()
 
+            scope.launch {
+                val temp = Neuron.generateResponseStreaming(prompt)
+                Log.d("PluginRouter", "AI Response: $temp")
+            }
+
 
             Log.e("PluginRouter", "Tool Call Input:\n$toolCallInput")  // ✅ correct logging
 
 
-            scope.launch {
-                val response = Neuron.generateResponseStreaming(toolCallInput)
-                    .substringBefore("<|im_end|>") // Clean trailing tokens if present
-                    .trim()
-
-                Log.d("PluginRouter", "AI Tool Response: $response")
-
-                // Optionally parse the JSON if you want structured access
-                try {
-                    val json = JSONObject(response)
-                    val code = json.getInt("code")
-                    val pluginName = json.getString("plugin_name")
-                    val reason = json.getString("message")
-
-
-                    when(code){
-                        0 -> {
-
-                        }
-                        1 -> {
-                            PluginManager.runPlugin(pluginName) { pluginInstance ->
-
-                                scope.launch {
-                                    val temp = Neuron.generateResponseStreaming(pluginInstance.submitAiRequest(prompt))
-                                    onPluginLoaded(temp)
-                                }
-
+//            scope.launch {
+//                PluginManager.runPlugin("List Applications Plugin") { pluginInstance ->
 //
-//                                AiRouter.processRequest(requestBody) { code2, response2 ->
-//                                    val view = pluginInstance.onAiResponse(JSONObject(response2))
-//                                    Log.d("PluginRouter", "Plugin view created.")
-//                                    cont.resume(view) { cause, _, _ -> null?.let { it(cause) } }
-//                                }
-                            }
-                        }
-                    }
-
-
-
-
-                    Log.d("PluginRouter", "AI Response: $response")
-                    Log.d("PluginRouter", "Code: $code \nPlugin Name: $pluginName \nReason: $reason")
-                } catch (e: Exception) {
-                    Log.e("PluginRouter", "Invalid JSON: $response", e)
-                }
-            }
+////                                AiRouter.processRequest(requestBody) { code2, response2 ->
+////                                    val view = pluginInstance.onAiResponse(JSONObject(response2))
+////                                    Log.d("PluginRouter", "Plugin view created.")
+////                                    cont.resume(view) { cause, _, _ -> null?.let { it(cause) } }
+////                                }
+//                }
+//
+//
+//
+////                val response = Neuron.generateResponseStreaming(toolCallInput)
+////                    .substringBefore("<|im_end|>") // Clean trailing tokens if present
+////                    .trim()
+////
+////                Log.d("PluginRouter", "AI Tool Response: $response")
+////
+////                // Optionally parse the JSON if you want structured access
+////                try {
+////                    val json = JSONObject(response)
+////                    val code = json.getInt("code")
+////                    val pluginName = json.getString("plugin_name")
+////                    val reason = json.getString("message")
+////
+////
+////                    when(1){
+////                        0 -> {
+////
+////                        }
+////                        1 -> {
+////
+////                        }
+////                    }
+////
+////
+////
+////
+////                    Log.d("PluginRouter", "AI Response: $response")
+////                    Log.d("PluginRouter", "Code: $code \nPlugin Name: $pluginName \nReason: $reason")
+////                } catch (e: Exception) {
+////                    Log.e("PluginRouter", "Invalid JSON: $response", e)
+////                }
+//            }
 
 
 

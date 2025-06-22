@@ -40,7 +40,11 @@ open class Plugin(protected val context: Context)  {
      *
      * @return A [JSONObject] containing the AI request payload.
      */
-    open fun submitAiRequest(prompt: String): String {
+    open fun getChatTemplate(): String {
+        return ""
+    }
+
+    open fun getSystemPrompt(): String {
         return ""
     }
 

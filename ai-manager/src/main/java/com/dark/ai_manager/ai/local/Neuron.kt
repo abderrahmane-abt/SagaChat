@@ -1,8 +1,10 @@
 package com.dark.ai_manager.ai.local
 
+import android.hardware.biometrics.BiometricPrompt
 import android.util.Log
 import com.dark.ai_manager.ai.types.NeuronVariant
 import io.shubham0204.smollm.SmolLM
+import io.shubham0204.smollm.SmolLM.DefaultInferenceParams
 import io.shubham0204.smollm.SmolLM.InferenceParams
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,8 +36,10 @@ object Neuron {
 
     fun loadModel(
         variant: NeuronVariant,
-        contextLength: Long = 1024,
+        contextLength: Long = 8024,
+        chatTemplate: String? = null,
         forceReload: Boolean = false,
+        systemPrompt: String? = null,
         onLoaded: (() -> Unit)? = null // Optional callback
     ) {
 
@@ -63,12 +67,13 @@ object Neuron {
                         contextSize = contextLength,
                         useMmap = true,
                         useMlock = false,
+                        chatTemplate = chatTemplate,
                         storeChats = false,
                         numThreads = 6 // optimal for mobile
                     )
                 )
 
-                model.addSystemPrompt(variant.systemPrompt)
+                model.addSystemPrompt(systemPrompt ?: variant.systemPrompt)
 
                 withContext(Dispatchers.Main) {
                     onLoaded?.invoke()
@@ -112,7 +117,7 @@ object Neuron {
         return responseStr
     }
 
-    suspend fun generateResponseStreaming(input: String): String {
+    suspend fun generateResponseStreaming(input: String? = null): String {
         val variant = activeVariant ?: error("No active variant selected.")
         val modelEntry = modelInstances[variant.modelName] ?: error("Model not loaded.")
 
@@ -129,7 +134,6 @@ object Neuron {
         // Collect streaming pieces
         outputFlow.collect { piece ->
             fullResponse.append(piece)
-            Log.d("NeuronStreaming", "Piece: $piece") // <- You’ll now see streaming parts
         }
 
         val responseStr = fullResponse.toString().trim()

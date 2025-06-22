@@ -137,18 +137,8 @@ class SmolLM {
      */
     object DefaultInferenceParams {
         val contextSize: Long = 1024L
-        val chatTemplate: String = """
-{% set instruction = "You are a JSON bot.\n\nInstructions:\n- Match the Query with the most suitable plugin from the list.\n- Use plugin descriptions to find the best match.\n- Respond ONLY in JSON format.\n- No extra text, comments, or newlines.\n- Always begin with `{` and end with `}`.\n- Do not return null fields. Fill every field.\n\nIf a plugin matches:\n{\"code\":1,\"plugin_name\":\"<name>\",\"message\":\"Plugin matched\"}\n\nIf no suitable match:\n{\"code\":0,\"plugin_name\":null,\"message\":\"No plugin matched\"}" %}
-{{ '<|im_start|>system ' + instruction + '<|im_end|>\n' }}
-{% for message in messages %}
-{{ '<|im_start|>' + message['role'] + ' ' + message['content'] + '<|im_end|>\n' }}
-{% endfor %}
-{% if add_generation_prompt %}
-{{ '<|im_start|>assistant ' }}
-{% endif %}
-
-""".trimIndent()
-
+        val chatTemplate: String =
+            "{% for message in messages %}{% if loop.first and messages[0]['role'] != 'system' %}{{ '<|im_start|>system You are a helpful AI assistant named SmolLM, trained by Hugging Face<|im_end|> ' }}{% endif %}{{'<|im_start|>' + message['role'] + ' ' + message['content'] + '<|im_end|>' + ' '}}{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant ' }}{% endif %}"
     }
 
     /**
@@ -210,8 +200,8 @@ class SmolLM {
         ggufReader.load(modelPath)  // <- Don't wrap again
 
         val modelContextSize = DefaultInferenceParams.contextSize
-        val modelChatTemplate =  DefaultInferenceParams.chatTemplate
-        //ggufReader.getChatTemplate() ?:
+        val modelChatTemplate =  ggufReader.getChatTemplate() ?: DefaultInferenceParams.chatTemplate
+
         try {
             nativePtr = loadModel(
                 modelPath,
