@@ -59,8 +59,6 @@ dependencies {
 
     //PROJECTS
     implementation(project(":ai-manager"))
-    implementation(project(":plugin-api"))
-    implementation(project(":plugin-runtime"))
     implementation(project(":smollm"))
 
     implementation("com.google.accompanist:accompanist-insets:0.30.1")

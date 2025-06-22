@@ -12,8 +12,6 @@
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/ai-manager" />
             <option value="$PROJECT_DIR$/app" />
-            <option value="$PROJECT_DIR$/plugin-api" />
-            <option value="$PROJECT_DIR$/plugin-runtime" />
             <option value="$PROJECT_DIR$/smollm" />
           </set>
         </option>
