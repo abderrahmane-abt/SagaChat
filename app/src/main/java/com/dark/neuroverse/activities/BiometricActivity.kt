@@ -27,21 +27,23 @@ class BiometricActivity : FragmentActivity() {
 
         Log.d("BiometricActivity", "Started biometric authentication")
 
-        CoroutineScope(Dispatchers.Main).launch {
-            UserPrefs.isOnboardingComplete(context).collect {
-                when (it) {
-                    true -> {
-                        auth()
-                    }
+        startActivity(Intent(this@BiometricActivity, MainActivity::class.java))
+        finish()
 
-                    false -> {
-                        startActivity(Intent(this@BiometricActivity, SetUpActivity::class.java))
-                        finish()
-                    }
-
-                }
-            }
-        }
+//        CoroutineScope(Dispatchers.Main).launch {
+//            UserPrefs.isOnboardingComplete(context).collect {
+//                when (it) {
+//                    true -> {
+//                        auth()
+//                    }
+//
+//                    false -> {
+//                        startActivity(Intent(this@BiometricActivity, SetUpActivity::class.java))
+//                        finish()
+//                    }
+//                }
+//            }
+//        }
     }
 
     private fun auth() {
@@ -53,7 +55,8 @@ class BiometricActivity : FragmentActivity() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                     super.onAuthenticationSucceeded(result)
                     Log.d("BiometricActivity", "Authentication succeeded")
-
+                    startActivity(Intent(this@BiometricActivity, MainActivity::class.java))
+                    finish()
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
