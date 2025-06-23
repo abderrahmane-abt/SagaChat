@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.kapt)
+    kotlin("plugin.serialization") version "2.1.21"
 }
 
 android {
@@ -60,6 +61,7 @@ dependencies {
     implementation(project(":task-manager"))
     implementation(project(":ai-manager"))
     implementation(project(":smollm"))
+    implementation(project(":userData"))
 
     //DATABASE
     implementation(libs.androidx.room.runtime)
@@ -69,6 +71,7 @@ dependencies {
     //UTILS
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.biometric)
+    implementation(libs.kotlinx.serialization.json)
 
     //KTX
     implementation(libs.androidx.lifecycle.runtime.ktx)

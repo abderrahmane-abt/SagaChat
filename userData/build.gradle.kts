@@ -1,34 +1,17 @@
-import java.io.FileInputStream
-import java.util.Properties
-import kotlin.apply
-
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
-    kotlin("plugin.serialization") version "2.1.21"
 }
 
 android {
-    namespace = "com.dark.ai_manager"
+    namespace = "com.dark.userdata"
     compileSdk = 36
 
     defaultConfig {
-        minSdk = 33
 
+        minSdk = 28
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
-
-        val localPropertiesFile = rootProject.file("local.properties")
-        val apiKey = if (localPropertiesFile.exists()) {
-            val localProps = Properties().apply {
-                load(FileInputStream(localPropertiesFile))
-            }
-            localProps.getProperty("API_KEY") ?: "sample_dev_key"
-        } else {
-            System.getenv("API_KEY") ?: "sample_dev_key"
-        }
-
-        buildConfigField("String", "API_KEY", apiKey)
     }
 
     buildTypes {
@@ -44,19 +27,16 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-    buildFeatures{
-        buildConfig = true
-    }
     kotlinOptions {
         jvmTarget = "11"
     }
 }
 
 dependencies {
-    //API
-    implementation(project(":smollm"))
+    implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.material3)
+    implementation(libs.androidx.appcompat)
+    implementation(libs.material)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

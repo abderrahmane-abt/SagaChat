@@ -31,6 +31,13 @@
         android:roundIcon="@mipmap/ic_launcher_monochrome"
         android:supportsRtl="true"
         android:theme="@style/Theme.NeuroVerse">
+
+        <activity android:name=".activities.BrainViewerActivity"
+            android:exported="true"
+            android:enabled="true">
+        </activity>
+
+
         <activity
             android:name=".activities.BiometricActivity"
             android:exported="true"

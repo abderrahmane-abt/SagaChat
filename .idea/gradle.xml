@@ -14,6 +14,7 @@
             <option value="$PROJECT_DIR$/app" />
             <option value="$PROJECT_DIR$/smollm" />
             <option value="$PROJECT_DIR$/task-manager" />
+            <option value="$PROJECT_DIR$/userData" />
           </set>
         </option>
       </GradleProjectSettings>

@@ -1,22 +1,18 @@
-package com.dark.ai_manager.ai.neuron_tree
+package com.dark.userdata.neuron_tree
+
+import kotlinx.serialization.Serializable
+import java.util.UUID
 
 /**
  * Represents a basic node within the NeuronTree structure.
  * Each node can store data, maintain children, and respond to data requests.
  */
+@Serializable
 open class NeuronNode(
-    val id: String,                    // Unique identifier for the node (must be unique across tree)
-    internal val data: Any,            // Flexible data stored in the node (e.g., String, Object)
+    val id: String = UUID.randomUUID().toString(), // Unique identifier for the node (must be unique across tree)
+    val data: String,            // Flexible data stored in the node (e.g., String, Object)
     internal val children: MutableList<NeuronNode> = mutableListOf()  // Child nodes of this node
 ) {
-
-    /**
-     * Returns the data stored in this node.
-     * Example:
-     * val node = NeuronNode("id", "User Data")
-     * println(node.getData()) // Outputs: User Data
-     */
-    open fun getData(): Any = data
 
     /**
      * Returns a list of child nodes attached to this node.
@@ -41,7 +37,7 @@ open class NeuronNode(
      * Example:
      * println(node.onDataRequested("status"))
      */
-    open fun onDataRequested(request: String): Any? {
+    open fun onDataRequested(request: String): String? {
         return data
     }
 }

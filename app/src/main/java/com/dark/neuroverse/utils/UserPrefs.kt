@@ -1,11 +1,16 @@
 package com.dark.neuroverse.utils
 
 import android.content.Context
+import android.util.Base64
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import javax.crypto.SecretKey
+import javax.crypto.spec.SecretKeySpec
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
@@ -16,6 +21,7 @@ object UserPrefs {
         booleanPreferencesKey("artificial_grendel_understanding")
 
     private val IS_ONBOARDING_COMPLETE_KEY = booleanPreferencesKey("is_onboarding_complete")
+    private val KAY = stringPreferencesKey("kay")
 
     fun isTermsAccepted(context: Context): Flow<Boolean> {
         return context.dataStore.data.map { it[TERMS_ACCEPTED_KEY] == true }
@@ -39,6 +45,19 @@ object UserPrefs {
 
     suspend fun setAGU(context: Context, enabled: Boolean) {
         context.dataStore.edit { it[ARTIFICIAL_GRENDEL_UNDERSTANDING_KEY] = enabled }
+    }
+
+    suspend fun UserPrefs.saveSecretKey(context: Context, key: SecretKey) {
+        val encodedKey = Base64.encodeToString(key.encoded, Base64.DEFAULT)
+        context.dataStore.edit { it[KAY] = encodedKey }
+    }
+
+    suspend fun loadSecretKey(context: Context): SecretKey? {
+        val encodedKey = context.dataStore.data.map { it[KAY] ?: "" }.first()
+        if (encodedKey.isEmpty()) return null
+
+        val decodedKey = Base64.decode(encodedKey, Base64.DEFAULT)
+        return SecretKeySpec(decodedKey, "AES")
     }
 
     fun isOnboardingComplete(context: Context): Flow<Boolean> {

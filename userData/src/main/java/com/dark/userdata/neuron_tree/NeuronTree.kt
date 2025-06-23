@@ -1,4 +1,6 @@
-package com.dark.ai_manager.ai.neuron_tree
+package com.dark.userdata.neuron_tree
+
+import kotlinx.serialization.Serializable
 
 /**
  * Manages the entire NeuronTree structure with fast lookup and path indexing.
@@ -19,13 +21,14 @@ package com.dark.ai_manager.ai.neuron_tree
  * tree.printTree()
  * ```
  */
-class NeuronTree(root: NeuronNode) {
+@Serializable
+class NeuronTree(internal val root: NeuronNode) {
 
     /** Maps node ID to its unique path in the tree (e.g., root/0/1). */
     private val nodeIndex = mutableMapOf<String, String>()
 
     /** Maps node ID to the actual NeuronNode reference for fast access. */
-    private val nodeMap = mutableMapOf<String, NeuronNode>()
+    internal val nodeMap = mutableMapOf<String, NeuronNode>()
 
     init {
         indexNode(root, "root")
@@ -121,4 +124,14 @@ class NeuronTree(root: NeuronNode) {
             printNodeRecursive(child, depth + 1)
         }
     }
+
+
+    /**
+     * Recursively prints nodes ID's.
+     */
+    fun printAllIds() {
+        println("Registered Node IDs:")
+        nodeMap.keys.forEach { println(it) }
+    }
+
 }
