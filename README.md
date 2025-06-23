@@ -4,7 +4,6 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Built%20With-Kotlin%20%7C%20Jetpack%20Compose-purple" />
-  <img src="https://img.shields.io/badge/AI-OpenRouter%20API-black" />
 </p>
 
 ---
