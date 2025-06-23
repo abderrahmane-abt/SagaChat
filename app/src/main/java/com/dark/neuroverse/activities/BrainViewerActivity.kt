@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -33,11 +36,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.dark.neuroverse.data.UserData
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.userdata.collectAllNodes
 import com.dark.userdata.getBrainFilePath
 import com.dark.userdata.getOrCreateHardwareBackedAesKey
 import com.dark.userdata.loadEncryptedTree
+import com.dark.userdata.neuron_tree.NeuronNode
 import com.dark.userdata.neuron_tree.NeuronTree
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -50,20 +55,12 @@ class BrainViewerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        val filePath = intent.getStringExtra("brain_file_path")
-        if (filePath.isNullOrEmpty()) {
-            Toast.makeText(this, "Invalid file provided", Toast.LENGTH_SHORT).show()
-            finish()
-            return
-        }
-
         setContent {
             NeuroVerseTheme {
                 Scaffold(topBar = {
                     TopAppBar(title = { Text("Brain Viewer") })
                 }) { padding ->
-                    BrainScreen(padding, filePath)
+                    BrainScreen(padding)
                 }
             }
         }
@@ -71,20 +68,20 @@ class BrainViewerActivity : ComponentActivity() {
 }
 
 @Composable
-fun BrainScreen(paddingValues: PaddingValues, filePath: String) {
+fun BrainScreen(paddingValues: PaddingValues) {
 
     val context = LocalContext.current
-    var nodeList by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
-
-    val key = getOrCreateHardwareBackedAesKey()
+    var nodeList by remember { mutableStateOf<List<NeuronNode>>(emptyList()) }
+    val brainFile = getBrainFilePath(context)
 
     LaunchedEffect(Unit) {
-        val nodeTree: NeuronTree? = loadEncryptedTree(getBrainFilePath(context), key)
+        val key = getOrCreateHardwareBackedAesKey()
+        val nodeTree: NeuronTree? = loadEncryptedTree(brainFile, key)
 
-        CoroutineScope(Dispatchers.IO).async {
-            nodeTree?.collectAllNodes()?.forEach {
-                nodeList += Pair(it.id, it.data.toString())
-                Log.d("NeuronTree", "ID=${it.id}, Data=${it.data}")
+        nodeTree?.collectAllNodes()?.let {
+            nodeList = it
+            it.forEach { node ->
+                Log.d("NeuronTree", "ID=${node.id}, Data=${node.data.content}, Type=${node.data.type}")
             }
         }
     }
@@ -97,7 +94,7 @@ fun BrainScreen(paddingValues: PaddingValues, filePath: String) {
     ) {
         Text("Opened File:", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(4.dp))
-        Text(filePath, style = MaterialTheme.typography.bodySmall)
+        Text(brainFile.canonicalPath, style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(16.dp))
 
         if (nodeList.isEmpty()) {
@@ -105,19 +102,27 @@ fun BrainScreen(paddingValues: PaddingValues, filePath: String) {
                 Text("No data found or failed to decrypt.")
             }
         } else {
-            LazyColumn {
-                items(nodeList) { (id, data) ->
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 160.dp),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(12.dp)
+            ) {
+                items(nodeList) { node ->
                     Card(
                         Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 12.dp),
+                            .padding(8.dp)
+                            .fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        elevation = CardDefaults.cardElevation(0.dp)
+                        elevation = CardDefaults.cardElevation(4.dp)
                     ) {
                         Column(Modifier.padding(12.dp)) {
-                            Text("Node ID: $id", style = MaterialTheme.typography.titleSmall)
+                            Text("ID: ${node.id}", style = MaterialTheme.typography.titleSmall)
                             Spacer(Modifier.height(4.dp))
-                            Text("Data: $data", style = MaterialTheme.typography.bodyMedium)
+                            Text("Content: ${node.data.content}", style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(2.dp))
+                            Text("Type: ${node.data.type}", style = MaterialTheme.typography.bodySmall)
+                            Spacer(Modifier.height(2.dp))
+                            Text("Children: ${node.getChildNodes().size}", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }

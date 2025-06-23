@@ -1,11 +1,19 @@
 package com.dark.neuroverse.compose.screens.temp
 
 import android.content.Intent
-import android.util.Log
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -14,10 +22,13 @@ import com.dark.userdata.getOrCreateHardwareBackedAesKey
 import com.dark.userdata.memoryMapFile
 import com.dark.userdata.neuron_tree.NeuronNode
 import com.dark.userdata.neuron_tree.NeuronTree
+import com.dark.userdata.neuron_tree.NodeData
+import com.dark.userdata.neuron_tree.NodeType
 import com.dark.userdata.saveEncryptedTree
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.UUID
 import kotlin.system.measureTimeMillis
 
 @Composable
@@ -40,30 +51,36 @@ fun NeuronTreeScreen(paddingValues: PaddingValues) {
 
                 val key = getOrCreateHardwareBackedAesKey(keyAlias)
 
-                val root = NeuronNode("root", "Root Data")
+                val root = NeuronNode("root", NodeData("Root Node Data", NodeType.ROOT))
                 val tree = NeuronTree(root)
 
-                val totalNodes = 100_00
+                val totalNodes = 10  // Adjust for your testing
 
                 val add = measureTimeMillis {
                     repeat(totalNodes) { index ->
-                        if (index % 500 == 0) {
+                        if (index % 100 == 0) {
                             currentProgress = "Adding Node $index"
                         }
-                        if (index == 20) {
-                            val node = NeuronNode(
+
+                        val node = if (index == 20) {
+                            NeuronNode(
                                 "nodeU",
-                                "Unique Node"
+                                NodeData(
+                                    "Unique Special Node with ID=${UUID.randomUUID()}",
+                                    NodeType.HOLDER
+                                )
                             )
-                            tree.addChild("root", node)
+                        } else {
+                            NeuronNode(
+                                "node-$index",
+                                NodeData(generateRandomData(128), randomNodeType())
+                            )
                         }
-                        val node = NeuronNode(
-                            "node-$index",
-                            "Data $index - Large payload simulating real-world data."
-                        )
+
                         tree.addChild("root", node)
                     }
                 }
+
                 addTime = add
 
                 currentProgress = "Encrypting & Saving..."
@@ -80,6 +97,7 @@ fun NeuronTreeScreen(paddingValues: PaddingValues) {
 
                 currentProgress = "Completed"
             }
+
         }) {
             Text("Start NeuronTree Test")
         }
@@ -101,3 +119,16 @@ fun NeuronTreeScreen(paddingValues: PaddingValues) {
         }
     }
 }
+
+fun generateRandomData(length: Int): String {
+    val allowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+    return (1..length)
+        .map { allowedChars.random() }
+        .joinToString("")
+}
+
+fun randomNodeType(): NodeType {
+    val types = NodeType.entries.filter { it != NodeType.ROOT }
+    return types.random()
+}
+
