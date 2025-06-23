@@ -22,11 +22,8 @@
 * **Offline-First Privacy**
   Your data never leaves your device. Memory, tasks, and processing are handled offline.
 
-* **Modular Plugin System**
-  Extend functionality using isolated plugins. Plugins can automate apps, execute system actions, or add new capabilities.
-
 * **Dynamic Task System**
-  Tasks respond to AI-generated commands, user triggers, or voice input. Toggle tasks on or off as needed.
+  Tasks respond to AI-generated commands, user triggers
 
 * **Advanced UI**
   Modern design with Jetpack Compose and Material 3.
@@ -36,6 +33,7 @@
 
     * Native Text-to-Speech (TTS)
     * Offline Speech-to-Text (STT)
+    * Toggle tasks on or off as needed
     * Expanded Task library
     * Automated, sandboxed web browser with enhanced privacy
 
