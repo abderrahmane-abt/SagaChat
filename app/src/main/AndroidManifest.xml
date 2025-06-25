@@ -37,6 +37,22 @@
             android:enabled="true">
         </activity>
 
+        <service
+            android:name="com.dark.task_manager.services.NotificationListener"
+            android:label="@string/service_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="false">
+
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+
+            <!-- Optional: Only listen to specific notification types -->
+            <meta-data
+                android:name="android.service.notification.default_filter_types"
+                android:value="conversations" />
+        </service>
+
 
         <activity
             android:name=".activities.BiometricActivity"

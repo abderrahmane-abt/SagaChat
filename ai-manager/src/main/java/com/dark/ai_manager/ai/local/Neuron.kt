@@ -1,7 +1,7 @@
 package com.dark.ai_manager.ai.local
 
 import android.util.Log
-import com.dark.ai_manager.ai.types.NeuronVariant
+import com.dark.ai_manager.ai.local.NeuronVariant
 import io.shubham0204.smollm.SmolLM
 import io.shubham0204.smollm.SmolLM.InferenceParams
 import kotlinx.coroutines.CoroutineScope
@@ -37,7 +37,7 @@ object Neuron {
         val file = File(variant.path)
         Log.d("Neuron", "Model file exists=${file.exists()}, size=${file.length()}")
 
-        require(file.exists()) { "Model file does not exist at path: \${variant.path}" }
+        require(file.exists()) { "Model file does not exist at path: ${variant.path}" }
 
         // If already loaded, skip unless forceReload is true
         if (!forceReload && modelInstances.containsKey(variant.modelName)) {
@@ -102,7 +102,7 @@ object Neuron {
         return responseStr
     }
 
-    suspend fun generateResponseStreaming(input: String): String {
+    suspend fun generateResponseStreaming(input: String, onTokenReceived: (String) -> Unit): String {
         val variant = activeVariant ?: error("No active variant selected.")
         val modelEntry = modelInstances[variant.modelName] ?: error("Model not loaded.")
 
@@ -118,6 +118,7 @@ object Neuron {
 
         // Collect streaming pieces
         outputFlow.collect { piece ->
+            onTokenReceived(piece)
             fullResponse.append(piece)
         }
 

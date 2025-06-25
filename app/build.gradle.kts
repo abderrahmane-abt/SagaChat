@@ -5,7 +5,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.kotlin.kapt)
+    alias(libs.plugins.kotlin.ksp)
     kotlin("plugin.serialization") version "2.1.21"
 }
 
@@ -65,8 +65,7 @@ dependencies {
 
     //DATABASE
     implementation(libs.androidx.room.runtime)
-    //noinspection KaptUsageInsteadOfKsp
-    kapt(libs.androidx.room.compiler)
+    ksp(libs.androidx.room.compiler)
 
     //UTILS
     implementation(libs.androidx.datastore.preferences)

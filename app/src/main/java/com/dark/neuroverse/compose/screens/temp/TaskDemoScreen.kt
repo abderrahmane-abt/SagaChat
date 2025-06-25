@@ -1,5 +1,6 @@
 package com.dark.neuroverse.compose.screens.temp
 
+import android.content.Intent
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -7,7 +8,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -18,18 +18,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.dark.ai_manager.ai.local.Neuron
-import com.dark.neuroverse.utils.taskRouterSystemPrompt
+import com.dark.task_manager.data.taskRouterSystemPrompt
 import com.dark.task_manager.register.TaskRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-
 @Composable
 fun TaskDemoScreen(paddingValues: PaddingValues) {
     var text by remember { mutableStateOf("Hey Bro Open Chrome") }
+    var response by remember { mutableStateOf("") }
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -48,6 +51,13 @@ fun TaskDemoScreen(paddingValues: PaddingValues) {
         )
 
         Button(onClick = {
+            context.startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
+        }) {
+            Text("Open Notification")
+        }
+
+        Button(onClick = {
+            response = ""
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val userPrompt = text
@@ -71,12 +81,15 @@ fun TaskDemoScreen(paddingValues: PaddingValues) {
                         appendLine("User Prompt: $userPrompt")
                     }
 
-                    val response = Neuron.generateResponseStreaming(input)
+                    val data = Neuron.generateResponseStreaming(input) {
+                        response = response + it
+                    }
 
                     Log.d("TaskDemoScreen", "UserPrompt: $userPrompt")
-                    Log.d("TaskDemoScreen", "Response: $response")
+                    Log.d("TaskDemoScreen", "Response: $data")
 
-                    TaskRegistry.startTask(response, userPrompt)
+
+                    //   TaskRegistry.startTask(response, userPrompt)
                 } catch (e: Exception) {
                     println("Error loading model: ${e.message}")
                 }
@@ -84,6 +97,9 @@ fun TaskDemoScreen(paddingValues: PaddingValues) {
         }) {
             Text("Run Task")
         }
+
+
+        Text(response, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
 
     }
 }

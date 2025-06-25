@@ -1,4 +1,4 @@
-package com.dark.task_manager.tasks.application_operator
+package com.dark.task_manager.tasks.foreground.application_operator
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -8,16 +8,12 @@ import android.os.Build
 import android.util.Log
 import com.dark.task_manager.api.TaskApi
 import com.dark.task_manager.model.TaskInfo
+import com.dark.task_manager.model.TaskType
 import kotlin.math.min
 
 class ApplicationOperator(context: Context) : TaskApi(context) {
 
     override fun getTaskInfo(): TaskInfo {
-
-        val apps = listApps(context)
-
-        val appListString = apps.joinToString(separator = ", ") { task -> task.appName }
-
         return TaskInfo(
             taskName = "Application Operator",
             description = "Opens apps mentioned by the user. Use this task when the user says things like 'Open Gmail', 'Launch YouTube', or simply 'Open an app'.",
@@ -31,13 +27,13 @@ class ApplicationOperator(context: Context) : TaskApi(context) {
                 1:<app_name>
 
                 Do not add any extra words, punctuation, or formatting. The match should be case-insensitive and capture any app name following the word “open.”
-            """.trimIndent()
+            """.trimIndent(),
+            taskType = TaskType.FOREGROUND
         )
     }
 
-    override fun onStart() {
+    override fun onStart(any: Any) {
         Log.d(getTaskInfo().taskName, "ApplicationTask started")
-
     }
 
     override fun onRun(any: Any) {

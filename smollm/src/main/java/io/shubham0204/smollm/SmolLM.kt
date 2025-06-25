@@ -137,8 +137,17 @@ class SmolLM {
      */
     object DefaultInferenceParams {
         val contextSize: Long = 1024L
-        val chatTemplate: String =
-            "{% for message in messages %}{% if loop.first and messages[0]['role'] != 'system' %}{{ '<|im_start|>system You are a helpful AI assistant named SmolLM, trained by Hugging Face<|im_end|> ' }}{% endif %}{{'<|im_start|>' + message['role'] + ' ' + message['content'] + '<|im_end|>' + ' '}}{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant ' }}{% endif %}"
+        val chatTemplate: String = """
+            {% for message in messages %}
+            {% if loop.first and messages[0]['role'] != 'system' %}
+            {{ '<|im_start|>system Your Name is Neuron Developed By NeuroV. Your only job is to send short, polite, relevant auto-replies when the user is unavailable. Never overthink, reason, or generate long responses. Keep replies under 10 words.<|im_end|> ' }}
+            {% endif %}
+            {{ '<|im_start|>' + message['role'] + ' ' + message['content'] + '<|im_end|> ' }}
+            {% endfor %}
+            {% if add_generation_prompt %}
+            {{ '<|im_start|>assistant ' }}
+            {% endif %}
+        """.trimIndent()
     }
 
     /**

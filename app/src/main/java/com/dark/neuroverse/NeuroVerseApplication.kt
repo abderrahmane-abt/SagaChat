@@ -3,7 +3,7 @@ package com.dark.neuroverse
 import android.app.Application
 import android.util.Log
 import com.dark.ai_manager.ai.local.Neuron
-import com.dark.ai_manager.ai.types.NeuronVariant
+import com.dark.ai_manager.ai.local.NeuronVariant
 import com.dark.neuroverse.utils.taskRouterSystemPrompt
 import com.dark.task_manager.register.TaskRegistry
 

@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.dark.task_manager.api.TaskApi
 import com.dark.task_manager.model.TaskInfo
+import com.dark.task_manager.model.TaskType
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -23,11 +24,12 @@ class TimeLogger(context: Context) : TaskApi(context) {
                 - what's the time
 
                 Respond only with the current time in HH:mm format (e.g., 14:35). Do not add extra words or symbols.
-            """.trimIndent()
+            """.trimIndent(),
+            taskType = TaskType.FOREGROUND
         )
     }
 
-    override fun onStart() {
+    override fun onStart(any: Any) {
         Log.d(getTaskInfo().taskName, "TimeLogger started")
     }
 

@@ -36,7 +36,7 @@ object TaskRouter {
             }.toString()
 
             scope.launch {
-                val temp = Neuron.generateResponseStreaming(prompt)
+                val temp = Neuron.generateResponseStreaming(prompt){}
                 Log.d("PluginRouter", "AI Response: $temp")
             }
         }

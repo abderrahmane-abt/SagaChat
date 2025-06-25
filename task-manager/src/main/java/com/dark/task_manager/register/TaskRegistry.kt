@@ -4,7 +4,8 @@ import android.content.Context
 import com.dark.task_manager.api.TaskApi
 import com.dark.task_manager.model.TaskListModel
 import com.dark.task_manager.tasks.TimeLogger
-import com.dark.task_manager.tasks.application_operator.ApplicationOperator
+import com.dark.task_manager.tasks.background.AutoReply
+import com.dark.task_manager.tasks.foreground.application_operator.ApplicationOperator
 import kotlinx.coroutines.*
 
 object TaskRegistry {
@@ -14,14 +15,14 @@ object TaskRegistry {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     fun init(context: Context) {
-        registerTask(ApplicationOperator(context), TimeLogger(context))
+        registerTask(ApplicationOperator(context), TimeLogger(context), AutoReply(context))
     }
 
     fun registerTask(vararg taskApis: TaskApi) {
         taskApis.forEach { taskApi ->
             val taskInfo = taskApi.getTaskInfo()
             if (tasks.none { it.taskInfo.taskName == taskInfo.taskName }) {
-                tasks += TaskListModel(taskInfo, taskApi)
+                tasks += TaskListModel(taskInfo, taskApi, taskInfo.taskType)
             }
         }
     }
@@ -33,16 +34,26 @@ object TaskRegistry {
             return
         }
 
-        if (jobMap.containsKey(taskName) && jobMap[taskName]?.isActive == true) {
-            println("Task '$taskName' is already running.")
-            return
+        if (jobMap.containsKey(taskName)){
+            val existingJob = jobMap[taskName]
+
+            if (existingJob?.isActive == true) {
+                println("Task '$taskName' is already running. Updating...")
+
+                scope.launch(existingJob) {
+                    taskModel.taskApi.onRun(data)
+                }
+                return
+            }
         }
 
         val job = scope.launch {
+            taskModel.taskApi.onStart(data)
             taskModel.taskApi.onRun(data)
         }
         jobMap[taskName] = job
     }
+
 
     fun stopTask(taskName: String) {
         jobMap[taskName]?.let { job ->

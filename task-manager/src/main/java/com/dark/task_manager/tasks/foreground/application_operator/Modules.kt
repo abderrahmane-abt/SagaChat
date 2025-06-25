@@ -1,4 +1,4 @@
-package com.dark.task_manager.tasks.application_operator
+package com.dark.task_manager.tasks.foreground.application_operator
 
 import android.graphics.drawable.Drawable
 

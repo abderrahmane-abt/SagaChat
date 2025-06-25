@@ -69,6 +69,8 @@ import com.dark.neuroverse.neurov.mcp.chat.models.ROLE
 import com.dark.neuroverse.neurov.mcp.chat.viewModels.ChattingViewModel
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.neuroverse.utils.UserPrefs
+import com.dark.task_manager.register.TaskRegistry
+import com.dark.task_manager.register.TaskRouter
 import kotlinx.coroutines.launch
 
 
@@ -526,9 +528,7 @@ fun ActionBox(
                                     val safePrompt = text  // ✨ capture current value before launch
                                     text = ""              // ✨ clear the input after capturing
                                     scope.launch {
-                                        val response = process(safePrompt) {
-                                            text = it
-                                        }
+                                      TaskRegistry.startTask(TaskRouter.processUserPrompt(safePrompt), safePrompt)
                                     }
                                 }
                             })
