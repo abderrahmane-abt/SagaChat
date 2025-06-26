@@ -14,7 +14,7 @@ class NeuroVerseApplication : Application() {
         Log.d("NeuroVerseApplication", "✅ Application started")
         TaskRegistry.init(this)
         Neuron.loadModel(
-            variant = NeuronVariant.NVRouter,
+            variant = NeuronVariant.NVGeneral,
             systemPrompt = taskRouterSystemPrompt
         )
     }
