@@ -1,6 +1,5 @@
 package com.dark.neuroverse.compose.screens.main
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -28,6 +28,7 @@ import com.dark.neuroverse.compose.screens.main.content.CarouselExample_MultiBro
 import com.dark.neuroverse.compose.screens.main.content.HeaderChat
 import com.dark.neuroverse.compose.screens.main.content.HeaderMain
 import com.dark.neuroverse.compose.screens.main.content.MainCards
+import com.dark.neuroverse.neurov.mcp.chat.viewModels.ChattingViewModel
 
 @Composable
 fun MainScreen(paddingValues: PaddingValues) {
@@ -43,7 +44,7 @@ fun MainScreen(paddingValues: PaddingValues) {
             composable(Actions.MAIN.name) {
                 MainScreenContent(paddingValues = paddingValues, onAction = {
                     action = it
-                    navController.navigate(it.name){
+                    navController.navigate(it.name) {
                         launchSingleTop = true
                         popUpTo(Actions.MAIN.name) { inclusive = true }
                     }
@@ -51,12 +52,12 @@ fun MainScreen(paddingValues: PaddingValues) {
             }
 
             composable(Actions.CHAT.name) {
-                ChatScreenContent(paddingValues){
-                    navController.navigate(Actions.MAIN.name){
+                ChatScreenContent(paddingValues, onBack = {
+                    navController.navigate(Actions.MAIN.name) {
                         launchSingleTop = true
                         popUpTo(Actions.MAIN.name) { inclusive = true }
                     }
-                }
+                })
             }
         }
     }
@@ -81,7 +82,7 @@ fun MainScreenContent(onAction: (Actions) -> Unit, paddingValues: PaddingValues)
 }
 
 @Composable
-fun ChatScreenContent(paddingValues: PaddingValues, onBack: () -> Unit = {}) {
+fun ChatScreenContent(paddingValues: PaddingValues, onBack: () -> Unit = {}, viewModel: ChattingViewModel = viewModel()) {
     val isKeyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
     var modifier = Modifier
@@ -103,8 +104,8 @@ fun ChatScreenContent(paddingValues: PaddingValues, onBack: () -> Unit = {}) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         HeaderChat(onBack)
-        BodyChat(Modifier.weight(1f))
-        BottomChat()
+        BodyChat(Modifier.weight(1f), viewModel)
+        BottomChat(viewModel)
     }
 }
 

@@ -57,6 +57,8 @@ android {
 
 dependencies {
 
+    implementation("org.jsoup:jsoup:1.21.1")
+
     //PROJECTS
     implementation(project(":task-manager"))
     implementation(project(":ai-manager"))

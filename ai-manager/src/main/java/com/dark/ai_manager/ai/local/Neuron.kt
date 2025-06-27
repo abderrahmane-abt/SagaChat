@@ -1,15 +1,9 @@
 package com.dark.ai_manager.ai.local
 
 import android.util.Log
-import com.dark.ai_manager.ai.local.NeuronVariant
 import io.shubham0204.smollm.SmolLM
 import io.shubham0204.smollm.SmolLM.InferenceParams
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
@@ -31,49 +25,39 @@ object Neuron {
         chatTemplate: String? = null,
         forceReload: Boolean = false,
         systemPrompt: String,
-        onLoaded: (() -> Unit)? = null // Optional callback
+        onLoaded: (() -> Unit)? = null
     ) {
-
         val file = File(variant.path)
-        Log.d("Neuron", "Model file exists=${file.exists()}, size=${file.length()}")
+        require(file.exists()) { "Model file missing at: ${variant.path}" }
+        Log.d("Neuron", "Loading ${file.name}, size=${file.length()}")
 
-        require(file.exists()) { "Model file does not exist at path: ${variant.path}" }
-
-        // If already loaded, skip unless forceReload is true
         if (!forceReload && modelInstances.containsKey(variant.modelName)) {
             activeVariant = variant
             onLoaded?.invoke()
             return
         }
 
-        // Unload existing model if needed
         unloadActiveModel()
         val model = SmolLM()
 
         val job = nvScope.launch {
-            try {
+            runCatching {
                 model.load(
                     variant.path,
                     InferenceParams(
                         contextSize = contextLength,
-                        useMmap = true,
-                        useMlock = false,
                         chatTemplate = chatTemplate,
                         storeChats = false,
-                        numThreads = 6
+                        numThreads = 6,
+                        useMmap = true,
+                        useMlock = false
                     )
                 )
-
                 model.addSystemPrompt(systemPrompt)
-
-                withContext(Dispatchers.Main) {
-                    onLoaded?.invoke()
-                }
-
-            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onLoaded?.invoke() }
+            }.onFailure {
+                Log.e("Neuron", "Model load failed", it)
                 model.close()
-                e.printStackTrace()
-                throw e
             }
         }
 
@@ -81,65 +65,56 @@ object Neuron {
         activeVariant = variant
     }
 
-    suspend fun generateResponseBlocking(
-        input: String,
-    ): String {
-        val variant = activeVariant ?: error("No active variant selected.")
-        val modelEntry = modelInstances[variant.modelName] ?: error("Model not loaded.")
-        modelEntry.job.join()
-        val model = modelEntry.instance
-
-        // Add user message
+    suspend fun generateResponseBlocking(input: String): String {
+        val model = getActiveModel()
         model.addUserMessage(input)
 
-        // Run the actual inference in blocking mode
-        val responseStr = withContext(Dispatchers.IO) {
-            model.getResponse(input)
-        }
-
-        // Add assistant reply to memory
-        model.addAssistantMessage(responseStr)
-        return responseStr
+        val response = withContext(Dispatchers.IO) { model.getResponse(input) }
+        model.addAssistantMessage(response)
+        return response.trim()
     }
 
     suspend fun generateResponseStreaming(input: String, onTokenReceived: (String) -> Unit): String {
-        val variant = activeVariant ?: error("No active variant selected.")
-        val modelEntry = modelInstances[variant.modelName] ?: error("Model not loaded.")
-
-        modelEntry.job.join()
-
-        val model = modelEntry.instance
-
-        // If needed, you can clean and re-add system prompt here
+        val model = getActiveModel()
         model.addUserMessage(input)
 
-        val outputFlow = model.getResponseAsFlow(input)
         val fullResponse = StringBuilder()
-
-        // Collect streaming pieces
-        outputFlow.collect { piece ->
-            onTokenReceived(piece)
-            fullResponse.append(piece)
+        model.getResponseAsFlow(input).collect { token ->
+            onTokenReceived(token)
+            fullResponse.append(token)
         }
-
-        val responseStr = fullResponse.toString().trim()
-        model.addAssistantMessage(responseStr)
-        return responseStr
+        val response = fullResponse.toString().trim()
+        model.addAssistantMessage(response)
+        return response
     }
 
     fun unloadActiveModel() {
         activeVariant?.let {
-            modelInstances[it.modelName]?.instance?.close()
-            modelInstances.remove(it.modelName)
+            modelInstances.remove(it.modelName)?.instance?.close()
         }
         activeVariant = null
     }
 
+    fun stopGeneration(immediate: Boolean = false) {
+        activeVariant?.let {
+            modelInstances[it.modelName]?.instance?.let { model ->
+                if (immediate) model.stopGenerationImmediately() else model.stopGeneration()
+            }
+        }
+    }
+
     fun unloadAllModels() {
-        modelInstances.forEach { (_, model) -> model.instance.close() }
+        modelInstances.values.forEach { it.instance.close() }
         modelInstances.clear()
         activeVariant = null
     }
 
     fun listLoadedModels(): List<String> = modelInstances.keys.toList()
+
+    private suspend fun getActiveModel(): SmolLM {
+        val variant = activeVariant ?: error("No active model selected.")
+        val entry = modelInstances[variant.modelName] ?: error("Model not loaded.")
+        entry.job.join()
+        return entry.instance
+    }
 }

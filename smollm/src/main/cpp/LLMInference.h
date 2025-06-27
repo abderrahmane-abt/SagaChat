@@ -2,6 +2,8 @@
 #include <jni.h>
 #include <string>
 #include <vector>
+#include <atomic>
+#include <thread>
 
 class LLMInference {
     // llama.cpp-specific types
@@ -21,6 +23,9 @@ class LLMInference {
     std::vector<llama_token> _promptTokens;
     int _prevLen = 0;
     const char *_chatTemplate;
+
+    std::atomic<bool> _stopRequested = false;
+    std::thread _generationThread;
 
     // stores the complete response for the given query
     std::string _response;
@@ -55,4 +60,8 @@ public:
     void stopCompletion();
 
     ~LLMInference();
+
+    void clearChatMemory();
+
+    void stopGenerationImmediately();
 };

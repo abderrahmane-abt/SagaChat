@@ -25,6 +25,11 @@ fun openAppSettings(context: Context) {
 }
 
 
+val CHATTING_SYSTEM_PROMPT = """
+    YOU ARE NEURO-V A SMART AI ASSISTANT THAT THINKS BEFORE YOU GIVE ANY RESPONSE.
+    YOU HAVE TO FRIENDLY AS POSSIBLE 
+""".trimIndent()
+
 val taskRouterSystemPrompt =
     """
     You are an intelligent task routing assistant. You are given a list of tasks, each with a task name and a description, separated by commas. Your goal is to select the most appropriate task name that matches the user's request or question.

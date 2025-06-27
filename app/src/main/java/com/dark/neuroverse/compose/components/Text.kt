@@ -8,12 +8,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextStyle
 import kotlinx.coroutines.delay
 
 @Composable
 fun GlitchTypingText(
     finalText: String,
     delayPerChar: Long = 60L,
+    style: TextStyle = MaterialTheme.typography.bodyLarge,
     modifier: Modifier
 ) {
     var displayText by remember { mutableStateOf("") }
@@ -34,7 +36,7 @@ fun GlitchTypingText(
 
     RichText(
         text = "$displayText▌",
-        style = MaterialTheme.typography.bodyLarge,
+        style = style,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier
     )

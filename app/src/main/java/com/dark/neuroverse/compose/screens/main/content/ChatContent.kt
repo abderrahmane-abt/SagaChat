@@ -12,16 +12,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.twotone.Send
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -31,8 +35,10 @@ import androidx.compose.material3.LoadingIndicatorDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,7 +52,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dark.neuroverse.R
 import com.dark.neuroverse.compose.components.RichText
+import com.dark.neuroverse.neurov.mcp.chat.viewModels.ChattingViewModel
 import com.dark.neuroverse.utils.vibrate
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -61,9 +69,14 @@ fun HeaderChat(onBack: () -> Unit) {
 
         Row(verticalAlignment = Alignment.CenterVertically) {
 
-            Icon(Icons.AutoMirrored.Default.ArrowBack, "back", modifier = Modifier.size(38.dp).clickable {
-                onBack()
-            })
+            Icon(
+                Icons.AutoMirrored.Default.ArrowBack,
+                "back",
+                modifier = Modifier
+                    .size(38.dp)
+                    .clickable {
+                        onBack()
+                    })
 
             Spacer(Modifier.width(10.dp))
 
@@ -113,31 +126,82 @@ fun HeaderChat(onBack: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun BodyChat(modifier: Modifier) {
+fun BodyChat(
+    modifier: Modifier,
+    viewModel: ChattingViewModel
+) {
+    // Scroll state (if you still want scrolling)
+    val scrollState = rememberScrollState()
+
+    // Your existing state
+    val streamingResponse by viewModel.streamingBuffer.collectAsState()
+    val isThinking by viewModel.isThinking.collectAsState()
+    val latestResponse = viewModel.getLatestAIResponse() ?: ""
+
+    // 1) Animate a “Typing” ellipsis
+    var dotCount by remember { mutableIntStateOf(0) }
+    LaunchedEffect(isThinking) {
+        if (isThinking) {
+            // while the AI is generating, bump the dotCount every 500ms
+            while (true) {
+                delay(500)
+                dotCount = (dotCount + 1) % 4       // cycles 0,1,2,3
+            }
+        }
+        // reset once generation stops
+        dotCount = 0
+    }
+
+    // 2) Build your displayText
+    val displayText = if (isThinking) {
+        // "Typing", "Typing.", "Typing..", "Typing..."
+        "Typing" + ".".repeat(dotCount)
+    } else {
+        streamingResponse.ifEmpty { latestResponse }
+    }
 
     Card(
         modifier = modifier.padding(bottom = 6.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background),
-        shape = RoundedCornerShape(
-            topEnd = 24.dp,
-            topStart = 24.dp,
-            bottomEnd = 8.dp,
-            bottomStart = 8.dp
-        ),
+        shape = RoundedCornerShape(24.dp, 24.dp, 8.dp, 8.dp)
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-
+        Column(
+            modifier = Modifier
+                .padding(18.dp)
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AnimatedContent(isThinking) {
+                    if (it)
+                        LoadingIndicator(Modifier.size(24.dp))
+                }
+                Spacer(Modifier.width(8.dp))
+                RichText(
+                    displayText,
+                    modifier = Modifier.fillMaxSize(),
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
         }
+    }
+
+    // auto-scroll to bottom when text changes
+    LaunchedEffect(displayText) {
+        scrollState.scrollTo(scrollState.maxValue)
     }
 }
 
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun BottomChat() {
+fun BottomChat(viewModel: ChattingViewModel) {
     val context = LocalContext.current
     val text by UserInput.text.collectAsState()
     var startAudio by remember { mutableStateOf(false) }
+    val isGenerating by viewModel.isGenerating.collectAsState()
 
 
     // Main container (mimics the Card with a pill shape)
@@ -173,6 +237,7 @@ fun BottomChat() {
                         value = text,
                         onValueChange = { UserInput.updateText(it) },
                         singleLine = false,
+                        textStyle = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Normal),
                         decorationBox = { innerTextField ->
                             if (text.isEmpty()) {
                                 Text(
@@ -230,30 +295,50 @@ fun BottomChat() {
 
                 IconButton(
                     onClick = {
-                        
-                    }, colors = IconButtonDefaults.iconButtonColors(
+                        if (isGenerating) {
+                            viewModel.stopGenerating()
+                        } else {
+                            val text = UserInput.text.value
+                            UserInput.updateText("")
+                            vibrate(context)
+                            viewModel.sendMessage(text)
+                        }
+                    },
+                    colors = IconButtonDefaults.iconButtonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
                     )
                 ) {
-                    AnimatedContent(text.isNotEmpty(), label = "Audio Animated") { it ->
+                    AnimatedContent(text.isNotEmpty(), label = "Audio Animated") { isTextNotEmpty ->
+                        AnimatedContent(isGenerating) { isGeneratingText ->
+                            when {
+                                isGeneratingText -> {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        CircularWavyProgressIndicator()
+                                        Icon(
+                                            imageVector = Icons.Default.Stop,
+                                            contentDescription = "Mic"
+                                        )
+                                    }
+                                }
 
-                        when (it) {
-                            true -> {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.TwoTone.Send,
-                                    contentDescription = "Audio"
-                                )
-                            }
+                                isTextNotEmpty -> {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.TwoTone.Send,
+                                        contentDescription = "Audio"
+                                    )
+                                }
 
-                            false -> {
-                                Icon(
-                                    imageVector = Icons.Default.GraphicEq,
-                                    contentDescription = "Audio"
-                                )
+                                else -> {
+                                    Icon(
+                                        imageVector = Icons.Default.GraphicEq,
+                                        contentDescription = "Audio"
+                                    )
+                                }
                             }
                         }
                     }
+
                 }
             }
         }
@@ -262,7 +347,7 @@ fun BottomChat() {
 
 
 object UserInput {
-    private val _textState = MutableStateFlow("Initial text")
+    private val _textState = MutableStateFlow("Hey Bro..!")
     val text: StateFlow<String> = _textState
 
     private val _speakState = MutableStateFlow(false)

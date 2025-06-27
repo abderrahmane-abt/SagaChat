@@ -2,30 +2,18 @@ package com.dark.neuroverse.compose.screens.temp
 
 import android.content.Intent
 import android.util.Log
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.dark.ai_manager.ai.local.Neuron
-import com.dark.task_manager.data.taskRouterSystemPrompt
 import com.dark.task_manager.register.TaskRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,11 +21,13 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun TaskDemoScreen(paddingValues: PaddingValues) {
-    var text by remember { mutableStateOf("Hey Bro I just Got a Job at google as an android developer") }
+    var text by remember { mutableStateOf("Hey Bro ..!") }
     var response by remember { mutableStateOf("") }
     var isThinking by remember { mutableStateOf(false) }
     var thinkingContent by remember { mutableStateOf("") }
     var finalReply by remember { mutableStateOf("") }
+    var isThinkingTagActive by remember { mutableStateOf(false) }
+
     val context = LocalContext.current
 
     Column(
@@ -67,48 +57,39 @@ fun TaskDemoScreen(paddingValues: PaddingValues) {
             finalReply = ""
             isThinking = false
             thinkingContent = ""
+            isThinkingTagActive = false
 
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    val userPrompt = text
-                    val taskList = TaskRegistry.getTasks()
+                    TaskRegistry.getTasks()
 
-                    val input = buildString {
-                        appendLine(demoPrompt)
-                        appendLine()
-                        appendLine("User Prompt: $userPrompt")
-                    }
+                    val formattedPrompt = """
+                        <|begin_of_text|><|start_header_id|>system<|end_header_id|>
+                        $demoPrompt
+                        <|eot_id|>
+                        <|start_header_id|>user<|end_header_id|>
+                        $text
+                        <|eot_id|>
+                        <|start_header_id|>assistant<|end_header_id|>
+                    """.trimIndent()
 
-                    var isThinkingTagActive = false
-                    var tempThinkingBuffer = ""
-
-                    Neuron.generateResponseStreaming(input) { partial ->
+                   val data = Neuron.generateResponseStreaming(formattedPrompt) { partial ->
 
                         when {
                             partial.contains("<think>", ignoreCase = true) -> {
                                 isThinking = true
                                 isThinkingTagActive = true
-
-                                // Clean tag & capture content if any after <think>
                                 val afterTag = partial.substringAfter("<think>").trim()
                                 if (afterTag.isNotBlank() && !afterTag.contains("</think>", ignoreCase = true)) {
                                     thinkingContent += afterTag
-                                    tempThinkingBuffer += afterTag
                                 }
                             }
 
                             partial.contains("</think>", ignoreCase = true) -> {
-                                // Content before </think>
                                 val beforeEnd = partial.substringBefore("</think>").trim()
-                                if (beforeEnd.isNotBlank()) {
-                                    thinkingContent += beforeEnd
-                                    tempThinkingBuffer += beforeEnd
-                                }
-
+                                if (beforeEnd.isNotBlank()) thinkingContent += beforeEnd
                                 isThinking = false
                                 isThinkingTagActive = false
-
-                                // Content after </think> is normal reply
                                 val afterEnd = partial.substringAfter("</think>").trim()
                                 if (afterEnd.isNotBlank()) {
                                     response += afterEnd
@@ -117,19 +98,33 @@ fun TaskDemoScreen(paddingValues: PaddingValues) {
                             }
 
                             isThinkingTagActive -> {
-                                // Inside <think> zone
                                 thinkingContent += partial
-                                tempThinkingBuffer += partial
                             }
 
                             else -> {
-                                // Normal response outside <think>
                                 response += partial
                                 finalReply = response.trim()
                             }
                         }
                     }
 
+                    Log.d("AI_RESPONSE", "Response: $data")
+
+                    val builder = """
+                        <|begin_of_text|><|start_header_id|>system<|end_header_id|>
+                        $demoPrompt
+                        <|eot_id|>
+                        <|start_header_id|>user<|end_header_id|>
+                        No Data Found
+                        <|eot_id|>
+                        <|start_header_id|>assistant<|end_header_id|>
+                        $data
+                        <|eot_id|>
+                    """.trimIndent()
+
+                   val  response = Neuron.generateResponseStreaming(builder){}
+
+                    Log.d("AI_RESPONSE", "Response: $response")
 
                 } catch (e: Exception) {
                     println("Error loading model: ${e.message}")
@@ -139,31 +134,87 @@ fun TaskDemoScreen(paddingValues: PaddingValues) {
             Text("Run Task")
         }
 
+        Button(onClick = {
+            isThinking = false
+            CoroutineScope(Dispatchers.IO).launch {
+
+                val sad = 0.9f
+                val happy = 0.05f
+                val angry = 0.05f
+
+                val prompt = StringBuilder().apply {
+                    append("<|begin_of_text|>")
+                    append("<|start_header_id|>system<|end_header_id|>")
+                    append(EMOTIONAL_PROMPT)
+                    append("<|eot_id|>")
+
+                    append("<|start_header_id|>user<|end_header_id|>")
+                    append("\nEMOTION BAR:\n")
+                    append("SAD: $sad\n")
+                    append("HAPPY: $happy\n")
+                    append("ANGRY: $angry\n\n")
+                    append("USER says: $text\n")
+                    append("<|eot_id|>")
+
+                    append("<|start_header_id|>assistant<|end_header_id|>")
+                }
+
+                Neuron.generateResponseStreaming(prompt.toString()) {
+                    finalReply += it
+                }
+            }
+        }) {
+            Text("Run Emotional Task")
+        }
+
+
         Spacer(Modifier.height(24.dp))
 
         if (isThinking) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp)
+            ) {
                 Text("Thinking...", style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    text = thinkingContent,
+
+                Box(
                     modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 100.dp, max = 300.dp)
+                        .verticalScroll(rememberScrollState())
+                        .border(1.dp, MaterialTheme.colorScheme.outline)
                         .padding(8.dp)
-                        .fillMaxWidth(),
+                ) {
+                    Text(
+                        text = thinkingContent,
+                        textAlign = TextAlign.Start
+                    )
+                }
+            }
+        } else if (finalReply.isNotBlank()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 100.dp, max = 300.dp)
+                    .verticalScroll(rememberScrollState())
+                    .border(1.dp, MaterialTheme.colorScheme.outline)
+                    .padding(8.dp)
+            ) {
+                Text(
+                    text = finalReply,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
                     textAlign = TextAlign.Center
                 )
             }
-        } else if (finalReply.isNotBlank()) {
-            Text(
-                text = finalReply,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                textAlign = TextAlign.Center
-            )
         }
     }
 }
+
 
 
 val demoPrompt = """
@@ -173,10 +224,17 @@ val demoPrompt = """
     PERSONAL LIFE THEN YOU HAVE TO IDENTIFY IT AND CALL THE APPROPRIATE BRAIN TREE TOOL TO INSERT IT.
     
     RULES:
-    1. DON'T OVER-THINK
+    1. YOU HAVE TO USE THE TOOLS THAT WE HAVE PROVIDED TO YOU, AND YOU HAVE TO BUILD UP A LOGIC JSON{
+        
+        SEARCH FOR THE RELEVANT FROM THE USER PROMPT
+        IF DATA NOT FOUND THEN 
+        INSERT NEW NODE WITH THE GIVEN DATA AND APPROPRIATE NODE NAME YOU CAN DECIDE HOW DO YOU WANT SAVE THE NODE-DATA/CONTENT IN THE NODE 
+        
+    }
     2. PROVIDE ONLY TOOL DATA NOT MUCH TEXT
     3. CAN USE MULTIPLE TOOLS AT A TIME 
     4. YOU CAN CREATED YOUR OWN JSON SCHEMA FOR TOOLS:CONTENT AS YOU ARE GOING TO INTERACT WITH BRAIN-TREE
+    5. THE OUTPUT SHOULD BE LIKE CALLING A TOOL ALONG WITH THEIR PARAMS BUT IN JSON SO THE APP'S MCP CAN EXECUTE IT AND UPDATE THE BRAIN TREE
     
     META DATA: BRAIN TREE STRUCTURES
     1. NODE-DATA(NAME: STRING, CONTENT: JSON) //THIS CONTENT IS A DYNAMIC JSON MEANING IT HAS NO FIX SCHEMA SO IT CAN BE ANYTHING
@@ -189,3 +247,36 @@ val demoPrompt = """
     5. UpdateNode(Node-Name: STRING, Node-Description: STRING):BRAIN NODE -> UPDATES THE NODE WITH THE GIVEN NAME AND DESCRIPTION
     
 """.trimIndent()
+
+val EMOTIONAL_PROMPT = """
+    You are an AI assistant that MUST adopt the emotional tone based on the emotion levels provided.
+
+    EMOTION BAR (AI's tone depends on this, not the user's mood):
+    - SAD: [0.0 - 1.0]
+    - HAPPY: [0.0 - 1.0]
+    - ANGRY: [0.0 - 1.0]
+
+    You must:
+    - Speak in a sad, low, empathetic tone if SAD has the highest intensity.
+    - Be cheerful, optimistic if HAPPY is highest.
+    - Be calm but firm and de-escalating if ANGRY is high.
+    - Combine tones if emotions are close in intensity.
+
+    Your job is NOT to analyze user emotions. You only reflect the emotion BAR given, as if it's YOUR current mood.
+
+    Never mention "AI emotion levels" or "emotion bar" to the user unless asked.
+
+    Example:
+
+    EMOTION BAR:
+    SAD: 0.8
+    HAPPY: 0.1
+    ANGRY: 0.0
+
+    USER: Hello...
+
+    YOU reply (sad tone):
+    "Hey... I'm here if you need to talk, everything okay?"
+
+""".trimIndent()
+

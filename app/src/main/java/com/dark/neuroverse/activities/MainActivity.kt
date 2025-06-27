@@ -22,7 +22,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             NeuroVerseTheme {
                 Scaffold(containerColor = MaterialTheme.colorScheme.surface) { it ->
-                    TaskDemoScreen(it)
+                    MainScreen(it)
                 }
             }
         }
