@@ -30,6 +30,9 @@ jobs:
       - name: INSTALL NDK
         run: sdkmanager "ndk;29.0.13599879"
 
+      - name: INSTALL CMake
+        run: sdkmanager "cmake;4.0.2"
+
       - name: EXECUTE PERMISSION TO GRADLEW
         run: chmod +x ./gradlew
 

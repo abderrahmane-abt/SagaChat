@@ -128,7 +128,9 @@ fi
 
 # For Cygwin or MSYS, switch paths to Windows format before running java
 if [ "$cygwin" = "true" -o "$msys" = "true" ] ; then
+    # shellcheck disable=SC2006
     APP_HOME=`cygpath --path --mixed "$APP_HOME"`
+    # shellcheck disable=SC2006
     CLASSPATH=`cygpath --path --mixed "$CLASSPATH"`
 
     JAVACMD=`cygpath --unix "$JAVACMD"`
