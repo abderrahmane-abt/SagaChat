@@ -1,5 +1,7 @@
 package com.dark.userdata.neuron_tree
 
+import com.dark.userdata.schema.ChildNodeSchema
+import com.dark.userdata.schema.NodeContentSchema
 import kotlinx.serialization.Serializable
 
 /**
@@ -137,6 +139,40 @@ class NeuronTree(internal val root: NeuronNode) {
 }
 
 fun getDefaultBrainStructure(){
-    val root = NeuronNode("root", NodeData("", NodeType.ROOT))
+    val tools = generateOperatorNode("tools", OperatorNodesContent.TOOLS)
+    val temp = generateOperatorNode("temp", OperatorNodesContent.TEMP)
+    val main = generateOperatorNode("main", OperatorNodesContent.MAIN)
+    val ai = generateOperatorNode("ai", OperatorNodesContent.AI)
+
+    val root = NeuronNode("root", NodeData(NodeContentSchema(
+        name = "root",
+        childNodes = listOf(
+            ChildNodeSchema(tools.id, )
+        )
+    ), NodeType.ROOT))
     val tree = NeuronTree(root)
+}
+
+internal fun generateOperatorNode(id: String, content: NodeContentSchema = NodeContentSchema()): NeuronNode{
+    return NeuronNode(id, NodeData(content, NodeType.OPERATOR))
+}
+
+internal object OperatorNodesContent{
+    val TOOLS = NodeContentSchema(
+        name = "tool",
+
+        childNodes = mutableListOf(ChildNodeSchema())
+    )
+    val TEMP = NodeContentSchema(
+        name = "temp",
+        childNodes = mutableListOf(ChildNodeSchema())
+    )
+    val MAIN = NodeContentSchema(
+        name = "main",
+        childNodes = mutableListOf(ChildNodeSchema())
+    )
+    val AI = NodeContentSchema(
+        name = "ai",
+        childNodes = mutableListOf(ChildNodeSchema())
+    )
 }

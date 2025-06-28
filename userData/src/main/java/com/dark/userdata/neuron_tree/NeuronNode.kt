@@ -1,5 +1,6 @@
 package com.dark.userdata.neuron_tree
 
+import com.dark.userdata.schema.NodeContentSchema
 import kotlinx.serialization.Serializable
 import java.util.UUID
 
@@ -24,7 +25,7 @@ open class NeuronNode(
 
 @Serializable
 data class NodeData(
-    val content: String,
+    val content: NodeContentSchema,
     val type: NodeType
 )
 
