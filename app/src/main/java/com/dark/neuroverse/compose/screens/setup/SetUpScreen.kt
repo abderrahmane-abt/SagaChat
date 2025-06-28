@@ -18,14 +18,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.dark.neuroverse.BuildConfig
+import com.dark.neuroverse.activities.BrainScreen
 import com.dark.neuroverse.activities.MainActivity
 import com.dark.neuroverse.compose.screens.setup.intro.IntroScreen
 import com.dark.neuroverse.compose.screens.setup.permissions.PermissionScreen
 import com.dark.neuroverse.utils.UserPrefs
+import com.dark.userdata.getOrCreateHardwareBackedAesKey
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -36,8 +40,10 @@ fun SetUpScreen(paddingValues: PaddingValues) {
     var closeLoadingScreen by remember { mutableStateOf(false) }
     val animDuration = 500
     val context = LocalContext.current
+    val key = getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS)
 
     LaunchedEffect(Unit) {
+
         delay(700)
         showLoading = true
         delay(2700)
@@ -66,6 +72,13 @@ fun SetUpScreen(paddingValues: PaddingValues) {
             false -> IntroScreen(showLoading)
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalAnimationApi::class)
+@Preview
+@Composable
+fun SetUpScreenPreview() {
+    SetUpScreen(paddingValues = PaddingValues())
 }
 
 @Composable

@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.kotlin.ksp)
     kotlin("plugin.serialization") version "2.1.21"
 }
+val localPropertiesFile = rootProject.file("local.properties")
 
 android {
     namespace = "com.dark.neuroverse"
@@ -20,17 +21,8 @@ android {
         versionCode = 3
         versionName = "0.3-beta"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        val localPropertiesFile = rootProject.file("local.properties")
-        val apiKey = if (localPropertiesFile.exists()) {
-            val localProps = Properties().apply {
-                load(FileInputStream(localPropertiesFile))
-            }
-            localProps.getProperty("API_KEY") ?: "sample_dev_key"
-        } else {
-            System.getenv("API_KEY") ?: "sample_dev_key"
-        }
 
-        buildConfigField("String", "API_KEY", apiKey)
+        buildConfigField("String", "ALIAS", getProperty("ALIAS"))
     }
     buildTypes {
         release {
@@ -104,4 +96,15 @@ dependencies {
     //DEBUG
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+}
+
+fun getProperty(value: String): String {
+    return if (localPropertiesFile.exists()) {
+        val localProps = Properties().apply {
+            load(FileInputStream(localPropertiesFile))
+        }
+        localProps.getProperty(value) ?: "sample_val"
+    } else {
+        System.getenv(value) ?: "sample_val"
+    }
 }

@@ -1,0 +1,28 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ main-without-plugins ]
+  pull_request:
+    branches: [ main-without-plugins ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: CHECK-OUT CODE
+        uses: actions/checkout@v3
+
+      - name: SET-UP JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 17
+
+      - name: EXECUTE PERMISSION TO GRADLEW
+        run: chmod +x ./gradlew
+
+      - name: BUILD APP WITH GRADLE
+        run: ./gradlew build
