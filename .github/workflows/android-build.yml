@@ -21,6 +21,15 @@ jobs:
           distribution: 'temurin'
           java-version: 17
 
+      - name: SET UP ANDROID SDK
+        uses: android-actions/setup-android@v3
+
+      - name: ACCEPT LICENSES
+        run: yes | sdkmanager --licenses
+
+      - name: INSTALL NDK
+        run: sdkmanager "ndk;29.0.13599879"
+
       - name: EXECUTE PERMISSION TO GRADLEW
         run: chmod +x ./gradlew
 
