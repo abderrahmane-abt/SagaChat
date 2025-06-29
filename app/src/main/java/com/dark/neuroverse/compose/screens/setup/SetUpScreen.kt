@@ -46,15 +46,16 @@ fun SetUpScreen(paddingValues: PaddingValues) {
         }
 
         delay(700)
+        //state = SetupState.TERMS_AND_CONDITIONS
 
-        UserPrefs.isTermsAccepted(context).collect { termsAccepted ->
-            state = if (termsAccepted) {
-                val onboardingComplete = UserPrefs.isOnboardingComplete(context).first()
-                if (onboardingComplete) SetupState.COMPLETED else SetupState.PERMISSIONS
-            } else {
-                SetupState.TERMS_AND_CONDITIONS
-            }
-        }
+//        UserPrefs.isTermsAccepted(context).collect { termsAccepted ->
+//            state = if (termsAccepted) {
+//                val onboardingComplete = UserPrefs.isOnboardingComplete(context).first()
+//                if (onboardingComplete) SetupState.COMPLETED else SetupState.PERMISSIONS
+//            } else {
+//                SetupState.TERMS_AND_CONDITIONS
+//            }
+//        }
     }
 
     AnimatedContent(
@@ -63,7 +64,9 @@ fun SetUpScreen(paddingValues: PaddingValues) {
         label = "setup"
     ) { currentState ->
         when (currentState) {
-            SetupState.FRESH_START -> IntroScreen(showLoading = false)
+            SetupState.FRESH_START -> {
+                IntroScreen()
+            }
 
             SetupState.TERMS_AND_CONDITIONS -> TermsAndConditionScreen {
                 scope.launch(Dispatchers.IO) {
@@ -71,31 +74,16 @@ fun SetUpScreen(paddingValues: PaddingValues) {
                 }
             }
 
-            SetupState.PERMISSIONS -> SetUpCompose(paddingValues)
+            SetupState.PERMISSIONS -> {
+                PermissionScreen(paddingValues) {
+                    scope.launch(Dispatchers.IO) {
+                        UserPrefs.setOnboardingComplete(context, true)
+                    }
+                }
+            }
 
             SetupState.COMPLETED -> {
-                context.startActivity(Intent(context, MainActivity::class.java))
-            }
-        }
-    }
-}
-
-@Composable
-fun SetUpCompose(paddingValues: PaddingValues) {
-    val navController = rememberNavController()
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    NavHost(
-        navController = navController,
-        startDestination = "permission_screen"
-    ) {
-        composable("permission_screen") {
-            PermissionScreen(paddingValues) {
-                scope.launch(Dispatchers.IO) {
-                    UserPrefs.setOnboardingComplete(context, true)
-                    context.startActivity(Intent(context, MainActivity::class.java))
-                }
+               // context.startActivity(Intent(context, MainActivity::class.java))
             }
         }
     }
