@@ -21,6 +21,15 @@ object ModelsList {
             File(modelsDir, "Jan-Nano-Guff.gguf").absolutePath
         )
 
-        return listOf(janNanoGuff)
+        val kodifyNano = ModelsData(
+            id = 1,
+            "Kodify-Nano-GGUF",
+            "Kodify-Nano-GGUF - GGUF version of MTSAIR/Kodify-Nano, optimized for CPU/GPU inference with Ollama/llama.cpp. Lightweight LLM for code development tasks with minimal resource requirements.",
+            "https://huggingface.co/MTSAIR/Kodify-Nano-GGUF/resolve/main/Kodify_Nano_q4_k_s.gguf?download=true",
+            "https://huggingface.co/MTSAIR/Kodify-Nano-GGUF",
+            File(modelsDir, "Kodify-Nano-GGUF.gguf").absolutePath
+        )
+
+        return listOf(janNanoGuff, kodifyNano)
     }
 }

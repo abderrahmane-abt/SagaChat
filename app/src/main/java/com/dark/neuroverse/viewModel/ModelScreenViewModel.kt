@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import android.content.Context
+import androidx.lifecycle.ViewModelProvider
 import com.dark.neuroverse.data.db.DatabaseProvider
 
 class ModelScreenViewModel(context: Context) : ViewModel() {
@@ -58,3 +59,13 @@ class ModelScreenViewModel(context: Context) : ViewModel() {
         }
     }
 }
+
+class ModelScreenViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(ModelScreenViewModel::class.java)) {
+            return ModelScreenViewModel(context) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}
+
