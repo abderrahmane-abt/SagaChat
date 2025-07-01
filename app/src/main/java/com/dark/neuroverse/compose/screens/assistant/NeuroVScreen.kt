@@ -63,6 +63,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.dark.ai_manager.ai.local.Neuron
+import com.dark.ai_manager.ai.local.NeuronVariant
 import com.dark.neuroverse.R
 import com.dark.neuroverse.compose.components.GlitchTypingText
 import com.dark.neuroverse.neurov.mcp.ai.TaskRouter.process
@@ -70,8 +72,11 @@ import com.dark.neuroverse.neurov.mcp.chat.models.ROLE
 import com.dark.neuroverse.neurov.mcp.chat.viewModels.ChattingViewModel
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.neuroverse.utils.UserPrefs
+import com.dark.task_manager.data.taskRouterSystemPrompt
 import com.dark.task_manager.register.TaskRegistry
 import com.dark.task_manager.register.TaskRouter
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 

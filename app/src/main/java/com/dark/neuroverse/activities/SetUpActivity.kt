@@ -18,8 +18,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.dark.neuroverse.compose.screens.models.ModelsScreen
 import com.dark.neuroverse.compose.screens.setup.common.TopBar
-import com.dark.neuroverse.compose.screens.setup.data.TermsAndConditionScreen
+import com.dark.neuroverse.compose.screens.setup.terms.TermsAndConditionScreen
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.neuroverse.utils.UserPrefs
 import kotlinx.coroutines.Dispatchers
@@ -40,12 +41,12 @@ class SetUpActivity : ComponentActivity()  {
             enableEdgeToEdge()
             NeuroVerseTheme {
                 val context = LocalContext.current
-                var setupState by remember { mutableStateOf(SetupState.TERMS) }
+                var setupState by remember { mutableStateOf(SetupState.CHOOSE_MODELS) }
                 val scope = rememberCoroutineScope()
 
                 LaunchedEffect(Unit) {
                     val termsAccepted = UserPrefs.isTermsAccepted(context).first()
-                    setupState = if (!termsAccepted) SetupState.TERMS else SetupState.COMPLETED
+                    setupState = if (!termsAccepted) SetupState.CHOOSE_MODELS else SetupState.COMPLETED
                 }
 
                 Scaffold { padding ->
@@ -67,7 +68,12 @@ class SetUpActivity : ComponentActivity()  {
                                     }
                                 }
 
+                                SetupState.CHOOSE_MODELS -> {
+                                    ModelsScreen()
+                                }
+
                                 SetupState.COMPLETED -> launchMain()
+
                             }
                         }
                     }
@@ -81,3 +87,4 @@ class SetUpActivity : ComponentActivity()  {
         finish()
     }
 }
+

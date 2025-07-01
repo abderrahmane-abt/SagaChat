@@ -1,34 +1,6 @@
-package com.dark.neuroverse.compose.screens.setup.data
+package com.dark.neuroverse.data.other
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import com.dark.neuroverse.compose.components.RichText
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun TermsAndConditionScreen(onAgree: () -> Unit = {}) {
-
-    Column(
-        modifier = Modifier
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 24.dp, vertical = 16.dp)
-            .verticalScroll(rememberScrollState())
-    ) {
-
-        RichText(
-            style = MaterialTheme.typography.bodyLarge,
-            text = """
+fun fullTermsText() = """
                 Neuro V — Terms & Conditions & Privacy Policy
                 Effective Date: 29-06-2025
 
@@ -119,15 +91,4 @@ fun TermsAndConditionScreen(onAgree: () -> Unit = {}) {
 
                 *--- End of Terms ---*
                 ***--- Thank You For Downloading The App... ---***
-
-            """.trimIndent()
-        )
-
-        Button(
-            onClick = onAgree,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("I Agree")
-        }
-    }
-}
+""".trimIndent()

@@ -139,11 +139,11 @@ fun BottomBarMain(onAction: (Actions) -> Unit) {
                 fontWeight = FontWeight.Bold
             )
 
-            CollapsableButton(true, text = "New Chat", icon = Icons.TwoTone.Add) {
+            CollapsableButton(collapse = true, text = "New Chat", icon = Icons.TwoTone.Add) {
                 onAction(Actions.CHAT)
             }
 
-            CollapsableButton(false, text = "EXPLORE", icon = Icons.TwoTone.Explore) {
+            CollapsableButton(collapse = false, text = "EXPLORE", icon = Icons.TwoTone.Explore) {
                 onAction(Actions.EXPLORE)
             }
         }

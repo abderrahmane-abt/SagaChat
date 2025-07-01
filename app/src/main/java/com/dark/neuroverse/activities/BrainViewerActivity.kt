@@ -37,7 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.dark.neuroverse.BuildConfig
-import com.dark.neuroverse.data.UserData
+import com.dark.neuroverse.data.repo.UserData
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.userdata.collectAllNodes
 import com.dark.userdata.getBrainFilePath

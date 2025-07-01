@@ -15,5 +15,6 @@ class NeuroVerseApplication : Application() {
         Log.d("NeuroVerseApplication", "✅ Application started")
         TaskRegistry.init(this)
         //Neuron.loadModel(variant = NeuronVariant.NVChat, systemPrompt = CHATTING_SYSTEM_PROMPT)
+        Neuron.loadModel(NeuronVariant.NVAdvanceRouter, systemPrompt = com.dark.task_manager.data.taskRouterSystemPrompt)
     }
 }

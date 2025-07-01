@@ -1,4 +1,4 @@
-package com.dark.neuroverse.data
+package com.dark.neuroverse.data.repo
 
 import android.content.Context
 import com.dark.userdata.getBrainFilePath
@@ -12,7 +12,8 @@ import com.dark.userdata.saveEncryptedTree
 import com.dark.userdata.schema.NodeContentSchema
 
 object UserData {
-    var rootTree: NeuronTree? = NeuronTree(NeuronNode("root", NodeData(NodeContentSchema(), NodeType.ROOT)))
+    var rootTree: NeuronTree? =
+        NeuronTree(NeuronNode("root", NodeData(NodeContentSchema(), NodeType.ROOT)))
 
     fun init(context: Context){
         rootTree = loadEncryptedTree(getBrainFilePath(context), getOrCreateHardwareBackedAesKey())

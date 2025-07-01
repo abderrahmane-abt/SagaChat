@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountTree
@@ -30,45 +31,45 @@ fun CollapsableButton(
     icon: ImageVector = Icons.Default.AccountTree,
     onClick: () -> Unit = {}
 ) {
-    AnimatedContent(collapse, transitionSpec = {
-        fadeIn() togetherWith fadeOut() using SizeTransform(clip = false)
-    }, label = "Button Animation") {
-        when (it) {
-            true -> {
-                IconButton(
-                    onClick = {
-                        onClick()
-                    },
-                    colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    )
-                ) {
-                    Icon(
-                        icon,
-                        "settings",
-                        modifier = Modifier
-                    )
-                }
-            }
-
-            false -> {
-                Button(
-                    onClick = {
-                        onClick()
-                    },
-                    colors = ButtonDefaults.buttonColors(contentColor = MaterialTheme.colorScheme.onPrimary),
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        AnimatedContent(collapse, transitionSpec = {
+            fadeIn() togetherWith fadeOut() using SizeTransform(clip = false)
+        }, label = "Button Animation") {
+            when (it) {
+                true -> {
+                    IconButton(
+                        onClick = {
+                            onClick()
+                        },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
                     ) {
-                        Text(text, fontFamily = FontFamily.Serif)
+                        Icon(
+                            icon,
+                            "settings",
+                            modifier = Modifier
+                        )
+                    }
+                }
 
-                        Icon(icon, "")
+                false -> {
+                    Button(
+                        onClick = {
+                            onClick()
+                        },
+                        colors = ButtonDefaults.buttonColors(contentColor = MaterialTheme.colorScheme.onPrimary),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(text, fontFamily = FontFamily.Serif)
+
+                            Icon(icon, "")
+                        }
                     }
                 }
             }
         }
-    }
 }
