@@ -10,21 +10,21 @@ import kotlinx.coroutines.launch
 import android.content.Context
 import androidx.lifecycle.ViewModelProvider
 import com.dark.neuroverse.data.db.DatabaseProvider
+import com.dark.neuroverse.worker.model.ModelManager
 
 class ModelScreenViewModel(context: Context) : ViewModel() {
 
     private val _models = MutableStateFlow<List<ModelsData>>(emptyList())
     val models: StateFlow<List<ModelsData>> = _models
 
-    private val dao = DatabaseProvider.getDatabase(context).ModelDAO()
-
     init {
+        ModelManager.init(context)
         observeModels()
     }
 
     private fun observeModels() {
         viewModelScope.launch {
-            dao.getAllModels().collectLatest { modelList ->
+            ModelManager.observeModels().collectLatest { modelList ->
                 _models.value = modelList
             }
         }
@@ -32,33 +32,31 @@ class ModelScreenViewModel(context: Context) : ViewModel() {
 
     fun addModel(model: ModelsData) {
         viewModelScope.launch {
-            dao.insertModel(model)
+            ModelManager.addModel(model)
         }
     }
 
     fun checkIfInstalled(modelName: String, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
-            val exists = dao.getModelByName(modelName) != null
+            val exists = ModelManager.checkIfInstalled(modelName)
             onResult(exists)
         }
     }
 
     fun removeModel(modelName: String) {
         viewModelScope.launch {
-            val model = dao.getModelByName(modelName)
-            if (model != null) {
-                dao.deleteModel(model)
-            }
+            ModelManager.removeModel(modelName)
         }
     }
 
     fun getModel(modelName: String, onResult: (ModelsData?) -> Unit) {
         viewModelScope.launch {
-            val model = dao.getModelByName(modelName)
+            val model = ModelManager.getModel(modelName)
             onResult(model)
         }
     }
 }
+
 
 class ModelScreenViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {

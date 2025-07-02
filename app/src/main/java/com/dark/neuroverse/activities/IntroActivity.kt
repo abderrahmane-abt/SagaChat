@@ -28,7 +28,7 @@ class IntroActivity : ComponentActivity() {
                     IntroScreen(it) {
                         CoroutineScope(Dispatchers.IO).launch {
                             if (UserPrefs.isTermsAccepted(context).first()) {
-                                startActivity(Intent(context, SetUpActivity::class.java))
+                                startActivity(Intent(context, MainActivity::class.java))
                             } else {
                                 startActivity(Intent(context, SetUpActivity::class.java))
                             }

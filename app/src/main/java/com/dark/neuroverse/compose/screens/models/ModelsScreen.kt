@@ -56,15 +56,23 @@ import kotlinx.coroutines.launch
 import java.io.File
 import com.dark.neuroverse.compose.components.systemui.StandardBottomBar
 import com.dark.neuroverse.compose.components.CollapsableButton
+import com.dark.neuroverse.worker.model.ModelManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 
 @Composable
-fun ModelsScreen() {
+fun ModelsScreen(onNext: () -> Unit) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val models = getModelList(context)
     val factory = remember { ModelScreenViewModelFactory(context) }
     val viewModel: ModelScreenViewModel = viewModel(factory = factory)
-    var onDownloadComplete by remember { mutableStateOf(false) }
+
+    var isEnabled by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        isEnabled = ModelManager.isAnyModelInstalled()
+    }
 
     Box(Modifier.fillMaxSize()){
         LazyColumn {
@@ -72,6 +80,7 @@ fun ModelsScreen() {
                 var progress by remember { mutableFloatStateOf(0f) }
                 var isDownloading by remember { mutableStateOf(false) }
                 var message by remember { mutableStateOf("") }
+                var onDownloadComplete by remember { mutableStateOf(false) }
 
                 ModelCard(
                     modelsData = modelData,
@@ -93,6 +102,7 @@ fun ModelsScreen() {
                                     message = "Download Complete"
                                     viewModel.addModel(modelData)
                                     onDownloadComplete = true
+                                    isEnabled = true
                                 },
                                 onError = { e ->
                                     isDownloading = false
@@ -106,9 +116,13 @@ fun ModelsScreen() {
             }
         }
 
-        StandardBottomBar(Modifier.align(Alignment.BottomCenter)){
-            CollapsableButton(text = "Finish", icon = Icons.AutoMirrored.Default.ArrowForward){
 
+
+
+
+        StandardBottomBar(Modifier.align(Alignment.BottomCenter)){
+            CollapsableButton(text = "Finish", icon = Icons.AutoMirrored.Default.ArrowForward, enabled = isEnabled){
+                onNext()
             }
         }
     }

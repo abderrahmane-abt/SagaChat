@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 fun CollapsableButton(
     collapse: Boolean = false,
     text: String = "New Chat",
+    enabled: Boolean = true,
     icon: ImageVector = Icons.Default.AccountTree,
     onClick: () -> Unit = {}
 ) {
@@ -37,6 +38,7 @@ fun CollapsableButton(
             when (it) {
                 true -> {
                     IconButton(
+                        enabled = enabled,
                         onClick = {
                             onClick()
                         },
@@ -55,6 +57,7 @@ fun CollapsableButton(
 
                 false -> {
                     Button(
+                        enabled = enabled,
                         onClick = {
                             onClick()
                         },
