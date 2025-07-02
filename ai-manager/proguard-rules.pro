@@ -1,0 +1,1 @@
+-keep class com.dark.ai_manager.ai.local.Neuron { *; }
