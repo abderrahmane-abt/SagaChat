@@ -9,6 +9,7 @@ import android.util.Log
 import com.dark.task_manager.api.TaskApi
 import com.dark.task_manager.model.TaskInfo
 import com.dark.task_manager.model.TaskType
+import org.json.JSONObject
 import kotlin.math.min
 
 class ApplicationOperator(context: Context) : TaskApi(context) {
@@ -16,7 +17,7 @@ class ApplicationOperator(context: Context) : TaskApi(context) {
     override fun getTaskInfo(): TaskInfo {
         return TaskInfo(
             taskName = "Application Operator",
-            description = "Opens an Android app by app Name ",
+            description = "Opens an Android app by app Name, RULES is NO NEED TO ADD PACKAGE NAME FOR CALLING THIS TOOL, YOU JUST HAVE TO PROVIDE THE APP NAME",
             args = """
                 { app_name: String }
             """.trimIndent(),
@@ -31,7 +32,8 @@ class ApplicationOperator(context: Context) : TaskApi(context) {
     override fun onRun(any: Any) {
         Log.d(getTaskInfo().taskName, "Apps List = ${listApps(context)}")
         val input = any.toString().lowercase()
-        val appNames = extractAppNames(input)
+        val args: JSONObject =  any as JSONObject
+        val appNames = args.getString("app_name")
 
         if (appNames.isEmpty()) {
             Log.w(getTaskInfo().taskName, "No app names detected in input: $input")
@@ -40,16 +42,16 @@ class ApplicationOperator(context: Context) : TaskApi(context) {
 
         val installedApps = listApps(context)
 
-        appNames.forEach { rawName ->
-            val matchedApp = fuzzyFindApp(installedApps, rawName)
+
+            val matchedApp = fuzzyFindApp(installedApps, appNames)
             if (matchedApp != null) {
                 launchApp(context, matchedApp.packageName) {
                     Log.e(getTaskInfo().taskName, "Error launching app ${matchedApp.appName}: $it")
                 }
             } else {
-                Log.w(getTaskInfo().taskName, "No match found for app name: $rawName")
+                Log.w(getTaskInfo().taskName, "No match found for app name: $appNames")
             }
-        }
+
 
         Log.d(getTaskInfo().taskName, "ApplicationTask completed")
     }

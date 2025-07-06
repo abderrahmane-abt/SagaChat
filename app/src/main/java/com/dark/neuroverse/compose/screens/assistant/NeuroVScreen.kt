@@ -538,8 +538,7 @@ fun ActionBox(
                                         val toolCall = jsonObject.getJSONObject("tool_call")
 
                                         val args = toolCall.getJSONObject("args")
-                                        val pkgName = args.getString("app_name")
-                                        TaskRegistry.startTask(pkgName, safePrompt)
+                                        TaskRegistry.startTask(toolCall.getString("name"), args)
                                     }
                                 }
                             })
