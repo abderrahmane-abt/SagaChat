@@ -1,5 +1,6 @@
 package com.dark.neuroverse.compose.screens.assistant
 
+import android.annotation.SuppressLint
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
@@ -79,6 +80,7 @@ import com.dark.task_manager.register.TaskRegistry
 import com.dark.task_manager.register.TaskRouter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -410,6 +412,7 @@ internal object ComposeComponents {
         }
     }
 
+    @SuppressLint("CoroutineCreationDuringComposition")
     @OptIn(ExperimentalMaterial3ExpressiveApi::class)
     @Composable
     fun BodyContentSTT(stt: STTManager) {
@@ -422,10 +425,14 @@ internal object ComposeComponents {
 
         var lastSpeechTimestamp by remember { mutableLongStateOf(0L) }
         var speechOngoing by remember { mutableStateOf(false) }
+        var output by remember { mutableStateOf("") }
+        if (isListening) output = ""
 
         // Track buffer for speech activity
         LaunchedEffect(bufferResults) {
             if (bufferResults.isNotBlank()) {
+                finalResults += bufferResults
+                Log.d("SpeechOutput", "Buffer text is: $bufferResults")
                 lastSpeechTimestamp = System.currentTimeMillis()
                 if (!speechOngoing) {
                     speechOngoing = true
@@ -456,7 +463,6 @@ internal object ComposeComponents {
 
                     if (speechOngoing && timeSinceLastSpeech > 2000) {
                         speechOngoing = false
-                        finalResults = bufferResults
                         Toast.makeText(context, "Speech Paused (End Segment)", Toast.LENGTH_SHORT).show()
                         stt.stop()
                     }
@@ -471,11 +477,30 @@ internal object ComposeComponents {
             if (isListening) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     LoadingIndicator()
-                    Text("Partial: $bufferResults", modifier = Modifier.padding(top = 4.dp))
-                    Text("Final: $finalResults", color = Color.Green, modifier = Modifier.padding(top = 4.dp))
                 }
             } else {
-                Text("Tap mic below to start speaking", color = Color.Gray)
+                if(finalResults.isNotEmpty()){
+                    CoroutineScope(Dispatchers.IO).launch {
+                        Neuron.updateSystemPrompt("YOU ARE A HELP FULL AI ASSISTANT AND YOU REPLY FOR EVERY RESPONSE IN A VERY POLITE MANNER")
+
+                        val temp = """
+                            YOU ARE A HELP FULL AI ASSISTANT AND YOU REPLY FOR EVERY RESPONSE IN A VERY POLITE MANNER
+                            
+                            here is the user prompt
+                            $finalResults
+                        """.trimIndent()
+
+                        output = Neuron.generateResponseStreaming(temp){
+                            output += it
+                        }
+                    }
+                }
+                if (output.isNotEmpty()){
+                    Text(output)
+                    finalResults = ""
+                }else{
+                    Text("Tap mic below to start speaking", color = Color.Gray)
+                }
             }
         }
     }
