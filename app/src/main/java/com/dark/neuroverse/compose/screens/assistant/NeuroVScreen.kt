@@ -2,7 +2,6 @@ package com.dark.neuroverse.compose.screens.assistant
 
 import android.util.Log
 import android.widget.Toast
-import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -32,13 +31,16 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.MicOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedButton
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
@@ -46,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -62,20 +65,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dark.ai_manager.ai.data.db.DatabaseProvider
+import com.dark.ai_manager.ai.local.Neuron
 import com.dark.mylibrary.STTManager
 import com.dark.neuroverse.R
 import com.dark.neuroverse.compose.components.GlitchTypingText
-import com.dark.neuroverse.neurov.mcp.chat.models.ROLE
-import com.dark.neuroverse.neurov.mcp.chat.viewModels.ChattingViewModel
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.neuroverse.utils.UserPrefs
 import com.dark.neuroverse.utils.extractPureJson
+import com.dark.neuroverse.utils.taskRouterSystemPrompt
 import com.dark.neuroverse.viewModel.NeuroVScreenViewModel
 import com.dark.task_manager.register.TaskRegistry
 import com.dark.task_manager.register.TaskRouter
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.io.File
 
 
 private val cardColor = Color(0xFFEFEFEF)
@@ -84,6 +91,17 @@ private val cardColor = Color(0xFFEFEFEF)
 fun NeuroVScreen(onClickOutside: () -> Unit) {
     val viewModel = remember { NeuroVScreenViewModel() }
     var action by remember { mutableStateOf(Action.NONE) }
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        CoroutineScope(Dispatchers.IO).launch {
+            val db = DatabaseProvider.getDatabase(context)
+            Neuron.loadModel(
+                File(db.ModelDAO().getAllModels().first()[0].modelPath),
+                systemPrompt = taskRouterSystemPrompt
+            )
+        }
+    }
 
     NeuroVerseTheme {
         Column(
@@ -136,7 +154,7 @@ internal fun NeuroVHeader(action: Action, onBack: () -> Unit = {}) {
                 .weight(1f)
         )
 
-        IconButton (
+        IconButton(
             onClick = {
                 //Open Settings Activity
             },
@@ -165,7 +183,15 @@ internal fun NeuroVBody(
         when (it) {
             Action.NONE -> ComposeComponents.BodyContentNone(onClick)
 
-            Action.SPEAK -> ComposeComponents.BodyContentSTT()
+            Action.SPEAK -> {
+                val context = LocalContext.current
+                val stt = remember(context) { STTManager(context) }
+
+                Column {
+                    ComposeComponents.BodyContentSTT(stt)
+                    ComposeComponents.BottomBarActionSpeak(stt)
+                }
+            }
 
             else -> ComposeComponents.ResultComposable(viewModel, action)
         }
@@ -202,7 +228,11 @@ internal fun BottomNavButton(text: String, selected: Boolean, onClick: () -> Uni
 }
 
 @Composable
-internal fun ActionBox(action: Action, viewModel: NeuroVScreenViewModel, onPluginSelected: () -> Unit) {
+internal fun ActionBox(
+    action: Action,
+    viewModel: NeuroVScreenViewModel,
+    onPluginSelected: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth(),
@@ -215,7 +245,9 @@ internal fun ActionBox(action: Action, viewModel: NeuroVScreenViewModel, onPlugi
             when (it) {
                 Action.WRITE -> ComposeComponents.BottomBarActionWrite(viewModel)
 
-                Action.SPEAK -> ComposeComponents.BodyContentSTT()
+                Action.SPEAK -> {
+
+                }
 
                 else -> ComposeComponents.DefaultActionCompose(onPluginSelected)
             }
@@ -368,19 +400,85 @@ internal object ComposeComponents {
                     onClick(Action.SPEAK)
                 }
             )
-            QuickActionCard(
-                modifier = Modifier.weight(1f),
-                icon = painterResource(R.drawable.brain), // swap for your AGU icon
-                title = "AGU",
-                desc = "Let the AI understand the surrounding & make decisions",
-                true
-            )
+//            QuickActionCard(
+//                modifier = Modifier.weight(1f),
+//                icon = painterResource(R.drawable.brain), // swap for your AGU icon
+//                title = "AGU",
+//                desc = "Let the AI understand the surrounding & make decisions",
+//                true
+//            )
         }
     }
 
+    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
     @Composable
-    fun BodyContentSTT() =
-        Toast.makeText(LocalContext.current, "Coming Soon....!", Toast.LENGTH_SHORT).show()
+    fun BodyContentSTT(stt: STTManager) {
+        val bufferResults by stt.bufferSpeechResults.collectAsState()
+        var finalResults by remember { mutableStateOf("") }
+        val isListening by stt.isListening.collectAsState()
+
+        val context = LocalContext.current
+        val scope = rememberCoroutineScope()
+
+        var lastSpeechTimestamp by remember { mutableLongStateOf(0L) }
+        var speechOngoing by remember { mutableStateOf(false) }
+
+        // Track buffer for speech activity
+        LaunchedEffect(bufferResults) {
+            if (bufferResults.isNotBlank()) {
+                lastSpeechTimestamp = System.currentTimeMillis()
+                if (!speechOngoing) {
+                    speechOngoing = true
+                    Toast.makeText(context, "Speech Resumed (Interrupt)", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        LaunchedEffect(finalResults) {
+            if (finalResults.isNotBlank()) {
+                Toast.makeText(context, "Final Speech Text: $finalResults", Toast.LENGTH_SHORT).show()
+
+                // You can also trigger your model, save text, or whatever:
+                Log.d("SpeechOutput", "Final text is: $finalResults")
+            }
+        }
+
+
+        // Pause detection with proper coroutine
+        LaunchedEffect(isListening) {
+            if (isListening) {
+                speechOngoing = false
+                lastSpeechTimestamp = System.currentTimeMillis()
+
+                while (true) {
+                    kotlinx.coroutines.delay(500)
+                    val timeSinceLastSpeech = System.currentTimeMillis() - lastSpeechTimestamp
+
+                    if (speechOngoing && timeSinceLastSpeech > 2000) {
+                        speechOngoing = false
+                        finalResults = bufferResults
+                        Toast.makeText(context, "Speech Paused (End Segment)", Toast.LENGTH_SHORT).show()
+                        stt.stop()
+                    }
+                }
+            }
+        }
+
+        Box(
+            Modifier.fillMaxWidth().height(200.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isListening) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    LoadingIndicator()
+                    Text("Partial: $bufferResults", modifier = Modifier.padding(top = 4.dp))
+                    Text("Final: $finalResults", color = Color.Green, modifier = Modifier.padding(top = 4.dp))
+                }
+            } else {
+                Text("Tap mic below to start speaking", color = Color.Gray)
+            }
+        }
+    }
 
     @Composable
     fun ResultComposable(viewModel: NeuroVScreenViewModel, action: Action) {
@@ -412,6 +510,7 @@ internal object ComposeComponents {
         }
     }
 
+    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
     @Composable
     fun BottomBarActionWrite(viewModel: NeuroVScreenViewModel) {
         var text by remember { mutableStateOf("Search About Humans") }
@@ -424,11 +523,6 @@ internal object ComposeComponents {
             UserPrefs.isAGU(context).collect { isAguChecked = it }
         }
 
-        val animColor by animateColorAsState(
-            targetValue = if (isAguChecked) Color(0xFF0FB100) else Color.Black,
-            animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing)
-        )
-
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -439,13 +533,12 @@ internal object ComposeComponents {
             val context = LocalContext.current
             val stt = remember(context) { STTManager(context) }
             val speechResults by stt.speechResults.collectAsState()
+            val isListening by stt.isListening.collectAsState()
 
             LaunchedEffect(speechResults) {
-                text = speechResults
-            }
-
-            LaunchedEffect(speechResults) {
-                text = speechResults
+                if (speechResults.isBlank()) return@LaunchedEffect
+                val result = JSONObject(speechResults)
+                text = result.getString("text")
             }
 
             BasicTextField(
@@ -466,32 +559,29 @@ internal object ComposeComponents {
                 }
             )
 
-            // AUG
-            Icon(
-                painterResource(R.drawable.brain),
-                contentDescription = "AGU",
-                tint = animColor,
-                modifier = Modifier.clickable {
-                    isAguChecked = !isAguChecked
-                    coroutineScope.launch {
-                        UserPrefs.setAGU(context, isAguChecked)
-                    }
-                }
-            )
-
             // SPEAK
-            Icon(
-                painterResource(R.drawable.mic),
-                contentDescription = "Speak",
-                modifier = Modifier.clickable {
-                    if (stt.isModelReady()) {
-                        if(stt.isListening.value) stt.stop()
-                        else stt.startListening()
-                    } else {
-                        Toast.makeText(context, "Model loading...", Toast.LENGTH_SHORT).show()
-                    }
+            when (isListening) {
+                true -> {
+                    LoadingIndicator(Modifier.clickable {
+                        stt.stop()
+                    })
                 }
-            )
+
+                false -> {
+                    Icon(
+                        painterResource(R.drawable.mic),
+                        contentDescription = "Speak",
+                        modifier = Modifier.clickable {
+                            if (stt.isModelReady()) {
+                                stt.startListening()
+                            } else {
+                                Toast.makeText(context, "Model loading...", Toast.LENGTH_SHORT)
+                                    .show()
+                            }
+                        }
+                    )
+                }
+            }
 
 
             //SEND
@@ -525,6 +615,38 @@ internal object ComposeComponents {
             )
         }
     }
+
+    @Composable
+    fun BottomBarActionSpeak(stt: STTManager) {
+        val context = LocalContext.current
+        val isListening by stt.isListening.collectAsState()
+
+        Box(
+            Modifier.fillMaxWidth().height(200.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            IconButton(
+                onClick = {
+                    if (stt.isModelReady()) {
+                        if (isListening) stt.stop() else stt.startListening()
+                    } else {
+                        Toast.makeText(context, "Model loading...", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                modifier = Modifier.size(54.dp),
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            ) {
+                Icon(
+                    if (isListening) Icons.Outlined.MicOff else Icons.Outlined.Mic,
+                    contentDescription = "Speak"
+                )
+            }
+        }
+    }
+
 
     @Composable
     fun DefaultActionCompose(onPluginSelected: () -> Unit) {

@@ -1,13 +1,13 @@
 package com.dark.mylibrary
 
 import android.Manifest
-import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
-import androidx.core.app.ActivityCompat
+import android.util.Log
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import org.json.JSONObject
 import org.vosk.Model
 import org.vosk.Recognizer
 import org.vosk.android.RecognitionListener
@@ -19,28 +19,34 @@ class STTManager(private val activity: Context) : RecognitionListener {
     private var model: Model? = null
     private var speechService: SpeechService? = null
 
-
     private val _speechResults = MutableStateFlow("")
     val speechResults: StateFlow<String> get() = _speechResults
+
+    private val _buffeSpeechResults = MutableStateFlow("")
+    val bufferSpeechResults: StateFlow<String> get() = _buffeSpeechResults
 
     private val _isListening = MutableStateFlow(false)
     val isListening: StateFlow<Boolean> get() = _isListening
 
     fun isModelReady() = model != null
 
-
     init {
         checkPermissionAndInit()
     }
 
     private fun checkPermissionAndInit() {
-        if (ContextCompat.checkSelfPermission(activity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(
+                activity,
+                Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
             initModel()
         }
     }
 
     fun initModel() {
-        StorageService.unpack(activity, "vosk-model-small-en-in-0.4", "model",
+        StorageService.unpack(
+            activity, "vosk-model-small-en-in-0.4", "model",
             { unpackedModel ->
                 model = unpackedModel
             },
@@ -57,6 +63,7 @@ class STTManager(private val activity: Context) : RecognitionListener {
                 speechService = SpeechService(recognizer, 16000.0f)
                 speechService?.startListening(this)
                 _isListening.value = true
+                _speechResults.value = "" // Clear old results
             } catch (e: Exception) {
                 _speechResults.value = "Recognizer Error: ${e.message}"
             }
@@ -64,7 +71,6 @@ class STTManager(private val activity: Context) : RecognitionListener {
             _speechResults.value = "Model not initialized!"
         }
     }
-
 
     fun stop() {
         speechService?.stop()
@@ -74,23 +80,28 @@ class STTManager(private val activity: Context) : RecognitionListener {
     }
 
     override fun onResult(hypothesis: String?) {
-        hypothesis?.let {
-            _speechResults.value = it
-        }
+        // Ignore continuous result flooding
     }
 
     override fun onFinalResult(hypothesis: String?) {
-        hypothesis?.let {
-            _speechResults.value = it
+        hypothesis?.takeIf { it.isNotBlank() }?.let {
+            _speechResults.value = it.trim()
+            Log.d("STTManager", "Final Result: $it")
         }
         stop()
     }
 
     override fun onPartialResult(hypothesis: String?) {
-        hypothesis?.let {
-            _speechResults.value = it
+        hypothesis?.takeIf { it.isNotBlank() }?.let {
+            val json = JSONObject(it.trim())
+            val partialText = json.optString("partial", "")
+            if (partialText.isNotBlank()) {
+                _buffeSpeechResults.value = partialText
+            }
         }
     }
+
+
 
     override fun onError(e: Exception?) {
         _speechResults.value = "Error: ${e?.message}"
@@ -98,7 +109,7 @@ class STTManager(private val activity: Context) : RecognitionListener {
     }
 
     override fun onTimeout() {
-        _speechResults.value = "Listening timed out"
+        _speechResults.value = ""
         stop()
     }
 }
