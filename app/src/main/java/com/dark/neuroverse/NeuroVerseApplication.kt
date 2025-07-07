@@ -25,8 +25,6 @@ class NeuroVerseApplication : Application() {
 
         val db = DatabaseProvider.getDatabase(this)
 
-
-
         CoroutineScope(Dispatchers.IO).launch {
             if (!UserPrefs.isTermsAccepted(applicationContext).first()) return@launch
 

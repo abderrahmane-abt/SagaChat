@@ -6,7 +6,9 @@ import com.dark.task_manager.model.TaskListModel
 import com.dark.task_manager.tasks.TimeLogger
 import com.dark.task_manager.tasks.background.AutoReply
 import com.dark.task_manager.tasks.foreground.application_operator.ApplicationOperator
+import com.dark.task_manager.tasks.foreground.search_wiki.WikiSearchTask
 import kotlinx.coroutines.*
+import org.json.JSONObject
 
 object TaskRegistry {
 
@@ -15,7 +17,7 @@ object TaskRegistry {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     fun init(context: Context) {
-        registerTask(ApplicationOperator(context), TimeLogger(context), AutoReply(context))
+        registerTask(WikiSearchTask(context), ApplicationOperator(context), TimeLogger(context), AutoReply(context))
     }
 
     fun registerTask(vararg taskApis: TaskApi) {
@@ -27,7 +29,7 @@ object TaskRegistry {
         }
     }
 
-    fun startTask(taskName: String, data: Any) {
+    fun startTask(taskName: String, data: Any, onResult: (JSONObject) -> Unit = {}) {
         val taskModel = tasks.find { it.taskInfo.taskName == taskName }
         if (taskModel == null) {
             println("Task '$taskName' not found.")
@@ -41,7 +43,7 @@ object TaskRegistry {
                 println("Task '$taskName' is already running. Updating...")
 
                 scope.launch(existingJob) {
-                    taskModel.taskApi.onRun(data)
+                    onResult(taskModel.taskApi.onRun(data) as JSONObject)
                 }
                 return
             }
@@ -49,7 +51,7 @@ object TaskRegistry {
 
         val job = scope.launch {
             taskModel.taskApi.onStart(data)
-            taskModel.taskApi.onRun(data)
+            onResult(taskModel.taskApi.onRun(data) as JSONObject)
         }
         jobMap[taskName] = job
     }

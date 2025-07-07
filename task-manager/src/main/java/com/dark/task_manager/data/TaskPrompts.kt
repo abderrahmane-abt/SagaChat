@@ -3,6 +3,7 @@ package com.dark.task_manager.data
 val toolRouterAIPrompt =
     """
         THE LIST OF TOOLS ARE HERE ALONG WITH THE QUERY BY THE USER &
+        YOU HAVE TO PREDICT FROM THE USERS PROMPT WHICH TOOL TO USE AND
         When you reply, output **only** the JSON object.  
         Do **not** wrap it in backticks, code fences, or any other markup—just pure JSON.
         The Schema For Json is 

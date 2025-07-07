@@ -29,31 +29,31 @@ class ApplicationOperator(context: Context) : TaskApi(context) {
         Log.d(getTaskInfo().taskName, "ApplicationTask started")
     }
 
-    override fun onRun(any: Any) {
+    override fun onRun(any: Any): Any {
         Log.d(getTaskInfo().taskName, "Apps List = ${listApps(context)}")
         val input = any.toString().lowercase()
-        val args: JSONObject =  any as JSONObject
+        val args: JSONObject = any as JSONObject
         val appNames = args.getString("app_name")
 
         if (appNames.isEmpty()) {
             Log.w(getTaskInfo().taskName, "No app names detected in input: $input")
-            return
+            return JSONObject().put("result", "No app names detected in input: $input")
         }
 
         val installedApps = listApps(context)
 
-
-            val matchedApp = fuzzyFindApp(installedApps, appNames)
-            if (matchedApp != null) {
-                launchApp(context, matchedApp.packageName) {
-                    Log.e(getTaskInfo().taskName, "Error launching app ${matchedApp.appName}: $it")
-                }
-            } else {
-                Log.w(getTaskInfo().taskName, "No match found for app name: $appNames")
+        val matchedApp = fuzzyFindApp(installedApps, appNames)
+        if (matchedApp != null) {
+            launchApp(context, matchedApp.packageName) {
+                Log.e(getTaskInfo().taskName, "Error launching app ${matchedApp.appName}: $it")
             }
+        } else {
+            Log.w(getTaskInfo().taskName, "No match found for app name: $appNames")
+        }
 
 
         Log.d(getTaskInfo().taskName, "ApplicationTask completed")
+        return JSONObject().put("result", "Success")
     }
 
 

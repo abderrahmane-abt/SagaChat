@@ -16,28 +16,11 @@ class SmolLM {
             val logTag = SmolLM::class.java.simpleName
 
             val cpuFeatures = getCPUFeatures().split(" ")
-            val hasFp16 = "fp16" in cpuFeatures || "fphp" in cpuFeatures
-            val hasDotProd = "dotprod" in cpuFeatures || "asimddp" in cpuFeatures
-            val hasSve = "sve" in cpuFeatures
-            val hasI8mm = "i8mm" in cpuFeatures
-            val isAtLeastArmV82 = "asimd" in cpuFeatures && "crc32" in cpuFeatures && "aes" in cpuFeatures
-            val isAtLeastArmV84 = "dcpop" in cpuFeatures && "uscat" in cpuFeatures
-
-            val isEmulated = Build.HARDWARE.contains("goldfish") || Build.HARDWARE.contains("ranchu")
-
             Log.d(logTag, "CPU features: $cpuFeatures")
 
             val lib = when {
-                isEmulated -> "smollm"
-                supportsArm64V8a() && isAtLeastArmV84 && hasSve && hasI8mm && hasFp16 && hasDotProd -> "smollm_v8_4_fp16_dotprod_i8mm_sve"
-                supportsArm64V8a() && isAtLeastArmV84 && hasSve && hasFp16 && hasDotProd -> "smollm_v8_4_fp16_dotprod_sve"
-                supportsArm64V8a() && isAtLeastArmV84 && hasI8mm && hasFp16 && hasDotProd -> "smollm_v8_4_fp16_dotprod_i8mm"
-                supportsArm64V8a() && isAtLeastArmV84 && hasFp16 && hasDotProd -> "smollm_v8_4_fp16_dotprod"
-                supportsArm64V8a() && isAtLeastArmV82 && hasFp16 && hasDotProd -> "smollm_v8_2_fp16_dotprod"
-                supportsArm64V8a() && isAtLeastArmV82 && hasFp16 -> "smollm_v8_2_fp16"
                 supportsArm64V8a() -> "smollm_v8"
-                Build.SUPPORTED_32_BIT_ABIS.firstOrNull() == "armeabi-v7a" -> "smollm_v7a"
-                else -> "smollm"
+                else -> "smollm"  // fallback, though this shouldn't happen with your setup
             }
 
             Log.d(logTag, "Loading lib$lib.so")

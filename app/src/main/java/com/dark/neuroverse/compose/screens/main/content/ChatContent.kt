@@ -238,7 +238,7 @@ fun BottomChat(viewModel: ChattingViewModel) {
                         onValueChange = { UserInput.updateText(it) },
                         singleLine = false,
                         modifier = Modifier.fillMaxWidth(),
-                        textStyle = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Normal),
+                        textStyle = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Normal, color = Color.Gray),
                         decorationBox = { innerTextField ->
                             if (text.isEmpty()) {
                                 Text(

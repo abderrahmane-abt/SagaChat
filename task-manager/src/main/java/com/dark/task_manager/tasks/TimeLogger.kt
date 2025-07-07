@@ -5,6 +5,7 @@ import android.util.Log
 import com.dark.task_manager.api.TaskApi
 import com.dark.task_manager.model.TaskInfo
 import com.dark.task_manager.model.TaskType
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -25,10 +26,11 @@ class TimeLogger(context: Context) : TaskApi(context) {
         Log.d(getTaskInfo().taskName, "TimeLogger started")
     }
 
-    override fun onRun(any: Any) {
+    override fun onRun(any: Any): Any {
         val currentTime = getCurrentTime()
         Log.d(getTaskInfo().taskName, "Current time is: $currentTime")
         // You can add logic here to send the time to UI or log it elsewhere.
+        return JSONObject().put("result", currentTime)
     }
 
     override fun onStop() {

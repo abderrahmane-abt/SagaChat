@@ -30,6 +30,15 @@ object ModelsList {
             File(modelsDir, "Kodify-Nano-GGUF.gguf").absolutePath
         )
 
-        return listOf(janNanoGuff, kodifyNano)
+        val llamaToolCallV2 = ModelsData(
+            id = 0,
+            "Llama_3.2_1B_Intruct-TC-V2",
+            "A specialized fine-tuned version of the meta-llama/Llama-3.2-1B-Instruct model enhanced with function/tool calling capabilities. The model leverages the nguyenthanhthuan/function-calling-sharegpt dataset for training.",
+            "https://huggingface.co/mav23/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF/resolve/main/llama_3.2_1b_intruct_tool_calling_v2.Q2_K.gguf?download=true",
+            "https://huggingface.co/mav23/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF",
+            File(modelsDir, "llama_3.2_1b_intruct_tool_calling_v2.Q2_K.gguf").absolutePath
+        )
+
+        return listOf(janNanoGuff, kodifyNano, llamaToolCallV2)
     }
 }

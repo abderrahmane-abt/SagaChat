@@ -10,7 +10,7 @@ object TaskRouter {
 
     // Build the task string: "Task1: Description1, Task2: Description2, ..."
     val toolListStr = taskList.joinToString(separator = ", ") { task ->
-        "${task.taskInfo.taskName}: ${task.taskInfo.description}"
+        "tool Name -> ${task.taskInfo.taskName}: tool Description -> ${task.taskInfo.description}: tool Args -> ${task.taskInfo.args}"
     }
 
     suspend fun processUserPrompt(userPrompt: String): String {
@@ -18,13 +18,28 @@ object TaskRouter {
         Log.d("TaskDemoScreen", "Task String: $toolListStr")
 
         val input = buildString {
-            appendLine(toolRouterAIPrompt)
+            appendLine("SYSTEM INSTRUCTION:")
+            appendLine("You are a strict tool-calling AI.")
             appendLine()
-            appendLine("TOOLS LIST:")
-            appendLine(toolListStr)
+            appendLine("Output format:")
+            appendLine("- JSON ONLY.")
+            appendLine("- No explanations, no extra text.")
             appendLine()
-            appendLine("USER PROMPT: $userPrompt")
+            appendLine("Example:")
+            appendLine("""{ "tool_call": { "name": "Wiki Search", "args": { "query": "example" } } }""")
+            appendLine()
+            appendLine("List of Available Tools:\n")
+
+            taskList.forEach { task ->
+                appendLine("Tool: ${task.taskInfo.taskName}")
+                appendLine("Args: ${task.taskInfo.args}")
+                appendLine()
+            }
+
+            appendLine("User Request: $userPrompt")
         }
+
+        Log.e("TaskDemoScreen", "Input: $input")
 
         Neuron.updateSystemPrompt(toolRouterAIPrompt)
 

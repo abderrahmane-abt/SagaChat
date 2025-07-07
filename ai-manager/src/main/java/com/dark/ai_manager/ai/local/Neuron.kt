@@ -27,7 +27,7 @@ object Neuron {
         systemPrompt: String,
         onLoaded: (() -> Unit)? = null
     ) {
-        val file = File("/storage/emulated/0/Download/Models/llama_3.2_1b_intruct_tool_calling_v2.Q2_K.gguf")
+        val file = path
         require(file.exists()) { "Model file missing at: ${path.path}" }
         Log.d("Neuron", "Loading ${file.name}, size=${file.length()}")
 

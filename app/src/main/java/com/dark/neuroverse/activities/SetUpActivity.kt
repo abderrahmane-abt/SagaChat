@@ -1,6 +1,8 @@
 package com.dark.neuroverse.activities
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -23,16 +25,24 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import com.dark.ai_manager.ai.data.db.DatabaseProvider
+import com.dark.ai_manager.ai.local.Neuron
+import com.dark.mylibrary.STTManager
 import com.dark.neuroverse.compose.components.systemui.TopBar
 import com.dark.neuroverse.compose.screens.models.ModelsScreen
 import com.dark.neuroverse.compose.screens.setup.data.SetupState
 import com.dark.neuroverse.compose.screens.setup.terms.TermsAndConditionScreen
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.neuroverse.utils.UserPrefs
+import com.dark.neuroverse.utils.taskRouterSystemPrompt
 import com.dark.neuroverse.worker.model.ModelManager
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.io.File
 
 class SetUpActivity : ComponentActivity() {
     @OptIn(
@@ -40,13 +50,22 @@ class SetUpActivity : ComponentActivity() {
         ExperimentalMaterial3ExpressiveApi::class,
         ExperimentalAnimationApi::class
     )
+
+    private val PERMISSIONS_REQUEST_RECORD_AUDIO = 1
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+        val context = this
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.RECORD_AUDIO),
+                PERMISSIONS_REQUEST_RECORD_AUDIO
+            )
+        }
         setContent {
             enableEdgeToEdge()
             NeuroVerseTheme {
-                val context = LocalContext.current
                 var setupState by remember { mutableStateOf(SetupState.CHOOSE_MODELS) }
                 val scope = rememberCoroutineScope()
                 var message by remember { mutableStateOf("") }

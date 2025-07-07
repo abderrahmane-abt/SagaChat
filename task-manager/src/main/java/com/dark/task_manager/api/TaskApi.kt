@@ -3,6 +3,7 @@ package com.dark.task_manager.api
 import android.content.Context
 import com.dark.task_manager.model.TaskInfo
 import com.dark.task_manager.model.TaskType
+import org.json.JSONObject
 
 open class TaskApi(internal val context: Context) {
     open fun getTaskInfo(): TaskInfo{
@@ -14,6 +15,8 @@ open class TaskApi(internal val context: Context) {
         )
     }
     open fun onStart(any: Any) {}
-    open fun onRun(any: Any) {}
+    open fun onRun(any: Any): Any {
+        return JSONObject()
+    }
     open fun onStop(){}
 }

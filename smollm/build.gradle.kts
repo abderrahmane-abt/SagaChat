@@ -1,3 +1,6 @@
+import com.android.build.api.dsl.Packaging
+import groovy.lang.ExpandoMetaClassCreationHandle.enable
+
 /*
  * Copyright (C) 2024 Shubham Panchal
  *
@@ -35,11 +38,35 @@ android {
                 cppFlags += listOf()
             }
         }
+
+        ndk {
+            //noinspection ChromeOsAbiSupport
+            abiFilters += "arm64-v8a"
+        }
+    }
+
+    // legacy packaging = compress native libs
+    fun Packaging.() {
+        jniLibs {
+            // legacy packaging = compress native libs
+            useLegacyPackaging = true
+        }
+    }
+
+    // if you prefer splits:
+    splits {
+        abi {
+            reset()
+            include("arm64-v8a")
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
+            ndk {
+                debugSymbolLevel = "none"  // Strip native debug symbols
+            }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -59,6 +86,8 @@ android {
         }
     }
 }
+
+
 
 dependencies {
     implementation(libs.kotlinx.coroutines.core)

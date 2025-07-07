@@ -14,6 +14,7 @@ import com.dark.task_manager.services.NotificationListener
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 class AutoReply(context: Context) : TaskApi(context) {
 
@@ -35,11 +36,12 @@ class AutoReply(context: Context) : TaskApi(context) {
 
     }
 
-    override fun onRun(any: Any) {
-        if (isGenerating) return
+    override fun onRun(any: Any): Any {
+        if (isGenerating) return JSONObject().put("result", "Generating")
         if (any is Pair<*, *> && any.first is NotificationListener && any.second is StatusBarNotification) {
             onReceived(any.first as NotificationListener, any.second as StatusBarNotification)
         }
+        return JSONObject().put("result", "Success")
     }
 
     private fun onReceived(listener: NotificationListener, sbn: StatusBarNotification) {

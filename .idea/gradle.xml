@@ -15,6 +15,7 @@
             <option value="$PROJECT_DIR$/smollm" />
             <option value="$PROJECT_DIR$/task-manager" />
             <option value="$PROJECT_DIR$/userData" />
+            <option value="$PROJECT_DIR$/vosk" />
           </set>
         </option>
       </GradleProjectSettings>
