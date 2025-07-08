@@ -6,6 +6,7 @@ import com.dark.task_manager.model.TaskListModel
 import com.dark.task_manager.tasks.TimeLogger
 import com.dark.task_manager.tasks.background.AutoReply
 import com.dark.task_manager.tasks.foreground.application_operator.ApplicationOperator
+import com.dark.task_manager.tasks.foreground.files.FileManager
 import com.dark.task_manager.tasks.foreground.search_wiki.WikiSearchTask
 import kotlinx.coroutines.*
 import org.json.JSONObject
@@ -17,7 +18,7 @@ object TaskRegistry {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     fun init(context: Context) {
-        registerTask(WikiSearchTask(context), ApplicationOperator(context), TimeLogger(context), AutoReply(context))
+        registerTask(WikiSearchTask(context), FileManager(context), ApplicationOperator(context), TimeLogger(context), AutoReply(context))
     }
 
     fun registerTask(vararg taskApis: TaskApi) {

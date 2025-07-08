@@ -1,4 +1,4 @@
-package com.dark.userdata.schema
+package com.dark.userdata.ntds.schema
 
 import kotlinx.serialization.Serializable
 

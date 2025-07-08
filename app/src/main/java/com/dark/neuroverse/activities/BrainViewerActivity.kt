@@ -2,7 +2,6 @@ package com.dark.neuroverse.activities
 
 import android.os.Bundle
 import android.util.Log
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -14,11 +13,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,18 +34,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.dark.neuroverse.BuildConfig
-import com.dark.neuroverse.data.repo.UserData
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
-import com.dark.userdata.collectAllNodes
-import com.dark.userdata.getBrainFilePath
-import com.dark.userdata.getOrCreateHardwareBackedAesKey
-import com.dark.userdata.loadEncryptedTree
-import com.dark.userdata.neuron_tree.NeuronNode
-import com.dark.userdata.neuron_tree.NeuronTree
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import java.io.File
+import com.dark.userdata.ntds.collectAllNodes
+import com.dark.userdata.ntds.getBrainFilePath
+import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
+import com.dark.userdata.ntds.loadEncryptedTree
+import com.dark.userdata.ntds.neuron_tree.NeuronNode
+import com.dark.userdata.ntds.neuron_tree.NeuronTree
 
 class BrainViewerActivity : ComponentActivity() {
 

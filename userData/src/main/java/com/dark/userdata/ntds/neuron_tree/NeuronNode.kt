@@ -1,6 +1,6 @@
-package com.dark.userdata.neuron_tree
+package com.dark.userdata.ntds.neuron_tree
 
-import com.dark.userdata.schema.NodeContentSchema
+import com.dark.userdata.ntds.schema.NodeContentSchema
 import kotlinx.serialization.Serializable
 import java.util.UUID
 

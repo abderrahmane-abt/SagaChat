@@ -538,7 +538,7 @@ internal object ComposeComponents {
     @OptIn(ExperimentalMaterial3ExpressiveApi::class)
     @Composable
     fun BottomBarActionWrite(viewModel: NeuroVScreenViewModel) {
-        var text by remember { mutableStateOf("Search About Humans") }
+        var text by remember { mutableStateOf("Just Create a Text File With Random Data") }
         var isAguChecked by remember { mutableStateOf(false) }
         val context = LocalContext.current
         val coroutineScope = rememberCoroutineScope()

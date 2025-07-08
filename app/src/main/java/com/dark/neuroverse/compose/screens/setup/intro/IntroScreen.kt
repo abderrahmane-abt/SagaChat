@@ -24,10 +24,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.dark.neuroverse.BuildConfig
-import com.dark.userdata.getBrainFilePath
-import com.dark.userdata.getOrCreateHardwareBackedAesKey
-import com.dark.userdata.neuron_tree.getDefaultBrainStructure
-import com.dark.userdata.saveEncryptedTree
+import com.dark.userdata.getDefaultBrainStructure
+import com.dark.userdata.ntds.getBrainFilePath
+import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
+import com.dark.userdata.ntds.saveEncryptedTree
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)

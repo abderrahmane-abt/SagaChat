@@ -1,10 +1,8 @@
-package com.dark.userdata
+package com.dark.userdata.ntds
 
 import android.content.Context
-import com.dark.userdata.neuron_tree.NeuronNode
-import com.dark.userdata.neuron_tree.NeuronTree
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.decodeFromString
+import com.dark.userdata.ntds.neuron_tree.NeuronNode
+import com.dark.userdata.ntds.neuron_tree.NeuronTree
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.io.RandomAccessFile

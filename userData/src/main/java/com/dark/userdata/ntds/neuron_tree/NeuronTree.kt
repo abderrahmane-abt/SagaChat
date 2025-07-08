@@ -1,8 +1,8 @@
-package com.dark.userdata.neuron_tree
+package com.dark.userdata.ntds.neuron_tree
 
-import com.dark.userdata.schema.ChildNodeSchema
-import com.dark.userdata.schema.NodeContentSchema
-import com.dark.userdata.schema.NodeTags
+import com.dark.userdata.ntds.schema.ChildNodeSchema
+import com.dark.userdata.ntds.schema.NodeContentSchema
+import com.dark.userdata.ntds.schema.NodeTags
 import kotlinx.serialization.Serializable
 
 /**
@@ -139,52 +139,4 @@ class NeuronTree(internal val root: NeuronNode) {
 
 }
 
-fun getDefaultBrainStructure(): NeuronTree {
-    val tools = generateOperatorNode("tools", OperatorNodesContent.TOOLS)
-    val temp = generateOperatorNode("temp-mem", OperatorNodesContent.TEMPORARY_MEMORY)
-    val main = generateOperatorNode("main-mem", OperatorNodesContent.MAIN_MEMORY)
-    val ai = generateOperatorNode("ai", OperatorNodesContent.AI)
 
-    val root = NeuronNode("root", NodeData(NodeContentSchema(
-        name = "root",
-        tags = listOf(NodeTags.ROOT, NodeTags.PR_VERY_HIGH),
-        childNodes = listOf(
-            ChildNodeSchema(tools.id),
-            ChildNodeSchema(temp.id),
-            ChildNodeSchema(main.id),
-            ChildNodeSchema(ai.id)
-        )
-    ), NodeType.ROOT))
-    val tree = NeuronTree(root)
-
-    tree.addChild(root.id, tools, temp, main, ai)
-
-    return tree
-}
-
-internal fun generateOperatorNode(id: String, content: NodeContentSchema = NodeContentSchema()): NeuronNode{
-    return NeuronNode(id, NodeData(content, NodeType.OPERATOR))
-}
-
-internal object OperatorNodesContent{
-    val TOOLS = NodeContentSchema(
-        name = "tool",
-        tags = listOf(NodeTags.TOOL, NodeTags.APP_OPERATOR, NodeTags.PR_VERY_HIGH),
-        childNodes = mutableListOf(ChildNodeSchema())
-    )
-    val TEMPORARY_MEMORY = NodeContentSchema(
-        name = "temporary-memory",
-        tags = listOf(NodeTags.TEMP, NodeTags.PR_LOW, NodeTags.TEMP_MESSAGES),
-        childNodes = mutableListOf(ChildNodeSchema())
-    )
-    val MAIN_MEMORY = NodeContentSchema(
-        name = "main-memory",
-        tags = listOf(NodeTags.MAIN, NodeTags.PR_MEDIUM, NodeTags.MAIN_CONVERSATION),
-        childNodes = mutableListOf(ChildNodeSchema())
-    )
-    val AI = NodeContentSchema(
-        name = "ai",
-        tags = listOf(NodeTags.AI, NodeTags.PR_HIGH),
-        childNodes = mutableListOf(ChildNodeSchema())
-    )
-}
