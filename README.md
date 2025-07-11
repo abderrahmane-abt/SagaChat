@@ -60,14 +60,13 @@ Tasks are modular, isolated, and designed with privacy and performance in mind.
 ## Screenshots
 
 > Experimental UI Previews
+![Preview 1](web/Screenshot_1.png)
 
 <p align="center">
   <img src="web/Screenshot_1.png" alt="Preview 1" width="200" />
   <img src="web/Screenshot_2.png" alt="Preview 2" width="200" />
   <img src="web/Screenshot_3.png" alt="Preview 3" width="200" />
 </p>
-
-[https://github.com/user-attachments/assets/546037b8-05f1-43d4-bc24-15ae2caf4bb0](https://github.com/user-attachments/assets/546037b8-05f1-43d4-bc24-15ae2caf4bb0)
 
 ---
 
