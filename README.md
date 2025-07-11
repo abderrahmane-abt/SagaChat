@@ -60,7 +60,6 @@ Tasks are modular, isolated, and designed with privacy and performance in mind.
 ## Screenshots
 
 > Experimental UI Previews
-![Preview 1](web/Screenshot_1.png)
 
 <p align="center">
   <img src="web/Screenshot_1.png" alt="Preview 1" width="200" />
