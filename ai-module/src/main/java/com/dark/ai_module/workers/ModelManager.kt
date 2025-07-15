@@ -38,6 +38,10 @@ object ModelManager {
         }
     }
 
+    suspend fun getFirstModel(): ModelsData? {
+        return dao.getAllModels().first().firstOrNull()
+    }
+
     suspend fun getModel(modelName: String): ModelsData? {
         return dao.getModelByName(modelName)
     }

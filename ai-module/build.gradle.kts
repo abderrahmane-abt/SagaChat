@@ -38,6 +38,9 @@ android {
 
 dependencies {
 
+    //PROJECTS
+    implementation(project(":smollm"))
+
     //DATABASE
     implementation(libs.androidx.room.runtime)
     ksp(libs.androidx.room.compiler)

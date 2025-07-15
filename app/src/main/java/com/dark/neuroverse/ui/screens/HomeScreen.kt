@@ -9,7 +9,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
-import com.dark.neuroverse.ui.components.IntroComposable
 
 @Composable
 fun HomeScreen() {

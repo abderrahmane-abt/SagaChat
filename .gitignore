@@ -22,3 +22,4 @@ local.properties
 /app/release/output-metadata.json
 /.idea/codeStyles/Project.xml
 /web/*.html
+/smollm/src/main/jniLibs/
