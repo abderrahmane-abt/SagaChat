@@ -43,7 +43,7 @@
 > Experimental UI Previews
 
 <p align="center">
-  <img src="RES/output.gif" alt="Demo" width="400"/>
+  <img src="RES/output.gif" alt="Demo" width="260"/>
 </p>
 ---
 
