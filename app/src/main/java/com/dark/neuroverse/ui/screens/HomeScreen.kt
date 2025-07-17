@@ -79,7 +79,7 @@ import kotlinx.coroutines.flow.collectLatest
 import java.io.File
 
 @Composable
-fun HomeScreen(viewModel: ChattingViewModel = viewModel(), onModelScreen: () -> Unit){
+fun HomeScreen(viewModel: ChattingViewModel = viewModel(), onModelScreen: () -> Unit) {
 
     WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
@@ -97,7 +97,7 @@ fun HomeScreen(viewModel: ChattingViewModel = viewModel(), onModelScreen: () -> 
 }
 
 @Composable
-internal fun TopBar(viewModel: ChattingViewModel, onModelScreen: () -> Unit){
+internal fun TopBar(viewModel: ChattingViewModel, onModelScreen: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val density = LocalDensity.current
     val screenWidthDp = LocalWindowInfo.current.containerSize.width.dp
@@ -119,9 +119,7 @@ internal fun TopBar(viewModel: ChattingViewModel, onModelScreen: () -> Unit){
         val tempModel = File(ModelManager.getModel(currentModel)?.modelPath ?: "")
         if (currentModel != "") {
             Neuron.loadModel(
-                path = tempModel,
-                context = context,
-                systemPrompt = "You are a helpful assistant."
+                path = tempModel, context = context, systemPrompt = "You are a helpful assistant."
             ) {
                 Toast.makeText(context, "$currentModel Model loaded", Toast.LENGTH_SHORT).show()
             }
@@ -216,6 +214,18 @@ internal fun Conversations(modifier: Modifier = Modifier, viewModel: ChattingVie
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = if (message.role == ROLE.USER) Alignment.End else Alignment.Start
         ) {
+            if (message.role == ROLE.USER) {
+                if (message.document?.name != "") {
+                    Box(Modifier.padding(start = rDP(12.dp)), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = message.document?.name ?: "",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
             if (isThinkingMessage) {
                 ThinkingBubble(message.copy(content = cleanThinking))
             }
@@ -303,7 +313,9 @@ internal fun BottomBar(viewModel: ChattingViewModel) {
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(rDP(10.dp))
         ) {
-            Box(modifier = Modifier.weight(1f).padding(8.dp)) {
+            Box(modifier = Modifier
+                .weight(1f)
+                .padding(8.dp)) {
                 BasicTextField(
                     value = userInput,
                     textStyle = MaterialTheme.typography.titleMedium.copy(
@@ -322,8 +334,7 @@ internal fun BottomBar(viewModel: ChattingViewModel) {
                             )
                         }
                         innerTextField()
-                    }
-                )
+                    })
             }
 
             // Attachment Button
@@ -424,8 +435,7 @@ internal object UIComponents {
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         shape = MaterialTheme.shapes.medium
                     )
-                    .padding(rDP(10.dp))
-            ) {
+                    .padding(rDP(10.dp))) {
                 Icon(
                     imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                     contentDescription = "Expand",

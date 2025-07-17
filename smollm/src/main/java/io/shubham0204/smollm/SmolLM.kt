@@ -54,13 +54,14 @@ class SmolLM(private val context: Context) {
                     params.useMmap,
                     params.useMlock
                 )
+
             } catch (e: IllegalStateException) {
                 Log.e(logTag, "Model load failed: ${e.message}", e)
             }
         }
 
     object DefaultInferenceParams {
-        const val contextSize: Long = 1024L
+        const val contextSize: Long = 8024L
         val chatTemplate: String = """
             {% for message in messages %}
                 {% if loop.first and messages[0]['role'] != 'system' %}
@@ -76,7 +77,7 @@ class SmolLM(private val context: Context) {
         val minP: Float = 0.01f,
         val temperature: Float = 1.0f,
         val storeChats: Boolean = false,
-        val contextSize: Long? = null,
+        val contextSize: Long? = 8024L,
         val chatTemplate: String? = null,
         val numThreads: Int = 4,
         val useMmap: Boolean = true,
@@ -111,6 +112,7 @@ class SmolLM(private val context: Context) {
     fun getResponseAsFlow(query: String): Flow<String> = flow {
         verifyHandle()
         startCompletion(nativePtr, query)
+        Log.d("CONTEXT", "CTX size used >> ${getContextSizeUsed(nativePtr)}")
         while (true) {
             val piece = completionLoop(nativePtr)
             if (piece == "[EOG]") break

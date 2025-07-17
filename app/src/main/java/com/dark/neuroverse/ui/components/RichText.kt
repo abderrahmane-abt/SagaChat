@@ -82,6 +82,13 @@ fun RichText(
                     append("\n\n")
                 }
 
+                trimmedLine.startsWith("#### ") -> {
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = style.fontSize * 1.1f)) {
+                        append(trimmedLine.removePrefix("#### "))
+                    }
+                    append("\n\n")
+                }
+
                 // List items
                 trimmedLine.startsWith("•") || trimmedLine.startsWith("- ") || trimmedLine.startsWith("* ") -> {
                     append("• ")

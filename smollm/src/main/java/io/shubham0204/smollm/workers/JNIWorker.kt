@@ -26,6 +26,22 @@ object JNIWorker {
         }
     }
 
+    suspend fun downloadLib(context: Context, libName: String, onDownloadComplete: () -> Unit) {
+        val nativeJniPath = File(context.filesDir, "jniLibs").apply { mkdirs() }
+
+        val matchedLib = jniLibs.find {
+            it.name == "lib$libName" // match full filename (without .so)
+        } ?: error("Compatible JNI lib not found for $libName")
+
+        jniLibsDownloader(
+            fileUrl = matchedLib.link,
+            outputFile = File(nativeJniPath, "${matchedLib.name}.so"),
+            onProgress = {},
+            onComplete = { onDownloadComplete() },
+            onError = {}
+        )
+    }
+
     suspend fun downloadLib(context: Context, onDownloadComplete: () -> Unit) {
         val nativeJniPath = File(context.filesDir, "jniLibs").apply { mkdirs() }
 

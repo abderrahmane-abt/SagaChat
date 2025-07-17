@@ -3,11 +3,13 @@ package com.dark.neuroverse.viewModel
 import android.content.Context
 import android.database.Cursor
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.ai_module.ai.Neuron
 import com.dark.neuroverse.data.DocReader
+import com.dark.neuroverse.model.DOC
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.ROLE
 import kotlinx.coroutines.Dispatchers
@@ -25,7 +27,11 @@ class ChattingViewModel : ViewModel() {
     val messages: StateFlow<List<Message>> = _messages
     private val _streamingBuffer = MutableStateFlow("")
     val streamingBuffer: StateFlow<String> = _streamingBuffer
-    private val fileData = MutableStateFlow("")
+    private val fileData = MutableStateFlow(
+        DOC(
+            "", "", "", ""
+        )
+    )
 
     private val _isGenerating = MutableStateFlow(false)
     val isGenerating: StateFlow<Boolean> = _isGenerating
@@ -38,7 +44,9 @@ class ChattingViewModel : ViewModel() {
             val userTime = System.currentTimeMillis().toString()
             val streamTime = "streaming" // temp ID for live update
 
-            val userMessage = Message(ROLE.USER, userInput, userTime)
+            val document = fileData.value
+
+            val userMessage = Message(ROLE.USER, userInput, userTime, document)
             _messages.update { it + userMessage }
 
             // Add placeholder AI message (initially blank)
@@ -63,8 +71,11 @@ class ChattingViewModel : ViewModel() {
                             put("role", msg.role.name.lowercase())
                             put("content", cleanedContent)
                             put("timestamp", msg.timeStamp)
-                            if (fileData.value.isNotEmpty()) {
-                                put("user_shared_document", fileData.value)
+                            if (fileData.value.path.isNotEmpty()) {
+                                put("Has User Shared A Document ?", "Yes")
+                                put("document.name", fileData.value.name)
+                                put("document.type", fileData.value.type)
+                                put("document.content", fileData.value.content)
                             }
                         })
                     }
@@ -93,6 +104,7 @@ class ChattingViewModel : ViewModel() {
             }
 
             _isGenerating.value = false
+            fileData.value = DOC("", "", "", "")
 
             // Replace temporary message with full final message
             _messages.update { current ->
@@ -139,7 +151,7 @@ class ChattingViewModel : ViewModel() {
 
     // Helper Extension
     private fun Cursor.getColumnIndexOpenableColumnsDisplayName(): Int {
-        return getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+        return getColumnIndex(OpenableColumns.DISPLAY_NAME)
     }
 
 

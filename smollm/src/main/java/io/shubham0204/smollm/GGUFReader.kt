@@ -16,6 +16,7 @@
 
 package io.shubham0204.smollm
 
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -28,10 +29,10 @@ class GGUFReader {
 
     private var nativeHandle: Long = 0L
 
-    suspend fun load(modelPath: String) =
-        withContext(Dispatchers.IO) {
-            nativeHandle = getGGUFContextNativeHandle(modelPath)
-        }
+    suspend fun load(modelPath: String) = withContext(Dispatchers.IO) {
+        nativeHandle = getGGUFContextNativeHandle(modelPath)
+        if (nativeHandle != 0L) Log.d("JNI DEBUG", getContextSize().toString())
+    }
 
     fun getContextSize(): Long? {
         assert(nativeHandle == 0L) { "Use GGUFReader.load() to initialize the reader" }
