@@ -42,7 +42,9 @@
 
 > Experimental UI Previews
 
-![Demo](RES/output.gif)
+<p align="center">
+  <img src="RES/output.gif" alt="Demo" width="400"/>
+</p>
 ---
 
 ## Technical Stack
