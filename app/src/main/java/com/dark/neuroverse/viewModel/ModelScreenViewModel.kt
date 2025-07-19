@@ -11,6 +11,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModelProvider
 import com.dark.ai_module.model.ModelsData
 import com.dark.ai_module.workers.ModelManager
+import java.io.File
 
 class ModelScreenViewModel(context: Context) : ViewModel() {
 
@@ -45,6 +46,9 @@ class ModelScreenViewModel(context: Context) : ViewModel() {
 
     fun removeModel(modelName: String) {
         viewModelScope.launch {
+            ModelManager.getModel(modelName)?.let { model ->
+                File(model.modelPath).delete()
+            }
             ModelManager.removeModel(modelName)
         }
     }

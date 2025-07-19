@@ -1,16 +1,52 @@
 package com.dark.ai_module.workers
 
 import android.content.Context
+import com.dark.ai_module.ai.Neuron
 import com.dark.ai_module.db.DatabaseProvider
 import com.dark.ai_module.db.ModelDAO
 import com.dark.ai_module.model.ModelsData
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import java.io.File
 
 object ModelManager {
 
     private var daoInitialized = false
     private lateinit var dao: ModelDAO
+    private lateinit var currentModel: MutableStateFlow<ModelsData>
+    private var modelParams = MutableStateFlow(Pair(ModelParams.Professional(), ModelParams.Emotional()))
+
+    fun getModel() = currentModel
+
+    fun getModelParams() = modelParams
+
+    fun setCurrentModel(model: ModelsData) {
+        currentModel.value = model
+    }
+
+    fun updateModelParams(
+        professional: ModelParams.Professional = ModelParams.Professional(),
+        emotional: ModelParams.Emotional = ModelParams.Emotional()
+    ) {
+        modelParams.value = Pair(professional, emotional)
+    }
+
+    fun loadModel(context: Context, modelData: ModelsData, onLoaded: () -> Unit) {
+        Neuron.loadModel(
+            File(modelData.modelPath), context = context,
+            systemPrompt = "You are a helpful assistant.",
+            contextLength = modelData.modelCtxSize.toLong(),
+            chatTemplate = modelData.chatTemplate
+        ) {
+            onLoaded()
+            currentModel = MutableStateFlow(modelData)
+        }
+    }
+
+
+
 
     fun init(context: Context) {
         if (!daoInitialized) {
@@ -49,4 +85,9 @@ object ModelManager {
     suspend fun isAnyModelInstalled(): Boolean {
         return dao.getAllModels().first().isNotEmpty()
     }
+}
+
+object ModelParams {
+    data class Professional(val float: Float = 3.5f)
+    data class Emotional(val float: Float = 7.6f)
 }

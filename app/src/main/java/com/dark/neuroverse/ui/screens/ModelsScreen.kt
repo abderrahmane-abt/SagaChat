@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -19,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.ArrowCircleDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.twotone.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -40,8 +42,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -53,6 +58,7 @@ import com.dark.neuroverse.ui.components.CollapsableButton
 import com.dark.neuroverse.ui.components.StandardBottomBar
 import com.dark.neuroverse.ui.theme.Success
 import com.dark.neuroverse.ui.theme.onSuccess
+import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.ModelScreenViewModel
 import com.dark.neuroverse.viewModel.ModelScreenViewModelFactory
 import kotlinx.coroutines.launch
@@ -80,8 +86,7 @@ fun ModelsScreen(onNext: () -> Unit) {
                 .fillMaxWidth()
                 .padding(top = 24.dp, start = 24.dp, bottom = 12.dp),
             style = MaterialTheme.typography.headlineLarge.copy(
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Serif
+                fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif
             )
         )
 
@@ -186,6 +191,23 @@ fun ModelCard(
             Text(
                 modelsData.modelDescription, style = MaterialTheme.typography.bodyLarge
             )
+
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ){
+                Text(
+                    buildAnnotatedString {
+                        withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, fontSize = MaterialTheme.typography.titleMedium.fontSize)) {
+                            append("Details\n")
+                        }
+                        append("\u2023 Context Size: ${modelsData.modelCtxSize}\n")
+                        append("\u2023 Model Size: ${modelsData.modelSize} MB\n")
+                        append("\u2023 Tool Call: ${modelsData.toolUse.uppercase()}")
+                    }
+                )
+            }
+
             AnimatedVisibility(isDownloading) {
                 LinearWavyProgressIndicator(
                     modifier = Modifier.fillMaxWidth(),
@@ -194,7 +216,7 @@ fun ModelCard(
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Button(onClick = {
-                    onDownload()
+                    if (!isInstalled) onDownload()
                 }, colors = buttonColor) {
                     Crossfade(isInstalled) {
                         when (it) {
@@ -203,8 +225,8 @@ fun ModelCard(
                             }
 
                             false -> {
-                                Crossfade(isDownloading) {
-                                    when (it) {
+                                Crossfade(isDownloading) { isDownload ->
+                                    when (isDownload) {
                                         true -> {
                                             Icon(
                                                 Icons.Default.Stop,
@@ -222,6 +244,23 @@ fun ModelCard(
                                 }
                             }
                         }
+                    }
+                }
+
+                Spacer(Modifier.width(rDP(8.dp)))
+
+                AnimatedVisibility(isInstalled) {
+                    Button(
+                        onClick = {
+                            viewModel.removeModel(modelsData.modeName)
+                            isInstalled = false
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Icon(Icons.TwoTone.Delete, contentDescription = "")
                     }
                 }
 

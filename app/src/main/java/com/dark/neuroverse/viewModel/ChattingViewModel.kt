@@ -1,5 +1,6 @@
 package com.dark.neuroverse.viewModel
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.database.Cursor
 import android.net.Uri
@@ -28,8 +29,8 @@ class ChattingViewModelFactory(private val context: Context) : ViewModelProvider
         return ChattingViewModel(context) as T
     }
 }
-
-class ChattingViewModel(private val context: Context) : ViewModel() {
+@SuppressLint("StaticFieldLeak")
+class ChattingViewModel( private val context: Context) : ViewModel() {
 
     //region -- State Variables
     private lateinit var key: MutableStateFlow<SecretKey>

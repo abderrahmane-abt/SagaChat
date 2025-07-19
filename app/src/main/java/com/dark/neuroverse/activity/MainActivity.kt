@@ -16,7 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.dark.ai_module.ai.Neuron
 import com.dark.ai_module.helpers.JNILibHelper
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
@@ -33,7 +32,6 @@ import com.dark.userdata.ntds.saveEncryptedTree
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.io.File
 
 class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -108,16 +106,7 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable(Screen.Settings.route) {
-                            SettingsScreen(
-                                onClearChat = { /* logic */ },
-                                onClearPrefs = { /* logic */ },
-                                onClearAllData = { /* logic */ },
-                                onChangeModel = {
-                                    navController.navigate(Screen.Model.route)
-                                },
-                                modelName = "gte-small-fp32",
-                                appVersion = "v0.0.1-beta"
-                            )
+                            SettingsScreen()
                         }
                     }
                 }
@@ -129,13 +118,15 @@ class MainActivity : ComponentActivity() {
     private suspend fun loadJNI(onLoaded: () -> Unit) {
         JNILibHelper.loadJNILib(this@MainActivity) {
             CoroutineScope(Dispatchers.IO).launch {
-                Neuron.loadModel(
-                    File(ModelManager.getFirstModel()?.modelPath ?: ""),
-                    context = this@MainActivity,
-                    systemPrompt = "You are a helpful assistant."
-                ) {
-                    onLoaded()
+                val model = ModelManager.getFirstModel()
+                if (model != null) {
+                    ModelManager.loadModel(this@MainActivity, model) {
+                        onLoaded()
+                        return@loadModel
+                    }
                 }
+
+                onLoaded()
             }
         }
     }

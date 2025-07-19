@@ -67,7 +67,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.dark.ai_module.ai.Neuron
 import com.dark.ai_module.model.ModelsData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.R
@@ -83,7 +82,6 @@ import com.dark.neuroverse.viewModel.ChattingViewModel
 import com.dark.neuroverse.viewModel.ChattingViewModelFactory
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import java.io.File
 
 @Composable
 fun HomeScreen(
@@ -143,12 +141,13 @@ internal fun TopBar(viewModel: ChattingViewModel, onDrawerOpen: () -> Unit) {
     }
 
     LaunchedEffect(currentModel) {
-        val tempModel = File(ModelManager.getModel(currentModel)?.modelPath ?: "")
+        val tempModel = ModelManager.getModel(currentModel)
         if (currentModel != "") {
-            Neuron.loadModel(
-                path = tempModel, context = context, systemPrompt = "You are a helpful assistant."
-            ) {
-                Toast.makeText(context, "$currentModel Model loaded", Toast.LENGTH_SHORT).show()
+            if (tempModel != null) {
+                ModelManager.loadModel(context, tempModel) {
+                    Toast.makeText(context, "$currentModel Model loaded", Toast.LENGTH_SHORT).show()
+                }
+                return@LaunchedEffect
             }
         }
     }

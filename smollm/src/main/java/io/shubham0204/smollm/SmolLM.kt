@@ -36,13 +36,14 @@ class SmolLM(private val context: Context) {
         libraryLoaded = true
     }
 
-    suspend fun load(modelPath: String, params: InferenceParams = InferenceParams()) =
+    suspend fun load(modelPath: String, params: InferenceParams) =
         withContext(Dispatchers.IO) {
             if (!libraryLoaded) init()
             val ctxSize = params.contextSize ?: DefaultInferenceParams.contextSize
             val template = params.chatTemplate ?: DefaultInferenceParams.chatTemplate
 
             try {
+                Log.d("Template", template)
                 nativePtr = loadModel(
                     modelPath,
                     params.minP,

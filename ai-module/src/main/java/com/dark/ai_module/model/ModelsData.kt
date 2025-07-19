@@ -9,7 +9,11 @@ data class ModelsData(
     val id: Int = 0,
     val modeName: String,
     val modelDescription: String,
+    val modelCtxSize: Int,
+    val toolUse: String,
     val modelLink: String,
     val modelPageLink: String,
-    val modelPath: String
+    val modelPath: String,
+    val chatTemplate: String,
+    val modelSize: Int
 )
