@@ -10,6 +10,7 @@ import androidx.lifecycle.*
 import com.dark.ai_module.ai.Neuron
 import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.data.DocReader
+import com.dark.neuroverse.data.UserPrefs
 import com.dark.neuroverse.model.*
 import com.dark.neuroverse.util.extractPureJson
 import com.dark.userdata.*
@@ -55,6 +56,9 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
     private val _attachedFiles = MutableStateFlow<List<FileAttachment>>(emptyList())
     val attachedFiles: StateFlow<List<FileAttachment>> = _attachedFiles
 
+    val professionalism = MutableStateFlow(5.0f) // default mid-level
+    val emotional = MutableStateFlow(5.0f)       // default mid-level
+
 
     val chatId = MutableStateFlow("")
     //endregion
@@ -83,6 +87,9 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
             updateChatList()
             clearAttachment()
             rootNode.value.printTree()
+
+            professionalism.value = UserPrefs.getModelPParams(context).first()!!
+            emotional.value = UserPrefs.getModelEParams(context).first()!!
         }
     }
     //endregion
@@ -342,6 +349,9 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
         return JSONObject().apply {
             put("messages", arr)
             put("response_format", "text")
+            put("professionalism", professionalism.value)
+            put("emotional", emotional.value)
+
             if (finalizedDocs.isNotEmpty()) {
                 put("documents", JSONArray().apply {
                     finalizedDocs.forEach {

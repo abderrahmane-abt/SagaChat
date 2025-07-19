@@ -15,6 +15,11 @@ object ModelsList {
         val chatTemplate = """
             <|im_start|>system
             Your name is Neuron, developed by NeuroV. You only send short, polite, relevant auto-replies when the user is unavailable. Never overthink, reason, or generate long responses. Keep replies under 10 words.
+            Use the following parameters to adjust your tone:
+            - Professionalism: {{ professionalism }} (0.1 - 9.0)
+            - Emotional: {{ emotional }} (0.1 - 9.0)
+            
+            Respond with tone adjusted to these values.
             <|im_end|>
             {% for message in messages %}
             <|im_start|>{{ message['role'] }}
