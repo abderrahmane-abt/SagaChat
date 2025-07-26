@@ -9,9 +9,14 @@ import android.os.IBinder
 import android.os.Message
 import android.os.Messenger
 import android.util.Log
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import com.dark.plugins.engine.ComposableBlock
 import com.dark.plugins.engine.PluginApi
 import com.dark.plugins.engine.PluginInfo
 import com.dark.plugins.sys.uiAction.CommandBridgeService
+import com.dark.plugins.ui.theme.NeuroVersePluginTheme
 import org.json.JSONObject
 
 class UiActionPlugin(private val context: Context) : PluginApi(context) {
@@ -62,5 +67,16 @@ class UiActionPlugin(private val context: Context) : PluginApi(context) {
 
     override fun getPluginInfo(): PluginInfo {
         return PluginInfo("UiActionPlugin", "Handles UI tool calls via accessibility bridge")
+    }
+
+    @Composable
+    override fun AppContent(){
+        NeuroVersePluginTheme {
+            Button(onClick = {
+
+            }) {
+                Text("Send Click Command")
+            }
+        }
     }
 }

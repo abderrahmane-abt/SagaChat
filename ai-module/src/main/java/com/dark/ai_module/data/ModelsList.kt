@@ -85,19 +85,21 @@ object ModelsList {
             940
         )
 
-        val smolJson = ModelsData(
+        val qwenZeroCoder = ModelsData(
             id = 4,
-            "SmolLM2-360M-Instruct-Text-2-JSON",
-            "This model is fine-tuned on SmolLM2-360M-Instruct-bnb-4bit using QLoRA to extract structured calendar event information from natural language text. It identifies and structures key scheduling entities like action, date, time, attendees, location, duration, recurrence, and notes.",
-            8192,
+            "Qwen3-Zero-Coder-Reasoning-0.8B",
+            "This is a coder/programming model, will full reasoning on the Qwen 3 platform that is insanely fast - hitting over 150 t/s on moderate hardware, and 50 t/s+ on CPU only...",
+            40960,
             "YES",
-            "https://huggingface.co/pramodkoujalagi/SmolLM2-360M-Instruct-Text-2-JSON/resolve/main/SmolLM2-360M-Instruct-Text-2-JSON.Q4_K_M.gguf?download=true",
-            "https://huggingface.co/pramodkoujalagi/SmolLM2-360M-Instruct-Text-2-JSON",
-            File(modelsDir, "SmolLM2-JSON.Q4_K_M.gguf").absolutePath,
+            "https://huggingface.co/DavidAU/Qwen3-Zero-Coder-Reasoning-0.8B-NEO-EX-GGUF/resolve/main/Qwen3-Zero-Coder-Reasoning-0.8B-NEO-EX-D_AU-Q4_K_M-imat.gguf?download=true",
+            "https://huggingface.co/DavidAU/Qwen3-Zero-Coder-Reasoning-0.8B-NEO-EX-GGUF",
+            File(modelsDir, "QwenZeroCoder-Q4_K_M-imat.gguf").absolutePath,
             chatTemplate,
-            303
+            528
         )
 
-        return listOf(smolJson, lucy128K, kodifyNano, janNanoGuff, llamaToolCallV2)
+
+
+        return listOf(qwenZeroCoder, lucy128K, kodifyNano, janNanoGuff, llamaToolCallV2)
     }
 }
