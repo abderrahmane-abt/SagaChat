@@ -177,7 +177,7 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
                     return@launch
                 }
 
-                val fullResponse = Neuron.generateResponseStreaming(inputStr) { chunk ->
+                val fullResponse = Neuron.generateStreamAndWait(inputStr) { chunk ->
                     viewModelScope.launch(Dispatchers.Main) {
                         _streamingBuffer.update { it + chunk }
                         _messages.update {
@@ -295,7 +295,7 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
         """.trimIndent()
 
         runCatching {
-            val result = Neuron.generateResponseBlocking(prompt)
+            val result = Neuron.generateAndWait(prompt)
             val title = JSONObject(extractPureJson(result)).getString("title")
             _chatTitle.value = title
         }.onFailure {
