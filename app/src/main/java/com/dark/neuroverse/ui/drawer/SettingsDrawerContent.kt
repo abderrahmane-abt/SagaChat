@@ -34,12 +34,12 @@ import androidx.compose.ui.unit.dp
 import com.dark.neuroverse.activity.TempActivity
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.ChattingViewModel
+import com.dark.neuroverse.viewModel.PluginHostViewModel
 
 @Composable
 fun SettingsDrawerContent(
-    viewModel: ChattingViewModel, onSettingsClick: () -> Unit, onModelsClick: () -> Unit
+    viewModel: PluginHostViewModel, onSettingsClick: () -> Unit, onModelsClick: () -> Unit
 ) {
-    val chatList = viewModel.chatList.collectAsState(emptyList())
     val context = LocalContext.current
 
     Column(
@@ -63,37 +63,6 @@ fun SettingsDrawerContent(
                         fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold
                     ), modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
                 )
-            }
-
-            items(chatList.value) { chat ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically, modifier = Modifier
-                        .clickable {
-                            viewModel.loadChatById(chat.id)
-                        }
-                        .background(
-                            MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small
-                        )
-                        .padding(rDP(10.dp))) {
-                    Text(
-                        text = chat.name,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    Icon(
-                        Icons.TwoTone.Delete,
-                        contentDescription = "Delete",
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier
-                            .padding(start = 8.dp)
-                            .clickable {
-                                viewModel.deleteChatById(chat.id)
-                            })
-                }
-
             }
         }
 

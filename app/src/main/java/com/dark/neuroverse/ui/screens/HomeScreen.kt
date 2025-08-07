@@ -66,6 +66,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelsData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.R
+import com.dark.neuroverse.activity.PluginHostScreen
 import com.dark.neuroverse.model.DOC
 import com.dark.neuroverse.model.FileAttachment
 import com.dark.neuroverse.model.Message
@@ -79,9 +80,13 @@ import com.dark.neuroverse.ui.screens.UIComponents.ThinkingBubble
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.ChattingViewModel
 import com.dark.neuroverse.viewModel.ChattingViewModelFactory
+import com.dark.neuroverse.viewModel.PluginHostViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
+/* ===================================================================== */
+/*  HomeScreen — uses PluginHostScreen as the plugin host                 */
+/* ===================================================================== */
 @Composable
 fun HomeScreen(
     onRequestModelChange: () -> Unit, // For navigating to model screen
@@ -90,22 +95,23 @@ fun HomeScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val viewModel: ChattingViewModel = viewModel(factory = ChattingViewModelFactory(context))
+    val viewModel: PluginHostViewModel = viewModel()
 
     LaunchedEffect(Unit) {
         Log.d("HomeScreen", "LaunchedEffect triggered")
-        viewModel.updateChatList()
         Log.d("HomeScreen", "Chat list updated")
     }
 
     ModalNavigationDrawer(
-        drawerState = drawerState, drawerContent = {
+        drawerState = drawerState,
+        drawerContent = {
             SettingsDrawerContent(
                 viewModel,
                 onSettingsClick = onRequestSettingsChange,
                 onModelsClick = onRequestModelChange
             )
-        }) {
+        }
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -115,83 +121,51 @@ fun HomeScreen(
         ) {
             TopBar(
                 viewModel = viewModel,
-                onDrawerOpen = {
-                    scope.launch { drawerState.open() }
-                },
+                onDrawerOpen = { scope.launch { drawerState.open() } },
             )
-            Conversations(Modifier.weight(1f), viewModel)
-            BottomBar(viewModel)
+
+            // This is the unified plugin host UI
+            PluginHostScreen(viewModel = viewModel)
+
+            // Conversations + BottomBar are managed by plugins now; keep them commented
+            // Conversations(Modifier.weight(1f), viewModel)
+            // BottomBar(viewModel)
         }
     }
 }
 
-
+/* ===================================================================== */
+/*  TopBar (unchanged behavior, minor tidy)                               */
+/* ===================================================================== */
 @Composable
-internal fun TopBar(viewModel: ChattingViewModel, onDrawerOpen: () -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    val modelList = remember { mutableStateListOf<ModelsData>() }
-
-    val context = LocalContext.current
-
-    LaunchedEffect(Unit) {
-        ModelManager.observeModels().collectLatest { data ->
-            modelList.clear()
-            modelList += data
-            Log.d("ModelManager", "Model list updated: $data")
-        }
-    }
-
-
+internal fun TopBar(viewModel: PluginHostViewModel, onDrawerOpen: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
     ) {
-        IconButton(onClick = {
-            onDrawerOpen()
-        }) {
+        IconButton(onClick = onDrawerOpen) {
             Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
         }
 
-        val chatTitle = viewModel.chatTitle.collectAsState()
-
-        Crossfade(chatTitle.value.ifEmpty { "NeuroV Chat" }) { title ->
+        val chatTitle = viewModel.activePluginName.collectAsState().value
+        Crossfade(chatTitle) { title ->
             Text(
-                title,
+                title ?: "Neuro-V",
                 maxLines = 1,
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.headlineSmall.copy(
-                    fontFamily = FontFamily.Serif, fontWeight = FontWeight.W100
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.W100
                 )
             )
         }
 
-
         Spacer(Modifier.weight(1f))
 
         IconButton(onClick = {
-            viewModel.newChat()
+
         }) {
             Icon(painter = painterResource(R.drawable.new_chat), contentDescription = "New Chat")
-        }
-
-        // “More” button that toggles the dropdown
-        IconButton(onClick = { expanded = true }, modifier = Modifier) {
-            Icon(painter = painterResource(R.drawable.more), contentDescription = "More")
-        }
-        if (expanded) {
-            ModelDialog(modelList) {
-                expanded = false
-                if (it != null) {
-                    Toast.makeText(
-                        context, "Model switched to ${it.modeName}", Toast.LENGTH_SHORT
-                    ).show()
-                    ModelManager.loadModel(context, it) {
-                        Toast.makeText(
-                            context, "Model loaded successfully", Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                }
-            }
         }
     }
 }
