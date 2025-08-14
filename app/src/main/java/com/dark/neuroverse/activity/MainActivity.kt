@@ -72,6 +72,10 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // Get plugin name from intent
+        val pluginName = intent.getStringExtra("plugin_name")
+        Log.d("MainActivity", "plugin_name extra: $pluginName")
+
         setContent {
             val navController = rememberNavController()
             var isJNIReady by remember { mutableStateOf(false) }
@@ -94,8 +98,11 @@ class MainActivity : ComponentActivity() {
 
             LaunchedEffect(isJNIReady) {
                 if (isJNIReady) {
-                    val startScreen = if (ModelManager.isAnyModelInstalled())
-                        Screen.Home.route else Screen.Model.route
+                    val startScreen = when {
+                        pluginName != null -> Screen.Home.route // direct to Home
+                        ModelManager.isAnyModelInstalled() -> Screen.Home.route
+                        else -> Screen.Model.route
+                    }
                     navController.navigate(startScreen) {
                         popUpTo(Screen.Intro.route) { inclusive = true }
                     }
@@ -110,11 +117,9 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(innerPadding)
                     ) {
                         composable(Screen.Intro.route) {
-                            Log.d("Screen", "Intro")
                             IntroScreen(isJNIDownloading)
                         }
                         composable(Screen.Model.route) {
-                            Log.d("Screen", "Model")
                             ModelsScreen {
                                 navController.navigate(Screen.Home.route) {
                                     popUpTo(Screen.Model.route) { inclusive = true }
@@ -122,14 +127,14 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         composable(Screen.Home.route) {
-                            Log.d("Screen", "Home")
                             HomeScreen(
                                 onRequestModelChange = {
                                     navController.navigate(Screen.Model.route)
                                 },
                                 onRequestSettingsChange = {
                                     navController.navigate(Screen.Settings.route)
-                                }
+                                },
+                                pluginName = pluginName // pass it to HomeScreen if needed
                             )
                         }
                         composable(Screen.Settings.route) {
@@ -140,6 +145,7 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
 
     private suspend fun loadJNI(onLoaded: () -> Unit) {
         val model = ModelManager.getFirstModel()

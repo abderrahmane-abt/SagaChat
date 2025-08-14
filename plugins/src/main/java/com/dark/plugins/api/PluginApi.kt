@@ -1,4 +1,4 @@
-package com.dark.plugins.engine
+package com.dark.plugins.api
 
 import android.content.Context
 import androidx.annotation.CallSuper
@@ -9,8 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import com.dark.ai_module.ai.Neuron
-import com.dark.plugins.repo.PluginRegistry
-import com.dark.plugins.worker.PluginManager
+import com.dark.plugins.manager.PluginManager
 import org.json.JSONObject
 
 typealias ComposableBlock = @Composable () -> Unit
@@ -44,7 +43,7 @@ open class PluginApi(ctx: Context) : ComposePlugin {
     }
 
     open fun callPlugin(name: String, data: Any) {
-        PluginManager.runPlugin(appContext, path, args)
+        PluginManager.runPlugin(appContext, name, data)
     }
 
     @Composable

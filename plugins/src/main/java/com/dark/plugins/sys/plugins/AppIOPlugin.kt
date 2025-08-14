@@ -9,10 +9,9 @@ import android.graphics.drawable.Drawable
 import android.os.Build
 import android.util.Log
 import androidx.core.net.toUri
-import com.dark.plugins.engine.PluginApi
-import com.dark.plugins.engine.PluginInfo
+import com.dark.plugins.api.PluginApi
+import com.dark.plugins.api.PluginInfo
 import com.dark.plugins.sys.uiAction.fuzzyFindApp
-import org.json.JSONArray
 import org.json.JSONObject
 
 data class AppInfo(

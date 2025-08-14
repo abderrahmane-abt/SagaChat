@@ -6,7 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewModelScope
 import com.dark.ai_module.workers.ModelManager
-import com.dark.plugins.worker.PluginManager
+import com.dark.plugins.manager.PluginManager
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -18,8 +18,10 @@ import java.io.File
 class PluginHostViewModel : ViewModel() {
 
     /** All loaded plugins (directly mirrored from PluginManager). */
+    val installedPlugins =
+        PluginManager.installedPlugins.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val loadedPlugins =
-        PluginManager.plugins.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        PluginManager.runningPlugins.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Currently focused/active plugin instance (mirrored). */
     val currentPlugin =
@@ -33,44 +35,31 @@ class PluginHostViewModel : ViewModel() {
     val isActiveLoaded: StateFlow<Boolean> = activePluginName.map { name ->
             if (name == null) return@map false
             loadedPlugins.value.any {
-                it.loadedPlugin?.api?.getPluginInfo()?.name == name
+                it.api?.getPluginInfo()?.name == name
             }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
-
-    /* ----------------------------------------------------------------- *//*  Public API                                                        *//* ----------------------------------------------------------------- */
-
-    /** Load default model & bootstrap plugins once. Safe to call repeatedly. */
-    fun ensureInitialLoad(appContext: Context) {
-        viewModelScope.launch {
-            ModelManager.getModel("Lucy-128k-gguf")?.let { mdl ->
-                Log.d("PluginHostViewModel", "Loading default model...")
-                ModelManager.loadModel(appContext, mdl) {
-                    Log.d("PluginHostViewModel", "Default model loaded.")
-                    if (loadedPlugins.value.isEmpty()) {
-                        listOf(
-                            "app-io-plugin.zip", "demo-macro-plugin.zip", "ai-chat-plugin.zip"
-                        ).forEach { runPluginZip(appContext, it) }
-                    }
-                }
-            }
-        }
-    }
-
-    fun loadPlugin(appContext: Context, file: File) {
-        viewModelScope.launch {
-            runPluginZip(appContext = appContext, path = file)
-        }
-    }
-
     /** If nothing is active but we have plugins, select the first. */
     fun selectFirstIfNone() {
         val current = activePluginName.value
         if (current == null && loadedPlugins.value.isNotEmpty()) {
-            loadedPlugins.value.first().loadedPlugin?.api?.getPluginInfo()?.name?.let {
+            loadedPlugins.value.first().api?.getPluginInfo()?.name?.let {
                     setCurrentByName(
                         it
                     )
                 }
+        }
+    }
+
+    fun runPlugin(name: String, context: Context){
+        // Check if plugin is already running
+        val isAlreadyRunning = loadedPlugins.value.any {
+            it.api?.getPluginInfo()?.name == name
+        }
+
+        if (!isAlreadyRunning) {
+            PluginManager.runPlugin(context, name, Any())
+        } else {
+            Log.d("PluginHostViewModel", "Plugin $name is already running")
         }
     }
 
@@ -87,16 +76,6 @@ class PluginHostViewModel : ViewModel() {
     /** Stop currently active plugin, if any. */
     fun stopCurrent() {
         activePluginName.value?.let { PluginManager.stopPlugin(it) }
-    }
-
-    /** Run a packaged plugin (.zip) from assets with optional args. */
-    fun runPluginZip(appContext: Context, zipFileName: String, args: Any = Unit) {
-        PluginManager.runPlugin(appContext, zipFileName, args)
-    }
-
-    /** Run a packaged plugin (.zip) from a file with optional args. */
-    fun runPluginZip(appContext: Context, path: File, args: Any = Unit) {
-        PluginManager.runPlugin(appContext, path, args)
     }
 
     /** Provide a ViewModelStoreOwner for the current plugin's scoped ViewModels. */
