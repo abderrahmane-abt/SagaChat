@@ -36,8 +36,6 @@ import com.dark.userdata.getDefaultBrainStructure
 import com.dark.userdata.ntds.getBrainFilePath
 import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.userdata.ntds.saveEncryptedTree
-import com.mp.updatemanager.UpdateActionReceiver
-import com.mp.updatemanager.UpdateScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

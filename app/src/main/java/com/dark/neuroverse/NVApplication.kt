@@ -8,7 +8,7 @@ import com.dark.ai_module.workers.ModelParams.Emotional
 import com.dark.ai_module.workers.ModelParams.Professional
 import com.dark.neuroverse.data.UserPrefs
 import com.dark.plugins.manager.PluginManager
-import com.mp.updatemanager.UpdateScheduler
+import com.mp.updatemanager.UpdateCenter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
@@ -22,7 +22,9 @@ class NVApplication : Application() {
             Python.start(AndroidPlatform(this))
         }
         ModelManager.init(applicationContext)
-        UpdateScheduler.scheduleDailyUpdateCheck(applicationContext)
+        UpdateCenter.init(this)
+        // e.g., once per app start, or behind a button:
+        UpdateCenter.checkAndMaybeUpdate(force = true)
         PluginManager.init(applicationContext)
         CoroutineScope(Dispatchers.IO).launch {
 
