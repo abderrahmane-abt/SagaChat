@@ -314,10 +314,7 @@ fun SettingsScreen(
                         UpdateStatus.READY_TO_INSTALL -> updateViewModel.triggerInstall(context)
 
                         UpdateStatus.IDLE -> {
-                            updateViewModel.checkForUpdateAndStartDownload(
-                                context,
-                                "https://raw.githubusercontent.com/Siddhesh2377/NeuroVerse/fresh-new/repo/AppUpdate.json?ts=${System.currentTimeMillis()}"
-                            )
+                            updateViewModel.checkForUpdateAndStartDownload()
                         }
 
                         UpdateStatus.FAILED -> {
