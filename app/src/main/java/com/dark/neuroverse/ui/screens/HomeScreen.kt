@@ -64,7 +64,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.neuroverse.R
-import com.dark.neuroverse.activity.PluginHostScreen
+import com.dark.neuroverse.activity.TempActivity
 import com.dark.neuroverse.model.FileAttachment
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.ROLE
@@ -81,17 +81,25 @@ import com.dark.neuroverse.util.queryDisplayName
 import com.dark.neuroverse.util.uriToFile
 import com.dark.neuroverse.viewModel.ChattingViewModel
 import com.dark.neuroverse.viewModel.PluginHostViewModel
+import com.dark.plugins.manager.PluginManager
 import kotlinx.coroutines.launch
 
 @Composable
 fun HomeScreen(
     onRequestModelChange: () -> Unit, // For navigating to model screen
-    onRequestSettingsChange: () -> Unit // Optional, if needed outside
+    onRequestSettingsChange: () -> Unit, // Optional, if needed outside,
+    pluginName: String? = null
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    LocalContext.current
+    val context = LocalContext.current
     val viewModel: PluginHostViewModel = viewModel()
+
+    LaunchedEffect(pluginName) {
+        if (pluginName != null) {
+            viewModel.setCurrentByName(pluginName)
+        }
+    }
 
     LaunchedEffect(Unit) {
         Log.d("HomeScreen", "LaunchedEffect triggered")
@@ -108,6 +116,9 @@ fun HomeScreen(
                     scope.launch {
                         drawerState.close()
                     }
+                },
+                onPluginStoreClick = {
+                    context.startActivity(Intent(context, TempActivity::class.java))
                 })
         }) {
         Column(
@@ -149,14 +160,15 @@ internal fun TopBar(viewModel: PluginHostViewModel, onDrawerOpen: () -> Unit) {
                 resolver.takePersistableUriPermission(
                     uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
-            } catch (_: SecurityException) { }
+            } catch (_: SecurityException) {
+            }
 
             val name = queryDisplayName(resolver, uri)
             val mime = resolver.getType(uri)
 
             if (isZipByName(name) || isZipByMime(mime) || isZipByHeader(resolver, uri)) {
                 val file = uriToFile(context, uri)
-                viewModel.loadPlugin(context, file)
+                PluginManager.registerPlugin(path = arrayOf(file.absolutePath), context)
             } else {
                 Toast.makeText(context, "Not a valid plugin", Toast.LENGTH_SHORT).show()
             }

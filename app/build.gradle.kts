@@ -82,6 +82,7 @@ chaquopy {
 }
 
 dependencies {
+    implementation(libs.androidx.lifecycle.runtime.compose)
     //CORE
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 
