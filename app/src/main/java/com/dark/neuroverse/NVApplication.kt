@@ -24,7 +24,7 @@ class NVApplication : Application() {
         ModelManager.init(applicationContext)
         UpdateCenter.init(this)
         // e.g., once per app start, or behind a button:
-        UpdateCenter.checkAndMaybeUpdate(force = true)
+       // UpdateCenter.checkAndMaybeUpdate(force = true)
         PluginManager.init(applicationContext)
         CoroutineScope(Dispatchers.IO).launch {
 
