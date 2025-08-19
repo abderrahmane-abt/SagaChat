@@ -196,7 +196,6 @@ object Neuron {
         queue.send(Request.Blocking(prompt, gen, def))
         return def.await()
     }
-
     /** Queue a streaming request; returns the final reply. */
     suspend fun generateStreaming(
         prompt: String,
