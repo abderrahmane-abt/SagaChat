@@ -9,7 +9,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.ksp)
-  //  alias(libs.plugins.chaquo.py)
+
     kotlin("plugin.serialization") version "2.1.21"
 }
 val localPropertiesFile = rootProject.file("local.properties")

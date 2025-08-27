@@ -16,7 +16,7 @@ project("ai_core")
 if(GGML_VULKAN)
     include_directories(${VULKAN_HEADERS_INCLUDE_DIR})
 endif()
-include_directories(/home/home/dev/gpu/Vulkan-Headers/include/vulkan)
+include_directories(/home/home/dev/LIBS/gpu/Vulkan-Headers/include/vulkan)
 
 add_subdirectory(/home/home/dev/AI/llama.cpp build-llama)
 #add_subdirectory(C:/Users/Rudraraj/Music/llama.cpp build-llama)

@@ -14,6 +14,7 @@ import dalvik.system.InMemoryDexClassLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +24,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.coroutines.cancellation.CancellationException
 
 object PluginManager {
 
@@ -78,7 +80,7 @@ object PluginManager {
             }
         }
 
-        registerPluginFromAssets(context, arrayOf("ai-chat-plugin.zip"))
+        registerPluginFromAssets(context, arrayOf("notifcation-io-plugin.zip"))
     }
 
 
@@ -113,71 +115,91 @@ object PluginManager {
      * Load + run a plugin by DB/display name. Returns the LoadedPlugin (even if run fails),
      * and updates running/current state if start succeeded.
      */
+
     fun runPlugin(ctx: Context, name: String, data: Any): LoadedPlugin {
         val path = getPlugin(name)
-        Log.d("PluginManager", "Running plugin: $path")
         if (path.isEmpty()) {
             Log.w(TAG, "Plugin not found: $name")
             return LoadedPlugin(null, null, null, null, IllegalArgumentException("Not installed"))
         }
 
         val loadedPlugin = loadPluginFromFile(File(path), ctx)
-        val api = loadedPlugin.api
-
-        if (api == null) {
+        val api = loadedPlugin.api ?: return loadedPlugin.also {
             Log.e(TAG, "No API found for plugin: $name", loadedPlugin.throwable)
-            return loadedPlugin
         }
 
-        val pluginName = runCatching { api.getPluginInfo().name }.getOrElse { name }
+        val idName =
+            loadedPlugin.manifest?.name ?: api.getPluginInfo().name.takeIf { it.isNotBlank() }
+            ?: name
 
-        // Launch the plugin job and keep a reference on LoadedPlugin
         val job = pluginScope.launch {
             try {
                 api.onCreate(data)
-                // IMPORTANT: Do NOT call onDestroy() immediately — let stop/cancel trigger it.
-                // onDestroy will be invoked in stopPlugin() or if the job is cancelled with a finally.
+                // Keep this coroutine alive until stopPlugin() cancels it.
+                awaitCancellation()
+            } catch (ce: CancellationException) {
+                // normal stop
+                throw ce
             } catch (e: Exception) {
-                Log.e(TAG, "Plugin execution failed for $pluginName", e)
+                Log.e(TAG, "Plugin execution failed for $idName", e)
             } finally {
                 try {
                     api.onDestroy()
                 } catch (e: Exception) {
-                    Log.e(TAG, "onDestroy failed for $pluginName", e)
+                    Log.e(TAG, "onDestroy failed for $idName", e)
                 }
             }
         }
 
         val running = loadedPlugin.copy(job = job)
+
+        // Replace any existing instance with the same idName
         _runningPlugins.value =
-            _runningPlugins.value.filterNot { it.api?.getPluginInfo()?.name == pluginName } + running
+            _runningPlugins.value.filterNot { it.displayName() == idName } + running
 
         _currentPlugin.value = running
+
+        // Auto-remove from running list when the job completes
+        job.invokeOnCompletion {
+            val list = _runningPlugins.value.filterNot { it.displayName() == idName }
+            _runningPlugins.value = list
+            if (_currentPlugin.value?.displayName() == idName) {
+                _currentPlugin.value = list.firstOrNull()
+            }
+            pluginViewModelStores.remove(idName)?.clear()
+        }
+
         return running
     }
+
 
     fun stopPlugin(pluginName: String) {
         Log.d(TAG, "Stopping plugin: $pluginName")
 
         val currentList = _runningPlugins.value.toMutableList()
-        val idx = currentList.indexOfFirst { it.api?.getPluginInfo()?.name == pluginName }
+        val idx = currentList.indexOfFirst { it.displayName() == pluginName }
         if (idx == -1) {
-            Log.w(TAG, "Plugin $pluginName not found in loaded plugins.")
+            Log.w(
+                TAG,
+                "Plugin $pluginName not found in loaded plugins. Running=${currentList.map { it.displayName() }}"
+            )
             return
         }
 
         val plugin = currentList.removeAt(idx)
-        // Cancel its job -> triggers onDestroy in runPlugin's finally
+
+        // Cancel the job – onDestroy() is called in runPlugin’s finally.
         plugin.job?.cancel()
 
         _runningPlugins.value = currentList
-        if (_currentPlugin.value?.api?.getPluginInfo()?.name == pluginName) {
+        if (_currentPlugin.value?.displayName() == pluginName) {
             _currentPlugin.value = currentList.firstOrNull()
         }
 
         pluginViewModelStores.remove(pluginName)?.clear()
         Log.d(TAG, "Plugin $pluginName successfully stopped.")
     }
+
 
     fun getViewModelStoreOwner(pluginName: String): ViewModelStoreOwner {
         return object : ViewModelStoreOwner {
@@ -210,6 +232,10 @@ object PluginManager {
     }
 
     // --- Internals ---
+
+    private fun LoadedPlugin.displayName(): String = this.manifest?.name?.takeIf { it.isNotBlank() }
+        ?: this.api?.getPluginInfo()?.name?.takeIf { it.isNotBlank() } ?: ""
+
 
     private suspend fun installPlugin(file: File, context: Context) = withContext(Dispatchers.IO) {
         if (!file.exists()) throw IOException("Plugin file not found: ${file.absolutePath}")
