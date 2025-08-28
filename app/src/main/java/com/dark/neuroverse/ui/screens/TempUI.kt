@@ -20,10 +20,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.filled.FileOpen
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Web
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,6 +40,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,16 +52,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dark.neuroverse.R
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.SlateGrey
+import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.TempViewModel
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,7 +80,7 @@ fun NeuroVChatScreen(
         }, onLeftMenu = {
 
         })
-    }, containerColor = MaterialTheme.colorScheme.surface, bottomBar = {
+    }, bottomBar = {
         BottomBar(viewModel)
     }) { inner ->
         BodyContent(inner, viewModel)
@@ -131,7 +140,7 @@ private fun TopBar(
             )
         }
     }, colors = TopAppBarDefaults.topAppBarColors(
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = MaterialTheme.colorScheme.background
     )
     )
 }
@@ -170,7 +179,7 @@ private fun BodyContent(inner: PaddingValues, viewModel: TempViewModel) {
 private fun BottomBar(
     viewModel: TempViewModel
 ) {
-    var input by remember { mutableStateOf("") }
+    var input by remember { mutableStateOf("Search On Web About General Science") }
 
     ChatInputBar(value = input, onValueChange = {
         input = it
@@ -263,55 +272,100 @@ private fun AssistTag(name: String) {
 private fun ChatInputBar(
     value: String, onValueChange: (String) -> Unit, onAttach: () -> Unit, onSend: () -> Unit
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(vertical = 8.dp)
-            .padding(bottom = 4.dp)
-            .padding(end = 18.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .background(MaterialTheme.colorScheme.surface),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        TextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 6.dp),
-            placeholder = { Text("Say Anything…", color = SlateGrey) },
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.Transparent,
-                unfocusedContainerColor = Color.Transparent,
-                disabledContainerColor = Color.Transparent,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-                cursorColor = MaterialTheme.colorScheme.primary
-            ),
-            textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.primary)
-        )
 
-        IconButton(onClick = onAttach) {
-            Icon(
-                Icons.Outlined.AttachFile,
-                contentDescription = "Attach",
-                tint = MaterialTheme.colorScheme.primary
-            )
-        }
-        // Send button with gradient pill
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary)
-                .clickable { onSend() },
-            contentAlignment = Alignment.Center
+        Row(
+            modifier = Modifier.padding(top = 16.dp, start = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(
-                Icons.AutoMirrored.Outlined.Send,
-                modifier = Modifier.padding(8.dp),
-                contentDescription = "Send",
-                tint = MaterialTheme.colorScheme.background
-            )
+            Button(
+                onClick = { /*TODO*/ }, colors = ButtonDefaults.textButtonColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                ),
+                shape = RoundedCornerShape(rDP(8.dp))
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(painterResource(R.drawable.tools), contentDescription = "Add")
+                    Text(text = "Tools")
+                }
+            }
+
+            ToolCard()
         }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+                .padding(bottom = 4.dp)
+                .padding(end = 18.dp), verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 6.dp),
+                placeholder = { Text("Say Anything…", color = SlateGrey) },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    cursorColor = MaterialTheme.colorScheme.primary
+                ),
+                textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.primary)
+            )
+
+            IconButton(onClick = onAttach) {
+                Icon(
+                    Icons.Outlined.AttachFile,
+                    contentDescription = "Attach",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            // Send button with gradient pill
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .clickable { onSend() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painterResource(R.drawable.send_chat),
+                    modifier = Modifier.padding(8.dp),
+                    contentDescription = "Send",
+                    tint = MaterialTheme.colorScheme.background
+                )
+            }
+        }
+    }
+
+}
+
+@Composable
+private fun ToolCard(modifier: Modifier = Modifier) {
+    val accentColor = Color(0xFF0066FF)
+    val backgroundColor = accentColor.copy(alpha = 0.2f)
+
+    Box(
+        modifier
+            .size(ButtonDefaults.MinHeight)
+            .background(color = backgroundColor, shape = RoundedCornerShape(rDP(8.dp))),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(Icons.Default.Web, contentDescription = "Open File", tint = accentColor)
     }
 }
