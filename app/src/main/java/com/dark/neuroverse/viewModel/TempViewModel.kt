@@ -72,7 +72,7 @@ class TempViewModel : ViewModel() {
 
             ModelManager.loadModel(
                 modelData = model,
-                defaults = ModelManager.ManagerDefaults(systemPrompt = systemPrompt),
+               // defaults = ModelManager.ManagerDefaults(systemPrompt = systemPrompt),
                 chatTemplate = ModelsList.chatTemplate,
                 forceReload = true
             ) {
@@ -88,7 +88,9 @@ class TempViewModel : ViewModel() {
         var token = ""
 
         viewModelScope.launch(Dispatchers.IO) {
-            Neuron.generateStreaming(
+            _messages.value += Message(role = Role.Assistant, text = "", id = "-1")
+
+            val response = Neuron.generateStreaming(
                 prompt = input, onToken = { tok ->
                     token += tok
                     _messages.update {
@@ -100,7 +102,9 @@ class TempViewModel : ViewModel() {
                             }
                         }
                     }
-                }).let {
+                })
+
+            response.let {
                 _messages.update {
                     it.map { message ->
                         if (message.id == "-1") {
