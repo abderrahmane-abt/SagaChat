@@ -80,7 +80,7 @@ object PluginManager {
             }
         }
 
-        registerPluginFromAssets(context, arrayOf("notifcation-io-plugin.zip"))
+        registerPluginFromAssets(context, arrayOf("web-searching-plugin.zip"))
     }
 
 

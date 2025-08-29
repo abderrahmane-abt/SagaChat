@@ -1,5 +1,7 @@
 package com.dark.neuroverse.ui.screens
 
+import android.annotation.SuppressLint
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,8 +22,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FileOpen
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Web
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.MoreVert
@@ -40,7 +40,6 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +58,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dark.ai_module.ai.Neuron
+import com.dark.ai_module.data.ModelsList
 import com.dark.neuroverse.R
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
@@ -65,13 +67,17 @@ import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.SlateGrey
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.TempViewModel
-import kotlinx.coroutines.delay
+import com.dark.plugins.manager.PluginManager
+import org.json.JSONObject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NeuroVChatScreen(
     viewModel: TempViewModel = viewModel(),
 ) {
+    val context = LocalContext.current
+    PluginManager.init(context)
+
     Scaffold(modifier = Modifier
         .fillMaxSize()
         .imePadding(), topBar = {
@@ -179,13 +185,14 @@ private fun BodyContent(inner: PaddingValues, viewModel: TempViewModel) {
 private fun BottomBar(
     viewModel: TempViewModel
 ) {
+    val context = LocalContext.current
     var input by remember { mutableStateOf("Search On Web About General Science") }
 
     ChatInputBar(value = input, onValueChange = {
         input = it
     }, onAttach = {}, onSend = {
         if (input.isNotBlank()) {
-            viewModel.sendMessage(input)
+            viewModel.sendMessage(input, context)
             input = ""
         }
     })
@@ -209,6 +216,9 @@ private fun EmptyHint() {
 
 @Composable
 private fun ChatBubble(msg: Message) {
+
+    val context = LocalContext.current
+
     val isUser = msg.role == Role.User
 
     val bubbleColor = if (isUser) MaterialTheme.colorScheme.primary
@@ -244,6 +254,34 @@ private fun ChatBubble(msg: Message) {
                 Text(
                     msg.text, color = textColor, fontSize = 15.sp, lineHeight = 20.sp
                 )
+
+                if (isUser){
+                    val lp = PluginManager.runPlugin(context, "Web-Searching", "data")
+                    lp.api?.content()?.invoke()
+
+                    Log.d("ToolRunner", "Running tool for plugin ${lp.manifest?.name}")
+                    val toolCall = JSONObject().apply {
+                        put("type", "tool_call")
+                        put("tool", "searchWeb")
+                        put("arguments", JSONObject().apply {
+                            put("query", "What is the capital of France?")
+                        })
+                    }
+
+                    if (lp.api == null) Log.e("ToolRunner", "API is null")
+                    if (lp.api != null) Log.e(
+                        "ToolRunner",
+                        "API is Not Null ${lp.api?.getPluginInfo()}"
+                    )
+
+                    lp.api?.runTool(
+                        context,
+                        toolCall.getString("tool"),
+                        toolCall.getJSONObject("arguments")
+                    ) { result ->
+                        Log.d("ToolRunner", "Tool result: $result")
+                    }
+                }
             }
         }
     }
@@ -268,10 +306,17 @@ private fun AssistTag(name: String) {
     }
 }
 
+@SuppressLint("StateFlowValueCalledInComposition")
 @Composable
 private fun ChatInputBar(
     value: String, onValueChange: (String) -> Unit, onAttach: () -> Unit, onSend: () -> Unit
 ) {
+    val context = LocalContext.current
+
+    val loadedPlugin = PluginManager.runPlugin(context, "Web-Searching", "data")
+
+
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -279,16 +324,18 @@ private fun ChatInputBar(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
 
+
         Row(
             modifier = Modifier.padding(top = 16.dp, start = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Button(
-                onClick = { /*TODO*/ }, colors = ButtonDefaults.textButtonColors(
+                onClick = {
+                    Neuron.setSystemPrompt(ModelsList.toolCallingSystemPrompt + "\nTOOLS:\n" + loadedPlugin.manifest?.rawToolsCode)
+                }, colors = ButtonDefaults.textButtonColors(
                     containerColor = MaterialTheme.colorScheme.background
-                ),
-                shape = RoundedCornerShape(rDP(8.dp))
+                ), shape = RoundedCornerShape(rDP(8.dp))
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

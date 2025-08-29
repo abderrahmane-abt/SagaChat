@@ -84,6 +84,13 @@ android {
 //}
 
 dependencies {
+
+    //NET
+    implementation(libs.jsoup)
+    implementation(libs.okhttp)
+    implementation(libs.moshi)
+    implementation(libs.moshi.kotlin)
+
     implementation(libs.androidx.lifecycle.runtime.compose)
     //CORE
     implementation("org.jetbrains.kotlin:kotlin-stdlib")

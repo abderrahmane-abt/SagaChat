@@ -1,5 +1,6 @@
 package com.dark.neuroverse.viewModel
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -8,6 +9,8 @@ import com.dark.ai_module.data.ModelsList
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
+import com.dark.plugins.manager.PluginManager
+import com.dark.plugins.worker.ToolRunner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,7 +43,7 @@ class TempViewModel : ViewModel() {
     }
 
     //Public Methods
-    fun sendMessage(input: String) {
+    fun sendMessage(input: String, context: Context) {
         //Add user message to the list
         _messages.value += Message(role = Role.User, text = input)
         var token = ""
@@ -62,7 +65,11 @@ class TempViewModel : ViewModel() {
                     }
                 })
 
-            response.let {
+            response.let { it ->
+                Log.d("Response", "Response: $it")
+                val loadedPlugin = PluginManager.currentPlugin.value ?: return@let
+
+                ToolRunner.run(loadedPlugin, context)
                 _messages.update {
                     it.map { message ->
                         if (message.id == "-1") {

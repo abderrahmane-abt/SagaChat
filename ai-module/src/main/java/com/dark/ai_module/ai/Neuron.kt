@@ -307,4 +307,8 @@ object Neuron {
 
     private fun activeModelOrThrow(): Variant =
         activeModel() ?: error("No active model selected. Call loadModel() first.")
+
+    fun setSystemPrompt(systemPrompt: String) {
+        activeModel()?.lib?.setSystemPrompt(systemPrompt)
+    }
 }
