@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -34,6 +35,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,13 +61,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.dark.ai_module.ai.Neuron
-import com.dark.ai_module.data.ModelsList
 import com.dark.neuroverse.R
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
@@ -271,10 +273,53 @@ private fun ChatBubble(msg: Message) {
                 )
 
                 if (!isUser) {
-                    val lp = PluginManager.currentPlugin.collectAsState().value
-                    Card(elevation = CardDefaults.cardElevation(0.dp)) {
-                        lp?.api?.content()?.invoke()
+                    if (msg.viaPlugin != null) {
+                        val lp = PluginManager.currentPlugin.collectAsState().value
+
+                        AnimatedContent(lp == null) {
+                            when (it) {
+                                true -> {
+                                    Card(
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.surface
+                                        ),
+                                        elevation = CardDefaults.cardElevation(0.dp),
+                                        modifier = Modifier
+                                            .size(200.dp),
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(24.dp),
+                                            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(32.dp), // a bit larger than before
+                                                strokeWidth = 3.dp
+                                            )
+                                            Text(
+                                                text = "Loading...Plugin \n ${msg.viaPlugin}",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                textAlign = TextAlign.Center,
+                                                fontFamily = FontFamily.Serif
+                                            )
+                                        }
+                                    }
+
+                                }
+
+                                false -> {
+                                    Card(elevation = CardDefaults.cardElevation(0.dp)) {
+                                        lp?.api?.content()?.invoke()
+                                    }
+                                }
+                            }
+
+                        }
                     }
+
+
                 }
             }
         }
@@ -399,15 +444,12 @@ private fun ChatInputBar(
             }
 
             LazyRow {
-                items(
-                    selectedTools,
-                    key = { it.toolName } // stable key for animation
+                items(selectedTools, key = { it.toolName } // stable key for animation
                 ) { tool ->
                     ToolCard(
                         modifier = Modifier
                             .animateItem() // smooth slide when inserted/removed
-                            .padding(8.dp),
-                        tool = tool
+                            .padding(8.dp), tool = tool
                     )
                 }
             }

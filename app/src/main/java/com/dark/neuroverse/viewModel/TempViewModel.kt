@@ -67,7 +67,7 @@ class TempViewModel : ViewModel() {
         var token = ""
 
         viewModelScope.launch(Dispatchers.IO) {
-            _messages.value += Message(role = Role.Assistant, text = "", id = "-1")
+            _messages.value += Message(role = Role.Assistant, text = "", id = "-1", viaPlugin = if (selectedTools.value.isNotEmpty()) selectedTools.value.joinToString { it.toolName } else "")
 
             val response = Neuron.generateStreaming(
                 prompt = input, onToken = { tok ->
