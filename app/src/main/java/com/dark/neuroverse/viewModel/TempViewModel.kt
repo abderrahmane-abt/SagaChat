@@ -24,10 +24,9 @@ class TempViewModel : ViewModel() {
     //Define State Variables
     private var _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages
-    val toolList: StateFlow<List<Pair<String, List<Tools>>>> = MutableStateFlow(PluginManager.getInstalledTools())
+    val toolList: StateFlow<List<Pair<String, List<Tools>>>> = MutableStateFlow(PluginManager.toolsList.value)
 
     init {
-        Log.v("ViewModel", PluginManager.getInstalledTools().toString())
         viewModelScope.launch(Dispatchers.IO) {
             //Initialize NativeLib
             val model = ModelManager.getFirstModel()

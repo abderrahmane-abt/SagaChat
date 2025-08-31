@@ -29,59 +29,58 @@ import kotlin.coroutines.cancellation.CancellationException
 
 object PluginManager {
 
+    //Private Variables
     private const val TAG = "PluginManager"
-
-    // A standard Scope For Plugins to Execute
     private val supervisorJob = SupervisorJob()
-    val pluginScope: CoroutineScope = CoroutineScope(Dispatchers.IO + supervisorJob)
-
-    // Installed plugins (from DB)
     private val _installedPlugins = MutableStateFlow<List<PluginLocalDB>>(emptyList())
-    val installedPlugins: StateFlow<List<PluginLocalDB>> = _installedPlugins.asStateFlow()
-
-    // Running plugins
     private val _runningPlugins = MutableStateFlow<List<LoadedPlugin>>(emptyList())
-    val runningPlugins: StateFlow<List<LoadedPlugin>> = _runningPlugins.asStateFlow()
-
-    // Mapping Plugin ViewModels
     private val pluginViewModelStores = mutableMapOf<String, ViewModelStore>()
-
-    // Current Plugin in use
     private val _currentPlugin = MutableStateFlow<LoadedPlugin?>(null)
-    val currentPlugin: StateFlow<LoadedPlugin?> = _currentPlugin.asStateFlow()
-
-    // Backing DAO (init via init(context))
     private val daoRef = AtomicReference<PluginLocalDBDao?>()
+    private val _toolsList = MutableStateFlow<List<Pair<String, List<Tools>>>>(emptyList())
 
+    //Public Variables
+    val pluginScope: CoroutineScope = CoroutineScope(Dispatchers.IO + supervisorJob)
+    val installedPlugins: StateFlow<List<PluginLocalDB>> = _installedPlugins.asStateFlow()
+    val runningPlugins: StateFlow<List<LoadedPlugin>> = _runningPlugins.asStateFlow()
+    val currentPlugin: StateFlow<LoadedPlugin?> = _currentPlugin.asStateFlow()
+    val toolsList: StateFlow<List<Pair<String, List<Tools>>>> = _toolsList.asStateFlow()
+
+    //Public Fun's
+
+    //Init Function
     fun init(context: Context) {
-        Log.d(TAG, "PluginManager.init() called")
+        Log.d(TAG, "PluginManager.init() Started")
+        val pluginDatabase = daoRef.get() == null
 
-        val firstInit = daoRef.get() == null
-        if (firstInit) {
-            Log.d(TAG, "DAO is not initialized — proceeding with setup")
-            val db = LocalPluginDBManager.getInstance(context.applicationContext)
-            daoRef.set(db.getPluginLocalDBDao())
-            Log.d(TAG, "DAO initialized: ${daoRef.get()}")
-        } else {
-            Log.d(TAG, "DAO already initialized — continuing with plugin sync and seeding")
+        //If pluginDatabase is not null Then Return
+        if (!pluginDatabase) {
+            Log.d(TAG, "Database is already initialized — continuing with plugin sync and seeding")
+            return
         }
 
-        // Always start collection if not already collecting
-        if (firstInit) {
-            pluginScope.launch {
-                Log.d(TAG, "Starting collection of plugins from DB...")
-                try {
-                    daoRef.get()?.getAll()?.collect { rows ->
-                        Log.d(TAG, "DB emitted ${rows.size} plugin(s)")
-                        _installedPlugins.value = rows
-                    }
-                } catch (t: Throwable) {
-                    Log.e(TAG, "Failed collecting plugins from DB", t)
+        //If pluginDatabase is null Then Init Database
+        Log.d(TAG, "Database is not initialized — proceeding with setup")
+        val db = LocalPluginDBManager.getInstance(context.applicationContext)
+        daoRef.set(db.getPluginLocalDBDao())
+        Log.d(TAG, "Database is initialized: ${daoRef.get()}")
+        pluginScope.launch {
+            Log.d(TAG, "Starting collection of plugins from DB...")
+            try {
+                daoRef.get()?.getAll()?.collect { rows ->
+                    Log.d(TAG, "DB emitted ${rows.size} plugin(s)")
+                    _installedPlugins.value = rows
                 }
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed collecting plugins from DB", t)
             }
         }
 
+        //Register Plugin From Assets :: FOR DEBUG PURPOSE ONLY
         registerPluginFromAssets(context, arrayOf("web-searching-plugin.zip"))
+
+        //Collect Tools List
+        updateToolsList()
     }
 
 
@@ -308,12 +307,10 @@ object PluginManager {
         return ok
     }
 
-    fun getInstalledTools(): List<Pair<String, List<Tools>>>{
-        val tools = mutableListOf<Pair<String, List<Tools>>>()
+    private fun updateToolsList() {
         installedPlugins.value.forEach { plugin ->
-            tools.add(Pair(plugin.pluginName, plugin.tools))
+            _toolsList.value += Pair(plugin.pluginName, plugin.tools)
         }
-        return tools
     }
 
 
@@ -383,7 +380,7 @@ object PluginManager {
     }
 
 
-    fun addTools(){
+    fun addTools() {
 
     }
 }
