@@ -5,19 +5,16 @@
 NeuroVerse is a privacy‑first Android app that runs fully on‑device and showcases a plugin‑based architecture. The current public milestone is **chat‑only** via the first‑party **AI Chat** plugin. The command/automation engine exists in the codebase but is **disabled and not user‑facing yet**.
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Platform-Android_14%2B-informational">
-  <img src="https://img.shields.io/badge/Built%20With-Kotlin%20%7C%20Jetpack%20Compose-purple">
-  <a href="#license"><img src="https://img.shields.io/badge/License-Apache_2.0-green"></a>
+  <img src="https://img.shields.io/badge/Platform-Android_14%2B-informational" />
+  <img src="https://img.shields.io/badge/Built%20With-Kotlin%20%7C%20Jetpack%20Compose-purple" />
+  <a href="#license"><img src="https://img.shields.io/badge/License-Apache_2.0-green" /></a>
+  <a href="https://discord.gg/tG5r9aDF"><img src="https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white" /></a>
 </p>
-
 ---
 
 ## Try it now
 
 * **Download APK:** [latest release](https://github.com/Siddhesh2377/NeuroVerse/releases/latest)
-* **Join Discord:** community support and plugin discussions — [https://discord.gg/tG5r9aDF](https://discord.gg/tG5r9aDF)
-* <a href="https://www.producthunt.com/products/github-167?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-github&#0045;cb231061&#0045;046f&#0045;4524&#0045;a405&#0045;cc41969cc199" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1005548&theme=light&t=1755241765667" alt="GitHub - Privacy&#0045;first&#0044;&#0032;on&#0045;device&#0032;LLM&#0032;chat&#0046;&#0032;Modular&#0032;plugins&#0046;&#0032;No&#0032;cloud | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
-
 > First‑run: install the APK, grant permissions, open **AI Chat** and start chatting. No cloud account required.
 
 ---
