@@ -31,6 +31,11 @@ NeuroVerse is a privacy‑first Android app that runs fully on‑device and show
 
 ---
 
+## Working 
+<img width="800" alt="image" src="https://github.com/user-attachments/assets/eedf5670-b384-4883-8b62-f371122cd91d" />
+
+---
+
 ## Status
 
 * **Current:** Chat‑only experience using the built‑in **AI Chat** plugin.
