@@ -1,7 +1,10 @@
 package com.dark.neuroverse.viewModel
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.util.Log
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -13,6 +16,7 @@ import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.model.ChatINFO
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
+import com.dark.neuroverse.model.RunningTool
 import com.dark.neuroverse.util.extractPureJson
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
@@ -23,7 +27,9 @@ import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.userdata.ntds.neuron_tree.NeuronTree
 import com.dark.userdata.readBrainFile
 import com.dark.userdata.saveTree
+import com.dark.userdata.writeBitmapImage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,7 +40,6 @@ import kotlinx.serialization.json.Json
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
-import javax.crypto.SecretKey
 
 class ChattingViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
@@ -60,11 +65,14 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
 
     // Selected tools/model lists are also observable; keep them consistent
     val toolList: MutableStateFlow<List<Pair<String, List<Tools>>>> = MutableStateFlow(emptyList())
-    val selectedTools: MutableStateFlow<List<Tools>> = MutableStateFlow(emptyList())
+    val selectedTools: MutableStateFlow<Pair<String, Tools>> = MutableStateFlow(Pair("", Tools()))
     val modelList: MutableStateFlow<List<ModelsData>> = MutableStateFlow(emptyList())
     val chatId = MutableStateFlow("")
     val _isGenerating = MutableStateFlow(false)
+    val _generationState = MutableStateFlow(GenerationState.IDLE)
     val isGenerating: StateFlow<Boolean> = _isGenerating.asStateFlow()
+    val generationState: StateFlow<GenerationState> = _generationState.asStateFlow()
+    val currentRunningToolName = MutableStateFlow("")
 
     private val streamBuffer = StringBuilder()
     private var streamingMsgIndex = -1
@@ -140,12 +148,12 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
             ModelManager.loadModel(
                 modelData = model,
                 defaults = ModelManager.ManagerDefaults(
-                    systemPrompt = if (selectedTools.value.isEmpty())
+                    systemPrompt = if (selectedTools.value.first.isEmpty())
                         ModelsList.generalPurposeSystemPrompt
                     else
                         ModelsList.getToolCallSystemPrompt(
-                            buildToolsListForPrompt = selectedTools.value.joinToString {
-                                it.toolName + ":" + it.args.entries.joinToString { (k, v) -> "$k:$v" }
+                            buildToolsListForPrompt = selectedTools.value.let {
+                                it.second.toolName + ":" + it.second.args.entries.joinToString { (k, v) -> "$k:$v" }
                             }
                         )
                 ),
@@ -157,13 +165,13 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
         }
     }
 
-    fun selectTool(tool: Tools) {
+    fun selectTool(tool: Pair<String, Tools>) {
         // ensure new list instance
-        selectedTools.update { it + tool }
+        selectedTools.value = tool
         Neuron.setSystemPrompt(
             ModelsList.getToolCallSystemPrompt(
-                buildToolsListForPrompt = selectedTools.value.joinToString {
-                    it.toolName + ":" + it.args.entries.joinToString { (k, v) -> "$k:$v" }
+                buildToolsListForPrompt = selectedTools.value.let {
+                    it.second.toolName + ":" + it.second.args.entries.joinToString { (k, v) -> "$k:$v" }
                 }
             )
         )
@@ -172,6 +180,7 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
     fun sendMessage(input: String, context: Context) {
         _messages.update { it + Message(role = Role.User, text = input) }
         _isGenerating.value = true
+        _generationState.value = GenerationState.GENERATING
 
         viewModelScope.launch(Dispatchers.Main) {
             // 1) Create streaming placeholder exactly once
@@ -182,8 +191,12 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
                 role = Role.Assistant,
                 text = "",
                 id   = streamingMsgId,
-                viaPlugin = if (selectedTools.value.isNotEmpty())
-                    selectedTools.value.joinToString { t -> t.toolName } else ""
+                tool = if (selectedTools.value.first.isNotEmpty()) {
+                    RunningTool(
+                        toolName = selectedTools.value.second.toolName,
+                        toolPreview = ""              // will be filled after capture
+                    )
+                } else null
             )
             _messages.value = list
 
@@ -226,17 +239,42 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
                 }
 
                 // Tool call (if any)
-                if (selectedTools.value.isNotEmpty()) {
+                if (selectedTools.value.first.isNotEmpty()) {
                     runCatching {
-                        val json = extractPureJson(final)
-                        val loaded = PluginManager.runPlugin(context, "Web-Searching", json)
-                        ToolRunner.run(loaded, context, JSONObject(json))
+                        val raw = extractPureJson(final)
+                        val obj = runCatching { JSONObject(raw) }.getOrNull()
+
+                        // Accept either the model-specified tool or the user-selected tool as fallback
+                        val selectedToolName = selectedTools.value.second.toolName
+                        val toolName = obj?.optString("tool")?.takeIf { it.isNotBlank() } ?: selectedToolName.takeIf { it.isNotBlank() }
+
+                        if (toolName != null && selectedTools.value.first.isNotEmpty()) {
+                            // merge/ensure args object
+                            val args = obj?.optJSONObject("args") ?: obj?.optJSONObject("arguments") ?: JSONObject()
+                            val payload = JSONObject().apply {
+                                put("tool", toolName)
+                                put("args", args)
+                            }
+
+                            val loaded = PluginManager.runPlugin(context, selectedTools.value.first, payload.toString())
+                            currentRunningToolName.value = toolName
+
+                            runCatching {
+                                ToolRunner.run(loaded, context, payload)
+                            }.onFailure { Log.e("ToolCall", "failed", it) }
+                        } else {
+                            Log.d("ToolCall", "No tool call detected or no tool selected — skipping plugin run")
+                        }
                     }.onFailure { Log.e("ToolCall", "failed", it) }
                 }
 
                 generateTitle()
                 updateConversation(context)
                 _isGenerating.value = false
+                delay(2000)
+                _generationState.value = GenerationState.DONE
+                delay(2000)
+                _generationState.value = GenerationState.IDLE
             }
         }
     }
@@ -298,6 +336,28 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
         }
     }
 
+    fun writeToolPreviewByID(id: String, runningTool: String){
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                _messages.update {
+                    it.map { message ->
+                        if (message.id == id) {
+                            message.copy(
+                                tool = RunningTool(
+                                    toolName = selectedTools.value.second.toolName,
+                                    runningTool
+                                )
+                            )
+                        } else {
+                            message
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("writeToolPreviewByID", "Failed to write tool preview for chat $id", e)
+            }
+        }
+    }
 
     fun stopGenerating() {
         Neuron.stopGeneration().let {
@@ -341,4 +401,10 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
             Log.e("updateConversation", "Failed updating chat", e)
         }
     }
+}
+
+enum class GenerationState {
+    IDLE,
+    GENERATING,
+    DONE
 }

@@ -2,10 +2,10 @@ package com.dark.neuroverse.ui.screens
 
 import android.annotation.SuppressLint
 import android.content.Intent
-import android.util.Log
-import androidx.compose.animation.AnimatedContent
+import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -46,7 +46,6 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -55,6 +54,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +66,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -73,6 +74,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -82,14 +84,18 @@ import com.dark.neuroverse.R
 import com.dark.neuroverse.activity.PluginStoreActivity
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
+import com.dark.neuroverse.ui.components.ProjectedCapturable
 import com.dark.neuroverse.ui.drawer.SettingsDrawerContent
 import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.SlateGrey
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.ChatScreenViewModel
 import com.dark.neuroverse.viewModel.ChattingViewModelFactory
+import com.dark.neuroverse.viewModel.GenerationState
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
+import com.dark.userdata.readBitmapImage
+import com.dark.userdata.writeBitmapImage
 import kotlinx.coroutines.launch
 
 @Composable
@@ -194,6 +200,7 @@ private fun TopBar(
 @Composable
 private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
+    val generationState by viewModel.generationState.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier
@@ -211,11 +218,12 @@ private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
                 contentPadding = PaddingValues(bottom = 96.dp, top = 8.dp, start = 8.dp, end = 8.dp)
             ) {
                 items(
-                    items = messages,
-                    key = { it.id },                    // <-- stable!
-                    contentType = { if (it.role == Role.User) "user" else "assistant" }
-                ) { msg ->
-                    ChatBubble(msg)
+                    items = messages, key = { it.id },                    // <-- stable!
+                    contentType = { if (it.role == Role.User) "user" else "assistant" }) { msg ->
+                    ChatBubble(msg, generationState) {
+                        val preview = writeBitmapImage(it)
+                        viewModel.writeToolPreviewByID(msg.id, preview)
+                    }
                     Spacer(Modifier.height(18.dp))
                 }
             }
@@ -235,30 +243,36 @@ private fun BottomBar(
     val modelList by viewModel.modelList.collectAsStateWithLifecycle()
     val isGenerating by viewModel.isGenerating.collectAsStateWithLifecycle()
 
+    ChatInputBar(
+        value = input,
+        onValueChange = {
+            input = it
+        },
+        tools = tools,
+        isGenerating = isGenerating,
+        modelList = modelList,
+        onAttach = {},
+        onToolSelected = {
+            viewModel.selectTool(it)
+        },
+        selectedTools = if (selectedTools.first.isEmpty()) emptyList() else listOf(selectedTools.second),
+        onModelSelected = {
+            viewModel.selectModel(it)
+        },
+        onSend = {
+            when (isGenerating) {
+                true -> {
+                    viewModel.stopGenerating()
+                }
 
-    selectedTools.forEach {
-        Log.v("Selected Tool", it.toolName)
-    }
-
-    ChatInputBar(value = input, onValueChange = {
-        input = it
-    }, tools = tools, isGenerating = isGenerating, modelList = modelList, onAttach = {}, onToolSelected = {
-        viewModel.selectTool(it)
-    }, selectedTools = selectedTools, onModelSelected = {
-        viewModel.selectModel(it)
-    }, onSend = {
-        when(isGenerating){
-            true -> {
-                viewModel.stopGenerating()
-            }
-            false -> {
-                if (input.isNotBlank()) {
-                    viewModel.sendMessage(input, context)
-                    input = ""
+                false -> {
+                    if (input.isNotBlank()) {
+                        viewModel.sendMessage(input, context)
+                        input = ""
+                    }
                 }
             }
-        }
-    })
+        })
 }
 
 @Composable
@@ -278,7 +292,9 @@ private fun EmptyHint() {
 }
 
 @Composable
-private fun ChatBubble(msg: Message) {
+private fun ChatBubble(
+    msg: Message, generationState: GenerationState, onCapture: (Bitmap) -> Unit
+) {
 
     val isUser = msg.role == Role.User
 
@@ -289,10 +305,25 @@ private fun ChatBubble(msg: Message) {
         if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
     val align = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
     val radius = with(LocalDensity.current) { 18.dp }
+    LocalContext.current
 
     val corner = RoundedCornerShape(
         radius
     )
+
+    var shouldCaptureNow by remember { mutableStateOf(false) }
+
+    LaunchedEffect(generationState) {
+        shouldCaptureNow = when (generationState) {
+            GenerationState.DONE -> {
+                true
+            }
+
+            else -> {
+                false
+            }
+        }
+    }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -308,61 +339,81 @@ private fun ChatBubble(msg: Message) {
                 .padding(14.dp), contentAlignment = align
         ) {
             Column {
-                if (msg.viaPlugin != null) {
-                    AssistTag(msg.viaPlugin)
+                if (msg.tool != null) {
+                    AssistTag(msg.tool.toolName)
                     Spacer(Modifier.height(6.dp))
                 }
                 Text(
                     msg.text, color = textColor, fontSize = 15.sp, lineHeight = 20.sp
                 )
 
-                if (!isUser && !msg.viaPlugin.isNullOrEmpty()) {
+                if (!isUser && msg.tool != null) {
                     // Only collect when this bubble is actually showing plugin content
-                    val pluginLoading by remember(msg.id) {
+                    val pluginLoading by remember(msg.tool) {
                         PluginManager.currentPlugin   // Flow<...>
                     }.collectAsState(initial = null)
 
-                    val isLoading = pluginLoading == null
+                    val bitmap: Bitmap? = readBitmapImage(msg.tool.toolPreview)
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier.size(200.dp)
+                        )
+                    }else{
+                        val isLoading = pluginLoading == null
+                        val captureReady = shouldCaptureNow && !isLoading    // only capture once plugin content is shown
 
-                    Crossfade(
-                        targetState = isLoading,
-                        label = "plugin"
-                    ) { loading ->
-                        if (loading) {
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surface
-                                ),
-                                elevation = CardDefaults.cardElevation(0.dp),
-                                modifier = Modifier.size(200.dp),
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(24.dp),
-                                    verticalArrangement = Arrangement.spacedBy(
-                                        16.dp, Alignment.CenterVertically
-                                    ),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(32.dp), // a bit larger than before
-                                        strokeWidth = 3.dp
-                                    )
-                                    Text(
-                                        text = "Loading...Plugin \n ${msg.viaPlugin}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        textAlign = TextAlign.Center,
-                                        fontFamily = FontFamily.Serif
-                                    )
+                        ProjectedCapturable(
+                            size = DpSize(200.dp, 200.dp),
+                            captureKey = msg.id to captureReady,         // stable + flips when ready
+                            captureWhen = captureReady,
+                            onCaptured = { bmp ->
+                                onCapture(bmp)                           // <-- CALL the lambda you passed from BodyContent
+                                // optional: stop further captures for this bubble
+                                shouldCaptureNow = false
+                            },
+                        ) {
+                            Crossfade(targetState = isLoading, label = "plugin") { loading ->
+                                if (loading) {
+                                    Card(
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.surface
+                                        ),
+                                        elevation = CardDefaults.cardElevation(0.dp),
+                                        modifier = Modifier.size(200.dp),
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(24.dp),
+                                            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(32.dp),
+                                                strokeWidth = 3.dp
+                                            )
+                                            Text(
+                                                text = "Loading...Plugin \n ${msg.tool?.toolName ?: ""}",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                textAlign = TextAlign.Center,
+                                                fontFamily = FontFamily.Serif
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Card(elevation = CardDefaults.cardElevation(0.dp)) {
+                                        PluginManager.currentPlugin
+                                            .collectAsState().value
+                                            ?.api?.content()?.invoke()
+                                    }
                                 }
                             }
-                        } else {
-                            Card(elevation = CardDefaults.cardElevation(0.dp)) {
-                                PluginManager.currentPlugin.collectAsState().value?.api?.content()?.invoke()
-                            }
                         }
+
                     }
+
                 }
             }
         }
@@ -392,7 +443,7 @@ private fun AssistTag(name: String) {
 fun ToolsList(
     modifier: Modifier = Modifier,
     tools: List<Pair<String, List<Tools>>>, // Pair(pluginName, tools)
-    onToolSelected: (Tools) -> Unit
+    onToolSelected: (Pair<String, Tools>) -> Unit
 ) {
     LazyColumn(
         modifier = modifier.heightIn(min = 100.dp, max = 300.dp),
@@ -413,7 +464,7 @@ fun ToolsList(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 32.dp, vertical = 4.dp)
-                        .clickable { onToolSelected(tool) },
+                        .clickable { onToolSelected(Pair(pluginName, tool)) },
                     elevation = CardDefaults.cardElevation(0.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.background
@@ -484,7 +535,7 @@ private fun ChatInputBar(
     tools: List<Pair<String, List<Tools>>>,
     modelList: List<ModelsData>,
     selectedTools: List<Tools>,
-    onToolSelected: (Tools) -> Unit,
+    onToolSelected: (Pair<String, Tools>) -> Unit,
     onModelSelected: (ModelsData) -> Unit,
     onValueChange: (String) -> Unit,
     onAttach: () -> Unit,
@@ -611,7 +662,7 @@ private fun ChatInputBar(
                     .clickable { onSend() },
                 contentAlignment = Alignment.Center
             ) {
-                when(isGenerating){
+                when (isGenerating) {
                     true -> {
                         Icon(
                             Icons.Default.Stop,
@@ -621,6 +672,7 @@ private fun ChatInputBar(
                         )
                         CircularProgressIndicator(trackColor = MaterialTheme.colorScheme.background)
                     }
+
                     false -> {
                         Icon(
                             painterResource(R.drawable.send_chat),
