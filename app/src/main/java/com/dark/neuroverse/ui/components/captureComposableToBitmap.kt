@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.platform.findViewTreeCompositionContext
 import androidx.compose.ui.unit.IntSize
 import androidx.core.graphics.createBitmap
+import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -68,7 +69,12 @@ suspend fun captureComposableToBitmap(
         // Optional: give a visible bg if your UI uses transparency
         setBackgroundColor(Color.WHITE)
 
-        setContent { content() }
+
+        setContent {
+            NeuroVerseTheme {
+                content()
+            }
+        }
     }
 
     // Attach to window so Compose schedules real draws

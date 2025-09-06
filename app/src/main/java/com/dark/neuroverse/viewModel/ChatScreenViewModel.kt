@@ -261,6 +261,7 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
                                         _generationState.value = GenerationState.DONE
                                         delay(2000)
                                         _generationState.value = GenerationState.IDLE
+                                        PluginManager.stopPlugin(PluginManager.currentPlugin.value?.manifest?.name ?: "Unknown Plugin")
                                     }
                                 }
                             }.onFailure { Log.e("ToolCall", "failed", it) }
@@ -276,6 +277,7 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
                 generateTitle()
                 updateConversation(context)
                 _isGenerating.value = false
+                updateChatList()
             }
         }
     }
@@ -435,3 +437,4 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
 enum class GenerationState {
     IDLE, GENERATING, DONE
 }
+
