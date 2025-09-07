@@ -33,6 +33,52 @@ android {
             abiFilters += listOf("arm64-v8a")
         }
     }
+
+    // ****** sign apk ******
+    signingConfigs {
+        create("releaseee") {
+            val localProperties = Properties()
+            val localPropertiesFile = rootProject.file("local.properties")
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
+            if (localPropertiesFile.exists()) {
+                localProperties.load(FileInputStream(localPropertiesFile))
+
+                val storeFilePath = localProperties.getProperty("storeFile")
+                val storePasswordValue = localProperties.getProperty("storePassword")
+                val keyAliasValue = localProperties.getProperty("keyAlias")
+                val keyPasswordValue = localProperties.getProperty("keyPassword")
+
+                if (storeFilePath != null && storePasswordValue != null && 
+                    keyAliasValue != null && keyPasswordValue != null) {
+                    storeFile = file(storeFilePath)
+                    storePassword = storePasswordValue
+                    keyAlias = keyAliasValue
+                    keyPassword = keyPasswordValue
+                } else {
+                    logger.error("There is sth wrong with file content:local.properties !")
+                }
+            } else {
+                logger.error("File not exist:local.properties !")
+            }
+        }
+    }
+
+        buildTypes {
+            debug {
+                //signingConfig = signingConfigs.getByName("releaseee")
+                //applicationIdSuffix '.debug'
+                versionNameSuffix = "-debug"
+            }
+            release {
+                signingConfig = signingConfigs.getByName("releaseee")
+
+            }
+        }
+    // ****** sign apk ******
+
+
     buildTypes {
         release {
             isMinifyEnabled = false           // Enable code shrinking
