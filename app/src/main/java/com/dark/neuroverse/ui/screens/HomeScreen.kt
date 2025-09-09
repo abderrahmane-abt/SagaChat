@@ -283,6 +283,9 @@ private fun BottomBar(
             viewModel.selectModel(it)
         },
         selectedModel = selectedModel,
+        onToolRemoved = {
+            viewModel.unSelectTool()
+        },
         onSend = {
             when (isGenerating) {
                 true -> {
@@ -638,6 +641,7 @@ private fun ChatInputBar(
     onValueChange: (String) -> Unit,
     onAttach: () -> Unit,
     onSend: () -> Unit,
+    onToolRemoved: (Tools) -> Unit,
     selectedModel: ModelsData,
     isGenerating: Boolean
 ) {
@@ -683,7 +687,8 @@ private fun ChatInputBar(
                     showToolsList = !showToolsList
                     showModelList = false
                 }, colors = ButtonDefaults.textButtonColors(
-                    containerColor = if (showToolsList) SkyBlue else MaterialTheme.colorScheme.background
+                    containerColor = if (showToolsList) SkyBlue else MaterialTheme.colorScheme.background,
+                    contentColor = if (showToolsList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
                 ), shape = RoundedCornerShape(rDP(8.dp))
             ) {
                 Row(
@@ -700,7 +705,10 @@ private fun ChatInputBar(
                 ) { tool ->
                     ToolCard(
                         modifier = Modifier
-                            .animateItem() // smooth slide when inserted/removed
+                            .animateItem()
+                            .clickable {
+                                onToolRemoved(tool)
+                            }
                             .padding(8.dp), tool = tool
                     )
                 }
@@ -711,7 +719,10 @@ private fun ChatInputBar(
                     showModelList = !showModelList
                     showToolsList = false
                 },
-                colors = IconButtonDefaults.iconButtonColors(containerColor = if (showModelList) Mint else MaterialTheme.colorScheme.background),
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = if (showModelList) Mint else MaterialTheme.colorScheme.background,
+                    contentColor = if (showModelList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
+                ),
                 shape = RoundedCornerShape(rDP(8.dp))
             ) {
                 Icon(Icons.Default.SmartToy, contentDescription = "Add")

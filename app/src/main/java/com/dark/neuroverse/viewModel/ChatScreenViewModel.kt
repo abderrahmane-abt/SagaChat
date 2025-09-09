@@ -181,6 +181,11 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
             }))
     }
 
+    fun unSelectTool() {
+        selectedTools.value = Pair("", Tools())
+        Neuron.setSystemPrompt(ModelsList.generalPurposeSystemPrompt)
+    }
+
     fun sendMessage(input: String, context: Context) {
         _messages.update { it + Message(role = Role.User, text = input) }
         _isGenerating.value = true
