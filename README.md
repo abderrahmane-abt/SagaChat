@@ -1,4 +1,4 @@
-# NeuroVerse
+# ToolNeuron Previously Known As [ NeuroVerse ]
 
 **Offline Android AI chat with a modular plugin framework (automation coming soon).**
 
