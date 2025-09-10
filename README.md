@@ -103,7 +103,6 @@ First‑party plugins live here: **ToolNeuron System Plugins** — *link placeho
 
 ## Get Involved
 
-* **Sponsor development** on GitHub Sponsors — *link placeholder*
 * **Contribute code** via pull requests
 * Drop feedback & feature requests on **[Discord](https://discord.gg/vjGEyQev)**
 
