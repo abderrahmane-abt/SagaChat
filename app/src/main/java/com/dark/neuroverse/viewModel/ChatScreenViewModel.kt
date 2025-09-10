@@ -365,7 +365,7 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
                                         delay(2000)
                                         _generationState.value = GenerationState.IDLE
                                         val rawOutput = data
-
+                                        Neuron.setSystemPrompt(ModelsList.generalPurposeSystemPrompt)
                                         sendInternalReasoningMessage(
                                             """
                                             Summarize the following output:

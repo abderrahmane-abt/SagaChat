@@ -604,8 +604,8 @@ fun SettingCard(
                         contentColor = MaterialTheme.colorScheme.primary,
                         containerColor = MaterialTheme.colorScheme.background
                     ),
-                    modifier = Modifier.height(rDP(28.dp))
-                ) { Text(actionLabel, fontSize = rSp(12.sp)) }
+                    modifier = Modifier.height(rDP(34.dp))
+                ) { Text(actionLabel, fontSize = rSp(14.sp)) }
             }
         }
     }
@@ -646,8 +646,8 @@ fun SettingCard(
                         contentColor = MaterialTheme.colorScheme.primary,
                         containerColor = MaterialTheme.colorScheme.background
                     ),
-                    modifier = Modifier.height(rDP(28.dp))
-                ) { Text(actionLabel, fontSize = rSp(12.sp)) }
+                    modifier = Modifier.height(rDP(34.dp))
+                ) { Text(actionLabel, fontSize = rSp(14.sp)) }
             }
         }
         Spacer(Modifier.height(rDP(12.dp)))
