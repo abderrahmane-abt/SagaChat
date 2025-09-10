@@ -2,7 +2,8 @@
 
 **Offline Android AI chat with a modular plugin framework (automation coming soon).**
 
-NeuroVerse is a privacy‑first Android app that runs fully on‑device and showcases a plugin‑based architecture. The current public milestone is **chat‑only** via the first‑party **AI Chat** plugin. The command/automation engine exists in the codebase but is **disabled and not user‑facing yet**.
+ToolNeuron: A Secure, Offline Ai Ecosystems For Android Devices.
+It Lets Users Run Private Ai Models And Dynamic Plugins on Their Device, All With Hardware-Grade Encryption
 
 ---
 
