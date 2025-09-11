@@ -13,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
+import android.util.Log
 import android.widget.Toast
 import androidx.annotation.MainThread
 import androidx.core.app.NotificationCompat
@@ -41,9 +42,10 @@ import java.util.concurrent.TimeUnit
 @SuppressLint("StaticFieldLeak")
 object UpdateCenter {
 
+
     // ======= CONFIG =======
     private val UPDATE_JSON_URL =
-        "https://raw.githubusercontent.com/Siddhesh2377/NeuroVerse/refs/heads/fresh-new/repo/AppUpdate.json?ts=${System.currentTimeMillis()}"
+        "https://raw.githubusercontent.com/Siddhesh2377/NeuroVerse/fresh-new/repo/AppUpdate.json?ts=${System.currentTimeMillis()}"
 
     private const val NOTI_CHANNEL_ID = "updates.channel"
     private const val NOTI_CHANNEL_NAME = "App Updates"
@@ -56,63 +58,80 @@ object UpdateCenter {
     private lateinit var app: Context
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val client by lazy {
-        OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS).build()
+        OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build()
     }
 
     fun init(context: Context) {
         app = context.applicationContext
         ensureChannel()
-        // Re-bind to an in-flight download after process death
-        val sp = sp()
-        val existingId = sp.getLong(SP_KEY_DOWNLOAD_ID, -1L)
-        if (existingId > 0L) watchDownload(existingId)
+        val existingId = sp().getLong(SP_KEY_DOWNLOAD_ID, -1L)
+        if (existingId > 0L) {
+            Log.i("UpdateCenter", "Resuming watch on downloadId=$existingId")
+            watchDownload(existingId)
+        }
     }
 
-    /**
-     * Checks JSON; if hasUpdate and version is newer than installed, starts download+install.
-     * Set `force=true` to skip version comparison (useful for QA).
-     */
     @MainThread
     fun checkAndMaybeUpdate(force: Boolean = false) {
         require(::app.isInitialized) { "Call UpdateCenter.init(context) first." }
         ioScope.launch {
             val info = fetchUpdateJson() ?: return@launch
-            val installed = getInstalledVersionName()
-            if (info.hasUpdate){
-                // Force should only bypass version comparison, not hasUpdate flag
-                val shouldUpdate = (force || isNewer(info.version, installed))
-                if (!shouldUpdate) return@launch
+            Log.i("UpdateCenter", "Fetched UpdateInfo=$info")
 
+            val installed = getInstalledVersionName()
+            Log.i("UpdateCenter", "Installed version=$installed")
+
+            if (info.hasUpdate) {
+                val shouldUpdate = force || info.version != installed
+                if (!shouldUpdate) {
+                    Log.i("UpdateCenter", "Update skipped: remote=${info.version}, installed=$installed")
+                    return@launch
+                }
+
+                Log.i("UpdateCenter", "Update accepted: downloading ${info.version}")
                 sp().edit().putString(SP_KEY_LATEST_VERSION, info.version).apply()
+
                 val dmId = enqueueDownload(info.updateLink, info.version, info.whatsNew)
                 sp().edit().putLong(SP_KEY_DOWNLOAD_ID, dmId).apply()
                 watchDownload(dmId)
+            } else {
+                Log.i("UpdateCenter", "No update available (hasUpdate=false)")
             }
         }
     }
 
-
     // ======= JSON parse =======
     private data class UpdateInfo(
-        val hasUpdate: Boolean, val version: String, val updateLink: String, val whatsNew: String
+        val hasUpdate: Boolean,
+        val version: String,
+        val updateLink: String,
+        val whatsNew: String
     )
 
     private fun fetchUpdateJson(): UpdateInfo? {
         val req = Request.Builder().url(UPDATE_JSON_URL).get().build()
         return try {
             client.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return null
-                val body = resp.body.string()
+                if (!resp.isSuccessful) {
+                    Log.e("UpdateCenter", "Failed fetching JSON: HTTP ${resp.code}")
+                    return null
+                }
+                val body = resp.body?.string().orEmpty()
+                Log.d("UpdateCenter", "Raw JSON: $body")
+
                 val json = JSONObject(body)
                 UpdateInfo(
                     hasUpdate = json.optBoolean("hasUpdate", false),
                     version = json.optString("version", ""),
                     updateLink = json.optString("updateLink", ""),
-                    whatsNew = json.optString("whatsNew", "")
+                    whatsNew = json.optJSONArray("whatsNew")?.join(",") ?: ""
                 ).takeIf { it.updateLink.isNotBlank() && it.version.isNotBlank() }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e("UpdateCenter", "Error fetching JSON", e)
             null
         }
     }
@@ -122,79 +141,72 @@ object UpdateCenter {
         val dm = app.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val uri = url.toUri()
         val req = DownloadManager.Request(uri)
-        req.setDestinationInExternalPublicDir(
-            Environment.DIRECTORY_DOWNLOADS, "app-$version.apk"
-        ).setMimeType("application/vnd.android.package-archive")
-
+            .setDestinationInExternalPublicDir(
+                Environment.DIRECTORY_DOWNLOADS,
+                "app-$version.apk"
+            )
+            .setMimeType("application/vnd.android.package-archive")
             .setTitle("Downloading update $version")
             .setDescription(if (whatsNew.isBlank()) "App update" else whatsNew.take(120))
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
-            .setAllowedOverMetered(true).setAllowedOverRoaming(true).setVisibleInDownloadsUi(true)
-
-        // If you host on HTTPS with valid headers, DM will infer file name; otherwise:
-        // req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "app-$version.apk")
+            .setAllowedOverMetered(true)
+            .setAllowedOverRoaming(true)
+            .setVisibleInDownloadsUi(true)
 
         showProgress(0, "Preparing download…")
-        return dm.enqueue(req)
+        return dm.enqueue(req).also {
+            Log.i("UpdateCenter", "Enqueued download: id=$it, version=$version")
+        }
     }
 
     private fun watchDownload(downloadId: Long) {
         val dm = app.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         ioScope.launch {
             val query = DownloadManager.Query().setFilterById(downloadId)
-            var done = false
             var lastProgress = -1
 
-            while (!done) {
+            while (true) {
                 delay(750)
                 val cursor: Cursor = dm.query(query) ?: continue
                 cursor.use {
                     if (!it.moveToFirst()) return@use
-
                     val status = it.getInt(it.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                    val total =
-                        it.getLong(it.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
-                    val soFar =
-                        it.getLong(it.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                    val total = it.getLong(it.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                    val soFar = it.getLong(it.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
 
                     when (status) {
                         DownloadManager.STATUS_RUNNING, DownloadManager.STATUS_PAUSED -> {
                             val progress = if (total > 0) ((soFar * 100L) / total).toInt() else 0
                             if (progress != lastProgress) {
                                 lastProgress = progress
+                                Log.d("UpdateCenter", "Download progress: $progress%")
                                 showProgress(progress, "Downloading update… $progress%")
                             }
                         }
-
                         DownloadManager.STATUS_SUCCESSFUL -> {
+                            Log.i("UpdateCenter", "Download successful for id=$downloadId")
                             showComplete()
-                            done = true
-                            // Clear persisted id
                             sp().edit().remove(SP_KEY_DOWNLOAD_ID).apply()
-                            val uriStr =
-                                it.getString(it.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
-                            val apkUri =
-                                dm.getUriForDownloadedFile(downloadId) ?: uriStr?.let(Uri::parse)
+                            val apkUri = dm.getUriForDownloadedFile(downloadId)
                             if (apkUri != null) {
                                 promptInstall(apkUri)
                             } else {
                                 showError("Downloaded, but file not found.")
                             }
+                            return@launch
                         }
-
                         DownloadManager.STATUS_FAILED -> {
-                            done = true
+                            val reason = it.getInt(it.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+                            Log.e("UpdateCenter", "Download failed (code=$reason)")
                             sp().edit().remove(SP_KEY_DOWNLOAD_ID).apply()
-                            val reason =
-                                it.getInt(it.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
                             showError("Download failed (code $reason). Tap to retry.")
+                            return@launch
                         }
                     }
                 }
             }
         }
     }
-
     // ======= Install =======
     private fun promptInstall(apkUri: Uri) {
         // For Android 8.0+ you might need unknown sources permission for your app
@@ -229,21 +241,6 @@ object UpdateCenter {
         } catch (_: Exception) {
             "0"
         }
-    }
-
-    /** Very tolerant semver-ish comparison: 1.4.2 > 1.3.9; falls back to string compare if needed. */
-    private fun isNewer(remote: String, local: String): Boolean {
-        fun parse(v: String) = v.split(".", "-").mapNotNull { it.toLongOrNull() }
-        val r = parse(remote)
-        val l = parse(local)
-        val max = maxOf(r.size, l.size)
-        for (i in 0 until max) {
-            val rr = r.getOrElse(i) { 0L }
-            val ll = l.getOrElse(i) { 0L }
-            if (rr != ll) return rr > ll
-        }
-        // if identical numerically but different strings (e.g., 1.4.2-beta), consider remote newer
-        return remote != local
     }
 
     // ======= Notifications =======

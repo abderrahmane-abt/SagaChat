@@ -37,7 +37,7 @@ object Neuron {
     /** Defaults for model init. */
     data class ModelInitParams(
         val threads: Int = (Runtime.getRuntime().availableProcessors().coerceAtLeast(2)) / 2,
-        val gpuLayers: Int = 0,
+        val gpuLayers: Int = -1,
         val useMMAP: Boolean = true,
         val useMLOCK: Boolean = false,
         val ctxSize: Int = 2048,

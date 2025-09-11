@@ -296,212 +296,212 @@ fun SettingsScreen(
                 )
             }
 
-            // ——— APP SETTINGS ———
-            item {
-                SectionHeader("App Settings")
-
-                var showCard by remember { mutableStateOf(true) }
-
-                val actionLabel = when (updateInfo.status) {
-                    UpdateStatus.DOWNLOADING -> "${(updateInfo.downloadProgress * 100).toInt()}%"
-                    UpdateStatus.READY_TO_INSTALL -> "Install"
-                    UpdateStatus.FAILED -> "Retry"
-                    UpdateStatus.IDLE -> when {
-                        isChecking -> "Checking…"
-                        updateInfo.hasUpdate -> "Update"
-                        else -> "Check"
-                    }
-                }
-
-                SettingCard(
-                    title = "Check for Updates",
-                    actionLabel = actionLabel,
-                    showCard = showCard,
-                    onAction = {
-                        when (updateInfo.status) {
-                            UpdateStatus.READY_TO_INSTALL -> updateViewModel.triggerInstall(context)
-                            UpdateStatus.IDLE -> {
-                                isChecking = true
-                                updateViewModel.checkForUpdateAndStartDownload()
-                                showCard = true
-                            }
-                            UpdateStatus.FAILED -> {
-                                updateViewModel.downloadApk(context)
-                                showCard = true
-                            }
-                            UpdateStatus.DOWNLOADING -> Unit
-                        }
-                    }
-                ) {
-                    AnimatedContent(
-                        targetState = Triple(updateInfo.status, updateInfo.hasUpdate, isChecking),
-                        transitionSpec = {
-                            slideInVertically(animationSpec = tween(220)) { it / 2 } + fadeIn() togetherWith
-                                    slideOutVertically(animationSpec = tween(220)) { -it / 2 } + fadeOut()
-                        },
-                        label = "UpdateStatusAnimatedContent"
-                    ) { (status, hasUpdate, checking) ->
-                        var checkTimedOut by remember { mutableStateOf(false) }
-                        LaunchedEffect(checking, status, hasUpdate) {
-                            if (checking) {
-                                checkTimedOut = false
-                                kotlinx.coroutines.delay(10_000)
-                                if (isChecking && status == UpdateStatus.IDLE && !hasUpdate) {
-                                    checkTimedOut = true
-                                    isChecking = false
-                                }
-                            } else {
-                                checkTimedOut = false
-                            }
-                        }
-
-                        when (status) {
-                            UpdateStatus.IDLE -> {
-                                if (checking) {
-                                    Column(Modifier.padding(rDP(16.dp))) {
-                                        Text(
-                                            "Checking for updates…",
-                                            style = MaterialTheme.typography.titleMedium.copy(
-                                                color = CyberViolet,
-                                                fontSize = rSp(16.sp)
-                                            )
-                                        )
-                                        Spacer(Modifier.height(rDP(8.dp)))
-                                        LinearWavyProgressIndicator(
-                                            modifier = Modifier.fillMaxWidth(),
-                                        )
-                                        Spacer(Modifier.height(rDP(12.dp)))
-                                        SubtleNote("Hang tight while we ping the mothership.")
-                                    }
-                                } else if (hasUpdate) {
-                                    Column(Modifier.padding(rDP(16.dp))) {
-                                        Text(
-                                            "Update available",
-                                            style = MaterialTheme.typography.titleLarge.copy(
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = Coral,
-                                                fontSize = rSp(20.sp)
-                                            )
-                                        )
-                                        Spacer(Modifier.height(rDP(6.dp)))
-                                        MarkdownText("Tap **Update** to download the latest build.")
-                                    }
-                                } else if (checkTimedOut) {
-                                    Column(Modifier.padding(rDP(16.dp))) {
-                                        Text(
-                                            "No update found",
-                                            style = MaterialTheme.typography.titleLarge.copy(
-                                                fontWeight = FontWeight.SemiBold,
-                                                fontSize = rSp(20.sp)
-                                            )
-                                        )
-                                        Spacer(Modifier.height(rDP(6.dp)))
-                                        SubtleNote("We checked for 10s. Servers might be sleepy—try again later.")
-                                    }
-                                } else {
-                                    Column(Modifier.padding(rDP(16.dp))) {
-                                        Text(
-                                            "You're up to date",
-                                            style = MaterialTheme.typography.titleLarge.copy(
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = Mint,
-                                                fontSize = rSp(20.sp)
-                                            )
-                                        )
-                                        Spacer(Modifier.height(rDP(6.dp)))
-                                        MarkdownText("Current version: **${BuildConfig.VERSION_NAME}**")
-                                    }
-                                }
-                            }
-
-                            UpdateStatus.DOWNLOADING -> {
-                                Column(Modifier.padding(rDP(16.dp))) {
-                                    Text(
-                                        "Downloading update…",
-                                        style = MaterialTheme.typography.titleLarge.copy(
-                                            fontSize = rSp(20.sp)
-                                        )
-                                    )
-                                    Spacer(Modifier.height(rDP(8.dp)))
-
-                                    val animatedProgress by animateFloatAsState(
-                                        targetValue = updateInfo.downloadProgress.coerceIn(0f, 1f),
-                                        animationSpec = tween(350),
-                                        label = "ProgressAnim"
-                                    )
-
-                                    if (animatedProgress > 0f) {
-                                        LinearProgressIndicator(
-                                            progress = { animatedProgress },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            color = MaterialTheme.colorScheme.primary,
-                                            strokeCap = StrokeCap.Round
-                                        )
-                                    } else {
-                                        LinearProgressIndicator(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            strokeCap = StrokeCap.Round
-                                        )
-                                    }
-
-                                    if (updateInfo.whatsNew.isNotEmpty()) {
-                                        Spacer(Modifier.height(rDP(12.dp)))
-                                        Text(
-                                            buildAnnotatedString {
-                                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                                    append("What's New:\n")
-                                                }
-                                                updateInfo.whatsNew.forEach { append("• $it\n") }
-                                            },
-                                            fontSize = rSp(14.sp)
-                                        )
-                                    }
-                                }
-                            }
-
-                            UpdateStatus.FAILED -> {
-                                Column(Modifier.padding(rDP(16.dp))) {
-                                    Text(
-                                        "Download failed",
-                                        style = MaterialTheme.typography.titleLarge.copy(
-                                            color = MaterialTheme.colorScheme.error,
-                                            fontSize = rSp(20.sp)
-                                        )
-                                    )
-                                    Spacer(Modifier.height(rDP(6.dp)))
-                                    SubtleNote("Network gremlins? Tap **Retry** to try again.")
-                                }
-                            }
-
-                            UpdateStatus.READY_TO_INSTALL -> {
-                                Column(Modifier.padding(rDP(16.dp))) {
-                                    Text(
-                                        "Ready to install",
-                                        style = MaterialTheme.typography.titleLarge.copy(
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontSize = rSp(20.sp)
-                                        )
-                                    )
-                                    if (updateInfo.whatsNew.isNotEmpty()) {
-                                        Spacer(Modifier.height(rDP(8.dp)))
-                                        Text(
-                                            buildAnnotatedString {
-                                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                                    append("What's New:\n")
-                                                }
-                                                updateInfo.whatsNew.forEach { append("• $it\n") }
-                                            },
-                                            fontSize = rSp(14.sp)
-                                        )
-                                    }
-                                    Spacer(Modifier.height(rDP(6.dp)))
-                                    SubtleNote("Tap **Install** to finish the upgrade.")
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+//            // ——— APP SETTINGS ———
+//            item {
+//                SectionHeader("App Settings")
+//
+//                var showCard by remember { mutableStateOf(true) }
+//
+//                val actionLabel = when (updateInfo.status) {
+//                    UpdateStatus.DOWNLOADING -> "${(updateInfo.downloadProgress * 100).toInt()}%"
+//                    UpdateStatus.READY_TO_INSTALL -> "Install"
+//                    UpdateStatus.FAILED -> "Retry"
+//                    UpdateStatus.IDLE -> when {
+//                        isChecking -> "Checking…"
+//                        updateInfo.hasUpdate -> "Update"
+//                        else -> "Check"
+//                    }
+//                }
+//
+//                SettingCard(
+//                    title = "Check for Updates",
+//                    actionLabel = actionLabel,
+//                    showCard = showCard,
+//                    onAction = {
+//                        when (updateInfo.status) {
+//                            UpdateStatus.READY_TO_INSTALL -> updateViewModel.triggerInstall(context)
+//                            UpdateStatus.IDLE -> {
+//                                isChecking = true
+//                                updateViewModel.checkForUpdateAndStartDownload()
+//                                showCard = true
+//                            }
+//                            UpdateStatus.FAILED -> {
+//                                updateViewModel.downloadApk(context)
+//                                showCard = true
+//                            }
+//                            UpdateStatus.DOWNLOADING -> Unit
+//                        }
+//                    }
+//                ) {
+//                    AnimatedContent(
+//                        targetState = Triple(updateInfo.status, updateInfo.hasUpdate, isChecking),
+//                        transitionSpec = {
+//                            slideInVertically(animationSpec = tween(220)) { it / 2 } + fadeIn() togetherWith
+//                                    slideOutVertically(animationSpec = tween(220)) { -it / 2 } + fadeOut()
+//                        },
+//                        label = "UpdateStatusAnimatedContent"
+//                    ) { (status, hasUpdate, checking) ->
+//                        var checkTimedOut by remember { mutableStateOf(false) }
+//                        LaunchedEffect(checking, status, hasUpdate) {
+//                            if (checking) {
+//                                checkTimedOut = false
+//                                kotlinx.coroutines.delay(10_000)
+//                                if (isChecking && status == UpdateStatus.IDLE && !hasUpdate) {
+//                                    checkTimedOut = true
+//                                    isChecking = false
+//                                }
+//                            } else {
+//                                checkTimedOut = false
+//                            }
+//                        }
+//
+//                        when (status) {
+//                            UpdateStatus.IDLE -> {
+//                                if (checking) {
+//                                    Column(Modifier.padding(rDP(16.dp))) {
+//                                        Text(
+//                                            "Checking for updates…",
+//                                            style = MaterialTheme.typography.titleMedium.copy(
+//                                                color = CyberViolet,
+//                                                fontSize = rSp(16.sp)
+//                                            )
+//                                        )
+//                                        Spacer(Modifier.height(rDP(8.dp)))
+//                                        LinearWavyProgressIndicator(
+//                                            modifier = Modifier.fillMaxWidth(),
+//                                        )
+//                                        Spacer(Modifier.height(rDP(12.dp)))
+//                                        SubtleNote("Hang tight while we ping the mothership.")
+//                                    }
+//                                } else if (hasUpdate) {
+//                                    Column(Modifier.padding(rDP(16.dp))) {
+//                                        Text(
+//                                            "Update available",
+//                                            style = MaterialTheme.typography.titleLarge.copy(
+//                                                fontWeight = FontWeight.SemiBold,
+//                                                color = Coral,
+//                                                fontSize = rSp(20.sp)
+//                                            )
+//                                        )
+//                                        Spacer(Modifier.height(rDP(6.dp)))
+//                                        MarkdownText("Tap **Update** to download the latest build.")
+//                                    }
+//                                } else if (checkTimedOut) {
+//                                    Column(Modifier.padding(rDP(16.dp))) {
+//                                        Text(
+//                                            "No update found",
+//                                            style = MaterialTheme.typography.titleLarge.copy(
+//                                                fontWeight = FontWeight.SemiBold,
+//                                                fontSize = rSp(20.sp)
+//                                            )
+//                                        )
+//                                        Spacer(Modifier.height(rDP(6.dp)))
+//                                        SubtleNote("We checked for 10s. Servers might be sleepy—try again later.")
+//                                    }
+//                                } else {
+//                                    Column(Modifier.padding(rDP(16.dp))) {
+//                                        Text(
+//                                            "You're up to date",
+//                                            style = MaterialTheme.typography.titleLarge.copy(
+//                                                fontWeight = FontWeight.SemiBold,
+//                                                color = Mint,
+//                                                fontSize = rSp(20.sp)
+//                                            )
+//                                        )
+//                                        Spacer(Modifier.height(rDP(6.dp)))
+//                                        MarkdownText("Current version: **${BuildConfig.VERSION_NAME}**")
+//                                    }
+//                                }
+//                            }
+//
+//                            UpdateStatus.DOWNLOADING -> {
+//                                Column(Modifier.padding(rDP(16.dp))) {
+//                                    Text(
+//                                        "Downloading update…",
+//                                        style = MaterialTheme.typography.titleLarge.copy(
+//                                            fontSize = rSp(20.sp)
+//                                        )
+//                                    )
+//                                    Spacer(Modifier.height(rDP(8.dp)))
+//
+//                                    val animatedProgress by animateFloatAsState(
+//                                        targetValue = updateInfo.downloadProgress.coerceIn(0f, 1f),
+//                                        animationSpec = tween(350),
+//                                        label = "ProgressAnim"
+//                                    )
+//
+//                                    if (animatedProgress > 0f) {
+//                                        LinearProgressIndicator(
+//                                            progress = { animatedProgress },
+//                                            modifier = Modifier.fillMaxWidth(),
+//                                            color = MaterialTheme.colorScheme.primary,
+//                                            strokeCap = StrokeCap.Round
+//                                        )
+//                                    } else {
+//                                        LinearProgressIndicator(
+//                                            modifier = Modifier.fillMaxWidth(),
+//                                            strokeCap = StrokeCap.Round
+//                                        )
+//                                    }
+//
+//                                    if (updateInfo.whatsNew.isNotEmpty()) {
+//                                        Spacer(Modifier.height(rDP(12.dp)))
+//                                        Text(
+//                                            buildAnnotatedString {
+//                                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+//                                                    append("What's New:\n")
+//                                                }
+//                                                updateInfo.whatsNew.forEach { append("• $it\n") }
+//                                            },
+//                                            fontSize = rSp(14.sp)
+//                                        )
+//                                    }
+//                                }
+//                            }
+//
+//                            UpdateStatus.FAILED -> {
+//                                Column(Modifier.padding(rDP(16.dp))) {
+//                                    Text(
+//                                        "Download failed",
+//                                        style = MaterialTheme.typography.titleLarge.copy(
+//                                            color = MaterialTheme.colorScheme.error,
+//                                            fontSize = rSp(20.sp)
+//                                        )
+//                                    )
+//                                    Spacer(Modifier.height(rDP(6.dp)))
+//                                    SubtleNote("Network gremlins? Tap **Retry** to try again.")
+//                                }
+//                            }
+//
+//                            UpdateStatus.READY_TO_INSTALL -> {
+//                                Column(Modifier.padding(rDP(16.dp))) {
+//                                    Text(
+//                                        "Ready to install",
+//                                        style = MaterialTheme.typography.titleLarge.copy(
+//                                            fontWeight = FontWeight.SemiBold,
+//                                            fontSize = rSp(20.sp)
+//                                        )
+//                                    )
+//                                    if (updateInfo.whatsNew.isNotEmpty()) {
+//                                        Spacer(Modifier.height(rDP(8.dp)))
+//                                        Text(
+//                                            buildAnnotatedString {
+//                                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+//                                                    append("What's New:\n")
+//                                                }
+//                                                updateInfo.whatsNew.forEach { append("• $it\n") }
+//                                            },
+//                                            fontSize = rSp(14.sp)
+//                                        )
+//                                    }
+//                                    Spacer(Modifier.height(rDP(6.dp)))
+//                                    SubtleNote("Tap **Install** to finish the upgrade.")
+//                                }
+//                            }
+//                        }
+//                    }
+//                }
+//            }
         }
     }
 }

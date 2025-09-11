@@ -103,7 +103,7 @@ fun ModelLoadingScreen(
                 val ok = native.initModel(
                     path = f.absolutePath,
                     threads = maxOf(1, Runtime.getRuntime().availableProcessors()/2),
-                    gpuLayers = 0,
+                    gpuLayers = -1,
                     useMMAP = true,
                     useMLOCK = false,
                     ctxSize = 512,
