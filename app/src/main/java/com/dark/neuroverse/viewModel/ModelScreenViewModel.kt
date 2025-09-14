@@ -40,15 +40,8 @@ class ModelScreenViewModel(context: Context) : ViewModel() {
     val downloadStates: StateFlow<Map<String, DownloadState>> = _downloadStates
     private val downloadJobs = mutableMapOf<String, Job>()
 
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
-
     init {
         observeModels()
-    }
-
-    fun updateLoadingState(isLoading: Boolean) {
-        _isLoading.value = isLoading
     }
 
     private fun observeModels() {
@@ -129,7 +122,6 @@ class ModelScreenViewModel(context: Context) : ViewModel() {
             if (path.extension == "gguf") {
                 Log.d("FilePicker", "Selected file path: $path")
                 onResult(path)
-                _isLoading.value = false
             }
         }
     }

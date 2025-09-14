@@ -58,6 +58,12 @@ android {
         buildConfig = true
     }
 
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+
     dependencies {
 
         //NET
@@ -74,7 +80,7 @@ android {
         coreLibraryDesugaring(libs.desugar.jdk.libs)
 
         //LIBS
-        compileOnly(files("libs/ai-core-release.aar"))
+        implementation(files("libs/ai-core-release.aar"))
 
         //PROJECTS
         implementation(project(":ai-module"))

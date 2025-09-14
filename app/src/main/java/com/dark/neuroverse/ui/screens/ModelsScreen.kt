@@ -66,6 +66,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.data.ModelsList.getModelList
 import com.dark.ai_module.model.ModelsData
+import com.dark.neuroverse.activity.GgufPickerActivity
 import com.dark.neuroverse.activity.ModelLoadingActivity
 import com.dark.neuroverse.ui.components.CollapsableButton
 import com.dark.neuroverse.ui.components.ModelDialog
@@ -90,17 +91,7 @@ fun ModelsScreen(onNext: () -> Unit) {
     var isEnabled by remember { mutableStateOf(false) }
     LaunchedEffect(installedModels) { isEnabled = installedModels.isNotEmpty() }
 
-    // (Kept for future) File picker for local .gguf imports
-    var showDialog by remember { mutableStateOf(false) }
     var selectedModelPath by remember { mutableStateOf<java.io.File?>(null) }
-    val filePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        uri?.let {
-            viewModel.loadModelDetailsFromFile(it, context) { file ->
-                selectedModelPath = file
-                showDialog = true
-            }
-        }
-    }
 
     // Tabs: Marketplace | Installed LLM
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -134,25 +125,13 @@ fun ModelsScreen(onNext: () -> Unit) {
                 Button(
                     onClick = {
                         // Launch dedicated import screen
-                        context.startActivity(Intent(context, ModelLoadingActivity::class.java))
+                        context.startActivity(Intent(context, GgufPickerActivity::class.java))
                     }
                 ) {
                     Icon(Icons.TwoTone.FileOpen, contentDescription = "Import Model")
                     Spacer(Modifier.width(rDP(12.dp)))
                     Text("Import", fontSize = rSp(15.sp))
                 }
-            }
-
-            // Optional legacy local import dialog
-            if (showDialog) {
-                ModelDialog(
-                    modelInfo = selectedModelPath ?: java.io.File("default_model.gguf"),
-                    onDismiss = { showDialog = false },
-                    onSave = { vmModel ->
-                        viewModel.loadModel(vmModel)
-                        showDialog = false
-                    }
-                )
             }
 
             // Tabs
