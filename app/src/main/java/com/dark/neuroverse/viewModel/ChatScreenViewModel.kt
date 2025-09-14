@@ -5,7 +5,6 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.dark.ai_module.ai.Neuron
 import com.dark.ai_module.data.ModelsList
 import com.dark.ai_module.model.ModelsData
 import com.dark.ai_module.workers.ModelManager
@@ -103,15 +102,15 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
             updateChatList()
 
             ModelManager.getFirstModel()?.let { model ->
-                ModelManager.loadModel(
-                    modelData = model,
-                    defaults = ModelManager.ManagerDefaults(systemPrompt = ModelsList.generalPurposeSystemPrompt),
-                    chatTemplate = ModelsList.chatTemplate,
-                    forceReload = true
-                ) {
-                    Log.d("Model", "Model loaded successfully $model")
-                    selectedModel.value = model
-                }
+//                ModelManager.loadModel(
+//                    modelData = model,
+//                    defaults = ModelManager.ManagerDefaults(systemPrompt = ModelsList.generalPurposeSystemPrompt),
+//                    chatTemplate = ModelsList.chatTemplate,
+//                    forceReload = true
+//                ) {
+//                    Log.d("Model", "Model loaded successfully $model")
+//                    selectedModel.value = model
+//                }
             }
 
             // Load Tools & Models
@@ -149,7 +148,7 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
     fun selectModel(model: ModelsData) {
         ModelManager.unLoadModel()
         viewModelScope.launch(Dispatchers.IO) {
-            ModelManager.loadModel(
+            ModelManager.loadModelAwait(
                 modelData = model, defaults = ModelManager.ManagerDefaults(
                     systemPrompt = if (selectedTools.value.first.isEmpty()) ModelsList.generalPurposeSystemPrompt
                     else ModelsList.getToolCallSystemPrompt(
@@ -158,7 +157,20 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
                         })
                 ), chatTemplate = ModelsList.chatTemplate, forceReload = true
             ) {
-                Log.d("Model", "Model loaded successfully ${model.modeName}")
+                when(it){
+                    is ModelManager.LoadState.Error -> {
+                        Log.e("Model Loading", "Error : ${it.message}")
+                    }
+                    ModelManager.LoadState.Idle -> {
+                        Log.v("Model Loading", "IDLE")
+                    }
+                    is ModelManager.LoadState.Loading -> {
+                        Log.d("Model Loading", "${it.progress}")
+                    }
+                    is ModelManager.LoadState.OnLoaded -> {
+                        Log.d("Model Loading", "Loaded")
+                    }
+                }
                 selectedModel.value = model
             }
         }
@@ -167,7 +179,7 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
     fun selectTool(tool: Pair<String, Tools>) {
         // ensure new list instance
         selectedTools.value = tool
-        Neuron.setSystemPrompt(
+        ModelManager.setSystemPrompt(
             ModelsList.getToolCallSystemPrompt(
                 buildToolsListForPrompt = selectedTools.value.let {
                     it.second.toolName + ":" + it.second.args.entries.joinToString { (k, v) -> "$k:$v" }
@@ -177,7 +189,7 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
 
     fun unSelectTool() {
         selectedTools.value = Pair("", Tools())
-        Neuron.setSystemPrompt(ModelsList.generalPurposeSystemPrompt)
+        ModelManager.setSystemPrompt(ModelsList.generalPurposeSystemPrompt)
     }
 
     // ===================== sendMessage() =====================
@@ -321,7 +333,7 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
 
         try {
             // 🔌 Stream from the model
-            val finalRaw = Neuron.generateStreaming(
+            val finalRaw = ModelManager.generateStreaming(
                 prompt = prompt, onToken = { tok ->
                     rawSb.append(tok)
                     val lower = tok.lowercase()
@@ -395,7 +407,7 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
                                     // Optional summarization step
                                     viewModelScope.launch(Dispatchers.Default) {
                                         data
-                                        Neuron.setSystemPrompt(ModelsList.generalPurposeSystemPrompt)
+                                        ModelManager.setSystemPrompt(ModelsList.generalPurposeSystemPrompt)
                                         sendInternalReasoningMessage(
                                             """
                                         Summarize the following output:
@@ -468,7 +480,7 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
                 _chatTitle.value = ""
                 chatId.value = ""
             }
-            Neuron.stopGeneration()
+            ModelManager.stopGeneration()
         }
     }
 
@@ -546,7 +558,7 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
     }
 
     fun stopGenerating() {
-        Neuron.stopGeneration().let {
+        ModelManager.stopGeneration().let {
             _isGenerating.value = false
         }
     }

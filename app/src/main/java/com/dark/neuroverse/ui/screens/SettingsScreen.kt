@@ -220,11 +220,11 @@ fun SettingsScreen(
                                 Toast.makeText(
                                     ctx, "Model switched to ${it.modeName}", Toast.LENGTH_SHORT
                                 ).show()
-                                ModelManager.loadModel(it) {
-                                    Toast.makeText(
-                                        ctx, "Model loaded successfully", Toast.LENGTH_SHORT
-                                    ).show()
-                                }
+//                                ModelManager.loadModelAwait(modelData = it, onLoaded = {
+//                                    Toast.makeText(
+//                                        ctx, "Model loaded successfully", Toast.LENGTH_SHORT
+//                                    ).show()
+//                                })
                             }
                         }
                     }

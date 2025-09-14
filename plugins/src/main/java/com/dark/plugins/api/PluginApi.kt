@@ -8,7 +8,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
-import com.dark.ai_module.ai.Neuron
+import com.dark.ai_module.workers.ModelManager
 import com.dark.plugins.manager.PluginManager
 import org.json.JSONObject
 
@@ -57,14 +57,14 @@ open class PluginApi(ctx: Context) : ComposePlugin {
     open suspend fun aiCall(
         input: JSONObject, onToken: (String) -> Unit
     ): JSONObject {
-        val temp: String = Neuron.generateStreaming(
-            prompt = input.toString(), gen = Neuron.GenerationParams(), onToken = onToken
+        val temp: String = ModelManager.generateStreaming(
+            prompt = input.toString(), gen = ModelManager.GenerationParams(), onToken = onToken
         )
         return JSONObject().apply { put("response", temp) }
     }
 
     open suspend fun stopGeneration() {
-        Neuron.stopGeneration()
+        ModelManager.stopGeneration()
     }
 
     @Keep

@@ -37,12 +37,18 @@ android {
             jvmTarget.set(JvmTarget.JVM_11)
         }
     }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
 }
 
 dependencies {
 
     //PROJECTS
-    compileOnly(files("libs/ai-core-release.aar"))
+    implementation(files("libs/ai-core-release.aar"))
 
     //DATABASE
     implementation(libs.androidx.room.runtime)

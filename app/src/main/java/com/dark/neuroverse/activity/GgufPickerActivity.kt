@@ -1,0 +1,632 @@
+package com.dark.neuroverse.activity
+
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.annotation.RequiresApi
+import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.dark.neuroverse.ui.theme.NeuroVerseTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.io.File
+import java.io.FileInputStream
+import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlin.math.min
+
+/**
+ * Compose-based GGUF picker with:
+ * - Clean breadcrumb title (plain text, no buttons), proper ellipsis
+ * - System back press to go up folders (or finish at root)
+ * - Only folders + .gguf files are shown
+ * - Long-press opens a blurred-background info dialog with richer metadata
+ */
+class GgufPickerActivity : ComponentActivity() {
+    @RequiresApi(Build.VERSION_CODES.S)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            NeuroVerseTheme {
+                Surface(Modifier.fillMaxSize()) {
+                    GgufPickerScreen(finishWithPath = { absPath ->
+                        startActivity(
+                            Intent(this, ModelLoadingActivity::class.java).apply {
+                                putExtra(EXTRA_RESULT_FILE_PATH, absPath)
+                                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                            }
+                        )
+
+                        finish()
+                    }, onClose = { finish() })
+                }
+            }
+        }
+    }
+
+    companion object {
+        const val EXTRA_RESULT_FILE_PATH = "gguf_file_path"
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GgufPickerScreen(
+    finishWithPath: (String) -> Unit, onClose: () -> Unit
+) {
+    val context = LocalContext.current
+    val rootPath = remember { Environment.getExternalStorageDirectory().absolutePath }
+
+    var hasAllFiles by remember { mutableStateOf(hasAllFilesAccess(context)) }
+    var currentPath by rememberSaveable { mutableStateOf(rootPath) }
+    var listState by remember { mutableStateOf<List<FileItem>>(emptyList()) }
+    var loading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    var detailTarget by remember { mutableStateOf<FileItem?>(null) }
+
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+
+    LaunchedEffect(hasAllFiles, currentPath) {
+        if (hasAllFiles) {
+            loading = true
+            error = null
+            listState = try {
+                withContext(Dispatchers.IO) { listChildrenFiltered(currentPath) }
+            } catch (t: Throwable) {
+                error = t.message
+                emptyList()
+            } finally {
+                loading = false
+            }
+        }
+    }
+
+    // Back press goes up a directory; exits at root
+    BackHandler(true) {
+        if (currentPath != rootPath) {
+            currentPath = File(currentPath).parentFile?.absolutePath ?: rootPath
+        } else onClose()
+    }
+
+    Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = {
+            CenterAlignedTopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background,
+                scrolledContainerColor = MaterialTheme.colorScheme.background,
+                navigationIconContentColor = Color.Unspecified,
+                titleContentColor = Color.Unspecified,
+                actionIconContentColor = Color.Unspecified
+            ), navigationIcon = {
+                IconButton(onClick = {
+                    if (currentPath != rootPath) {
+                        currentPath = File(currentPath).parentFile?.absolutePath ?: rootPath
+                    } else onClose()
+                }) { Icon(Icons.Outlined.ArrowBack, contentDescription = "Back") }
+            }, title = { PathBreadcrumbText(currentPath) }, actions = {
+                if (!hasAllFiles) {
+                    TextButton(onClick = { openAllFilesAccessSettings(context) }) { Text("Grant access") }
+                } else {
+                    IconButton(onClick = { currentPath = rootPath }) {
+                        Icon(Icons.Outlined.Home, contentDescription = "Reset to root")
+                    }
+                }
+            }, scrollBehavior = scrollBehavior
+            )
+        }) { inner ->
+        val blurRadius = if (detailTarget != null) 12.dp else 0.dp
+        Box(
+            Modifier
+                .padding(inner)
+                .fillMaxSize()
+                .blur(blurRadius)
+        ) {
+            when {
+                !hasAllFiles -> PermGate(
+                    modifier = Modifier.fillMaxSize()
+                ) { hasAllFiles = hasAllFilesAccess(context) }
+
+                loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+
+                error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Error: ${error}")
+                        Spacer(Modifier.height(8.dp))
+                        Button(onClick = {
+                            hasAllFiles = hasAllFilesAccess(context)
+                        }) { Text("Retry") }
+                    }
+                }
+
+                else -> FileList(
+                    modifier = Modifier.fillMaxSize(),
+                    items = listState,
+                    rootPath = rootPath,
+                    currentPath = currentPath,
+                    onNavigate = { folder -> currentPath = folder.absolutePath },
+                    onPick = { file -> finishWithPath(file.absolutePath) },
+                    onLongPress = { detailTarget = it })
+            }
+        }
+
+        if (detailTarget != null) {
+            FileDetailDialog(
+                item = detailTarget!!,
+                onDismiss = { detailTarget = null },
+                onSelect = { finishWithPath(detailTarget!!.file.absolutePath) })
+        }
+    }
+}
+
+@Composable
+private fun PathBreadcrumbText(path: String) {
+    val scroll = rememberScrollState()
+    val normalized = remember(path) { path.removeSuffix("/") }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .horizontalScroll(scroll),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Crossfade(normalized) {
+            Text(
+                text = it,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+@Composable
+private fun PermGate(modifier: Modifier = Modifier, onCheck: () -> Unit) {
+    val ctx = LocalContext.current
+    Column(
+        modifier.padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.Start
+    ) {
+        Text(
+            "Storage access needed",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(Modifier.height(8.dp))
+        Text("To browse folders and pick .gguf models from /storage/emulated/0, allow \"All files access\" for this app.")
+        Spacer(Modifier.height(16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(onClick = { openAllFilesAccessSettings(ctx) }) { Text("Open Settings") }
+            OutlinedButton(onClick = { onCheck() }) { Text("I granted it") }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FileList(
+    modifier: Modifier,
+    items: List<FileItem>,
+    rootPath: String,
+    currentPath: String,
+    onNavigate: (File) -> Unit,
+    onPick: (File) -> Unit,
+    onLongPress: (FileItem) -> Unit
+) {
+    val parent = File(currentPath).parentFile
+    LazyColumn(
+        modifier = modifier.padding(horizontal = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        if (parent != null && currentPath != rootPath) {
+            item("..parent") {
+                ListRow(
+                    icon = { Icon(Icons.Outlined.Folder, contentDescription = null) },
+                    title = "..",
+                    subtitle = parent.absolutePath,
+                    onClick = { onNavigate(parent) },
+                    onLongClick = null
+                )
+            }
+        }
+        items(items, key = { it.file.absolutePath }) { item ->
+            val isDir = item.isDir
+            val subtitle = if (isDir) "Folder" else humanSize(item.size)
+            ListRow(
+                icon = {
+                if (isDir) Icon(Icons.Outlined.Folder, contentDescription = null)
+                else Icon(Icons.Filled.SmartToy, contentDescription = null)
+            },
+                title = item.name,
+                subtitle = subtitle,
+                trailing = if (!isDir) {
+                    {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Icon(
+                                Icons.Outlined.Info,
+                                contentDescription = null,
+                                modifier = Modifier.clickable {
+                                    onLongPress(item)
+                                })
+                            Icon(Icons.Outlined.Check, contentDescription = null)
+                        }
+
+                    }
+                } else null,
+                onClick = { if (isDir) onNavigate(item.file) else onPick(item.file) },
+                onLongClick = if (!isDir) {
+                    { onLongPress(item) }
+                } else null)
+        }
+    }
+}
+
+@Composable
+private fun ListRow(
+    icon: @Composable () -> Unit,
+    title: String,
+    subtitle: String? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)?
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) { icon() }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                fontWeight = FontWeight.Medium
+            )
+            if (subtitle != null) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        if (trailing != null) {
+            Spacer(Modifier.width(8.dp))
+            Box { trailing() }
+        }
+    }
+}
+
+@Composable
+private fun FileDetailDialog(
+    item: FileItem, onDismiss: () -> Unit, onSelect: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var probing by remember { mutableStateOf(false) }
+    var probeJson by remember { mutableStateOf<JSONObject?>(null) }
+    var quickSha by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(item.file) {
+        // quick 4MB SHA-256 fingerprint so the UI stays snappy
+        quickSha = computeSha256Prefix(item.file, limitBytes = 4L * 1024 * 1024)
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(dismissOnBackPress = true, usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 50.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "Model details",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                // Basic facts
+                InfoRow("Name", item.name)
+                InfoRow("Path", item.file.absolutePath)
+                InfoRow("Folder", item.file.parent ?: "—")
+                InfoRow("Size", "${humanSize(item.size)} (${item.size} B)")
+                InfoRow("Modified", formatTime(item.lastModified))
+                InfoRow("Readable / Writable", "${item.file.canRead()} / ${item.file.canWrite()}")
+                guessQuant(item.name)?.let { InfoRow("Quant", it) }
+                quickSha?.let { InfoRow("SHA-256 (first 4MB)", it) }
+
+                // Native probe section (optional, uses com.mp.ai_core.NativeLib reflectively)
+                Divider()
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Deep probe (native)", style = MaterialTheme.typography.labelLarge)
+                    if (!probing && probeJson == null) {
+                        OutlinedButton(onClick = {
+                            probing = true
+                            scope.launch(Dispatchers.IO) {
+                                val probed = probeWithNative(item.file.absolutePath)
+                                withContext(Dispatchers.Main) {
+                                    probeJson = probed
+                                    probing = false
+                                }
+                            }
+                        }) { Text("Probe") }
+                    } else if (probing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp), strokeWidth = 2.dp
+                        )
+                    } else {
+                        AssistChip(onClick = { probeJson = null }, label = { Text("Clear") })
+                    }
+                }
+                probeJson?.let { json ->
+                    Spacer(Modifier.height(6.dp))
+                    json.optJSONObject("core")?.let { core ->
+                        Text("Core dims", style = MaterialTheme.typography.labelLarge)
+                        val embd = core.optInt("n_embd", -1).takeIf { it > 0 }
+                        val layers = core.optInt("n_layer", -1).takeIf { it > 0 }
+                        val heads = core.optInt("n_head", -1).takeIf { it > 0 }
+                        if (embd != null) InfoRow("n_embd", embd.toString())
+                        if (layers != null) InfoRow("n_layer", layers.toString())
+                        if (heads != null) InfoRow("n_head", heads.toString())
+                    }
+                    json.optJSONObject("kv")?.let { kv ->
+                        Text("KV cache", style = MaterialTheme.typography.labelLarge)
+                        kv.keys().forEachRemaining { k ->
+                            @Composable {
+                                InfoRow(k, kv.opt(k).toString())
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onDismiss) { Text("Close") }
+                    Button(onClick = onSelect) { Text("Use this model") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoRow(k: String, v: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(
+            k,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            v,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+private data class FileItem(
+    val file: File, val name: String, val isDir: Boolean, val size: Long, val lastModified: Long
+)
+
+private suspend fun listChildrenFiltered(path: String): List<FileItem> =
+    withContext(Dispatchers.IO) {
+        val dir = File(path)
+        val children = dir.listFiles()?.toList().orEmpty()
+        return@withContext children.filter {
+            it.isDirectory || it.extension.equals(
+                "gguf", ignoreCase = true
+            )
+        }.sortedWith(
+            compareBy<File>({ !it.isDirectory }, { it.name.lowercase(Locale.getDefault()) })
+        ).map {
+            FileItem(
+                file = it,
+                name = it.name,
+                isDir = it.isDirectory,
+                size = if (it.isFile) it.length() else 0L,
+                lastModified = it.lastModified()
+            )
+        }
+    }
+
+private fun hasAllFilesAccess(context: Context): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        Environment.isExternalStorageManager()
+    } else {
+        context.checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+}
+
+private fun openAllFilesAccessSettings(context: Context) {
+    try {
+        val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+        intent.data = Uri.parse("package:${context.packageName}")
+        context.startActivity(intent)
+    } catch (e: ActivityNotFoundException) {
+        try {
+            val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+            context.startActivity(intent)
+        } catch (_: Throwable) {
+        }
+    }
+}
+
+private fun humanSize(bytes: Long): String {
+    if (bytes <= 0) return "0 B"
+    val units = arrayOf("B", "KB", "MB", "GB", "TB")
+    val group =
+        (Math.log10(bytes.toDouble()) / Math.log10(1024.0)).toInt().coerceAtMost(units.lastIndex)
+    return String.format(
+        Locale.getDefault(), "%.1f %s", bytes / Math.pow(1024.0, group.toDouble()), units[group]
+    )
+}
+
+private fun formatTime(millis: Long): String {
+    val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+    return sdf.format(Date(millis))
+}
+
+private fun guessQuant(name: String): String? {
+    // naive guess e.g., Q4_K_M, Q5_0, Q8_0 etc.
+    val rx = Regex("(?i)Q\\d+[_A-Z0-9]*")
+    return rx.find(name)?.value
+}
+
+private suspend fun computeSha256Prefix(file: File, limitBytes: Long): String? =
+    withContext(Dispatchers.IO) {
+        return@withContext try {
+            val md = MessageDigest.getInstance("SHA-256")
+            val buf = ByteArray(8192)
+            var remaining = limitBytes
+            FileInputStream(file).use { fis ->
+                while (remaining > 0) {
+                    val toRead = min(buf.size.toLong(), remaining).toInt()
+                    val len = fis.read(buf, 0, toRead)
+                    if (len <= 0) break
+                    md.update(buf, 0, len)
+                    remaining -= len
+                }
+            }
+            md.digest().joinToString("") { "%02x".format(it) }
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+private suspend fun probeWithNative(path: String): JSONObject? = withContext(Dispatchers.IO) {
+    return@withContext try {
+        val clazz = Class.forName("com.mp.ai_core.NativeLib")
+        val ctor = clazz.getConstructor()
+        val native = ctor.newInstance()
+        val init = clazz.getMethod(
+            "initModel",
+            String::class.java,
+            Int::class.javaPrimitiveType,
+            Int::class.javaPrimitiveType,
+            Boolean::class.javaPrimitiveType,
+            Boolean::class.javaPrimitiveType,
+            Int::class.javaPrimitiveType,
+            Float::class.javaPrimitiveType,
+            Int::class.javaPrimitiveType,
+            Float::class.javaPrimitiveType,
+            Float::class.javaPrimitiveType
+        )
+        val ok = init.invoke(
+            native,
+            path,
+            maxOf(1, Runtime.getRuntime().availableProcessors() / 2),
+            -1,
+            true,
+            false,
+            512,
+            0.7f,
+            20,
+            0.9f,
+            0f
+        ) as Boolean
+        if (!ok) null else {
+            val getInfo = clazz.getMethod("nativeGetModelInfo")
+            val raw = getInfo.invoke(native) as String
+            JSONObject(raw)
+        }
+    } catch (_: Throwable) {
+        null
+    }
+}
