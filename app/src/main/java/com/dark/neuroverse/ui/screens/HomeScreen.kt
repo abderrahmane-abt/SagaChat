@@ -259,7 +259,7 @@ private fun BottomBar(
     viewModel: ChatScreenViewModel
 ) {
     val context = LocalContext.current
-    var input by remember { mutableStateOf("Hi Bro") }
+    var input by remember { mutableStateOf("Hi Bro Search For Hats") }
     val tools by viewModel.toolList.collectAsStateWithLifecycle()
     val selectedTools by viewModel.selectedTools.collectAsStateWithLifecycle()
     val modelList by viewModel.modelList.collectAsStateWithLifecycle()
@@ -294,7 +294,7 @@ private fun BottomBar(
 
                 false -> {
                     if (input.isNotBlank()) {
-                        viewModel.sendMessage(input, context)
+                        viewModel.sendMessage(input)
                         input = ""
                     }
                 }

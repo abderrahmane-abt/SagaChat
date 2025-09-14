@@ -23,6 +23,7 @@ import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.userdata.ntds.neuron_tree.NeuronTree
 import com.dark.userdata.readBrainFile
 import com.dark.userdata.saveTree
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,79 +31,96 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 
+/**
+ * Factory
+ */
 class ChattingViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        return ChatScreenViewModel(context) as T
+        return ChatScreenViewModel(context.applicationContext) as T
     }
 }
 
-class ChatScreenViewModel(context: Context) : ViewModel() {
-    //Define State Variables
-    private val appContext = context.applicationContext
-    private var _messages = MutableStateFlow<List<Message>>(emptyList())
-    private val key = MutableStateFlow(getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS))
-    private val rootNode = MutableStateFlow(readBrainFile(key.value, context))
+/**
+ * Chat VM – optimized, de-duplicated, and sectioned.
+ */
+class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
-    // --- State exposure: keep mutable private, expose immutable
-    val messages: StateFlow<List<Message>> = _messages.asStateFlow()
+    //region Constants & Logging
+    companion object {
+        private const val TAG = "ChatVM"
+        private const val UI_POST_MS = 35L
+        private const val MAX_THINK_CHARS = 16_000
+        private const val MAX_THOUGHT_SAVE = 6_000
+    }
+    //endregion
 
+    //region Dispatchers
+    private val io: CoroutineDispatcher = Dispatchers.IO
+    private val cpu: CoroutineDispatcher = Dispatchers.Default
+    //endregion
+
+    //region Backing State
+    private val _messages = MutableStateFlow<List<Message>>(emptyList())
     private val _chatTitle = MutableStateFlow("")
-    val chatTitle: StateFlow<String> = _chatTitle.asStateFlow()
-
     private val _chatList = MutableStateFlow<List<ChatINFO>>(emptyList())
-    val chatList: StateFlow<List<ChatINFO>> = _chatList.asStateFlow()
+    private val _modelLoadingState = MutableStateFlow<ModelManager.LoadState>(ModelManager.LoadState.Idle)
+    private val _isGenerating = MutableStateFlow(false)
+    private val _generationState = MutableStateFlow(GenerationState.IDLE)
 
-    // Selected tools/model lists are also observable; keep them consistent
-    val toolList: MutableStateFlow<List<Pair<String, List<Tools>>>> = MutableStateFlow(emptyList())
-    val selectedTools: MutableStateFlow<Pair<String, Tools>> = MutableStateFlow(Pair("", Tools()))
-    val modelList: MutableStateFlow<List<ModelsData>> = MutableStateFlow(emptyList())
-    val selectedModel: MutableStateFlow<ModelsData> = MutableStateFlow(ModelsData())
-    val _modelLoadingState = MutableStateFlow<ModelManager.LoadState>(ModelManager.LoadState.Idle)
+    // Exposed immutable state
+    val messages: StateFlow<List<Message>> = _messages.asStateFlow()
+    val chatTitle: StateFlow<String> = _chatTitle.asStateFlow()
+    val chatList: StateFlow<List<ChatINFO>> = _chatList.asStateFlow()
     val modelLoadingState: StateFlow<ModelManager.LoadState> = _modelLoadingState.asStateFlow()
-    val chatId = MutableStateFlow("")
-    val _isGenerating = MutableStateFlow(false)
-    val _generationState = MutableStateFlow(GenerationState.IDLE)
     val isGenerating: StateFlow<Boolean> = _isGenerating.asStateFlow()
     val generationState: StateFlow<GenerationState> = _generationState.asStateFlow()
+
+    // Other observable state
+    val toolList: MutableStateFlow<List<Pair<String, List<Tools>>>> = MutableStateFlow(emptyList())
+    val selectedTools: MutableStateFlow<Pair<String, Tools>> = MutableStateFlow("" to Tools())
+    val modelList: MutableStateFlow<List<ModelsData>> = MutableStateFlow(emptyList())
+    val selectedModel: MutableStateFlow<ModelsData> = MutableStateFlow(ModelsData())
+    val chatId = MutableStateFlow("")
     val currentRunningToolName = MutableStateFlow("")
 
-    // near your buffers
-    private val MAX_THINK_CHARS = 16000
+    // Crypto & brain
+    private val key = MutableStateFlow(getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS))
+    private val rootNode = MutableStateFlow(readBrainFile(key.value, appContext))
+    //endregion
 
+    //region Streaming control
     private var streamingMsgIndex = -1
-    private var streamingMsgId = "-1"
+    @Volatile private var lastUiPost = 0L
+    private fun shouldPost(nowMs: Long, everyMs: Long = UI_POST_MS) = (nowMs - lastUiPost) >= everyMs
+    //endregion
 
-    // Throttle gate: post at most every 30–40ms
-    @Volatile
-    private var lastUiPost = 0L
-    private fun shouldPost(now: Long, everyMs: Long = 35L) = (now - lastUiPost) >= everyMs
-
+    //region Init
     init {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(io) {
             // Keys & brain
             key.value = getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS)
-            rootNode.value = readBrainFile(key.value, context)
+            rootNode.value = readBrainFile(key.value, appContext)
             rootNode.value.printTree()
 
+            // Load latest chat if present
             val root = rootNode.value.getNodeDirect("root")
             val chatHistory = getDefaultChatHistory(root)
-            val validChats = NeuronTree(chatHistory).getAllChildrenRecursive()
-                .filter { it.data.content.isNotBlank() }
-
+            val validChats = NeuronTree(chatHistory).getAllChildrenRecursive().filter { it.data.content.isNotBlank() }
             if (validChats.isNotEmpty()) {
                 val firstChat = validChats.first()
                 loadChatById(firstChat.id)
             }
-
             updateChatList()
 
+            // Load first model eagerly
             ModelManager.getFirstModel()?.let { model ->
                 ModelManager.loadModelAwait(
                     modelData = model,
@@ -120,21 +138,52 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
             modelList.value = ModelManager.getAllModels()
         }
     }
+    //endregion
 
+    //region Model & Tool Selection
+    fun selectModel(model: ModelsData) {
+        ModelManager.unLoadModel()
+        viewModelScope.launch(io) {
+            val sysPrompt = if (selectedTools.value.first.isBlank()) {
+                ModelsList.generalPurposeSystemPrompt
+            } else {
+                ModelsList.toolCallSYSTEMP
+            }
+            ModelManager.loadModelAwait(
+                modelData = model,
+                defaults = ModelManager.ManagerDefaults(systemPrompt = sysPrompt),
+                chatTemplate = ModelsList.chatTemplate,
+                forceReload = true
+            ) { state ->
+                _modelLoadingState.value = state
+                selectedModel.value = model
+            }
+        }
+    }
+
+    fun selectTool(tool: Pair<String, Tools>) {
+        selectedTools.value = tool
+        ModelManager.setSystemPrompt(ModelsList.toolCallSYSTEMP)
+    }
+
+    fun unSelectTool() {
+        selectedTools.value = "" to Tools()
+        ModelManager.setSystemPrompt(ModelsList.generalPurposeSystemPrompt)
+    }
+    //endregion
+
+    //region Chat CRUD
     fun loadChatById(chatIdToLoad: String) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(io) {
             try {
                 val root = rootNode.value.getNodeDirect("root")
                 val chatHistory = getDefaultChatHistory(root)
                 val node = NeuronTree(chatHistory).getNodeDirect(chatIdToLoad)
-
                 if (node.data.content.isBlank()) return@launch
 
                 val json = JSONObject(node.data.content)
                 val title = json.optString("title", "")
-                val conversations = Json.decodeFromString<List<Message>>(
-                    json.getJSONArray("conversations").toString()
-                )
+                val conversations = Json.decodeFromString<List<Message>>(json.getJSONArray("conversations").toString())
 
                 withContext(Dispatchers.Main) {
                     _chatTitle.value = title
@@ -142,143 +191,134 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
                     chatId.value = chatIdToLoad
                 }
             } catch (e: Exception) {
-                Log.e("loadChatById", "Failed loading chat $chatIdToLoad", e)
+                Log.e(TAG, "Failed loading chat $chatIdToLoad", e)
             }
         }
     }
 
-    fun selectModel(model: ModelsData) {
-        ModelManager.unLoadModel()
-        viewModelScope.launch(Dispatchers.IO) {
-            ModelManager.loadModelAwait(
-                modelData = model, defaults = ModelManager.ManagerDefaults(
-                    systemPrompt = if (selectedTools.value.first.isEmpty()) ModelsList.generalPurposeSystemPrompt
-                    else ModelsList.getToolCallSystemPrompt(
-                        buildToolsListForPrompt = selectedTools.value.let {
-                            it.second.toolName + ":" + it.second.args.entries.joinToString { (k, v) -> "$k:$v" }
-                        })
-                ), chatTemplate = ModelsList.chatTemplate, forceReload = true
-            ) {
-                _modelLoadingState.value = it
-                selectedModel.value = model
+    fun updateChatList() {
+        try {
+            val chatInfo = mutableListOf<ChatINFO>()
+            val root = rootNode.value.getNodeDirect("root")
+            val history = getDefaultChatHistory(root)
+
+            NeuronTree(history).getAllChildrenRecursive().forEach { node ->
+                if (node.data.content.isNotBlank()) {
+                    val title = runCatching { JSONObject(node.data.content).optString("title", "Untitled") }
+                        .getOrElse { "Untitled" }
+                    chatInfo.add(ChatINFO(node.id, title))
+                }
             }
+            _chatList.value = chatInfo
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed loading chat titles", e)
         }
     }
 
-    fun selectTool(tool: Pair<String, Tools>) {
-        // ensure new list instance
-        selectedTools.value = tool
-        ModelManager.setSystemPrompt(
-            ModelsList.getToolCallSystemPrompt(
-                buildToolsListForPrompt = selectedTools.value.let {
-                    it.second.toolName + ":" + it.second.args.entries.joinToString { (k, v) -> "$k:$v" }
-                })
-        )
-
-        Log.d("selectTool", "Selected tool: ${convertToolsToJson(selectedTools.value.second)}")
+    fun newChat() {
+        viewModelScope.launch(Dispatchers.Main) {
+            _messages.value = emptyList()
+            _chatTitle.value = ""
+            chatId.value = ""
+            ModelManager.stopGeneration()
+        }
     }
 
-    fun unSelectTool() {
-        selectedTools.value = Pair("", Tools())
-        ModelManager.setSystemPrompt(ModelsList.generalPurposeSystemPrompt)
-    }
+    fun deleteChatById(id: String) {
+        viewModelScope.launch(io) {
+            try {
+                rootNode.value.deleteNodeById(id)
+                saveTree(rootNode.value, appContext, BuildConfig.ALIAS)
+                updateChatList()
 
-    // ===================== sendMessage() =====================
-    fun sendMessage(input: String, context: Context) {
+                if (chatId.value == id) {
+                    withContext(Dispatchers.Main) {
+                        _messages.value = emptyList()
+                        _chatTitle.value = ""
+                        chatId.value = ""
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete chat $id", e)
+            }
+        }
+    }
+    //endregion
+
+    //region Sending & Streaming
+    fun sendMessage(input: String) {
         _messages.update { it + Message(role = Role.User, text = input) }
         _isGenerating.value = true
         _generationState.value = GenerationState.GENERATING
 
-        // Create streaming placeholder on Main once
+        // Create streaming placeholder on Main
         viewModelScope.launch(Dispatchers.Main) {
             val list = _messages.value.toMutableList()
             streamingMsgIndex = list.size
-            streamingMsgId = "-1"
+            val isTool = selectedTools.value.first.isNotBlank()
             list += Message(
-                role = if (selectedTools.value.first.isNotEmpty()) Role.Tool else Role.Assistant,
+                role = if (isTool) Role.Tool else Role.Assistant,
                 text = "",
-                id = streamingMsgId,
-                tool = if (selectedTools.value.first.isNotEmpty()) {
-                    RunningTool(
-                        toolName = selectedTools.value.second.toolName, toolPreview = ""
-                    )
-                } else null
+                id = "-1",
+                tool = if (isTool) RunningTool(toolName = selectedTools.value.second.toolName, toolPreview = "") else null
             )
             _messages.value = list
 
-            // All heavy work off the main thread (Neuron already runs on a BG dispatcher,
-            // but we also keep our coordination off-main to avoid blocking animations)
-            viewModelScope.launch(Dispatchers.Default) {
-                streamAndRender(
-                    prompt = input,
-                    context = context,
-                    enableTools = selectedTools.value.first.isNotEmpty(),
-                    toolJson = null
-                )
+            // Heavy work off main
+            viewModelScope.launch(cpu) {
+                streamAndRender(prompt = input, enableTools = isTool)
             }
         }
     }
 
-    // ===================== sendInternalReasoningMessage() =====================
-    fun sendInternalReasoningMessage(input: String, context: Context) {
+    fun sendInternalReasoningMessage(input: String) {
         _isGenerating.value = true
         unSelectTool()
 
         viewModelScope.launch(Dispatchers.Main) {
             val list = _messages.value.toMutableList()
             streamingMsgIndex = list.size
-            streamingMsgId = "-1"
-            list += Message(
-                role = Role.Assistant, text = "", id = streamingMsgId
-            )
+            list += Message(role = Role.Assistant, text = "", id = "-1")
             _messages.value = list
 
-            viewModelScope.launch(Dispatchers.Default) {
-                streamAndRender(
-                    prompt = input,
-                    context = context,
-                    enableTools = false, // internal reasoning never triggers tools
-                    toolJson = null
-                )
+            viewModelScope.launch(cpu) {
+                streamAndRender(prompt = input, enableTools = false)
             }
         }
     }
 
-    // ===================== Shared streaming routine =====================
-    private suspend fun streamAndRender(prompt: String, toolJson: String?, context: Context, enableTools: Boolean) {
-        // Local buffers for stream assembly
+    private suspend fun streamAndRender(prompt: String, enableTools: Boolean) {
+        // Local buffers
         val visibleSb = StringBuilder()
         val thoughtSb = StringBuilder()
-        val rawSb = StringBuilder() // full raw stream for a second pass
+        val rawSb = StringBuilder()
         var inThink = false
 
-        // UI throttle + change detection
+        // Change detection
         var lastPostedVisibleLen = 0
         var lastPostedThoughtLen = 0
 
-        fun postCoalesced() {
+        fun coalescedPost() {
             val now = System.nanoTime() / 1_000_000
-            if (shouldPost(now)) {
-                val visible = visibleSb.toString()
-                val thinking = if (thoughtSb.isNotEmpty()) thoughtSb.toString()
-                    .takeLast(MAX_THINK_CHARS) else null
+            if (!shouldPost(now)) return
 
-                // Skip no-op posts (lengths unchanged)
-                val vLen = visible.length
-                val tLen = thinking?.length ?: 0
-                if (vLen == lastPostedVisibleLen && tLen == lastPostedThoughtLen) return
-                lastPostedVisibleLen = vLen
-                lastPostedThoughtLen = tLen
+            val visible = visibleSb.toString()
+            val thinking = if (thoughtSb.isNotEmpty()) thoughtSb.toString().takeLast(MAX_THINK_CHARS) else null
 
-                lastUiPost = now
-                viewModelScope.launch(Dispatchers.Main.immediate) {
-                    val idx = streamingMsgIndex
-                    if (idx >= 0 && idx < _messages.value.size) {
-                        val cur = _messages.value.toMutableList()
-                        val m = cur[idx]
-                        cur[idx] = m.copy(text = visible, thought = thinking)
-                        _messages.value = cur
-                    }
+            val vLen = visible.length
+            val tLen = thinking?.length ?: 0
+            if (vLen == lastPostedVisibleLen && tLen == lastPostedThoughtLen) return
+            lastPostedVisibleLen = vLen
+            lastPostedThoughtLen = tLen
+            lastUiPost = now
+
+            viewModelScope.launch(Dispatchers.Main.immediate) {
+                val idx = streamingMsgIndex
+                if (idx in _messages.value.indices) {
+                    val cur = _messages.value.toMutableList()
+                    val m = cur[idx]
+                    cur[idx] = m.copy(text = visible, thought = thinking)
+                    _messages.value = cur
                 }
             }
         }
@@ -286,14 +326,10 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
         suspend fun applyFinal(text: String, thought: String?) {
             withContext(Dispatchers.Main.immediate) {
                 val idx = streamingMsgIndex
-                if (idx >= 0 && idx < _messages.value.size) {
+                if (idx in _messages.value.indices) {
                     val cur = _messages.value.toMutableList()
                     val m = cur[idx]
-                    cur[idx] = m.copy(
-                        id = UUID.randomUUID().toString(),
-                        text = text,
-                        thought = thought?.take(6000)
-                    )
+                    cur[idx] = m.copy(id = UUID.randomUUID().toString(), text = text, thought = thought?.take(MAX_THOUGHT_SAVE))
                     _messages.value = cur
                 }
             }
@@ -306,7 +342,7 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
                 val obj = JSONObject(json)
                 val final = obj.optString("final", obj.optString("answer", ""))
                 val thought = obj.optString("thought", obj.optString("reasoning", null))
-                if (final.isNotBlank() || thought != null) return final.ifBlank { "" } to thought
+                if (final.isNotBlank() || thought != null) return final to thought
             }
             // 2) <think>…</think>
             val tagRegex = Regex("(?is)<think>(.*?)</think>")
@@ -314,8 +350,7 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
             val visible = raw.replace(tagRegex, "").trim()
             if (thoughtTag != null) return visible to thoughtTag
             // 3) Reasoning: … Answer: …
-            val delim =
-                Regex("(?is)(?:reasoning|thoughts?)\\s*:\\s*(.+?)\\s*(?:final|answer)\\s*:\\s*(.+)")
+            val delim = Regex("(?is)(?:reasoning|thoughts?)\\s*:\\s*(.+?)\\s*(?:final|answer)\\s*:\\s*(.+)")
             delim.find(raw)?.let { m ->
                 val t = m.groupValues[1].trim()
                 val v = m.groupValues[2].trim()
@@ -325,9 +360,10 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
         }
 
         try {
-            // 🔌 Stream from the model
-            val finalRaw = ModelManager.generateStreaming(
-                prompt = prompt, onToken = { tok ->
+            ModelManager.generateStreaming(
+                prompt = prompt,
+                toolJson = if (enableTools) convertToolsToJson(selectedTools.value.second).toString() else null,
+                onToken = { tok ->
                     rawSb.append(tok)
                     val lower = tok.lowercase()
                     when {
@@ -338,11 +374,7 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
                             inThink = false
                             visibleSb.append(after)
                         }
-
-                        inThink -> {
-                            thoughtSb.append(tok)
-                        }
-
+                        inThink -> thoughtSb.append(tok)
                         lower.contains("<think>") -> {
                             val before = tok.substringBefore("<think>", tok)
                             val after = tok.substringAfter("<think>", tok)
@@ -350,13 +382,67 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
                             inThink = true
                             thoughtSb.append(after)
                         }
-
                         else -> visibleSb.append(tok)
                     }
-                    postCoalesced()
-                }, toolJson = toolJson, onToolCalled = { _, _ ->{
+                    coalescedPost()
+                },
+                onToolCalled = { nativeName: String, argsJson: String ->
+                    Log.d(TAG, "Tool called: $nativeName args=$argsJson")
 
-                } })
+                    fun isSchemaEcho(obj: JSONObject?): Boolean {
+                        if (obj == null) return true
+                        return obj.has("type") || obj.has("properties") || obj.has("required")
+                    }
+
+                    val lastUserQuery = messages.value.lastOrNull { it.role == Role.User }?.text?.trim().orEmpty()
+                    val selectedToolRealName = selectedTools.value.second.toolName.orEmpty()
+                    val fallbackTool = nativeName.ifBlank { selectedToolRealName }
+
+                    val repaired = try {
+                        val root = JSONObject(argsJson)                 // may throw if malformed
+                        val calls = root.optJSONArray("tool_calls")
+                        val first = calls?.optJSONObject(0)
+                        val toolName = first?.optString("name").orEmpty().ifBlank { fallbackTool }
+                        val argObj = first?.optJSONObject("arguments")
+
+                        if (isSchemaEcho(argObj)) {
+                            // Build minimal args the plugin understands; here we assume `query`
+                            JSONObject().put("tool", toolName)
+                                .put("args", JSONObject().put("query", lastUserQuery))
+                        } else {
+                            JSONObject().put("tool", toolName)
+                                .put("args", argObj)
+                        }
+                    } catch (_: Throwable) {
+                        // argsJson malformed → keep the native/fallback tool name, synthesize args
+                        JSONObject().put("tool", fallbackTool)
+                            .put("args", JSONObject().put("query", lastUserQuery))
+                    }
+
+                    Log.d(TAG, "Repaired tool call: $repaired")
+
+                    // Run through plugin
+                    val loaded = PluginManager.runPlugin(appContext, selectedTools.value.first, repaired.toString())
+                    currentRunningToolName.value = repaired.optString("tool")
+
+                    viewModelScope.launch(io) {
+                        ToolRunner.run(loaded, appContext, repaired) { result ->
+                            viewModelScope.launch(Dispatchers.Main) { _generationState.value = GenerationState.DONE }
+                            viewModelScope.launch(cpu) {
+                                ModelManager.setSystemPrompt("You are a crisp summarizer. Be concise, factual.")
+                                val rawOutput = result.toString()
+                                if (rawOutput.isNotBlank()) {
+                                    sendInternalReasoningMessage(
+                                        "Summarize the tool output in 5–6 tight lines. Preserve entities, numbers, urls.\n$rawOutput"
+                                    )
+                                }
+                                PluginManager.stopPlugin(PluginManager.currentPlugin.value?.manifest?.name ?: "Unknown Plugin")
+                            }
+                        }
+                    }
+                }
+
+            )
 
             // 2nd pass to pick up JSON or missed tags
             var finalText = visibleSb.toString()
@@ -367,212 +453,77 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
             }
 
             applyFinal(finalText, finalThought)
-
-            if (enableTools) {
-                runCatching {
-                    val raw = extractPureJson(finalRaw)
-                    val obj = runCatching { JSONObject(raw) }.getOrNull()
-
-                    val selectedToolName = selectedTools.value.second.toolName
-                    val toolName = obj?.optString("tool")?.takeIf { it.isNotBlank() }
-                        ?: selectedToolName.takeIf { it.isNotBlank() }
-
-                    if (toolName != null) {
-                        val args = obj?.optJSONObject("args") ?: obj?.optJSONObject("arguments")
-                        ?: JSONObject()
-
-                        val payload = JSONObject().apply {
-                            put("tool", toolName)
-                            put("args", args)
-                        }
-
-                        val loaded = PluginManager.runPlugin(
-                            context, selectedTools.value.first, payload.toString()
-                        )
-                        currentRunningToolName.value = toolName
-
-                        // Run tool asynchronously; do not block stream thread
-                        viewModelScope.launch(Dispatchers.Default) {
-                            runCatching {
-                                ToolRunner.run(loaded, context, payload) { data ->
-                                    // When tool returns, mark done and optionally summarize
-                                    viewModelScope.launch(Dispatchers.Main) {
-                                        _generationState.value = GenerationState.DONE
-                                    }
-                                    // Optional summarization step
-                                    viewModelScope.launch(Dispatchers.Default) {
-                                        data
-                                        ModelManager.setSystemPrompt(ModelsList.generalPurposeSystemPrompt)
-                                        sendInternalReasoningMessage(
-                                            """
-                                        Summarize the following output:
-                                        ${'$'}{rawOutput.toString()}
-                                        """.trimIndent(), context
-                                        )
-                                    }
-                                    PluginManager.stopPlugin(
-                                        PluginManager.currentPlugin.value?.manifest?.name
-                                            ?: "Unknown Plugin"
-                                    )
-                                }
-                            }.onFailure { Log.e("ToolCall", "failed", it) }
-                        }
-                    } else {
-                        Log.d(
-                            "ToolCall",
-                            "No tool call detected or no tool selected — skipping plugin run"
-                        )
-                    }
-                }.onFailure { Log.e("ToolCall", "failed", it) }
-            }
-
             generateTitle()
-            updateConversation(context)
+            updateConversation()
             updateChatList()
-        } catch (ce: kotlinx.coroutines.CancellationException) {
-            // propagate cancel but try to leave UI consistent
+        } catch (ce: CancellationException) {
+            Log.w(TAG, "stream cancelled", ce)
             throw ce
         } catch (t: Throwable) {
-            Log.e("sendMessage", "stream failed", t)
-            // best-effort flush of what we have
-            applyFinal(visibleSb.toString().ifBlank { "" }, thoughtSb.toString().ifBlank { null })
+            Log.e(TAG, "stream failed", t)
+            // best-effort flush
+            applyFinal(visibleSb.toString(), thoughtSb.toString().ifBlank { null })
         } finally {
             _isGenerating.value = false
-            if (_generationState.value != GenerationState.DONE) {
-                _generationState.value = GenerationState.IDLE
-            }
+            if (_generationState.value != GenerationState.DONE) _generationState.value = GenerationState.IDLE
         }
     }
+    //endregion
 
-    fun updateChatList() {
-        try {
-            _chatList.value = emptyList()
-            val chatInfo = mutableListOf<ChatINFO>()
-            val root = rootNode.value.getNodeDirect("root")
-            val history = getDefaultChatHistory(root)
-
-            NeuronTree(history).getAllChildrenRecursive().forEach { node ->
-                if (node.data.content.isNotBlank()) {
-                    val title = runCatching {
-                        JSONObject(node.data.content).optString("title", "Untitled")
-                    }.getOrElse { "Untitled" }
-
-                    chatInfo.add(ChatINFO(node.id, title))
-                }
-            }
-
-            _chatList.value = chatInfo
-
-        } catch (e: Exception) {
-            Log.e("updateChatList", "Failed loading chat titles", e)
-        }
-    }
-
-    fun newChat() {
-        viewModelScope.launch {
-            withContext(Dispatchers.Main) {
-                _messages.value = emptyList()
-                _chatTitle.value = ""
-                chatId.value = ""
-            }
-            ModelManager.stopGeneration()
-        }
-    }
-
-    fun deleteChatById(id: String, context: Context) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                rootNode.value.deleteNodeById(id)
-                saveTree(rootNode.value, context, BuildConfig.ALIAS)
-                updateChatList()
-
-                if (chatId.value == id) {
-                    withContext(Dispatchers.Main) {
-                        _messages.value = emptyList()
-                        _chatTitle.value = ""
-                        chatId.value = ""
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("deleteChatById", "Failed to delete chat $id", e)
-            }
-        }
-    }
-
+    //region Tool Preview
     fun writeToolPreviewByID(id: String, runningTool: String) {
-        val TAG = "writeToolPreviewByID"
         val selectedToolName = selectedTools.value.second.toolName
-        Log.d(TAG, "start(id=$id, runningTool=$runningTool, selectedTool=$selectedToolName)")
+        Log.d(TAG, "writePreview(id=$id, tool=$selectedToolName, bytes=${runningTool.length})")
 
-        viewModelScope.launch(Dispatchers.IO) {
-            val t0 = System.nanoTime()
+        viewModelScope.launch(io) {
             val beforeSize = _messages.value.size
+            var hits = 0
             try {
-                var hits = 0
-
                 _messages.update { list ->
                     list.map { message ->
                         if (message.id == id) {
                             hits++
-                            val updated = message.copy(
-                                tool = RunningTool(
-                                    toolName = selectedToolName, toolPreview = runningTool
-                                )
-                            )
-                            Log.v(
-                                TAG,
-                                "updated messageId=${message.id} -> tool=$selectedToolName (len=${runningTool.length})"
-                            )
-                            updated
+                            message.copy(tool = RunningTool(toolName = selectedToolName, toolPreview = runningTool))
                         } else message
                     }
                 }
-
                 if (hits > 0) {
-                    // 🔐 write the updated preview to disk so it survives process death
-                    updateConversation(appContext)
-                    Log.d(TAG, "persisted preview to tree")
-                }
-
-                val durationMs = (System.nanoTime() - t0) / 1_000_000
-                val afterSize = _messages.value.size
-                if (hits == 0) {
-                    Log.w(TAG, "no-op: message id not found (id=$id). size=$beforeSize")
+                    updateConversation() // persist preview to disk
                 } else {
-                    Log.d(
-                        TAG,
-                        "done: hits=$hits, size $beforeSize->$afterSize, took=${durationMs}ms, thread=${Thread.currentThread().name}"
-                    )
+                    Log.w(TAG, "no-op: message id not found (id=$id) size=$beforeSize")
                 }
             } catch (ce: CancellationException) {
-                Log.w(TAG, "cancelled(id=$id)", ce); throw ce
+                Log.w(TAG, "writePreview cancelled", ce)
+                throw ce
             } catch (e: Exception) {
-                Log.e(TAG, "failed(id=$id)", e)
+                Log.e(TAG, "writePreview failed", e)
             }
         }
     }
+    //endregion
 
+    //region Controls
     fun stopGenerating() {
-        ModelManager.stopGeneration().let {
-            _isGenerating.value = false
-        }
+        ModelManager.stopGeneration()
+        _isGenerating.value = false
     }
+    //endregion
 
+    //region Persistence & Title
     private fun generateTitle() {
         if (_chatTitle.value.isNotBlank()) return
-        val firstUser = _messages.value.firstOrNull { it.role == Role.User }?.text.orEmpty()
+        val firstUser = _messages.value.firstOrNull { it.role == Role.User }?.text.orEmpty().trim()
         if (firstUser.isBlank()) return
-        val title = firstUser.take(48)
-        _chatTitle.value = title
+        _chatTitle.value = firstUser.take(48)
     }
 
-    private fun updateConversation(context: Context) {
+    private fun updateConversation() {
         try {
             val root = rootNode.value.getNodeDirect("root")
             val history = getDefaultChatHistory(root)
             val tree = NeuronTree(history)
 
-            val currentList = _messages.value // ← take the UI’s current truth
+            val currentList = _messages.value
             val jsonData = JSONObject().apply {
                 put("title", _chatTitle.value)
                 put("conversations", JSONArray(Json.encodeToString(currentList)))
@@ -589,46 +540,41 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
                 chatId.value = newNode.id
             }
 
-            saveTree(rootNode.value, context, BuildConfig.ALIAS)
+            saveTree(rootNode.value, appContext, BuildConfig.ALIAS)
         } catch (e: Exception) {
-            Log.e("updateConversation", "Failed updating chat", e)
+            Log.e(TAG, "Failed updating chat", e)
         }
     }
+    //endregion
 
-    private fun convertToolsToJson(tools: Tools): JSONObject {
+    //region Tools → JSON Schema
+    private fun convertToolsToJson(tools: Tools): JSONArray {
         val properties = JSONObject()
         val required = mutableListOf<String>()
-
-        tools.args.forEach { (key, value) ->
-            val type = when (value) {
-                is Int, is Double, is Float -> "number"
-                is Boolean -> "boolean"
-                else -> "string"
-            }
-            properties.put(key, JSONObject().put("type", type))
-            if (value != null) required.add(key)
+        tools.args.forEach { (k, v) ->
+            properties.put(k, JSONObject().put("type",
+                when (v) { is Int, is Double, is Float -> "number"; is Boolean -> "boolean"; else -> "string" }
+            ))
+            if (v != null) required.add(k)
         }
 
-        val parameters = JSONObject().apply {
-            put("type", "object")
-            put("properties", properties)
-            put("required", required)
-        }
+        val parameters = JSONObject()
+            .put("type", "object")
+            .put("properties", properties)
+            .put("required", JSONArray(required))
 
-        val function = JSONObject().apply {
-            put("name", tools.toolName)
-            put("description", tools.description) // or replace with a real description field if you add one
-            put("parameters", parameters)
-        }
+        val function = JSONObject()
+            .put("name", tools.toolName)                      // e.g., "searchWeb"
+            .put("description", tools.description ?: "")
+            .put("parameters", parameters)
 
-        return JSONObject().apply {
-            put("type", "function")
-            put("function", function)
-        }
+        return JSONArray().put(JSONObject()
+            .put("type", "function")
+            .put("function", function)
+        )
     }
+
+    //endregion
 }
 
-enum class GenerationState {
-    IDLE, GENERATING, DONE
-}
-
+enum class GenerationState { IDLE, GENERATING, DONE }
