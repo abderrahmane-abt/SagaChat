@@ -458,6 +458,7 @@ fun ModelList(
                 Row(modifier = Modifier.padding(rDP(12.dp))) {
                     Text(
                         text = modelsData.modeName,
+                        maxLines = 1,
                         style = MaterialTheme.typography.bodyLarge.copy(
                             fontSize = rSp(16.sp)
                         )
@@ -868,7 +869,7 @@ private fun RegularChatUI(message: Message) {
 
 @Composable
 private fun UserChatUI(message: Message) {
-    val radius = with(LocalDensity.current) { rDP(18.dp) }
+    val radius = with(LocalDensity.current) { rDP(12.dp) }
 
     // shape
     val corner = RoundedCornerShape(radius)
@@ -878,15 +879,12 @@ private fun UserChatUI(message: Message) {
             .widthIn(max = rDP(300.dp))
             .clip(corner)
             .background(MaterialTheme.colorScheme.primary)
-            .padding(rDP(14.dp))
+            .padding(horizontal = rDP(14.dp), vertical = rDP(8.dp))
     ) {
         MarkdownText(
             message.text,
             color = MaterialTheme.colorScheme.onPrimary,
-            style = TextStyle.Default.copy(
-                fontSize = rSp(15.sp),
-                lineHeight = rSp(20.sp)
-            )
+            style = MaterialTheme.typography.bodyLarge
         )
     }
 }
@@ -922,18 +920,14 @@ private fun ThinkingChatUI(message: Message) {
                 .padding(rDP(10.dp))
                 .animateContentSize(animationSpec = tween(120))
         ) {
-            Crossfade(
-                if (showThinkingText) "Thinking..." else "Thought: \n${message.thought}",
-                label = message.thought ?: "thought"
-            ) { txt ->
-                Text(
-                    text = txt,
-                    color = Color(0xFFCBD5E1),
-                    fontSize = rSp(12.sp),
-                    lineHeight = rSp(18.sp),
-                    fontFamily = FontFamily.Monospace
-                )
-            }
+
+            Text(
+                text = if (showThinkingText) "Thinking..." else "Thought: \n${message.thought}",
+                color = Color(0xFFCBD5E1),
+                fontSize = rSp(12.sp),
+                lineHeight = rSp(18.sp),
+                fontFamily = FontFamily.Monospace
+            )
         }
     }
 }

@@ -111,7 +111,6 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
                     forceReload = true
                 ) { state ->
                     _modelLoadingState.value = state
-                    Log.d("Model", "Model loaded successfully $model")
                     selectedModel.value = model
                 }
             }
