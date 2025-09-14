@@ -98,6 +98,7 @@ import com.dark.neuroverse.activity.PluginStoreActivity
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.ui.components.MarkdownText
+import com.dark.neuroverse.ui.components.ModelLoadProgressBar
 import com.dark.neuroverse.ui.components.ProjectedCapturable
 import com.dark.neuroverse.ui.drawer.SettingsDrawerContent
 import com.dark.neuroverse.ui.theme.Mint
@@ -114,9 +115,10 @@ import com.dark.userdata.readBitmapImage
 import com.dark.userdata.writeBitmapImage
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onRequestModelChange: () -> Unit, // For navigating to model screen
+    onRequestModelChange: () -> Unit,
     onRequestSettingsChange: () -> Unit,
     viewModel: ChatScreenViewModel = viewModel(
         factory = ChattingViewModelFactory(LocalContext.current)
@@ -126,36 +128,40 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val chatTitle by viewModel.chatTitle.collectAsStateWithLifecycle()
+    val modelState by viewModel.modelLoadingState.collectAsStateWithLifecycle()
 
     ModalNavigationDrawer(
-        drawerState = drawerState, drawerContent = {
+        drawerState = drawerState,
+        drawerContent = {
             SettingsDrawerContent(
                 modifier = Modifier,
-                viewModel,
+                viewModel = viewModel,
                 onSettingsClick = onRequestSettingsChange,
                 onModelsClick = onRequestModelChange,
-                onPluginClick = {
-                    scope.launch {
-                        drawerState.close()
-                    }
-                },
+                onPluginClick = { scope.launch { drawerState.close() } },
                 onPluginStoreClick = {
                     context.startActivity(Intent(context, PluginStoreActivity::class.java))
-                })
-        }) {
-        Scaffold(modifier = Modifier
-            .fillMaxSize()
-            .imePadding(), topBar = {
-            TopBar(title = chatTitle, onMenu = {
-                scope.launch {
-                    drawerState.open()
                 }
-            }, onLeftMenu = {
-                viewModel.newChat()
-            })
-        }, bottomBar = {
-            BottomBar(viewModel)
-        }) { inner ->
+            )
+        }
+    ) {
+        Scaffold(
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding(),
+            topBar = {
+                Column {
+                    TopBar(
+                        title = chatTitle,
+                        onMenu = { scope.launch { drawerState.open() } },
+                        onLeftMenu = { viewModel.newChat() }
+                    )
+
+                    ModelLoadProgressBar(loadState = modelState)
+                }
+            },
+            bottomBar = { BottomBar(viewModel) }
+        ) { inner ->
             BodyContent(inner, viewModel)
         }
     }
