@@ -410,29 +410,7 @@ class AiSampleToolActivity : ComponentActivity() {
         // Two tools: device_info() and sum(a,b)
         val SAMPLE_TOOLS_JSON = """
 [
-  {
-    "type": "function",
-    "function": {
-      "name": "device_info",
-      "description": "Returns local device info (manufacturer, model, sdk)",
-      "parameters": {"type":"object","properties":{},"additionalProperties":false}
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "sum",
-      "description": "Add two numbers",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "a": {"type": "number"},
-          "b": {"type": "number"}
-        },
-        "required": ["a","b"]
-      }
-    }
-  },
+  {"type":"function","function":{"name":"searchWeb","description":"This Tool Helps In WebSearch","parameters":{"type":"object","properties":{"query":{"type":"string"}},"required":"[query]"}}}
 ]
 """.trimIndent()
 

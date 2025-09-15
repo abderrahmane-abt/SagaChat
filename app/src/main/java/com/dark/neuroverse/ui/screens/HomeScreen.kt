@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -45,6 +46,11 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Web
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.SelectAll
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -59,6 +65,7 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -68,11 +75,13 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -87,12 +96,14 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelsData
+import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.R
 import com.dark.neuroverse.activity.PluginStoreActivity
 import com.dark.neuroverse.model.Message
@@ -100,6 +111,7 @@ import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.ui.components.MarkdownText
 import com.dark.neuroverse.ui.components.ModelLoadProgressBar
 import com.dark.neuroverse.ui.components.ProjectedCapturable
+import com.dark.neuroverse.ui.components.RegenerateModelPickerDialog
 import com.dark.neuroverse.ui.drawer.SettingsDrawerContent
 import com.dark.neuroverse.ui.theme.Mint
 import com.dark.neuroverse.ui.theme.SkyBlue
@@ -131,8 +143,7 @@ fun HomeScreen(
     val modelState by viewModel.modelLoadingState.collectAsStateWithLifecycle()
 
     ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
+        drawerState = drawerState, drawerContent = {
             SettingsDrawerContent(
                 modifier = Modifier,
                 viewModel = viewModel,
@@ -141,27 +152,20 @@ fun HomeScreen(
                 onPluginClick = { scope.launch { drawerState.close() } },
                 onPluginStoreClick = {
                     context.startActivity(Intent(context, PluginStoreActivity::class.java))
-                }
-            )
-        }
-    ) {
-        Scaffold(
-            modifier = Modifier
-                .fillMaxSize()
-                .imePadding(),
-            topBar = {
-                Column {
-                    TopBar(
-                        title = chatTitle,
-                        onMenu = { scope.launch { drawerState.open() } },
-                        onLeftMenu = { viewModel.newChat() }
-                    )
+                })
+        }) {
+        Scaffold(modifier = Modifier
+            .fillMaxSize()
+            .imePadding(), topBar = {
+            Column {
+                TopBar(
+                    title = chatTitle,
+                    onMenu = { scope.launch { drawerState.open() } },
+                    onLeftMenu = { viewModel.newChat() })
 
-                    ModelLoadProgressBar(loadState = modelState)
-                }
-            },
-            bottomBar = { BottomBar(viewModel) }
-        ) { inner ->
+                ModelLoadProgressBar(loadState = modelState)
+            }
+        }, bottomBar = { BottomBar(viewModel) }) { inner ->
             BodyContent(inner, viewModel)
         }
     }
@@ -171,64 +175,103 @@ fun HomeScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TopBar(
-    title: String = "NeuroV Chat",
-    onMenu: () -> Unit = {},
-    onLeftMenu: () -> Unit = {}
+    title: String = "NeuroV Chat", onMenu: () -> Unit = {}, onLeftMenu: () -> Unit = {}
 ) {
     TopAppBar(
         title = {
+            val capitalizedTitle = title.replaceFirstChar {
+                if (it.isLowerCase()) it.titlecase() else it.toString()
+            }
+
             Text(
-                text = title,
+                text = capitalizedTitle,
+                modifier = Modifier.widthIn(max = rDP(180.dp)),
                 fontSize = rSp(22.sp),
                 color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 fontWeight = FontWeight.SemiBold
             )
-        },
-        navigationIcon = {
-            IconButton(onClick = onMenu) {
-                Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
-            }
-        },
-        actions = {
-            // circular spark button
+    }, navigationIcon = {
+        IconButton(onClick = onMenu) {
+            Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
+        }
+    }, actions = {
+        // circular spark button
+        Box(
+            modifier = Modifier
+                .padding(end = rDP(8.dp))
+                .size(rDP(32.dp))
+                .clip(CircleShape)
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.onPrimary, Color(0xFF0089FF)
+                        ) // SkyBlue
+                    )
+                )
+                .clickable { onLeftMenu() }, contentAlignment = Alignment.Center
+        ) {
             Box(
                 modifier = Modifier
-                    .padding(end = rDP(8.dp))
-                    .size(rDP(32.dp))
+                    .size(6.dp)
                     .clip(CircleShape)
-                    .background(
-                        Brush.linearGradient(
-                            listOf(MaterialTheme.colorScheme.onPrimary, Color(0xFF0089FF)) // SkyBlue
-                        )
-                    )
-                    .clickable { onLeftMenu() },
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(Color.White)
-                )
-            }
-            IconButton(onClick = onLeftMenu) {
-                Icon(
-                    imageVector = Icons.Outlined.MoreVert,
-                    contentDescription = "More",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.background
-        )
+                    .background(Color.White)
+            )
+        }
+        IconButton(onClick = onLeftMenu) {
+            Icon(
+                imageVector = Icons.Outlined.MoreVert,
+                contentDescription = "More",
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }, colors = TopAppBarDefaults.topAppBarColors(
+        containerColor = MaterialTheme.colorScheme.background
+    )
     )
 }
 
+
+
 @Composable
-private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
+fun BodyContent(
+    inner: PaddingValues,
+    viewModel: ChatScreenViewModel
+) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val generationState by viewModel.generationState.collectAsStateWithLifecycle()
+
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+
+    // Whether we should auto-follow new messages
+    var follow by remember { mutableStateOf(true) }
+
+    // Are we at the bottom? (last item visible)
+    val isAtBottom by remember {
+        derivedStateOf {
+            val total = listState.layoutInfo.totalItemsCount
+            if (total == 0) return@derivedStateOf true
+            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            lastVisible >= total - 1
+        }
+    }
+
+    // If the user scrolls up, pause auto-follow
+    LaunchedEffect(Unit) {
+        snapshotFlow { listState.isScrollInProgress to isAtBottom }
+            .collect { (scrolling, atBottom) ->
+                if (scrolling && !atBottom) follow = false
+            }
+    }
+
+    // When messages change and follow is on, go to bottom
+    LaunchedEffect(messages.size, follow) {
+        if (messages.isNotEmpty() && follow) {
+            scope.launch { listState.animateScrollToItem(messages.lastIndex) }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -242,6 +285,7 @@ private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = rDP(16.dp)),
+                state = listState,
                 reverseLayout = false,
                 contentPadding = PaddingValues(
                     bottom = rDP(96.dp),
@@ -252,10 +296,10 @@ private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
             ) {
                 items(
                     items = messages,
-                    key = { it.id },                    // <-- stable!
+                    key = { it.id },
                     contentType = { if (it.role == Role.User) "user" else "assistant" }
                 ) { msg ->
-                    ChatBubble(msg, generationState) {
+                    ChatBubble(msg, viewModel, generationState) {
                         val preview = writeBitmapImage(it)
                         viewModel.writeToolPreviewByID(msg.id, preview)
                     }
@@ -263,8 +307,33 @@ private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
                 }
             }
         }
+
+        // Jump-to-bottom FAB when the user scrolled up
+        AnimatedVisibility(
+            visible = !isAtBottom && messages.isNotEmpty(),
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = rDP(12.dp), bottom = rDP(20.dp))
+        ) {
+            SmallFloatingActionButton(
+                onClick = {
+                    follow = true
+                    scope.launch { listState.animateScrollToItem(messages.lastIndex) }
+                },
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.primary
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.ArrowDownward,
+                    contentDescription = "Jump to bottom"
+                )
+            }
+        }
     }
 }
+
 
 
 @Composable
@@ -272,7 +341,7 @@ private fun BottomBar(
     viewModel: ChatScreenViewModel
 ) {
     val context = LocalContext.current
-    var input by remember { mutableStateOf("Hi Bro") }
+    var input by remember { mutableStateOf("Hi Bro Search For Hats") }
     val tools by viewModel.toolList.collectAsStateWithLifecycle()
     val selectedTools by viewModel.selectedTools.collectAsStateWithLifecycle()
     val modelList by viewModel.modelList.collectAsStateWithLifecycle()
@@ -307,7 +376,7 @@ private fun BottomBar(
 
                 false -> {
                     if (input.isNotBlank()) {
-                        viewModel.sendMessage(input, context)
+                        viewModel.sendMessage(input)
                         input = ""
                     }
                 }
@@ -332,7 +401,6 @@ private fun EmptyHint() {
         )
     }
 }
-
 
 
 @Composable
@@ -369,13 +437,10 @@ fun ToolsList(
             item {
                 // Plugin header
                 Text(
-                    text = pluginName,
-                    style = MaterialTheme.typography.titleMedium.copy(
+                    text = pluginName, style = MaterialTheme.typography.titleMedium.copy(
                         fontSize = rSp(18.sp) // scaled font
-                    ),
-                    modifier = Modifier.padding(
-                        horizontal = rDP(16.dp),
-                        vertical = rDP(8.dp)
+                    ), modifier = Modifier.padding(
+                        horizontal = rDP(16.dp), vertical = rDP(8.dp)
                     )
                 )
             }
@@ -393,18 +458,15 @@ fun ToolsList(
                 ) {
                     Column(modifier = Modifier.padding(rDP(12.dp))) {
                         Text(
-                            text = tool.toolName,
-                            style = MaterialTheme.typography.bodyLarge.copy(
+                            text = tool.toolName, style = MaterialTheme.typography.bodyLarge.copy(
                                 fontSize = rSp(16.sp)
                             )
                         )
-                        if (tool.path.isNotBlank()) {
+                        if (tool.description.isNotBlank()) {
                             Text(
-                                text = tool.path,
-                                style = MaterialTheme.typography.bodySmall.copy(
+                                text = tool.description, style = MaterialTheme.typography.bodySmall.copy(
                                     fontSize = rSp(13.sp)
-                                ),
-                                color = Color.Gray
+                                ), color = Color.Gray
                             )
                         }
                     }
@@ -417,10 +479,8 @@ fun ToolsList(
 
 @Composable
 fun ModelList(
-    modifier: Modifier = Modifier,
-    modelList: List<ModelsData>, // list of models
-    onModelSelected: (ModelsData) -> Unit,
-    selectedModel: ModelsData
+    modifier: Modifier = Modifier, modelList: List<ModelsData>, // list of models
+    onModelSelected: (ModelsData) -> Unit, selectedModel: ModelsData
 ) {
     LazyColumn(
         modifier = modifier.heightIn(min = rDP(100.dp), max = rDP(300.dp)),
@@ -429,13 +489,10 @@ fun ModelList(
         item {
             // Section header
             Text(
-                text = "Local Models",
-                style = MaterialTheme.typography.titleMedium.copy(
+                text = "Local Models", style = MaterialTheme.typography.titleMedium.copy(
                     fontSize = rSp(18.sp)
-                ),
-                modifier = Modifier.padding(
-                    horizontal = rDP(16.dp),
-                    vertical = rDP(8.dp)
+                ), modifier = Modifier.padding(
+                    horizontal = rDP(16.dp), vertical = rDP(8.dp)
                 )
             )
         }
@@ -449,10 +506,8 @@ fun ModelList(
                     .clickable { onModelSelected(modelsData) },
                 elevation = CardDefaults.cardElevation(rDP(0.dp)),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isSelected)
-                        Mint.copy(alpha = 0.5f)
-                    else
-                        MaterialTheme.colorScheme.background
+                    containerColor = if (isSelected) Mint.copy(alpha = 0.5f)
+                    else MaterialTheme.colorScheme.background
                 )
             ) {
                 Row(modifier = Modifier.padding(rDP(12.dp))) {
@@ -477,7 +532,6 @@ fun ModelList(
         }
     }
 }
-
 
 
 @SuppressLint("StateFlowValueCalledInComposition")
@@ -507,13 +561,10 @@ private fun ChatInputBar(
     ) {
         AnimatedVisibility(showToolsList) {
             ToolsList(
-                modifier = Modifier,
-                tools = tools,
-                onToolSelected = {
+                modifier = Modifier, tools = tools, onToolSelected = {
                     onToolSelected(it)
                     showToolsList = false
-                }
-            )
+                })
         }
 
         AnimatedVisibility(showModelList) {
@@ -524,8 +575,7 @@ private fun ChatInputBar(
                 onModelSelected = {
                     onModelSelected(it)
                     showModelList = false
-                }
-            )
+                })
         }
 
         Row(
@@ -540,12 +590,10 @@ private fun ChatInputBar(
                 onClick = {
                     showToolsList = !showToolsList
                     showModelList = false
-                },
-                colors = ButtonDefaults.textButtonColors(
+                }, colors = ButtonDefaults.textButtonColors(
                     containerColor = if (showToolsList) SkyBlue else MaterialTheme.colorScheme.background,
                     contentColor = if (showToolsList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
-                ),
-                shape = RoundedCornerShape(rDP(8.dp))
+                ), shape = RoundedCornerShape(rDP(8.dp))
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -558,13 +606,10 @@ private fun ChatInputBar(
 
             LazyRow(Modifier.weight(1f)) {
                 items(selectedTools, key = { it.toolName }) { tool ->
-                    ToolCard(
-                        modifier = Modifier
-                            .animateItem()
-                            .clickable { onToolRemoved(tool) }
-                            .padding(rDP(8.dp)),
-                        tool = tool
-                    )
+                    ToolCard(modifier = Modifier
+                        .animateItem()
+                        .clickable { onToolRemoved(tool) }
+                        .padding(rDP(8.dp)), tool = tool)
                 }
             }
 
@@ -572,12 +617,10 @@ private fun ChatInputBar(
                 onClick = {
                     showModelList = !showModelList
                     showToolsList = false
-                },
-                colors = IconButtonDefaults.iconButtonColors(
+                }, colors = IconButtonDefaults.iconButtonColors(
                     containerColor = if (showModelList) Mint else MaterialTheme.colorScheme.background,
                     contentColor = if (showModelList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
-                ),
-                shape = RoundedCornerShape(rDP(8.dp))
+                ), shape = RoundedCornerShape(rDP(8.dp))
             ) {
                 Icon(Icons.Default.SmartToy, contentDescription = "Add")
             }
@@ -609,8 +652,7 @@ private fun ChatInputBar(
                     cursorColor = MaterialTheme.colorScheme.primary
                 ),
                 textStyle = LocalTextStyle.current.copy(
-                    color = MaterialTheme.colorScheme.primary,
-                    fontSize = rSp(15.sp)
+                    color = MaterialTheme.colorScheme.primary, fontSize = rSp(15.sp)
                 )
             )
 
@@ -678,9 +720,7 @@ private fun ToolCard(modifier: Modifier = Modifier, tool: Tools) {
 
 @Composable
 private fun ChatBubble(
-    msg: Message,
-    generationState: GenerationState,
-    onCapture: (Bitmap) -> Unit
+    msg: Message, viewModel: ChatScreenViewModel, generationState: GenerationState, onCapture: (Bitmap) -> Unit
 ) {
     // role check
     val isUser = msg.role == Role.User
@@ -712,18 +752,15 @@ private fun ChatBubble(
                 }
 
                 Role.Assistant -> {
-                    RegularChatUI(msg)
+                    RegularChatUI(msg, viewModel)
                 }
 
                 Role.Tool -> {
                     ToolChatUI(
-                        message = msg,
-                        shouldCaptureNow = shouldCaptureNow,
-                        onCapture = {
+                        message = msg, shouldCaptureNow = shouldCaptureNow, onCapture = {
                             shouldCaptureNow = false
                             onCapture(it)
-                        }
-                    )
+                        })
                 }
             }
         }
@@ -733,9 +770,7 @@ private fun ChatBubble(
 
 @Composable
 private fun ToolChatUI(
-    message: Message,
-    shouldCaptureNow: Boolean,
-    onCapture: (Bitmap) -> Unit
+    message: Message, shouldCaptureNow: Boolean, onCapture: (Bitmap) -> Unit
 ) {
     Column {
         AssistTag(message.tool?.toolName ?: "Unknown Tool")
@@ -778,8 +813,7 @@ private fun ToolChatUI(
                                     Text(
                                         text = "Loading...Plugin \n ${message.tool?.toolName}",
                                         style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontSize = rSp(14.sp),
-                                            fontFamily = FontFamily.Serif
+                                            fontSize = rSp(14.sp), fontFamily = FontFamily.Serif
                                         ),
                                         textAlign = TextAlign.Center
                                     )
@@ -787,8 +821,7 @@ private fun ToolChatUI(
                             }
                         } else {
                             Card(elevation = CardDefaults.cardElevation(rDP(0.dp))) {
-                                PluginManager.currentPlugin.collectAsState()
-                                    .value?.api?.content()
+                                PluginManager.currentPlugin.collectAsState().value?.api?.content()
                                     ?.invoke()
                             }
                         }
@@ -799,18 +832,14 @@ private fun ToolChatUI(
             false -> {
                 var showToolOutput by remember { mutableStateOf(false) }
 
-                Box(
-                    Modifier
-                        .clickable { showToolOutput = !showToolOutput }
-                        .padding(top = rDP(8.dp))
-                        .clip(RoundedCornerShape(rDP(12.dp)))
-                        .background(MaterialTheme.colorScheme.surface)
-                        .border(
-                            rDP(1.dp),
-                            MaterialTheme.colorScheme.outline,
-                            RoundedCornerShape(rDP(12.dp))
-                        )
-                ) {
+                Box(Modifier
+                    .clickable { showToolOutput = !showToolOutput }
+                    .padding(top = rDP(8.dp))
+                    .clip(RoundedCornerShape(rDP(12.dp)))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(
+                        rDP(1.dp), MaterialTheme.colorScheme.outline, RoundedCornerShape(rDP(12.dp))
+                    )) {
                     Crossfade(targetState = showToolOutput) { visible ->
                         when (visible) {
                             true -> {
@@ -832,8 +861,7 @@ private fun ToolChatUI(
                                     Text(
                                         "Show Tool Output",
                                         Modifier.padding(
-                                            horizontal = rDP(16.dp),
-                                            vertical = rDP(12.dp)
+                                            horizontal = rDP(16.dp), vertical = rDP(12.dp)
                                         ),
                                         fontSize = rSp(14.sp),
                                         color = MaterialTheme.colorScheme.onPrimary
@@ -849,20 +877,44 @@ private fun ToolChatUI(
 }
 
 @Composable
-private fun RegularChatUI(message: Message) {
-    Box(
+private fun RegularChatUI(message: Message, viewModel: ChatScreenViewModel) {
+    //Copy, Select Text, Regenerate, Share
+    var showPicker by remember { mutableStateOf(false) }
+    val actionIconSize = rDP(16.dp)
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = rDP(14.dp))
     ) {
         MarkdownText(
-            message.text,
-            color = MaterialTheme.colorScheme.primary,
-            style = TextStyle.Default.copy(
-                fontSize = rSp(15.sp),
-                lineHeight = rSp(20.sp)
+            message.text, color = MaterialTheme.colorScheme.primary, style = TextStyle.Default.copy(
+                fontSize = rSp(13.sp), lineHeight = rSp(20.sp)
             )
         )
+        Spacer(Modifier.height(rDP(10.dp)))
+        Row(horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))) {
+            Icon(
+                painterResource(R.drawable.copy),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier.size(actionIconSize)
+            )
+            Icon(
+                painterResource(R.drawable.regen),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier.size(actionIconSize).clickable { showPicker = true }
+            )
+            Icon(
+                Icons.Rounded.Share,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier.size(actionIconSize)
+            )
+        }
+    }
+    if (showPicker) {
+        RegenerateModelPickerDialog(viewModel = viewModel, messageId = message.id) { showPicker = false }
     }
 }
 
@@ -878,12 +930,12 @@ private fun UserChatUI(message: Message) {
         modifier = Modifier
             .widthIn(max = rDP(300.dp))
             .clip(corner)
-            .background(MaterialTheme.colorScheme.primary)
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
             .padding(horizontal = rDP(14.dp), vertical = rDP(8.dp))
     ) {
         MarkdownText(
             message.text,
-            color = MaterialTheme.colorScheme.onPrimary,
+            color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.bodyLarge
         )
     }
@@ -896,30 +948,26 @@ private fun ThinkingChatUI(message: Message) {
         visible = true,
         enter = fadeIn(animationSpec = tween(120)) + expandVertically(
             animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessLow
+                dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow
             )
         ) + slideInVertically(initialOffsetY = { -it / 6 }),
         exit = fadeOut(animationSpec = tween(120)) + shrinkVertically(
             animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessMedium
+                dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium
             )
         ) + slideOutVertically(targetOffsetY = { -it / 6 })
     ) {
         var showThinkingText by remember { mutableStateOf(true) }
 
         Spacer(Modifier.height(rDP(6.dp)))
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .clickable { showThinkingText = !showThinkingText }
-                .clip(RoundedCornerShape(rDP(8.dp)))
-                .background(Color(0xFF0F172A)) // slate-ish
-                .border(rDP(1.dp), Color(0xFF334155), RoundedCornerShape(rDP(8.dp)))
-                .padding(rDP(10.dp))
-                .animateContentSize(animationSpec = tween(120))
-        ) {
+        Box(Modifier
+            .fillMaxWidth()
+            .clickable { showThinkingText = !showThinkingText }
+            .clip(RoundedCornerShape(rDP(8.dp)))
+            .background(Color(0xFF0F172A)) // slate-ish
+            .border(rDP(1.dp), Color(0xFF334155), RoundedCornerShape(rDP(8.dp)))
+            .padding(rDP(10.dp))
+            .animateContentSize(animationSpec = tween(120))) {
 
             Text(
                 text = if (showThinkingText) "Thinking..." else "Thought: \n${message.thought}",

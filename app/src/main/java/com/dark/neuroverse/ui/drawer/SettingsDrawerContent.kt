@@ -97,7 +97,7 @@ fun SettingsDrawerContent(
                         modifier = Modifier
                             .padding(start = 8.dp)
                             .clickable {
-                                viewModel.deleteChatById(chats.id, context)
+                                viewModel.deleteChatById(chats.id)
                             })
                 }
 

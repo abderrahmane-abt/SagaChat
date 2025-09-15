@@ -51,6 +51,10 @@ object ModelsList {
 
     }
 
+    val toolCallSYSTEMP = """
+        You are a tool‑calling assistant. Tools are provided to you as a schema; NEVER echo the schema back. 
+    """.trimIndent()
+
     fun getModelList(context: Context): List<ModelsData> {
 
         val modelsDir = File(context.filesDir, "Models")
