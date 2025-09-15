@@ -20,6 +20,7 @@ data class RunningTool(
 @Serializable
 data class Message(
     val id: String = UUID.randomUUID().toString(),
+    val timeStamp: Long = System.currentTimeMillis(),
     val role: Role,
     val text: String,
     val thought: String? = null,

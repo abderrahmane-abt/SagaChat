@@ -351,8 +351,6 @@ private fun DetailsCard(
             )
 
             val sizeMb = remember(file) { (file.length() / 1024.0 / 1024.0).toInt() }
-            InfoRow("File", file.name)
-            InfoRow("Path", file.absolutePath)
             InfoRow("Size", "$sizeMb MB")
 
             info?.optJSONObject("core")?.let { core ->

@@ -95,7 +95,6 @@ import javax.crypto.SecretKey
 )
 @Composable
 fun SettingsScreen(
-    onResetTweaks: () -> Unit = {},
 ) {
     // —— Spacing tokens ——
     val screenPadding = rDP(20.dp)
@@ -202,47 +201,47 @@ fun SettingsScreen(
 
                 SectionHeader("Model Settings")
 
-                SettingCard(
-                    title = "Current Model",
-                    roundedCornerShape = RoundedCornerShape(
-                        topStart = outerCorner,
-                        topEnd = outerCorner,
-                        bottomEnd = innerCorner,
-                        bottomStart = innerCorner
-                    ),
-                    actionLabel = "Switch",
-                    onAction = { showModelPicker = true }
-                ) {
-                    if (showModelPicker) {
-                        ModelDialog(modelList) { selected ->
-                            showModelPicker = false
-                            selected?.let {
-                                Toast.makeText(
-                                    ctx, "Model switched to ${it.modeName}", Toast.LENGTH_SHORT
-                                ).show()
+//                SettingCard(
+//                    title = "Current Model",
+//                    roundedCornerShape = RoundedCornerShape(
+//                        topStart = outerCorner,
+//                        topEnd = outerCorner,
+//                        bottomEnd = innerCorner,
+//                        bottomStart = innerCorner
+//                    ),
+//                    actionLabel = "Switch",
+//                    onAction = { showModelPicker = true }
+//                ) {
+//                    if (showModelPicker) {
+//                        ModelDialog(modelList) { selected ->
+//                            showModelPicker = false
+//                            selected?.let {
+//                                Toast.makeText(
+//                                    ctx, "Model switched to ${it.modeName}", Toast.LENGTH_SHORT
+//                                ).show()
 //                                ModelManager.loadModelAwait(modelData = it, onLoaded = {
 //                                    Toast.makeText(
 //                                        ctx, "Model loaded successfully", Toast.LENGTH_SHORT
 //                                    ).show()
 //                                })
-                            }
-                        }
-                    }
-
-                    Text(
-                        buildAnnotatedString {
-                            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Name: ") }
-                            append("${currentModel.value.modeName}\n\n")
-
-                            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Parameters\n") }
-                            append("• Context Size: ${currentModel.value.modelCtxSize}\n")
-                            append("• Model Size: ${currentModel.value.modelSize} MB\n")
-                            append("• Tool Call: ${currentModel.value.toolUse}")
-                        },
-                        modifier = Modifier.padding(rDP(12.dp)),
-                        fontSize = rSp(14.sp)
-                    )
-                }
+//                            }
+//                        }
+//                    }
+//
+//                    Text(
+//                        buildAnnotatedString {
+//                            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Name: ") }
+//                            append("${currentModel.value.modeName}\n\n")
+//
+//                            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Parameters\n") }
+//                            append("• Context Size: ${currentModel.value.modelCtxSize}\n")
+//                            append("• Model Size: ${currentModel.value.modelSize} MB\n")
+//                            append("• Tool Call: ${currentModel.value.toolUse}")
+//                        },
+//                        modifier = Modifier.padding(rDP(12.dp)),
+//                        fontSize = rSp(14.sp)
+//                    )
+//                }
 
                 Spacer(Modifier.height(rDP(8.dp)))
 
@@ -255,7 +254,10 @@ fun SettingsScreen(
                         bottomStart = outerCorner
                     ),
                     actionLabel = "Reset",
-                    onAction = onResetTweaks
+                    onAction = {
+                        professionalism = 2.0f
+                        emotionalTone = 6.0f
+                    }
                 ) {
                     Column(
                         Modifier.padding(rDP(16.dp)),
@@ -583,7 +585,7 @@ fun SettingCard(
             .fillMaxWidth()
             .clip(roundedCornerShape)
             .background(MaterialTheme.colorScheme.surface)
-            .padding(rDP(16.dp))
+            .padding(horizontal = rDP(16.dp), vertical = rDP(12.dp))
             .animateContentSize(animationSpec = tween(250))
     ) {
         Row(
@@ -603,9 +605,8 @@ fun SettingCard(
                     colors = ButtonDefaults.buttonColors(
                         contentColor = MaterialTheme.colorScheme.primary,
                         containerColor = MaterialTheme.colorScheme.background
-                    ),
-                    modifier = Modifier.height(rDP(34.dp))
-                ) { Text(actionLabel, fontSize = rSp(14.sp)) }
+                    )
+                ) { Text(actionLabel, style = MaterialTheme.typography.bodyMedium) }
             }
         }
     }
@@ -625,7 +626,7 @@ fun SettingCard(
             .fillMaxWidth()
             .clip(roundedCornerShape)
             .background(MaterialTheme.colorScheme.surface)
-            .padding(rDP(16.dp))
+            .padding(horizontal = rDP(16.dp), vertical = rDP(12.dp))
             .animateContentSize(animationSpec = tween(250))
     ) {
         Row(
@@ -646,8 +647,7 @@ fun SettingCard(
                         contentColor = MaterialTheme.colorScheme.primary,
                         containerColor = MaterialTheme.colorScheme.background
                     ),
-                    modifier = Modifier.height(rDP(34.dp))
-                ) { Text(actionLabel, fontSize = rSp(14.sp)) }
+                ) { Text(actionLabel, style = MaterialTheme.typography.bodyMedium) }
             }
         }
         Spacer(Modifier.height(rDP(12.dp)))

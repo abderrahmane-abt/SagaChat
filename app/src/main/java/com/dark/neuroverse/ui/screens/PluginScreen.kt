@@ -44,6 +44,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -206,8 +207,7 @@ private fun PluginCard(
                         style = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Serif),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        InfoChip("v${plugin.pluginVersion}")
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         manifest?.let { m ->
                             m.metaData.pluginApi.takeIf { it.isNotBlank() }?.let { InfoChip(it) }
                             val author = m.authorText()
@@ -313,7 +313,7 @@ private fun InfoLine(label: String, value: String) {
 
 @Composable
 private fun InfoChip(text: String) {
-    androidx.compose.material3.SuggestionChip(onClick = {}, label = { Text(text) })
+    SuggestionChip(onClick = {}, label = { Text(text) })
 }
 
 @Composable
