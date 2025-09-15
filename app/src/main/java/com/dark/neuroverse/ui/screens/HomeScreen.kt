@@ -173,14 +173,19 @@ fun TopBar(
 ) {
     TopAppBar(
         title = {
-        Text(
-            text = title,
-            fontSize = rSp(22.sp),
-            color = MaterialTheme.colorScheme.primary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            fontWeight = FontWeight.SemiBold
-        )
+            val capitalizedTitle = title.replaceFirstChar {
+                if (it.isLowerCase()) it.titlecase() else it.toString()
+            }
+
+            Text(
+                text = capitalizedTitle,
+                modifier = Modifier.widthIn(max = rDP(180.dp)),
+                fontSize = rSp(22.sp),
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                fontWeight = FontWeight.SemiBold
+            )
     }, navigationIcon = {
         IconButton(onClick = onMenu) {
             Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
