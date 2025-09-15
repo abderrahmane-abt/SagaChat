@@ -91,12 +91,14 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelsData
+import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.R
 import com.dark.neuroverse.activity.PluginStoreActivity
 import com.dark.neuroverse.model.Message
@@ -175,6 +177,8 @@ fun TopBar(
             text = title,
             fontSize = rSp(22.sp),
             color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             fontWeight = FontWeight.SemiBold
         )
     }, navigationIcon = {
@@ -242,7 +246,7 @@ private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
                 items(
                     items = messages, key = { it.id },                    // <-- stable!
                     contentType = { if (it.role == Role.User) "user" else "assistant" }) { msg ->
-                    ChatBubble(msg, generationState) {
+                    ChatBubble(msg, viewModel, generationState) {
                         val preview = writeBitmapImage(it)
                         viewModel.writeToolPreviewByID(msg.id, preview)
                     }
@@ -638,7 +642,7 @@ private fun ToolCard(modifier: Modifier = Modifier, tool: Tools) {
 
 @Composable
 private fun ChatBubble(
-    msg: Message, generationState: GenerationState, onCapture: (Bitmap) -> Unit
+    msg: Message, viewModel: ChatScreenViewModel, generationState: GenerationState, onCapture: (Bitmap) -> Unit
 ) {
     // role check
     val isUser = msg.role == Role.User
@@ -670,7 +674,7 @@ private fun ChatBubble(
                 }
 
                 Role.Assistant -> {
-                    RegularChatUI(msg)
+                    RegularChatUI(msg, viewModel)
                 }
 
                 Role.Tool -> {
@@ -795,10 +799,10 @@ private fun ToolChatUI(
 }
 
 @Composable
-private fun RegularChatUI(message: Message) {
+private fun RegularChatUI(message: Message, viewModel: ChatScreenViewModel) {
     //Copy, Select Text, Regenerate, Share
 
-    val actionIconSize = rDP(14.dp)
+    val actionIconSize = rDP(16.dp)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -806,7 +810,7 @@ private fun RegularChatUI(message: Message) {
     ) {
         MarkdownText(
             message.text, color = MaterialTheme.colorScheme.primary, style = TextStyle.Default.copy(
-                fontSize = rSp(15.sp), lineHeight = rSp(20.sp)
+                fontSize = rSp(13.sp), lineHeight = rSp(20.sp)
             )
         )
         Spacer(Modifier.height(rDP(10.dp)))
@@ -827,7 +831,9 @@ private fun RegularChatUI(message: Message) {
                 Icons.Rounded.Refresh,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                modifier = Modifier.size(actionIconSize)
+                modifier = Modifier.size(actionIconSize).clickable {
+                    viewModel.regenerateResponse(ModelManager.currentModel.value, message.id)
+                }
             )
             Icon(
                 Icons.Rounded.Share,
