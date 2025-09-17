@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -95,7 +96,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -144,6 +144,7 @@ fun HomeScreen(
 
     ModalNavigationDrawer(
         drawerState = drawerState, drawerContent = {
+
             SettingsDrawerContent(
                 modifier = Modifier,
                 viewModel = viewModel,
@@ -153,6 +154,8 @@ fun HomeScreen(
                 onPluginStoreClick = {
                     context.startActivity(Intent(context, PluginStoreActivity::class.java))
                 })
+
+
         }) {
         Scaffold(modifier = Modifier
             .fillMaxSize()
@@ -550,6 +553,8 @@ private fun ChatInputBar(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .navigationBarsPadding()
+            .imePadding()
             .background(MaterialTheme.colorScheme.surface),
         verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
     ) {
@@ -927,15 +932,19 @@ private fun RegularChatUI(message: Message, isDecoding: Boolean, viewModel: Chat
                             painterResource(R.drawable.copy),
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                            modifier = Modifier.size(actionIconSize).
-                            clickable {
-                                // Copy the text
-                                clipboardManager.setText(AnnotatedString(message.text))
+                            modifier = Modifier
+                                .size(actionIconSize)
+                                .clickable {
+                                    // Copy the text
+                                    clipboardManager.setText(AnnotatedString(message.text))
 
-                                // Show a toast confirmation
-                                Toast.makeText(context, "Copied to clipboard!", Toast.LENGTH_SHORT).show()
-                            }
-                        )
+                                    // Show a toast confirmation
+                                    Toast.makeText(
+                                        context,
+                                        "Copied to clipboard!",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                })
                         Icon(
                             painterResource(R.drawable.regen),
                             contentDescription = null,

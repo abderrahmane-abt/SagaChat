@@ -392,7 +392,13 @@ object ModelManager {
         val acc = StringBuilder()
         val done = CompletableDeferred<Unit>()
         currentGenJob = lib.generateStreaming(
-            prompt = r.prompt,
+            prompt = """
+                Tone controls values :
+                - professional: {{ ${getModelParams().value.professional} }}
+                - emotional: {{ ${getModelParams().value.emotional} }}
+                Prompt:
+                ${r.prompt}
+            """.trimIndent(),
             maxTokens = r.gen.maxTokens,
             uiScope = uiScope,
             onStart = {},

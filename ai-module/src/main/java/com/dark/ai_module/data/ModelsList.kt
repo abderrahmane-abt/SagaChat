@@ -6,17 +6,42 @@ import java.io.File
 
 object ModelsList {
 
+    // Chat template with params + optional GBNF block.
     val chatTemplate = """
-            {# ChatML-ish, llama.cpp minimal-engine safe #}
-            {%- for m in messages -%}
-            <|im_start|>{{ m['role'] }}
-            {{ m['content'] }}
-            <|im_end|>
-            {%- endfor -%}
-            {%- if add_generation_prompt -%}
-            <|im_start|>assistant
-            {%- endif -%}
-        """.trimIndent()
+    {# ChatML-ish, llama.cpp minimal-engine safe #}
+
+    {# === Behavior controls (sliders) === #}
+    {%- if professional is defined or emotional is defined -%}
+    <|im_start|>system
+    Tone controls (0–10 scale; higher = more):
+    - professional: {{ professional|default(3.5) }}
+    - emotional: {{ emotional|default(7.6) }}
+    The assistant should modulate style accordingly while staying accurate.
+    <|im_end|>
+    {%- endif -%}
+
+    {# === Optional GBNF constraint (engine-level preferred; prompt is fallback) === #}
+    {%- if gbnf is defined and gbnf|length > 0 -%}
+    <|im_start|>system
+    The assistant's NEXT message MUST conform to the following GBNF grammar.
+    If a token would violate the grammar, do not emit it.
+    <GBNF>
+    {{ gbnf }}
+    </GBNF>
+    <|im_end|>
+    {%- endif -%}
+
+    {# === Conversation === #}
+    {%- for m in messages -%}
+    <|im_start|>{{ m['role'] }}
+    {{ m['content'] }}
+    <|im_end|>
+    {%- endfor -%}
+
+    {%- if add_generation_prompt -%}
+    <|im_start|>assistant
+    {%- endif -%}
+""".trimIndent()
 
     val generalPurposeSystemPrompt = """
         You are a helpful, respectful and honest assistant. Always be as helpful as possible, and do not provide harmful or explicit content.
