@@ -142,6 +142,7 @@ class TempActivity : ComponentActivity() {
     private val brainPath = "/storage/emulated/0/Download/ai/embeddings.brain"
 
     private val appStatus = MutableStateFlow(AppStatus.LOADING_MODEL)
+    private val embeddingModelPath = "/storage/emulated/0/Download/ai/all-MiniLM-L6-v2-Q8_0.gguf"
 
     @SuppressLint("DefaultLocale")
     @RequiresApi(Build.VERSION_CODES.S)
@@ -150,7 +151,6 @@ class TempActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Fix: Initialize embeddingManager before setContent
         embeddingManager = EmbeddingManager(native)
 
         setContent {
@@ -171,7 +171,7 @@ class TempActivity : ComponentActivity() {
                             Log.d("TempActivity", "Starting model initialization")
                             appStatus.value = AppStatus.LOADING_MODEL
                             val modelInitResult = embeddingManager.initializeEmbedding(
-                                modelPath = "/storage/emulated/0/Download/ai/all-MiniLM-L6-v2-Q8_0.gguf"
+                                modelPath = embeddingModelPath
                             )
 
                             modelInitResult.onFailure {
@@ -387,6 +387,14 @@ class TempActivity : ComponentActivity() {
             }
 
             val startTime = System.currentTimeMillis()
+
+            // Re-initialize the embedding model for each query to ensure a clean state
+            val modelInitResult = embeddingManager.initializeEmbedding(modelPath = embeddingModelPath)
+            modelInitResult.onFailure {
+                onError("Error re-initializing embedding model: ${it.message}")
+                Log.e("TempActivity", "Error re-initializing embedding model: ${it.message}")
+                return@withContext
+            }
 
             // Get query embedding
             Log.i("TempActivity", "Getting embedding for query: $query")
