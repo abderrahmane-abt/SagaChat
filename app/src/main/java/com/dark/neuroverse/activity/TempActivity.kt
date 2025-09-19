@@ -20,11 +20,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -33,6 +37,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -139,9 +144,10 @@ class TempActivity : ComponentActivity() {
     private val m1 = "/storage/emulated/0/Download/Models/Kodify-Nano-2.0.Q8_0.gguf"
     private val native = NativeLib()
     private lateinit var embeddingManager: EmbeddingManager
-    private val brainPath = "/storage/emulated/0/Download/ai/embeddings.brain"
+    private var brainPath = "/storage/emulated/0/Download/embeddings.brai"
 
     private val appStatus = MutableStateFlow(AppStatus.LOADING_MODEL)
+    private val brainRoot = mutableStateOf<BrainRoot?>(null)
     private val embeddingModelPath = "/storage/emulated/0/Download/ai/all-MiniLM-L6-v2-Q8_0.gguf"
 
     @SuppressLint("DefaultLocale")
@@ -150,7 +156,8 @@ class TempActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
+        val passedPath = intent.getStringExtra(EXTRA_RESULT_FILE_PATH)
+        brainPath = passedPath ?: brainPath
         embeddingManager = EmbeddingManager(native)
 
         setContent {
@@ -184,14 +191,7 @@ class TempActivity : ComponentActivity() {
                             // 2. Load the brain data
                             Log.d("TempActivity", "Model ready. Loading brain data...")
                             appStatus.value = AppStatus.LOADING_BRAIN
-                            val brainRoot = BrainDecoder.loadBrain(brainPath)
-
-                            if (brainRoot == null) {
-                                Log.e("TempActivity", "Brain file failed to load.")
-                                appStatus.value = AppStatus.ERROR
-                                errorMessage = "Failed to load knowledge base."
-                                return@withContext
-                            }
+                            brainRoot.value = BrainDecoder.loadBrain(brainPath)
 
                             // 3. All ready
                             Log.d("TempActivity", "Brain loaded. App is ready.")
@@ -213,6 +213,13 @@ class TempActivity : ComponentActivity() {
                     topBar = {
                         TopAppBar(title = { Text("RAG Brain Viewer") })
                     },
+                    floatingActionButton = {
+                        FloatingActionButton(onClick = {
+
+                        }) {
+                            Icon(Icons.Default.Add, "Add")
+                        }
+                    }
                 ) { padding ->
                     Column(
                         modifier = Modifier
@@ -368,7 +375,9 @@ class TempActivity : ComponentActivity() {
             }
         }
     }
-
+    companion object {
+        const val EXTRA_RESULT_FILE_PATH = "data_file_path"
+    }
     private suspend fun performRAG(
         query: String,
         onUpdate: (String) -> Unit,

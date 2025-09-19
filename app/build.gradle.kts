@@ -55,6 +55,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        prefab = true
     }
 
     packaging {
@@ -80,12 +81,14 @@ android {
 
         //LIBS
         implementation(files("libs/ai-core-release.aar"))
+        implementation(files("libs/libsodium-1.0.20.0.aar"))
 
         //PROJECTS
         implementation(project(":ai-module"))
         implementation(project(":userData"))
         implementation(project(":updateManager"))
         implementation(project(":plugins"))
+        implementation(project(":data-hub-lib"))
 
         //UTILS
         implementation(libs.androidx.datastore.preferences)
