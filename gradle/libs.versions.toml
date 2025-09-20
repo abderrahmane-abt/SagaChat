@@ -67,6 +67,7 @@ espressoCore = "3.7.0"
 
 # ▶ Java 8+ APIs on old devices
 desugar_jdk_libs = "2.1.5"
+zip4j = "2.11.5"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -135,6 +136,7 @@ androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "j
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }          # Version via BOM
 androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }              # Version via BOM
+zip4j = { module = "net.lingala.zip4j:zip4j", version.ref = "zip4j" }
 
 
 # ──────────────────────────────────────────────────────────────────────────────

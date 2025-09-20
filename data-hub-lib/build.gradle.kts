@@ -56,6 +56,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.zip4j)
     implementation (files("libs/libsodium-1.0.20.0.aar"))
     implementation(libs.gson)
     implementation(libs.androidx.room.runtime)

@@ -25,6 +25,7 @@ import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.userdata.ntds.neuron_tree.NeuronTree
 import com.dark.userdata.readBrainFile
 import com.dark.userdata.saveTree
+import com.mp.data_hub_lib.DataNativeLib
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -82,6 +83,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
     private val _lastDecodingMs = MutableStateFlow<Long?>(null)
     val lastDecodingMs: StateFlow<Long?> = _lastDecodingMs.asStateFlow()
+
+    val lib = DataNativeLib()
 
     private fun emitDecodeNow(
         type: DecodeType,
