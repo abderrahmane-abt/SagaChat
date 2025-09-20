@@ -40,7 +40,7 @@ class ScrapActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.S)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        DataHubManager.init(applicationContext)
+
 
         val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
         val zipFile = File(downloadsDir, "ai/protected_embeddings.zip")

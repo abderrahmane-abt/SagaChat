@@ -6,6 +6,7 @@ import com.dark.ai_module.workers.ModelManager
 import com.dark.ai_module.workers.ModelParams
 import com.dark.neuroverse.data.UserPrefs
 import com.dark.plugins.manager.PluginManager
+import com.mp.data_hub_lib.manager.DataHubManager
 import com.mp.updatemanager.UpdateCenter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,9 +26,9 @@ class NVApplication : Application() {
         super.onCreate()
         // Synchronous, cheap initializations
         ModelManager.init(applicationContext)
-        UpdateCenter.init(this)
+        UpdateCenter.init(applicationContext)
         PluginManager.init(applicationContext)
-
+        DataHubManager.init(applicationContext)
         // Lightweight background bootstrap
         appScope.launch {
             // 1) Apply user-tuned decoding params (with safe fallbacks)
