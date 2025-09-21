@@ -138,15 +138,6 @@ object ModelManager {
                     delay(50.milliseconds)
                 }
             }
-            val id = f.absolutePath
-            if (!forceReload && models.containsKey(id)) {
-                Log.d(TAG, "Reusing existing model instance for ${f.name}")
-                activeModelId = id
-                onLoaded(LoadState.Loading(1f))
-                onLoaded(LoadState.OnLoaded(modelData))
-                progressJob.cancelAndJoin()
-                return@withContext Result.success(Unit)
-            }
             // Otherwise, proceed with loading the model
             val init = ModelInitParams(
                 ctxSize = defaults.contextLength,
@@ -314,12 +305,6 @@ object ModelManager {
 
     private fun internalLoadModel(path: File, init: ModelInitParams, forceReload: Boolean, onLoaded: (() -> Unit)? = null) {
         val id = path.absolutePath
-        if (!forceReload && models.containsKey(id)) {
-            Log.d(TAG, "Reusing existing model instance for ${path.name}")
-            activeModelId = id
-            onLoaded?.invoke()
-            return
-        }
 
         Log.d(TAG, "Loading generation model: ${path.name}")
         unloadAllModels()

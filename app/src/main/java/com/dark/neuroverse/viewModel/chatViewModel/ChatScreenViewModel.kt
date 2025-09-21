@@ -33,6 +33,7 @@ import com.mp.data_hub_lib.model.RagResult
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -379,8 +380,15 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         try {
             // Step 1: Get RAG context using embedding instance
             val ragResult = withContext(Dispatchers.IO) {
-                val deferred = CompletableDeferred<Pair<Any?, String?>>()
+                // Properly reinitialize embedding model
+                val initResult = DataHubManager.reinitializeEmbeddingModel()
+                if (initResult.isFailure) {
+                    Log.e(TAG, "Failed to initialize embedding model: ${initResult.exceptionOrNull()?.message}")
+                    return@withContext null to "Embedding model initialization failed"
+                }
 
+                // Run RAG after embedding is ready
+                val deferred = CompletableDeferred<Pair<RagResult?, String?>>()
                 DataHubManager.runRAG(
                     query = input,
                     topK = 5
@@ -391,7 +399,10 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 deferred.await()
             }
 
+
             val (ragData, error) = ragResult
+
+            Log.d(TAG, ragData?.docs.toString())
 
             if (ragData != null && error == null) {
                 // Step 2: Extract context
@@ -403,21 +414,21 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                     return
                 }
 
-                Log.i(TAG, "RAG context extracted: ${ragContext.take(100)}...")
+                Log.i(TAG, "RAG context extracted: $ragContext")
 
                 val finalPrompt = buildString {
-                    append("Use the following context to answer the question:\n\n")
+                    append("Use the following context to answer::\n\n")
                     append("Context:\n")
                     append(ragContext)
                     append("\n\nQuestion: ")
                     append(input)
-                    append("\n\nPlease provide a comprehensive answer based on the context provided.")
                 }
 
+                Log.i(TAG, "Final prompt: $finalPrompt")
                 // Step 3: Ensure generation model is ready (separate from embedding model)
                 ensureGenerationModelReady {
                     viewModelScope.launch(Dispatchers.IO) {
-                        ModelManager.setSystemPrompt("You are a helpful assistant. Use the provided context to answer questions accurately and comprehensively.")
+                        ModelManager.setSystemPrompt("You are a helpful assistant.")
                         streamAndRender(prompt = finalPrompt, enableTools = isTool)
                     }
                 }
@@ -433,12 +444,12 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         }
     }
 
-    private fun extractRAGContext(ragData: Any): String {
+    private fun extractRAGContext(ragData: RagResult): String {
         return try {
-            val docs = ragData.javaClass.getField("docs").get(ragData) as? List<*>
-            docs?.mapNotNull { doc ->
-                doc?.javaClass?.getField("text")?.get(doc) as? String
-            }?.joinToString("\n") ?: ""
+            val docs = ragData.docs
+            docs.joinToString {
+                it.text
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to extract RAG context", e)
             ""
@@ -469,41 +480,30 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
             // Check if generation model is ready
             val generationLib = NativeLib.getGenerationInstance()
-            val modelInfo = try {
-                generationLib.nativeGetModelInfo()
-            } catch (e: Exception) {
-                ""
-            }
+            generationLib.nativeRelease()
 
-            generationLib.nativeSetChatTemplate("")
+            delay(500)
 
-            if (modelInfo.isBlank() || !generationLib.isGenerationReady()) {
-                Log.d(TAG, "Generation model needs loading/reloading")
-
-                ModelManager.loadModelAwait(
-                    currentModel,
-                    onLoaded = { loadState ->
-                        when (loadState) {
-                            is ModelManager.LoadState.OnLoaded -> {
-                                Log.d(TAG, "Generation model ready: ${loadState.model.modeName}")
-                                onReady()
-                            }
-                            is ModelManager.LoadState.Error -> {
-                                Log.e(TAG, "Generation model load failed: ${loadState.message}")
-                                handleGenerationError("Generation model load failed: ${loadState.message}")
-                            }
-                            else -> {
-                                Log.d(TAG, "Generation model loading: $loadState")
-                            }
+            ModelManager.loadModelAwait(
+                currentModel,
+                onLoaded = { loadState ->
+                    when (loadState) {
+                        is ModelManager.LoadState.OnLoaded -> {
+                            Log.d(TAG, "Generation model ready: ${loadState.model.modeName}")
+                            onReady()
+                        }
+                        is ModelManager.LoadState.Error -> {
+                            Log.e(TAG, "Generation model load failed: ${loadState.message}")
+                            handleGenerationError("Generation model load failed: ${loadState.message}")
+                        }
+                        else -> {
+                            Log.d(TAG, "Generation model loading: $loadState")
                         }
                     }
-                ).onFailure { error ->
-                    Log.e(TAG, "Generation model load failed", error)
-                    handleGenerationError("Generation model load failed: ${error.message}")
                 }
-            } else {
-                Log.d(TAG, "Generation model already ready")
-                onReady()
+            ).onFailure { error ->
+                Log.e(TAG, "Generation model load failed", error)
+                handleGenerationError("Generation model load failed: ${error.message}")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error ensuring generation model ready", e)
