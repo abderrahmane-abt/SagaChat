@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
 import com.dark.neuroverse.viewModel.chatViewModel.ChatUiState
@@ -207,18 +208,18 @@ private fun ChatHistoryItem(
             .clickable(enabled = !isDeleting) { onChatClick() }
             .background(
                 color = if (isCurrentChat) {
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                    SkyBlue.copy(0.1f)
                 } else {
                     MaterialTheme.colorScheme.surface
                 },
                 shape = MaterialTheme.shapes.small
             )
-            .padding(rDP(12.dp))
+            .padding(horizontal = rDP(12.dp), vertical = rDP(8.dp))
     ) {
         // Chat name
         Text(
             text = chat.name.ifBlank { "Untitled Chat" },
-            maxLines = 2,
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.bodyLarge.copy(
                 fontWeight = if (isCurrentChat) FontWeight.Medium else FontWeight.Normal

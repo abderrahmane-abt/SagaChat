@@ -475,9 +475,10 @@ private fun EmptyStateContent(uiState: ChatUiState) {
             }
             else -> {
                 Text(
-                    text = "Ready to chat! Ask me anything.",
+                    text = "Ready to chat! Ask me anything. \uD83D\uDE0A \nToolNeuron",
                     color = SlateGrey,
                     fontSize = rSp(16.sp),
+                    fontFamily = FontFamily.Serif,
                     textAlign = TextAlign.Center
                 )
             }

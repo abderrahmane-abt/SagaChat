@@ -1,20 +1,17 @@
 package com.dark.neuroverse.ui.screens
 
+import android.content.Context
 import android.content.Intent
 import android.util.Log
 import android.widget.Toast
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -25,40 +22,43 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -66,14 +66,8 @@ import com.dark.ai_module.model.ModelsData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.activity.ScrapActivity
-import com.dark.neuroverse.activity.TempActivity
 import com.dark.neuroverse.data.UserPrefs
 import com.dark.neuroverse.model.ChatINFO
-import com.dark.neuroverse.ui.components.MarkdownText
-import com.dark.neuroverse.ui.components.ModelDialog
-import com.dark.neuroverse.ui.theme.Coral
-import com.dark.neuroverse.ui.theme.CyberViolet
-import com.dark.neuroverse.ui.theme.Mint
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
 import com.dark.neuroverse.viewModel.UpdateStatus
@@ -83,446 +77,369 @@ import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.userdata.ntds.neuron_tree.NeuronTree
 import com.dark.userdata.readBrainFile
 import com.dark.userdata.saveTree
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import javax.crypto.SecretKey
 
-@OptIn(
-    ExperimentalMaterial3Api::class,
-    ExperimentalMaterial3ExpressiveApi::class,
-    ExperimentalAnimationApi::class
-)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(
-) {
-    // —— Spacing tokens ——
-    val screenPadding = rDP(20.dp)
-    val sectionSpacing = rDP(20.dp)
-    val innerCorner = rDP(12.dp)
-    val outerCorner = rDP(22.dp)
+fun SettingsScreen(onBackClick: () -> Unit = {}) {
+    // UI State
+    var isLoading by remember { mutableStateOf(true) }
+    var chatList by remember { mutableStateOf<List<ChatINFO>>(emptyList()) }
+    var clearingData by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // —— Brain state ——
-    lateinit var key: MutableStateFlow<SecretKey>
-    var rootNode: MutableStateFlow<NeuronTree>? = null
-    val chatList = remember { MutableStateFlow(emptyList<ChatINFO>()) }
+    // Model settings state
+    var professionalism by remember { mutableFloatStateOf(2.5f) }
+    var emotionalTone by remember { mutableFloatStateOf(7.3f) }
+
     val context = LocalContext.current
-
+    val scope = rememberCoroutineScope()
     val updateViewModel: UpdateViewModel = viewModel()
     val updateInfo by updateViewModel.updateInfo.collectAsState()
+    val currentModel by ModelManager.getModel().collectAsState()
 
-    var isChecking by remember { mutableStateOf(false) }
-
+    // Load initial data
     LaunchedEffect(Unit) {
-        key = MutableStateFlow(getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS))
-        rootNode = MutableStateFlow(readBrainFile(key.value, context))
+        scope.launch {
+            try {
+                // Load user preferences
+                professionalism = UserPrefs.getModelPParams(context).firstOrNull() ?: 2.5f
+                emotionalTone = UserPrefs.getModelEParams(context).firstOrNull() ?: 7.3f
 
-        try {
-            val chatInfo = mutableListOf<ChatINFO>()
-            val root = rootNode.value.getNodeDirect("root")
-            val history = getDefaultChatHistory(root)
-
-            NeuronTree(history).getAllChildrenRecursive().forEach { node ->
-                if (node.data.content.isNotBlank()) {
-                    val title = runCatching {
-                        JSONObject(node.data.content).optString("title", "Untitled")
-                    }.getOrElse { "Untitled" }
-                    chatInfo.add(ChatINFO(node.id, title))
-                }
+                // Load chat history
+                chatList = loadChatHistory(context)
+                isLoading = false
+            } catch (e: Exception) {
+                Log.e("SettingsScreen", "Failed to load settings", e)
+                errorMessage = "Failed to load settings: ${e.message}"
+                isLoading = false
             }
-            chatList.value = chatInfo
-        } catch (e: Exception) {
-            Log.e("updateChatList", "Failed loading chat titles", e)
-        }
-        rootNode.value.printTree()
-    }
-
-    LaunchedEffect(updateInfo.status, updateInfo.hasUpdate) {
-        if (updateInfo.status != UpdateStatus.IDLE) isChecking = false
-        if (updateInfo.status == UpdateStatus.IDLE && !updateInfo.hasUpdate) isChecking = false
-    }
-
-    fun clearChatHistory() {
-        val rn = rootNode ?: return
-        try {
-            for (chat in chatList.value) {
-                rn.value.deleteNodeById(chat.id)
-            }
-            saveTree(rn.value, context, BuildConfig.ALIAS)
-            Log.d("clearChatHistory", "Chat history cleared")
-            Toast.makeText(context, "Chat history cleared", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            Log.e("deleteChatById", "Failed to delete chats", e)
         }
     }
 
-    Scaffold { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize()
-                .padding(horizontal = screenPadding, vertical = screenPadding)
-                .animateContentSize(animationSpec = tween(300, easing = FastOutSlowInEasing)),
-            verticalArrangement = Arrangement.spacedBy(sectionSpacing)
-        ) {
-            item {
-                Text(
-                    "NeuroV Settings",
-                    style = MaterialTheme.typography.headlineLarge.copy(
-                        fontFamily = FontFamily.Serif,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = rSp(26.sp)
+    // Save preferences when they change
+    LaunchedEffect(professionalism, emotionalTone) {
+        if (!isLoading) {
+            UserPrefs.setModelPParams(context, professionalism)
+            UserPrefs.setModelEParams(context, emotionalTone)
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        "Settings",
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = FontWeight.Bold
+                        )
                     )
-                )
-            }
-
-            // ——— MODEL SETTINGS ———
-            item {
-                var professionalism by remember { mutableFloatStateOf(2.5f) }
-                var emotionalTone by remember { mutableFloatStateOf(7.3f) }
-                val currentModel = ModelManager.getModel().collectAsState()
-                val ctx = context
-                var showModelPicker by remember { mutableStateOf(false) }
-                val modelList = remember { mutableStateListOf<ModelsData>() }
-
-                LaunchedEffect(Unit) {
-                    professionalism = UserPrefs.getModelPParams(ctx).firstOrNull() ?: 2.5f
-                    emotionalTone = UserPrefs.getModelEParams(ctx).firstOrNull() ?: 7.3f
-
-                    ModelManager.observeModels().collectLatest { data ->
-                        modelList.clear(); modelList += data
-                    }
-                }
-
-                LaunchedEffect(professionalism, emotionalTone) {
-                    UserPrefs.setModelPParams(ctx, professionalism)
-                    UserPrefs.setModelEParams(ctx, emotionalTone)
-                }
-
-                SectionHeader("Model Settings")
-
-//                SettingCard(
-//                    title = "Current Model",
-//                    roundedCornerShape = RoundedCornerShape(
-//                        topStart = outerCorner,
-//                        topEnd = outerCorner,
-//                        bottomEnd = innerCorner,
-//                        bottomStart = innerCorner
-//                    ),
-//                    actionLabel = "Switch",
-//                    onAction = { showModelPicker = true }
-//                ) {
-//                    if (showModelPicker) {
-//                        ModelDialog(modelList) { selected ->
-//                            showModelPicker = false
-//                            selected?.let {
-//                                Toast.makeText(
-//                                    ctx, "Model switched to ${it.modeName}", Toast.LENGTH_SHORT
-//                                ).show()
-//                                ModelManager.loadModelAwait(modelData = it, onLoaded = {
-//                                    Toast.makeText(
-//                                        ctx, "Model loaded successfully", Toast.LENGTH_SHORT
-//                                    ).show()
-//                                })
-//                            }
-//                        }
-//                    }
-//
-//                    Text(
-//                        buildAnnotatedString {
-//                            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Name: ") }
-//                            append("${currentModel.value.modeName}\n\n")
-//
-//                            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Parameters\n") }
-//                            append("• Context Size: ${currentModel.value.modelCtxSize}\n")
-//                            append("• Model Size: ${currentModel.value.modelSize} MB\n")
-//                            append("• Tool Call: ${currentModel.value.toolUse}")
-//                        },
-//                        modifier = Modifier.padding(rDP(12.dp)),
-//                        fontSize = rSp(14.sp)
-//                    )
-//                }
-
-                Spacer(Modifier.height(rDP(8.dp)))
-
-                SettingCard(
-                    title = "Model Tweaks",
-                    roundedCornerShape = RoundedCornerShape(
-                        topStart = innerCorner,
-                        topEnd = innerCorner,
-                        bottomEnd = outerCorner,
-                        bottomStart = outerCorner
-                    ),
-                    actionLabel = "Reset",
-                    onAction = {
-                        professionalism = 2.0f
-                        emotionalTone = 6.0f
-                    }
-                ) {
-                    Column(
-                        Modifier.padding(rDP(16.dp)),
-                        verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
-                    ) {
-                        LabeledSlider(
-                            label = "Professionalism",
-                            value = professionalism,
-                            range = 0.1f..9.0f,
-                            onChange = { professionalism = it }
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back"
                         )
-                        LabeledSlider(
-                            label = "Emotional",
-                            value = emotionalTone,
-                            range = 0.1f..9.0f,
-                            onChange = { emotionalTone = it }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
+            )
+        }
+    ) { innerPadding ->
+        if (isLoading) {
+            LoadingContent(
+                modifier = Modifier.padding(innerPadding)
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .padding(innerPadding)
+                    .fillMaxSize()
+                    .padding(horizontal = rDP(20.dp), vertical = rDP(20.dp))
+                    .animateContentSize(animationSpec = tween(300, easing = FastOutSlowInEasing)),
+                verticalArrangement = Arrangement.spacedBy(rDP(20.dp))
+            ) {
+                // Error message
+                errorMessage?.let { error ->
+                    item {
+                        ErrorCard(
+                            message = error,
+                            onDismiss = { errorMessage = null }
                         )
                     }
                 }
+
+                // Model Settings Section
+                item {
+                    ModelSettingsSection(
+                        currentModel = currentModel,
+                        professionalism = professionalism,
+                        emotionalTone = emotionalTone,
+                        onProfessionalismChange = { professionalism = it },
+                        onEmotionalToneChange = { emotionalTone = it },
+                        onResetTweaks = {
+                            professionalism = 2.0f
+                            emotionalTone = 6.0f
+                        }
+                    )
+                }
+
+                // User Data Section
+                item {
+                    UserDataSection(
+                        chatCount = chatList.size,
+                        isClearingData = clearingData,
+                        onClearData = {
+                            scope.launch {
+                                clearingData = true
+                                try {
+                                    clearChatHistory(context, chatList)
+                                    chatList = emptyList()
+                                    Toast.makeText(context, "Chat history cleared", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    Log.e("SettingsScreen", "Failed to clear data", e)
+                                    errorMessage = "Failed to clear data: ${e.message}"
+                                } finally {
+                                    clearingData = false
+                                }
+                            }
+                        },
+                        onOpenDataHub = {
+                            context.startActivity(Intent(context, ScrapActivity::class.java))
+                        }
+                    )
+                }
+
+                // App Settings Section (commented out as in original)
+                // item {
+                //     AppSettingsSection(
+                //         updateInfo = updateInfo,
+                //         updateViewModel = updateViewModel,
+                //         context = context
+                //     )
+                // }
             }
-
-            // ——— USER SETTINGS ———
-            item {
-                SectionHeader("User Settings")
-                SettingCard(
-                    title = "Clear User Data",
-                    actionLabel = "Clear",
-                    onAction = { clearChatHistory() }
-                )
-
-                Spacer(Modifier.height(rDP(8.dp)))
-                SettingCard(
-                    title = "Data Hub",
-                    actionLabel = "Open",
-                    onAction = {
-                        context.startActivity(Intent(context, ScrapActivity::class.java))
-                    }
-                )
-            }
-
-//            // ——— APP SETTINGS ———
-//            item {
-//                SectionHeader("App Settings")
-//
-//                var showCard by remember { mutableStateOf(true) }
-//
-//                val actionLabel = when (updateInfo.status) {
-//                    UpdateStatus.DOWNLOADING -> "${(updateInfo.downloadProgress * 100).toInt()}%"
-//                    UpdateStatus.READY_TO_INSTALL -> "Install"
-//                    UpdateStatus.FAILED -> "Retry"
-//                    UpdateStatus.IDLE -> when {
-//                        isChecking -> "Checking…"
-//                        updateInfo.hasUpdate -> "Update"
-//                        else -> "Check"
-//                    }
-//                }
-//
-//                SettingCard(
-//                    title = "Check for Updates",
-//                    actionLabel = actionLabel,
-//                    showCard = showCard,
-//                    onAction = {
-//                        when (updateInfo.status) {
-//                            UpdateStatus.READY_TO_INSTALL -> updateViewModel.triggerInstall(context)
-//                            UpdateStatus.IDLE -> {
-//                                isChecking = true
-//                                updateViewModel.checkForUpdateAndStartDownload()
-//                                showCard = true
-//                            }
-//                            UpdateStatus.FAILED -> {
-//                                updateViewModel.downloadApk(context)
-//                                showCard = true
-//                            }
-//                            UpdateStatus.DOWNLOADING -> Unit
-//                        }
-//                    }
-//                ) {
-//                    AnimatedContent(
-//                        targetState = Triple(updateInfo.status, updateInfo.hasUpdate, isChecking),
-//                        transitionSpec = {
-//                            slideInVertically(animationSpec = tween(220)) { it / 2 } + fadeIn() togetherWith
-//                                    slideOutVertically(animationSpec = tween(220)) { -it / 2 } + fadeOut()
-//                        },
-//                        label = "UpdateStatusAnimatedContent"
-//                    ) { (status, hasUpdate, checking) ->
-//                        var checkTimedOut by remember { mutableStateOf(false) }
-//                        LaunchedEffect(checking, status, hasUpdate) {
-//                            if (checking) {
-//                                checkTimedOut = false
-//                                kotlinx.coroutines.delay(10_000)
-//                                if (isChecking && status == UpdateStatus.IDLE && !hasUpdate) {
-//                                    checkTimedOut = true
-//                                    isChecking = false
-//                                }
-//                            } else {
-//                                checkTimedOut = false
-//                            }
-//                        }
-//
-//                        when (status) {
-//                            UpdateStatus.IDLE -> {
-//                                if (checking) {
-//                                    Column(Modifier.padding(rDP(16.dp))) {
-//                                        Text(
-//                                            "Checking for updates…",
-//                                            style = MaterialTheme.typography.titleMedium.copy(
-//                                                color = CyberViolet,
-//                                                fontSize = rSp(16.sp)
-//                                            )
-//                                        )
-//                                        Spacer(Modifier.height(rDP(8.dp)))
-//                                        LinearWavyProgressIndicator(
-//                                            modifier = Modifier.fillMaxWidth(),
-//                                        )
-//                                        Spacer(Modifier.height(rDP(12.dp)))
-//                                        SubtleNote("Hang tight while we ping the mothership.")
-//                                    }
-//                                } else if (hasUpdate) {
-//                                    Column(Modifier.padding(rDP(16.dp))) {
-//                                        Text(
-//                                            "Update available",
-//                                            style = MaterialTheme.typography.titleLarge.copy(
-//                                                fontWeight = FontWeight.SemiBold,
-//                                                color = Coral,
-//                                                fontSize = rSp(20.sp)
-//                                            )
-//                                        )
-//                                        Spacer(Modifier.height(rDP(6.dp)))
-//                                        MarkdownText("Tap **Update** to download the latest build.")
-//                                    }
-//                                } else if (checkTimedOut) {
-//                                    Column(Modifier.padding(rDP(16.dp))) {
-//                                        Text(
-//                                            "No update found",
-//                                            style = MaterialTheme.typography.titleLarge.copy(
-//                                                fontWeight = FontWeight.SemiBold,
-//                                                fontSize = rSp(20.sp)
-//                                            )
-//                                        )
-//                                        Spacer(Modifier.height(rDP(6.dp)))
-//                                        SubtleNote("We checked for 10s. Servers might be sleepy—try again later.")
-//                                    }
-//                                } else {
-//                                    Column(Modifier.padding(rDP(16.dp))) {
-//                                        Text(
-//                                            "You're up to date",
-//                                            style = MaterialTheme.typography.titleLarge.copy(
-//                                                fontWeight = FontWeight.SemiBold,
-//                                                color = Mint,
-//                                                fontSize = rSp(20.sp)
-//                                            )
-//                                        )
-//                                        Spacer(Modifier.height(rDP(6.dp)))
-//                                        MarkdownText("Current version: **${BuildConfig.VERSION_NAME}**")
-//                                    }
-//                                }
-//                            }
-//
-//                            UpdateStatus.DOWNLOADING -> {
-//                                Column(Modifier.padding(rDP(16.dp))) {
-//                                    Text(
-//                                        "Downloading update…",
-//                                        style = MaterialTheme.typography.titleLarge.copy(
-//                                            fontSize = rSp(20.sp)
-//                                        )
-//                                    )
-//                                    Spacer(Modifier.height(rDP(8.dp)))
-//
-//                                    val animatedProgress by animateFloatAsState(
-//                                        targetValue = updateInfo.downloadProgress.coerceIn(0f, 1f),
-//                                        animationSpec = tween(350),
-//                                        label = "ProgressAnim"
-//                                    )
-//
-//                                    if (animatedProgress > 0f) {
-//                                        LinearProgressIndicator(
-//                                            progress = { animatedProgress },
-//                                            modifier = Modifier.fillMaxWidth(),
-//                                            color = MaterialTheme.colorScheme.primary,
-//                                            strokeCap = StrokeCap.Round
-//                                        )
-//                                    } else {
-//                                        LinearProgressIndicator(
-//                                            modifier = Modifier.fillMaxWidth(),
-//                                            strokeCap = StrokeCap.Round
-//                                        )
-//                                    }
-//
-//                                    if (updateInfo.whatsNew.isNotEmpty()) {
-//                                        Spacer(Modifier.height(rDP(12.dp)))
-//                                        Text(
-//                                            buildAnnotatedString {
-//                                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-//                                                    append("What's New:\n")
-//                                                }
-//                                                updateInfo.whatsNew.forEach { append("• $it\n") }
-//                                            },
-//                                            fontSize = rSp(14.sp)
-//                                        )
-//                                    }
-//                                }
-//                            }
-//
-//                            UpdateStatus.FAILED -> {
-//                                Column(Modifier.padding(rDP(16.dp))) {
-//                                    Text(
-//                                        "Download failed",
-//                                        style = MaterialTheme.typography.titleLarge.copy(
-//                                            color = MaterialTheme.colorScheme.error,
-//                                            fontSize = rSp(20.sp)
-//                                        )
-//                                    )
-//                                    Spacer(Modifier.height(rDP(6.dp)))
-//                                    SubtleNote("Network gremlins? Tap **Retry** to try again.")
-//                                }
-//                            }
-//
-//                            UpdateStatus.READY_TO_INSTALL -> {
-//                                Column(Modifier.padding(rDP(16.dp))) {
-//                                    Text(
-//                                        "Ready to install",
-//                                        style = MaterialTheme.typography.titleLarge.copy(
-//                                            fontWeight = FontWeight.SemiBold,
-//                                            fontSize = rSp(20.sp)
-//                                        )
-//                                    )
-//                                    if (updateInfo.whatsNew.isNotEmpty()) {
-//                                        Spacer(Modifier.height(rDP(8.dp)))
-//                                        Text(
-//                                            buildAnnotatedString {
-//                                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-//                                                    append("What's New:\n")
-//                                                }
-//                                                updateInfo.whatsNew.forEach { append("• $it\n") }
-//                                            },
-//                                            fontSize = rSp(14.sp)
-//                                        )
-//                                    }
-//                                    Spacer(Modifier.height(rDP(6.dp)))
-//                                    SubtleNote("Tap **Install** to finish the upgrade.")
-//                                }
-//                            }
-//                        }
-//                    }
-//                }
-//            }
         }
     }
 }
 
+@Composable
+private fun LoadingContent(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        CircularProgressIndicator()
+        Spacer(Modifier.height(rDP(16.dp)))
+        Text(
+            "Loading settings...",
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
+}
+
+@Composable
+private fun ErrorCard(
+    message: String,
+    onDismiss: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(rDP(16.dp)),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.weight(1f)
+            )
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors()
+            ) {
+                Text("Dismiss")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModelSettingsSection(
+    currentModel: ModelsData,
+    professionalism: Float,
+    emotionalTone: Float,
+    onProfessionalismChange: (Float) -> Unit,
+    onEmotionalToneChange: (Float) -> Unit,
+    onResetTweaks: () -> Unit
+) {
+    SectionHeader("Model Settings")
+
+    // Current Model Info
+    SettingCard(
+        title = "Current Model",
+        roundedCornerShape = RoundedCornerShape(
+            topStart = rDP(22.dp),
+            topEnd = rDP(22.dp),
+            bottomStart = rDP(12.dp),
+            bottomEnd = rDP(12.dp)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(rDP(16.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
+        ) {
+            ModelInfoRow("Name", currentModel.modeName)
+            ModelInfoRow("Context Size", "${currentModel.modelCtxSize}")
+            ModelInfoRow("Model Size", "${currentModel.modelSize} MB")
+            ModelInfoRow("Tool Support", currentModel.toolUse)
+        }
+    }
+
+    Spacer(Modifier.height(rDP(8.dp)))
+
+    // Model Tweaks
+    SettingCard(
+        title = "Model Tweaks",
+        actionLabel = "Reset",
+        onAction = onResetTweaks,
+        roundedCornerShape = RoundedCornerShape(
+            topStart = rDP(12.dp),
+            topEnd = rDP(12.dp),
+            bottomStart = rDP(22.dp),
+            bottomEnd = rDP(22.dp)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(rDP(16.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDP(16.dp))
+        ) {
+            LabeledSlider(
+                label = "Professionalism",
+                value = professionalism,
+                range = 0.1f..9.0f,
+                onChange = onProfessionalismChange
+            )
+            LabeledSlider(
+                label = "Emotional Tone",
+                value = emotionalTone,
+                range = 0.1f..9.0f,
+                onChange = onEmotionalToneChange
+            )
+        }
+    }
+}
+
+@Composable
+private fun ModelInfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontWeight = FontWeight.Medium
+            )
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun UserDataSection(
+    chatCount: Int,
+    isClearingData: Boolean,
+    onClearData: () -> Unit,
+    onOpenDataHub: () -> Unit
+) {
+    SectionHeader("User Data")
+
+    SettingCard(
+        title = "Clear Chat History",
+        actionLabel = if (isClearingData) "Clearing..." else "Clear ($chatCount)",
+        onAction = if (!isClearingData) onClearData else null
+    ) {
+        if (chatCount > 0) {
+            Column(
+                modifier = Modifier.padding(rDP(16.dp))
+            ) {
+                Text(
+                    text = "This will permanently delete all your chat conversations.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (isClearingData) {
+                    Spacer(Modifier.height(rDP(12.dp)))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(rDP(16.dp)),
+                            strokeWidth = rDP(2.dp)
+                        )
+                        Spacer(Modifier.width(rDP(8.dp)))
+                        Text(
+                            "Clearing data...",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    Spacer(Modifier.height(rDP(8.dp)))
+
+    SettingCard(
+        title = "Data Hub",
+        actionLabel = "Open",
+        onAction = onOpenDataHub
+    ) {
+        Column(
+            modifier = Modifier.padding(rDP(16.dp))
+        ) {
+            Text(
+                text = "Access your document processing and RAG data management.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
 
 @Composable
 private fun SectionHeader(title: String) {
-    Column(Modifier.fillMaxWidth()) {
-        Text(
-            title,
-            modifier = Modifier.padding(vertical = rDP(8.dp)),
-            style = MaterialTheme.typography.headlineMedium.copy(
-                fontFamily = FontFamily.Serif,
-                fontSize = rSp(20.sp)
-            )
-        )
-        Spacer(Modifier.height(rDP(4.dp)))
-    }
+    Text(
+        text = title,
+        style = MaterialTheme.typography.headlineMedium.copy(
+            fontFamily = FontFamily.Serif,
+            fontSize = rSp(20.sp),
+            fontWeight = FontWeight.Bold
+        ),
+        modifier = Modifier.padding(vertical = rDP(8.dp))
+    )
 }
 
 @Composable
@@ -532,21 +449,27 @@ private fun LabeledSlider(
     range: ClosedFloatingPointRange<Float>,
     onChange: (Float) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(rDP(6.dp))) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "$label : ${"%.1f".format(value)}",
+                text = "$label: ${"%.1f".format(value)}",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Medium
+                ),
                 fontSize = rSp(14.sp)
             )
             Text(
-                "${range.start} – ${range.endInclusive}",
+                text = "${range.start} – ${range.endInclusive}",
                 style = MaterialTheme.typography.labelMedium.copy(
                     fontSize = rSp(12.sp)
-                )
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         Slider(
@@ -556,22 +479,11 @@ private fun LabeledSlider(
             colors = SliderDefaults.colors(
                 thumbColor = MaterialTheme.colorScheme.primary,
                 activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = MaterialTheme.colorScheme.surface
+                inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
             ),
             modifier = Modifier.fillMaxWidth()
         )
     }
-}
-
-@Composable
-private fun SubtleNote(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.bodyMedium.copy(
-            fontSize = rSp(13.sp),
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-        )
-    )
 }
 
 @Composable
@@ -580,6 +492,7 @@ fun SettingCard(
     actionLabel: String? = null,
     roundedCornerShape: RoundedCornerShape = RoundedCornerShape(rDP(18.dp)),
     onAction: (() -> Unit)? = null,
+    content: (@Composable ColumnScope.() -> Unit)? = null
 ) {
     Column(
         modifier = Modifier
@@ -595,9 +508,10 @@ fun SettingCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                title,
+                text = title,
                 style = MaterialTheme.typography.titleLarge.copy(
-                    fontSize = rSp(16.sp)
+                    fontSize = rSp(16.sp),
+                    fontWeight = FontWeight.Medium
                 )
             )
             if (actionLabel != null && onAction != null) {
@@ -607,63 +521,61 @@ fun SettingCard(
                         contentColor = MaterialTheme.colorScheme.primary,
                         containerColor = MaterialTheme.colorScheme.background
                     )
-                ) { Text(actionLabel, style = MaterialTheme.typography.bodyMedium) }
+                ) {
+                    Text(
+                        text = actionLabel,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
         }
-    }
-}
 
-@Composable
-fun SettingCard(
-    title: String,
-    actionLabel: String? = null,
-    roundedCornerShape: RoundedCornerShape = RoundedCornerShape(rDP(18.dp)),
-    onAction: (() -> Unit)? = null,
-    showCard: Boolean = true,
-    content: @Composable ColumnScope.() -> Unit = { }
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(roundedCornerShape)
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = rDP(16.dp), vertical = rDP(12.dp))
-            .animateContentSize(animationSpec = tween(250))
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontSize = rSp(16.sp)
-                )
-            )
-            if (actionLabel != null && onAction != null) {
-                Button(
-                    onClick = onAction,
-                    colors = ButtonDefaults.buttonColors(
-                        contentColor = MaterialTheme.colorScheme.primary,
-                        containerColor = MaterialTheme.colorScheme.background
-                    ),
-                ) { Text(actionLabel, style = MaterialTheme.typography.bodyMedium) }
-            }
-        }
-        Spacer(Modifier.height(rDP(12.dp)))
-        AnimatedVisibility(
-            visible = showCard,
-            enter = slideInVertically(initialOffsetY = { it / 4 }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { -it / 4 }) + fadeOut()
-        ) {
+        content?.let {
+            Spacer(Modifier.height(rDP(12.dp)))
             Card(
-                Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background)
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
             ) {
-                content()
+                it()
             }
         }
     }
 }
 
+// Helper functions moved outside composable scope
+private suspend fun loadChatHistory(context: Context): List<ChatINFO> = withContext(Dispatchers.IO) {
+    try {
+        val key = getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS)
+        val rootNode = readBrainFile(key, context)
+        val root = rootNode.getNodeDirect("root")
+        val history = getDefaultChatHistory(root)
+
+        val chatInfo = mutableListOf<ChatINFO>()
+        NeuronTree(history).getAllChildrenRecursive().forEach { node ->
+            if (node.data.content.isNotBlank()) {
+                val title = runCatching {
+                    JSONObject(node.data.content).optString("title", "Untitled")
+                }.getOrElse { "Untitled" }
+                chatInfo.add(ChatINFO(node.id, title))
+            }
+        }
+        chatInfo
+    } catch (e: Exception) {
+        Log.e("loadChatHistory", "Failed to load chat history", e)
+        emptyList()
+    }
+}
+
+private suspend fun clearChatHistory(context: Context, chatList: List<ChatINFO>) = withContext(Dispatchers.IO) {
+    val key = getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS)
+    val rootNode = readBrainFile(key, context)
+
+    chatList.forEach { chat ->
+        rootNode.deleteNodeById(chat.id)
+    }
+
+    saveTree(rootNode, context, BuildConfig.ALIAS)
+    Log.d("clearChatHistory", "Cleared ${chatList.size} chats")
+}
