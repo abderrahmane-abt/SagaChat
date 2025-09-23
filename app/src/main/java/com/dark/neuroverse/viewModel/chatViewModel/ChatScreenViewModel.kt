@@ -2,6 +2,9 @@ package com.dark.neuroverse.viewModel.chatViewModel
 
 import android.content.Context
 import android.util.Log
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -123,7 +126,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     // Coroutine Management
     private val operationSemaphore = Semaphore(MAX_CONCURRENT_OPERATIONS)
     private var currentGenerationJob: Job? = null
-    private var currentStreamingState: StreamingState? = null
+    var currentStreamingState: StreamingState? = null
     private var batchingJob: Job? = null
 
     // Debounced save channel
@@ -1184,3 +1187,34 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
     //endregion
 }
+
+fun ChatScreenViewModel.getTokenFlow(messageId: String): Flow<String> = flow {
+    // Continuously emit tokens from the streaming state
+    while (currentCoroutineContext().isActive) {
+        val state = currentStreamingState
+        if (state != null && state.messageId == messageId) {
+            val newTokens = state.rawBuffer.toString().substring(state.lastEmittedIndex)
+            if (newTokens.isNotEmpty()) {
+                emit(newTokens)
+                state.lastEmittedIndex += newTokens.length
+            }
+        }
+        kotlinx.coroutines.delay(20) // small delay to avoid tight loop
+    }
+}
+
+fun ChatScreenViewModel.getCurrentBuffer(messageId: String): String {
+    val state = currentStreamingState
+    return if (state != null && state.messageId == messageId) {
+        state.visibleBuffer.toString()
+    } else {
+        ""
+    }
+}
+
+// Extend StreamingState to track last emitted index for getTokenFlow
+private var StreamingState.lastEmittedIndex: Int
+    get() = this._lastEmittedIndex ?: 0
+    set(value) { this._lastEmittedIndex = value }
+
+private var StreamingState._lastEmittedIndex: Int? by mutableStateOf(null)

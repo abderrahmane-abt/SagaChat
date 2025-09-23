@@ -906,7 +906,7 @@ private fun ChatBubble(
             // Main message content based on role
             when (message.role) {
                 Role.User -> UserChatUI(message)
-                Role.Assistant -> RegularChatUI(message, isThisMessageDecoding, viewModel)
+                Role.Assistant -> RegularChatUI(message, viewModel)
                 Role.Tool -> ToolChatUI(
                     message = message,
                     isDecoding = isThisMessageDecoding,
@@ -940,29 +940,13 @@ private fun UserChatUI(message: Message) {
 @Composable
 private fun RegularChatUI(
     message: Message,
-    isDecoding: Boolean,
     viewModel: ChatScreenViewModel
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
-    var displayedText by remember { mutableStateOf("") }
 
-    LaunchedEffect(message.id, isDecoding) {
-        if (isDecoding) { // only animate if message is currently being decoded
-            displayedText = ""
-            val newTokens = message.text
-            newTokens.forEach { token ->
-                displayedText += token
-                delay(20)
-            }
-        } else {
-            // just show full text immediately
-            displayedText = message.text
-        }
-    }
-
-    Crossfade(targetState = isDecoding, label = "assistant-content") { decoding ->
-        when (decoding) {
+    Crossfade(targetState = message.text.isEmpty(), label = "assistant-content") { empty ->
+        when (empty) {
             true -> {
                 RobotDecodePlaceholder(
                     active = true,
@@ -979,7 +963,7 @@ private fun RegularChatUI(
                         .padding(vertical = rDP(14.dp))
                 ) {
                     MarkdownText(
-                        text = displayedText,
+                        text = message.text,
                         color = MaterialTheme.colorScheme.primary,
                         style = TextStyle.Default.copy(
                             fontSize = rSp(13.sp),
