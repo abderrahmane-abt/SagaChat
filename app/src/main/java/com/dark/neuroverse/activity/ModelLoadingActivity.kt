@@ -137,7 +137,7 @@ fun ModelLoadingScreen(
         loadError = null
         infoJson = null
         withContext(Dispatchers.IO) {
-            val native = NativeLib()
+            val native = NativeLib.getGenerationInstance()
             val ok = native.initModel(
                 path = f.absolutePath,
                 threads = maxOf(1, Runtime.getRuntime().availableProcessors() / 2),
@@ -351,8 +351,6 @@ private fun DetailsCard(
             )
 
             val sizeMb = remember(file) { (file.length() / 1024.0 / 1024.0).toInt() }
-            InfoRow("File", file.name)
-            InfoRow("Path", file.absolutePath)
             InfoRow("Size", "$sizeMb MB")
 
             info?.optJSONObject("core")?.let { core ->

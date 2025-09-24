@@ -1,6 +1,7 @@
 package com.dark.neuroverse.activity
 
 import android.Manifest
+import android.content.Context
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -11,6 +12,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.core.view.WindowCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -33,89 +39,238 @@ import kotlinx.coroutines.withContext
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 class MainActivity : ComponentActivity() {
-    val permission = Manifest.permission.POST_NOTIFICATIONS
-    val requestNotificationPermission =
+
+    companion object {
+        private const val PREF_NAME = "app_preferences"
+        private const val KEY_INTRO_SHOWN = "intro_shown"
+        private const val KEY_FIRST_LAUNCH = "first_launch"
+        private const val INTRO_DURATION_MS = 2000L // Reduced from 3 seconds
+    }
+
+    private val permission = Manifest.permission.POST_NOTIFICATIONS
+    private val requestNotificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-            if (!isGranted) "Permission denied".makeToast(this)
+            if (!isGranted) {
+                "Notification permission denied. You may miss important updates.".makeToast(this)
+            }
         }
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
         setContent {
-            //Init Nav Controller
             val navController = rememberNavController()
+            val intent = intent
+            val isDirectChatScreen = intent.getBooleanExtra("nav", false)
 
-            //Heavy Work
+            // State for initialization
+            var initializationComplete by remember { mutableStateOf(false) }
+            var startDestination by remember { mutableStateOf(Screen.Intro.route) }
+
+            // Determine start destination based on app state
             LaunchedEffect(Unit) {
-                // Request notification permission
-                requestNotificationPermission.launch(permission)
-                // Ensure the brain file exists
-                withContext(Dispatchers.IO) { ensureBrainFileExists() }
-            }
+                try {
+                    Log.d("MainActivity", "Starting app initialization...")
 
-            // Navigation logic
-            LaunchedEffect(Unit) {
-                // Navigate to the intro screen
-                navController.navigate(Screen.Intro.route)
+                    // Request notification permission early
+                    requestNotificationPermission.launch(permission)
 
-                // Wait for 3 seconds
-                delay(3000)
+                    // Perform heavy initialization work
+                    withContext(Dispatchers.IO) {
+                        ensureBrainFileExists()
+                    }
 
-                // Determine the start screen based on whether a model is installed
-                navController.navigate(if (ModelManager.isAnyModelInstalled()) Screen.Home.route else Screen.Model.route)
+                    // Determine the appropriate start screen
+                    startDestination = determineStartDestination(
+                        isDirectNavigation = isDirectChatScreen,
+                        context = this@MainActivity
+                    )
+
+                    Log.d("MainActivity", "Start destination determined: $startDestination")
+                    initializationComplete = true
+
+                } catch (e: Exception) {
+                    Log.e("MainActivity", "Initialization failed", e)
+                    // Fallback to intro screen on error
+                    startDestination = Screen.Intro.route
+                    initializationComplete = true
+                }
             }
 
             NeuroVerseTheme {
-                NavHost(
-                    navController = navController,
-                    startDestination = Screen.Intro.route,
-                ) {
-                    composable(Screen.Intro.route) {
-                        IntroScreen()
-                    }
-                    composable(Screen.Model.route) {
-                        ModelsScreen {
-                            navController.navigate(Screen.Home.route) {
-                                popUpTo(Screen.Model.route) { inclusive = true }
+                if (initializationComplete) {
+                    NavHost(
+                        navController = navController,
+                        startDestination = startDestination
+                    ) {
+                        composable(Screen.Intro.route) {
+                            IntroScreen()
+
+                            // Auto-navigate after intro duration
+                            LaunchedEffect(Unit) {
+                                delay(INTRO_DURATION_MS)
+
+                                val targetDestination = if (ModelManager.isAnyModelInstalled()) {
+                                    Screen.Home.route
+                                } else {
+                                    Screen.Model.route
+                                }
+
+                                navController.navigate(targetDestination) {
+                                    popUpTo(Screen.Intro.route) { inclusive = true }
+                                }
+
+                                // Mark intro as shown for future launches
+                                markIntroAsShown(this@MainActivity)
+                            }
+                        }
+
+                        composable(Screen.Model.route) {
+                            ModelsScreen {
+                                navController.navigate(Screen.Home.route) {
+                                    popUpTo(Screen.Model.route) { inclusive = true }
+                                }
+                            }
+                        }
+
+                        composable(Screen.Home.route) {
+                            HomeScreen(
+                                onRequestModelChange = {
+                                    navController.navigate(Screen.Model.route)
+                                },
+                                onRequestSettingsChange = {
+                                    navController.navigate(Screen.Settings.route)
+                                }
+                            )
+                        }
+
+                        composable(Screen.Settings.route) {
+                            SettingsScreen() {
+                                // Handle back navigation from settings
+                                navController.popBackStack()
                             }
                         }
                     }
-                    composable(Screen.Home.route) {
-                        HomeScreen(
-                            onRequestModelChange = {
-                                navController.navigate(Screen.Model.route)
-                            },
-                            onRequestSettingsChange = {
-                                navController.navigate(Screen.Settings.route)
-                            },
-                        )
-                    }
-                    composable(Screen.Settings.route) {
-                        SettingsScreen()
-                    }
                 }
+                // Show loading/splash content while initializing
+                // You could add a proper loading screen component here if needed
             }
         }
     }
 
-    /** Ensure the encrypted brain structure exists; create it if missing. */
-    private fun ensureBrainFileExists() {
+    /**
+     * Determines the appropriate start destination based on app state and user preferences.
+     */
+    private suspend fun determineStartDestination(
+        isDirectNavigation: Boolean,
+        context: Context
+    ): String {
+        val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+
+        // Check if this is a direct navigation request (e.g., from notification)
+        if (isDirectNavigation) {
+            Log.d("MainActivity", "Direct navigation requested -> Home")
+            return Screen.Home.route
+        }
+
+        // Check if this is the first launch ever
+        val isFirstLaunch = prefs.getBoolean(KEY_FIRST_LAUNCH, true)
+        if (isFirstLaunch) {
+            Log.d("MainActivity", "First launch detected -> Intro")
+            // Mark first launch as complete
+            prefs.edit().putBoolean(KEY_FIRST_LAUNCH, false).apply()
+            return Screen.Intro.route
+        }
+
+        // Check if intro was shown in this session/recently
+        val introShown = prefs.getBoolean(KEY_INTRO_SHOWN, false)
+        if (!introShown) {
+            Log.d("MainActivity", "Intro not shown recently -> Intro")
+            return Screen.Intro.route
+        }
+
+        // Skip intro for regular app launches
+        Log.d("MainActivity", "Regular launch -> Skip intro")
+        return if (ModelManager.isAnyModelInstalled()) {
+            Screen.Home.route
+        } else {
+            Screen.Model.route
+        }
+    }
+
+    /**
+     * Marks intro as shown for this session/period.
+     */
+    private fun markIntroAsShown(context: Context) {
+        val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_INTRO_SHOWN, true).apply()
+        Log.d("MainActivity", "Intro marked as shown")
+    }
+
+    /**
+     * Resets intro preferences - useful for testing or user preference.
+     */
+    fun resetIntroPreferences() {
+        val prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putBoolean(KEY_INTRO_SHOWN, false)
+            .putBoolean(KEY_FIRST_LAUNCH, true)
+            .apply()
+        Log.d("MainActivity", "Intro preferences reset")
+    }
+
+    /**
+     * Ensure the encrypted brain structure exists; create it if missing.
+     */
+    private suspend fun ensureBrainFileExists() {
         runCatching {
+            Log.d("MainActivity", "Checking brain file existence...")
+
             val key = getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS)
             val brainFile = getBrainFilePath(this@MainActivity)
+
             if (!brainFile.exists()) {
+                Log.d("MainActivity", "Brain file not found, creating default structure")
                 val brain = getDefaultBrainStructure()
                 saveEncryptedTree(brain, brainFile, key)
+                Log.d("MainActivity", "Default brain structure created successfully")
+            } else {
+                Log.d("MainActivity", "Brain file exists, size: ${brainFile.length()} bytes")
             }
         }.onFailure { err ->
             Log.e("MainActivity", "Failed to initialize brain file", err)
+            // Consider showing error to user or providing recovery options
+            runOnUiThread {
+                "Failed to initialize app data. Please restart the app.".makeToast(this@MainActivity)
+            }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Log.d("MainActivity", "App resumed")
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Log.d("MainActivity", "App paused")
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        Log.d("MainActivity", "App destroyed - shutting down ModelManager")
         ModelManager.shutdown()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Reset intro shown flag when app goes to background
+        // This ensures intro shows again after app has been backgrounded for a while
+        val prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_INTRO_SHOWN, false).apply()
+        Log.d("MainActivity", "App stopped - intro flag reset")
     }
 }

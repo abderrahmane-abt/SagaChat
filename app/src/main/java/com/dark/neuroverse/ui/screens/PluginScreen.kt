@@ -31,9 +31,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DividerDefaults
@@ -44,6 +46,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -70,6 +73,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.neuroverse.activity.MainActivity
+import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.viewModel.PluginStoreScreenViewModel
 import com.dark.plugins.model.PluginLocalDB
 import com.dark.plugins.model.PluginManifest
@@ -113,10 +117,19 @@ fun PluginStoreScreen(
                 style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif)
             )
         }, actions = {
-            TextButton(onClick = {
-                val intent = Intent(context, MainActivity::class.java)
+            Button (onClick = {
+                val intent = Intent(context, MainActivity::class.java).apply {
+                    putExtra("nav", true)
+                }
                 context.startActivity(intent)
-            }) { Text("Home") }
+            }, modifier = Modifier.padding(end = rDP(12.dp)), colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                contentColor = MaterialTheme.colorScheme.primary
+            )) {
+                Icon(Icons.Outlined.Home, "Home")
+                Spacer(Modifier.width(rDP(3.dp)))
+                Text("Home")
+            }
         }, scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
         )
     }, floatingActionButton = {
@@ -206,8 +219,7 @@ private fun PluginCard(
                         style = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Serif),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        InfoChip("v${plugin.pluginVersion}")
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         manifest?.let { m ->
                             m.metaData.pluginApi.takeIf { it.isNotBlank() }?.let { InfoChip(it) }
                             val author = m.authorText()
@@ -313,15 +325,14 @@ private fun InfoLine(label: String, value: String) {
 
 @Composable
 private fun InfoChip(text: String) {
-    androidx.compose.material3.SuggestionChip(onClick = {}, label = { Text(text) })
+    SuggestionChip(onClick = {}, label = { Text(text) })
 }
 
 @Composable
 private fun ToolCard(tool: Tools) {
-    val colors = MaterialTheme.colorScheme
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = colors.surfaceVariant),
+        modifier = Modifier.fillMaxWidth().padding(vertical = rDP(8.dp)),
+        colors = CardDefaults.cardColors(containerColor = SkyBlue.copy(alpha = 0.1f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {

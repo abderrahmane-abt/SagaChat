@@ -45,7 +45,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
+import androidx.compose.material3.DividerDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -75,6 +77,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
+import com.dark.neuroverse.ui.theme.rDP
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -399,16 +402,15 @@ private fun FileDetailDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(dismissOnBackPress = true, usePlatformDefaultWidth = false)
+        properties = DialogProperties(dismissOnBackPress = true)
     ) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 50.dp),
-            shape = MaterialTheme.shapes.extraLarge,
+            ,shape = MaterialTheme.shapes.extraLarge,
             color = MaterialTheme.colorScheme.surface
         ) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.padding(rDP(20.dp)), verticalArrangement = Arrangement.spacedBy(rDP(10.dp))) {
                 Text(
                     "Model details",
                     style = MaterialTheme.typography.titleLarge,
@@ -416,16 +418,13 @@ private fun FileDetailDialog(
                 )
                 // Basic facts
                 InfoRow("Name", item.name)
-                InfoRow("Path", item.file.absolutePath)
-                InfoRow("Folder", item.file.parent ?: "—")
                 InfoRow("Size", "${humanSize(item.size)} (${item.size} B)")
-                InfoRow("Modified", formatTime(item.lastModified))
                 InfoRow("Readable / Writable", "${item.file.canRead()} / ${item.file.canWrite()}")
                 guessQuant(item.name)?.let { InfoRow("Quant", it) }
                 quickSha?.let { InfoRow("SHA-256 (first 4MB)", it) }
 
                 // Native probe section (optional, uses com.mp.ai_core.NativeLib reflectively)
-                Divider()
+                HorizontalDivider(Modifier, DividerDefaults.Thickness, DividerDefaults.color)
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -445,14 +444,14 @@ private fun FileDetailDialog(
                         }) { Text("Probe") }
                     } else if (probing) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp), strokeWidth = 2.dp
+                            modifier = Modifier.size(rDP(20.dp)), strokeWidth = rDP(2.dp)
                         )
                     } else {
                         AssistChip(onClick = { probeJson = null }, label = { Text("Clear") })
                     }
                 }
                 probeJson?.let { json ->
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(rDP(6.dp)))
                     json.optJSONObject("core")?.let { core ->
                         Text("Core dims", style = MaterialTheme.typography.labelLarge)
                         val embd = core.optInt("n_embd", -1).takeIf { it > 0 }
@@ -472,10 +471,10 @@ private fun FileDetailDialog(
                     }
                 }
 
-                Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Spacer(Modifier.height(rDP(6.dp)))
+                Row(horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
                     OutlinedButton(onClick = onDismiss) { Text("Close") }
-                    Button(onClick = onSelect) { Text("Use this model") }
+                    Button(onClick = onSelect) { Text("Load") }
                 }
             }
         }

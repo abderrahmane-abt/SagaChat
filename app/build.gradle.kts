@@ -30,8 +30,7 @@ android {
         buildConfigField("String", "ALIAS", getProperty("ALIAS"))
 
         ndk {
-            //noinspection ChromeOsAbiSupport
-            abiFilters += listOf("arm64-v8a")
+            abiFilters += listOf("arm64-v8a", "x86_64")
         }
     }
 
@@ -56,6 +55,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        prefab = true
     }
 
     packaging {
@@ -87,6 +87,7 @@ android {
         implementation(project(":userData"))
         implementation(project(":updateManager"))
         implementation(project(":plugins"))
+        implementation(project(":data-hub-lib"))
 
         //UTILS
         implementation(libs.androidx.datastore.preferences)
