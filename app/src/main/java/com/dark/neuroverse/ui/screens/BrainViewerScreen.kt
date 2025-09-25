@@ -51,7 +51,6 @@ import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.rDP
 
 @SuppressLint("NewApi")
-@Preview
 @Composable
 fun BrainViewerScreen() {
 
