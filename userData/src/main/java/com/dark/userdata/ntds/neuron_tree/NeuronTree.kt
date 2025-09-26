@@ -141,7 +141,10 @@ class NeuronTree(val root: NeuronNode) {
         } else {
             // Step 2: Remove from parent's children
             val removed = parentNode.children.removeIf { it.id == id }
-            Log.d("NeuronTree", "Removed node id=$id from parent id=${parentNode.id}, success=$removed")
+            Log.d(
+                "NeuronTree",
+                "Removed node id=$id from parent id=${parentNode.id}, success=$removed"
+            )
         }
 
         // Step 3: Remove this node and all descendants from maps
@@ -155,7 +158,6 @@ class NeuronTree(val root: NeuronNode) {
         removeRecursively(nodeToDelete)
         Log.d("NeuronTree", "Finished deleting node id=$id and its descendants")
     }
-
 
 
     /**

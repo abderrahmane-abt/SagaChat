@@ -55,7 +55,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelsData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
@@ -64,7 +63,6 @@ import com.dark.neuroverse.data.UserPrefs
 import com.dark.neuroverse.model.ChatINFO
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
-import com.dark.neuroverse.viewModel.UpdateViewModel
 import com.dark.userdata.getDefaultChatHistory
 import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.userdata.ntds.neuron_tree.NeuronTree
@@ -91,8 +89,6 @@ fun SettingsScreen(onBackClick: () -> Unit = {}) {
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val updateViewModel: UpdateViewModel = viewModel()
-    val updateInfo by updateViewModel.updateInfo.collectAsState()
     val currentModel by ModelManager.getModel().collectAsState()
 
     // Load initial data
@@ -127,27 +123,21 @@ fun SettingsScreen(onBackClick: () -> Unit = {}) {
             TopAppBar(
                 title = {
                     Text(
-                        "Settings",
-                        style = MaterialTheme.typography.headlineMedium.copy(
-                            fontFamily = FontFamily.Serif,
-                            fontWeight = FontWeight.Bold
+                        "Settings", style = MaterialTheme.typography.headlineMedium.copy(
+                            fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold
                         )
                     )
-                },
-                navigationIcon = {
+                }, navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back"
+                            imageVector = Icons.Default.ArrowBack, contentDescription = "Back"
                         )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
+                }, colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
                 )
             )
-        }
-    ) { innerPadding ->
+        }) { innerPadding ->
         if (isLoading) {
             LoadingContent(
                 modifier = Modifier.padding(innerPadding)
@@ -165,9 +155,7 @@ fun SettingsScreen(onBackClick: () -> Unit = {}) {
                 errorMessage?.let { error ->
                     item {
                         ErrorCard(
-                            message = error,
-                            onDismiss = { errorMessage = null }
-                        )
+                            message = error, onDismiss = { errorMessage = null })
                     }
                 }
 
@@ -182,8 +170,7 @@ fun SettingsScreen(onBackClick: () -> Unit = {}) {
                         onResetTweaks = {
                             professionalism = 2.0f
                             emotionalTone = 6.0f
-                        }
-                    )
+                        })
                 }
 
                 // User Data Section
@@ -197,7 +184,11 @@ fun SettingsScreen(onBackClick: () -> Unit = {}) {
                                 try {
                                     clearChatHistory(context, chatList)
                                     chatList = emptyList()
-                                    Toast.makeText(context, "Chat history cleared", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(
+                                        context,
+                                        "Chat history cleared",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
                                 } catch (e: Exception) {
                                     Log.e("SettingsScreen", "Failed to clear data", e)
                                     errorMessage = "Failed to clear data: ${e.message}"
@@ -208,8 +199,7 @@ fun SettingsScreen(onBackClick: () -> Unit = {}) {
                         },
                         onOpenDataHub = {
                             context.startActivity(Intent(context, UserDataActivity::class.java))
-                        }
-                    )
+                        })
                 }
 
                 // App Settings Section (commented out as in original)
@@ -235,20 +225,17 @@ private fun LoadingContent(modifier: Modifier = Modifier) {
         CircularProgressIndicator()
         Spacer(Modifier.height(rDP(16.dp)))
         Text(
-            "Loading settings...",
-            style = MaterialTheme.typography.bodyMedium
+            "Loading settings...", style = MaterialTheme.typography.bodyMedium
         )
     }
 }
 
 @Composable
 private fun ErrorCard(
-    message: String,
-    onDismiss: () -> Unit
+    message: String, onDismiss: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
+        modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.errorContainer
         )
     ) {
@@ -265,8 +252,7 @@ private fun ErrorCard(
                 modifier = Modifier.weight(1f)
             )
             Button(
-                onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors()
+                onClick = onDismiss, colors = ButtonDefaults.textButtonColors()
             ) {
                 Text("Dismiss")
             }
@@ -287,8 +273,7 @@ private fun ModelSettingsSection(
 
     // Current Model Info
     SettingCard(
-        title = "Current Model",
-        roundedCornerShape = RoundedCornerShape(
+        title = "Current Model", roundedCornerShape = RoundedCornerShape(
             topStart = rDP(22.dp),
             topEnd = rDP(22.dp),
             bottomStart = rDP(12.dp),
@@ -343,12 +328,10 @@ private fun ModelSettingsSection(
 @Composable
 private fun ModelInfoRow(label: String, value: String) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium.copy(
+            text = label, style = MaterialTheme.typography.bodyMedium.copy(
                 fontWeight = FontWeight.Medium
             )
         )
@@ -362,10 +345,7 @@ private fun ModelInfoRow(label: String, value: String) {
 
 @Composable
 private fun UserDataSection(
-    chatCount: Int,
-    isClearingData: Boolean,
-    onClearData: () -> Unit,
-    onOpenDataHub: () -> Unit
+    chatCount: Int, isClearingData: Boolean, onClearData: () -> Unit, onOpenDataHub: () -> Unit
 ) {
     SectionHeader("User Data")
 
@@ -389,13 +369,11 @@ private fun UserDataSection(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(rDP(16.dp)),
-                            strokeWidth = rDP(2.dp)
+                            modifier = Modifier.size(rDP(16.dp)), strokeWidth = rDP(2.dp)
                         )
                         Spacer(Modifier.width(rDP(8.dp)))
                         Text(
-                            "Clearing data...",
-                            style = MaterialTheme.typography.bodySmall
+                            "Clearing data...", style = MaterialTheme.typography.bodySmall
                         )
                     }
                 }
@@ -406,9 +384,7 @@ private fun UserDataSection(
     Spacer(Modifier.height(rDP(8.dp)))
 
     SettingCard(
-        title = "Data Hub",
-        actionLabel = "Open",
-        onAction = onOpenDataHub
+        title = "Data Hub", actionLabel = "Open", onAction = onOpenDataHub
     ) {
         Column(
             modifier = Modifier.padding(rDP(16.dp))
@@ -425,13 +401,9 @@ private fun UserDataSection(
 @Composable
 private fun SectionHeader(title: String) {
     Text(
-        text = title,
-        style = MaterialTheme.typography.headlineMedium.copy(
-            fontFamily = FontFamily.Serif,
-            fontSize = rSp(20.sp),
-            fontWeight = FontWeight.Bold
-        ),
-        modifier = Modifier.padding(vertical = rDP(8.dp))
+        text = title, style = MaterialTheme.typography.headlineMedium.copy(
+            fontFamily = FontFamily.Serif, fontSize = rSp(20.sp), fontWeight = FontWeight.Bold
+        ), modifier = Modifier.padding(vertical = rDP(8.dp))
     )
 }
 
@@ -501,23 +473,19 @@ fun SettingCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontSize = rSp(16.sp),
-                    fontWeight = FontWeight.Medium
+                text = title, style = MaterialTheme.typography.titleLarge.copy(
+                    fontSize = rSp(16.sp), fontWeight = FontWeight.Medium
                 )
             )
             if (actionLabel != null && onAction != null) {
                 Button(
-                    onClick = onAction,
-                    colors = ButtonDefaults.buttonColors(
+                    onClick = onAction, colors = ButtonDefaults.buttonColors(
                         contentColor = MaterialTheme.colorScheme.primary,
                         containerColor = MaterialTheme.colorScheme.background
                     )
                 ) {
                     Text(
-                        text = actionLabel,
-                        style = MaterialTheme.typography.bodyMedium
+                        text = actionLabel, style = MaterialTheme.typography.bodyMedium
                     )
                 }
             }
@@ -526,8 +494,7 @@ fun SettingCard(
         content?.let {
             Spacer(Modifier.height(rDP(12.dp)))
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
+                modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.background
                 )
             ) {
@@ -538,37 +505,39 @@ fun SettingCard(
 }
 
 // Helper functions moved outside composable scope
-private suspend fun loadChatHistory(context: Context): List<ChatINFO> = withContext(Dispatchers.IO) {
-    try {
+private suspend fun loadChatHistory(context: Context): List<ChatINFO> =
+    withContext(Dispatchers.IO) {
+        try {
+            val key = getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS)
+            val rootNode = readBrainFile(key, context)
+            val root = rootNode.getNodeDirect("root")
+            val history = getDefaultChatHistory(root)
+
+            val chatInfo = mutableListOf<ChatINFO>()
+            NeuronTree(history).getAllChildrenRecursive().forEach { node ->
+                if (node.data.content.isNotBlank()) {
+                    val title = runCatching {
+                        JSONObject(node.data.content).optString("title", "Untitled")
+                    }.getOrElse { "Untitled" }
+                    chatInfo.add(ChatINFO(node.id, title))
+                }
+            }
+            chatInfo
+        } catch (e: Exception) {
+            Log.e("loadChatHistory", "Failed to load chat history", e)
+            emptyList()
+        }
+    }
+
+private suspend fun clearChatHistory(context: Context, chatList: List<ChatINFO>) =
+    withContext(Dispatchers.IO) {
         val key = getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS)
         val rootNode = readBrainFile(key, context)
-        val root = rootNode.getNodeDirect("root")
-        val history = getDefaultChatHistory(root)
 
-        val chatInfo = mutableListOf<ChatINFO>()
-        NeuronTree(history).getAllChildrenRecursive().forEach { node ->
-            if (node.data.content.isNotBlank()) {
-                val title = runCatching {
-                    JSONObject(node.data.content).optString("title", "Untitled")
-                }.getOrElse { "Untitled" }
-                chatInfo.add(ChatINFO(node.id, title))
-            }
+        chatList.forEach { chat ->
+            rootNode.deleteNodeById(chat.id)
         }
-        chatInfo
-    } catch (e: Exception) {
-        Log.e("loadChatHistory", "Failed to load chat history", e)
-        emptyList()
+
+        saveTree(rootNode, context, BuildConfig.ALIAS)
+        Log.d("clearChatHistory", "Cleared ${chatList.size} chats")
     }
-}
-
-private suspend fun clearChatHistory(context: Context, chatList: List<ChatINFO>) = withContext(Dispatchers.IO) {
-    val key = getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS)
-    val rootNode = readBrainFile(key, context)
-
-    chatList.forEach { chat ->
-        rootNode.deleteNodeById(chat.id)
-    }
-
-    saveTree(rootNode, context, BuildConfig.ALIAS)
-    Log.d("clearChatHistory", "Cleared ${chatList.size} chats")
-}

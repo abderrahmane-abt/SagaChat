@@ -2,15 +2,25 @@
   "personalInfo": {
     "relations": {
       "father": {
-        "name" : "jon-deo",
-        "age" : 50,
-        "gender" : "Male"
+        "name": "jon-deo",
+        "age": 50,
+        "gender": "Male"
       }
     },
     "favourites": {
-      "games" : ["CS-GO", "Valorant", "GTA V"],
-      "colors" : ["BLACK"],
-      "movies" : ["The Dark Knight", "The Dark Knight Rises", "Batman Begins"]
+      "games": [
+        "CS-GO",
+        "Valorant",
+        "GTA V"
+      ],
+      "colors": [
+        "BLACK"
+      ],
+      "movies": [
+        "The Dark Knight",
+        "The Dark Knight Rises",
+        "Batman Begins"
+      ]
     }
   },
   "conversation": {

@@ -9,9 +9,9 @@ import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.util.Log
+import androidx.core.net.toUri
 import java.io.File
 import java.io.FileOutputStream
-import androidx.core.net.toUri
 
 @SuppressLint("Range")
 fun uriToFile(context: Context, uri: Uri): File {
@@ -51,7 +51,8 @@ fun uriToFile(context: Context, uri: Uri): File {
                             null
                         )?.use { cursor ->
                             if (cursor.moveToFirst()) {
-                                val path = cursor.getString(cursor.getColumnIndex(MediaStore.MediaColumns.DATA))
+                                val path =
+                                    cursor.getString(cursor.getColumnIndex(MediaStore.MediaColumns.DATA))
                                 if (!path.isNullOrEmpty()) {
                                     Log.d("UriToFile", "Resolved Downloads path = $path")
                                     return File(path)
@@ -91,7 +92,8 @@ fun uriToFile(context: Context, uri: Uri): File {
     }
 
     // Case 3: fallback → copy into cache
-    val fileName = queryDisplayName(context.contentResolver, uri) ?: "temp_${System.currentTimeMillis()}"
+    val fileName =
+        queryDisplayName(context.contentResolver, uri) ?: "temp_${System.currentTimeMillis()}"
     val tempFile = File(context.cacheDir, fileName)
 
     context.contentResolver.openInputStream(uri)?.use { input ->
@@ -112,7 +114,6 @@ private fun queryDisplayName(resolver: ContentResolver, uri: Uri): String? {
     }
     return null
 }
-
 
 
 fun isZipByName(name: String?): Boolean = name?.lowercase()?.endsWith(".zip") == true

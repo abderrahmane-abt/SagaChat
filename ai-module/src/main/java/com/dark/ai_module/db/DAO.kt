@@ -1,9 +1,9 @@
 package com.dark.ai_module.db
 
-import androidx.room.Insert
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Delete
+import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RoomDatabase
@@ -25,7 +25,6 @@ interface ModelDAO {
     @Query("SELECT * FROM local_models")
     fun getAllModels(): Flow<List<ModelsData>>
 }
-
 
 
 @Database(entities = [ModelsData::class], version = 1)

@@ -60,7 +60,7 @@ class PluginManifestWorker {
             val description = tObj.optString("description", "")
             val argsObj = tObj.optJSONObject("args") ?: JSONObject()
 
-            Log.d("TOOL MANAGER","Tool: $toolName, description: $description")
+            Log.d("TOOL MANAGER", "Tool: $toolName, description: $description")
 
             out += Tools(
                 toolName = toolName, description = description, args = argsObj.toMap()

@@ -20,7 +20,8 @@ fun sdkRootDir(rootProject: org.gradle.api.Project): File {
 
 fun latestBuildTools(sdk: File): File {
     val dir = File(sdk, "build-tools")
-    val all = dir.listFiles()?.filter { it.isDirectory }?.sortedByDescending { it.name } ?: emptyList()
+    val all =
+        dir.listFiles()?.filter { it.isDirectory }?.sortedByDescending { it.name } ?: emptyList()
     require(all.isNotEmpty()) { "No build-tools in $dir" }
     return all.first()
 }
@@ -61,7 +62,8 @@ val dexWorkDir = layout.buildDirectory.dir("outputs/pluginDex")
 val tmpDir = layout.buildDirectory.dir("tmp/pluginDex")
 
 val pluginVariant = providers.gradleProperty("pluginVariant").orElse("release")
-fun cap(s: String) = s.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
+fun cap(s: String) =
+    s.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
 
 // ---------- Locator (run at execution time only) ----------
 sealed interface PluginInput {

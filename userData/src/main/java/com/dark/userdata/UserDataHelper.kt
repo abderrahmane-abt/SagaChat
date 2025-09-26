@@ -1,9 +1,6 @@
 package com.dark.userdata
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.util.Base64
 import com.dark.userdata.ntds.getBrainFilePath
 import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.userdata.ntds.loadEncryptedTree
@@ -41,9 +38,7 @@ fun addNewChat(root: NeuronNode, data: JSONObject): NeuronNode {
 }
 
 
-
-
-fun saveTree(tree: NeuronTree, context: Context, alise: String){
+fun saveTree(tree: NeuronTree, context: Context, alise: String) {
     val key = getOrCreateHardwareBackedAesKey(alise)
     val file = getBrainFilePath(context)
     saveEncryptedTree(tree, file, key)

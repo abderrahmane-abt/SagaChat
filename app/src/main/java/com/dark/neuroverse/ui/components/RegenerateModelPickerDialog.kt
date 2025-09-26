@@ -33,10 +33,6 @@ import com.dark.neuroverse.R
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
 
-/**
- * Micro dialog for choosing a model to regenerate a single assistant message.
- * Clean, compact, and unobtrusive. One‑tap picks model & triggers regeneration.
- */
 @Composable
 fun RegenerateModelPickerDialog(
     viewModel: ChatScreenViewModel,
@@ -58,11 +54,11 @@ fun RegenerateModelPickerDialog(
         text = {
             Surface(tonalElevation = 0.dp, color = MaterialTheme.colorScheme.surface) {
                 LazyColumn(
-                    modifier = Modifier
-                        .heightIn(min = rDP(80.dp), max = rDP(360.dp))
+                    modifier = Modifier.heightIn(min = rDP(80.dp), max = rDP(360.dp))
                 ) {
                     // Current model first
-                    val sorted = listOf(selected) + models.filter { it.modeName != selected.modeName }
+                    val sorted =
+                        listOf(selected) + models.filter { it.modeName != selected.modeName }
                     items(sorted, key = { it.modeName }) { model ->
                         ModelRow(
                             name = shortModelLabel(model.modeName),
@@ -71,8 +67,7 @@ fun RegenerateModelPickerDialog(
                                 // Fire & close
                                 viewModel.regenerateResponse(model, messageId)
                                 onDismiss()
-                            }
-                        )
+                            })
                         HorizontalDivider(
                             Modifier,
                             DividerDefaults.Thickness,
@@ -134,13 +129,11 @@ private fun ModelRow(name: String, isCurrent: Boolean, onClick: () -> Unit) {
 private fun shortModelLabel(raw: String): String {
     // Squash file-y suffixes & quant tags, keep punchy ID
     var s = raw
-    s = s.replace(".gguf", "", ignoreCase = true)
-        .replace(".bin", "", ignoreCase = true)
+    s = s.replace(".gguf", "", ignoreCase = true).replace(".bin", "", ignoreCase = true)
         .replace(Regex("-Q\n?\n?\n?\\d.*$"), "") // defensive
         .replace(Regex("-Q\\d_[A-Z_]+$"), "")
         .replace(Regex("(?i)(fp16|int\n?8|int\n?4|Q\\d_[A-Z_]+)"), "")
-        .replace(Regex("[_-]{2,}"), "-")
-        .trim('-','_',' ')
+        .replace(Regex("[_-]{2,}"), "-").trim('-', '_', ' ')
     // keep it readable; collapse extra version chunks
     if (s.length > 28) s = s.take(24) + "…"
     return s

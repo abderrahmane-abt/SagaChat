@@ -1,24 +1,12 @@
 package com.mp.data_hub_lib.worker
 
 import android.util.Log
-import kotlinx.serialization.Serializable
+import com.mp.data_hub_lib.model.BrainDoc
+import com.mp.data_hub_lib.model.BrainRoot
+import com.mp.data_hub_lib.model.Doc
 import kotlinx.serialization.json.Json
 import kotlin.math.sqrt
 
-@Serializable
-data class BrainRoot(val docs: List<BrainDoc>)
-
-@Serializable
-data class BrainDoc(
-    val id: String,
-    val text: String,
-    val embedding: List<Float>
-)
-
-data class Doc(
-    val text: String,
-    val similarity: Double
-)
 
 // --- Brain Decoder and Vector Store ---
 object BrainDecoder {

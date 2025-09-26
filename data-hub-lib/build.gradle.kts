@@ -1,9 +1,7 @@
-import org.gradle.kotlin.dsl.withType
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 import java.io.FileInputStream
 import java.util.Properties
-import kotlin.apply
 
 plugins {
     alias(libs.plugins.android.library)
@@ -31,10 +29,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
+            consumerProguardFiles("consumer-rules.pro")
         }
     }
     externalNativeBuild {
@@ -60,8 +55,8 @@ android {
 
 dependencies {
     implementation(files("libs/ai-core-release.aar"))
+    implementation(files("libs/libsodium-1.0.20.0.aar"))
     implementation(libs.zip4j)
-    implementation (files("libs/libsodium-1.0.20.0.aar"))
     implementation(libs.gson)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

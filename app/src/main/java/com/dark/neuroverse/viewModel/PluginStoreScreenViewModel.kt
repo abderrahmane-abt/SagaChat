@@ -3,11 +3,11 @@ package com.dark.neuroverse.viewModel
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.viewModelScope
 import com.dark.plugins.manager.PluginManager
-import com.dark.plugins.model.PluginLocalDB
 import com.dark.plugins.model.LoadedPlugin
+import com.dark.plugins.model.PluginLocalDB
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -76,7 +76,13 @@ class PluginStoreScreenViewModel : ViewModel() {
     }
 
     private fun queryDisplayName(context: Context, uri: Uri): String? {
-        val cursor = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+        val cursor = context.contentResolver.query(
+            uri,
+            arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null
+        )
         cursor?.use {
             val idx = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
             if (idx >= 0 && it.moveToFirst()) return it.getString(idx)

@@ -2,7 +2,9 @@
 
 **Offline Android AI chat with a modular plugin framework**
 
-ToolNeuron is a **secure, offline AI ecosystem for Android devices**. It lets users run private AI models and dynamic plugins **fully offline**, with **hardware‑grade encryption** for maximum privacy.
+ToolNeuron is a **secure, offline AI ecosystem for Android devices**. It lets users run private AI
+models and dynamic plugins **fully offline**, with **hardware‑grade encryption** for maximum
+privacy.
 
 ---
 
@@ -16,7 +18,9 @@ ToolNeuron is a **secure, offline AI ecosystem for Android devices**. It lets us
 ---
 
 ### Note ..!
-- This Repo's C++ code has be Transfered to a Different Repo For Optimization link can be found here :: https://github.com/Siddhesh2377/Ai-Core
+
+- This Repo's C++ code has be Transfered to a Different Repo For Optimization link can be found
+  here :: https://github.com/Siddhesh2377/Ai-Core
 
 ---
 
@@ -24,7 +28,8 @@ ToolNeuron is a **secure, offline AI ecosystem for Android devices**. It lets us
 
 * **Download APK:** [Latest release](https://github.com/Siddhesh2377/NeuroVerse/releases/latest)
 
-> Install the APK, grant permissions, open **AI Chat**, and start chatting. **No cloud account required.**
+> Install the APK, grant permissions, open **AI Chat**, and start chatting. **No cloud account
+required.**
 
 ---
 
@@ -41,13 +46,13 @@ ToolNeuron is a **secure, offline AI ecosystem for Android devices**. It lets us
 
 * **Available now:**
 
-  * Local AI chat (on‑device)
-  * **Web Search plugin** (tool‑calling from chat)
-  * **Switch models at runtime**
-  * **In‑app updates** (check & install)
-  * **Import models from device** and **tweak parameters**
-  * **Model Store downloads**
-  * **Plugin manager** (enable/disable, inspect metadata like author/role)
+    * Local AI chat (on‑device)
+    * **Web Search plugin** (tool‑calling from chat)
+    * **Switch models at runtime**
+    * **In‑app updates** (check & install)
+    * **Import models from device** and **tweak parameters**
+    * **Model Store downloads**
+    * **Plugin manager** (enable/disable, inspect metadata like author/role)
 * **Coming soon:** Full automation, plugin gallery, advanced on‑device tools
 
 ---

@@ -63,6 +63,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.data.ModelsList.getModelList
 import com.dark.ai_module.model.ModelsData
 import com.dark.neuroverse.activity.GgufPickerActivity
+import com.dark.neuroverse.model.DownloadState
 import com.dark.neuroverse.ui.components.CollapsableButton
 import com.dark.neuroverse.ui.components.StandardBottomBar
 import com.dark.neuroverse.ui.theme.Coral
@@ -72,16 +73,13 @@ import com.dark.neuroverse.ui.theme.Success
 import com.dark.neuroverse.ui.theme.onSuccess
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
-import com.dark.neuroverse.viewModel.DownloadState
 import com.dark.neuroverse.viewModel.ModelScreenViewModel
-import com.dark.neuroverse.viewModel.ModelScreenViewModelFactory
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ModelsScreen(onNext: () -> Unit) {
     val context = LocalContext.current
-    val factory = remember { ModelScreenViewModelFactory(context) }
-    val viewModel: ModelScreenViewModel = viewModel(factory = factory)
+    val viewModel: ModelScreenViewModel = viewModel()
 
     // Installed state from VM
     val installedModels by viewModel.models.collectAsState()

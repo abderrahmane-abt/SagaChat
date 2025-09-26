@@ -29,8 +29,18 @@ object ToolRunner {
         fun invoke(tool: String, alreadyRetried: Boolean) {
             val handler = Handler(Looper.getMainLooper())
             val done = AtomicBoolean(false)
-            fun complete(any: JSONObject) { if (done.compareAndSet(false, true)) onResult(any) }
-            val timeout = Runnable { complete(errorJson("timeout", mapOf("tool" to tool, "ms" to timeoutMs))) }
+            fun complete(any: JSONObject) {
+                if (done.compareAndSet(false, true)) onResult(any)
+            }
+
+            val timeout = Runnable {
+                complete(
+                    errorJson(
+                        "timeout",
+                        mapOf("tool" to tool, "ms" to timeoutMs)
+                    )
+                )
+            }
             handler.postDelayed(timeout, timeoutMs)
 
             try {
@@ -50,7 +60,12 @@ object ToolRunner {
                 }
             } catch (t: Throwable) {
                 handler.removeCallbacks(timeout)
-                complete(errorJson("exception", mapOf("tool" to tool, "message" to (t.message ?: t::class.java.simpleName))))
+                complete(
+                    errorJson(
+                        "exception",
+                        mapOf("tool" to tool, "message" to (t.message ?: t::class.java.simpleName))
+                    )
+                )
             }
         }
 
@@ -59,10 +74,16 @@ object ToolRunner {
         invoke(tool, alreadyRetried = false)
     }
 
-    private fun errorJson(code: String, meta: Map<String, Any?> = emptyMap(), details: String? = null) =
+    private fun errorJson(
+        code: String,
+        meta: Map<String, Any?> = emptyMap(),
+        details: String? = null
+    ) =
         org.json.JSONObject().apply {
             put("ok", false); put("error", code)
             details?.let { put("details", it) }
-            if (meta.isNotEmpty()) put("meta", org.json.JSONObject().apply { meta.forEach { (k, v) -> put(k, v) } })
+            if (meta.isNotEmpty()) put(
+                "meta",
+                org.json.JSONObject().apply { meta.forEach { (k, v) -> put(k, v) } })
         }
 }

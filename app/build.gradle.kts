@@ -34,7 +34,7 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false           // Enable code shrinking
+            isMinifyEnabled = true           // Enable code shrinking
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             )
@@ -58,7 +58,7 @@ android {
 
     packaging {
         jniLibs {
-            useLegacyPackaging = false
+            useLegacyPackaging = true
         }
     }
 
@@ -86,11 +86,10 @@ android {
         implementation(files("libs/ai-core-release.aar"))
 
         //PROJECTS
-        implementation(project(":ai-module"))
-        implementation(project(":userData"))
-        implementation(project(":updateManager"))
-        implementation(project(":plugins"))
-        implementation(project(":data-hub-lib"))
+        api(project(":ai-module"))
+        api(project(":userData"))
+        api(project(":plugins"))
+        api(project(":data-hub-lib"))
 
         //UTILS
         implementation(libs.androidx.datastore.preferences)

@@ -63,7 +63,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelsData
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.neuroverse.viewModel.ModelScreenViewModel
-import com.dark.neuroverse.viewModel.ModelScreenViewModelFactory
 import com.mp.ai_core.NativeLib
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -99,7 +98,7 @@ class ModelLoadingActivity : ComponentActivity() {
 @Composable
 fun ModelLoadingScreen(
     incomingPath: String?,
-    viewModel: ModelScreenViewModel = viewModel(factory = ModelScreenViewModelFactory(LocalContext.current))
+    viewModel: ModelScreenViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -174,9 +173,11 @@ fun ModelLoadingScreen(
                 scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
             )
         }) { innerPadding ->
-        Surface(Modifier
-            .fillMaxSize()
-            .padding(innerPadding)) {
+        Surface(
+            Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                 val cardShape = RoundedCornerShape(18.dp)
 

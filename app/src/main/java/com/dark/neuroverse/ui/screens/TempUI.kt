@@ -2,7 +2,6 @@ package com.dark.neuroverse.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -11,7 +10,18 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -19,9 +29,41 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.ListAlt
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.SortByAlpha
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Divider
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -109,7 +151,12 @@ fun NeuronTreeScreen(
                 }
                 .let { seq ->
                     when (filter.sort) {
-                        SortKey.LAST_ACTIVE -> seq.sortedByDescending { it.messages.maxOfOrNull { m -> m.timestamp ?: 0L } ?: 0L }
+                        SortKey.LAST_ACTIVE -> seq.sortedByDescending {
+                            it.messages.maxOfOrNull { m ->
+                                m.timestamp ?: 0L
+                            } ?: 0L
+                        }
+
                         SortKey.MESSAGES -> seq.sortedByDescending { it.messages.size }
                         SortKey.CHATS -> seq.sortedBy { it.title ?: "" }
                     }
@@ -181,19 +228,39 @@ private fun QuickLooks(stats: ChatStats, filter: UiFilter, onFilterChange: (UiFi
 
         // Stats row
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatPill(modifier = Modifier.weight(1f), "Chats", stats.totalChats, selected = filter.roleScope == RoleScope.ALL) {
+            StatPill(
+                modifier = Modifier.weight(1f),
+                "Chats",
+                stats.totalChats,
+                selected = filter.roleScope == RoleScope.ALL
+            ) {
                 onFilterChange(filter.copy(roleScope = RoleScope.ALL))
             }
-            StatPill(modifier = Modifier.weight(1f),"Messages", stats.totalMessages, selected = false) {}
+            StatPill(
+                modifier = Modifier.weight(1f),
+                "Messages",
+                stats.totalMessages,
+                selected = false
+            ) {}
         }
 
         Spacer(Modifier.height(8.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatPill(modifier = Modifier.weight(1f),"Users", stats.roleCounts["user"] ?: 0, selected = filter.roleScope == RoleScope.USER) {
+            StatPill(
+                modifier = Modifier.weight(1f),
+                "Users",
+                stats.roleCounts["user"] ?: 0,
+                selected = filter.roleScope == RoleScope.USER
+            ) {
                 onFilterChange(filter.copy(roleScope = RoleScope.USER))
             }
-            StatPill(modifier = Modifier.weight(1f),"Assistants", stats.roleCounts["assistant"] ?: 0, selected = filter.roleScope == RoleScope.ASSISTANT) {
+            StatPill(
+                modifier = Modifier.weight(1f),
+                "Assistants",
+                stats.roleCounts["assistant"] ?: 0,
+                selected = filter.roleScope == RoleScope.ASSISTANT
+            ) {
                 onFilterChange(filter.copy(roleScope = RoleScope.ASSISTANT))
             }
         }
@@ -201,7 +268,12 @@ private fun QuickLooks(stats: ChatStats, filter: UiFilter, onFilterChange: (UiFi
         Spacer(Modifier.height(8.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatPill(modifier = Modifier.weight(1f),"Tool-Call", stats.roleCounts["tool"] ?: 0, selected = filter.roleScope == RoleScope.TOOL) {
+            StatPill(
+                modifier = Modifier.weight(1f),
+                "Tool-Call",
+                stats.roleCounts["tool"] ?: 0,
+                selected = filter.roleScope == RoleScope.TOOL
+            ) {
                 onFilterChange(filter.copy(roleScope = RoleScope.TOOL))
             }
         }
@@ -249,11 +321,19 @@ private fun QuickLooks(stats: ChatStats, filter: UiFilter, onFilterChange: (UiFi
 }
 
 @Composable
-private fun StatPill(modifier: Modifier = Modifier, label: String, value: Int, selected: Boolean, onClick: () -> Unit) {
+private fun StatPill(
+    modifier: Modifier = Modifier,
+    label: String,
+    value: Int,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
     val outline = MaterialTheme.colorScheme.outlineVariant
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(
+            alpha = 0.5f
+        ),
         tonalElevation = if (selected) 1.dp else 0.dp,
         border = ButtonDefaults.outlinedButtonBorder,
         modifier = modifier
@@ -268,7 +348,11 @@ private fun StatPill(modifier: Modifier = Modifier, label: String, value: Int, s
         ) {
             Text(label, style = MaterialTheme.typography.labelMedium)
             Spacer(Modifier.weight(1f))
-            Text("%02d".format(value), style = MaterialTheme.typography.labelMedium, color = outline)
+            Text(
+                "%02d".format(value),
+                style = MaterialTheme.typography.labelMedium,
+                color = outline
+            )
         }
     }
 }
@@ -286,11 +370,21 @@ private fun SectionHeader(title: String) {
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.AccountTree, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(
+                Icons.Default.AccountTree,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(Modifier.width(8.dp))
-            Text(title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+            )
             Spacer(Modifier.weight(1f))
-            AssistChip(onClick = { /* TODO: scroll to root */ }, label = { Text("Root") }, leadingIcon = { Icon(Icons.Default.Home, null) })
+            AssistChip(
+                onClick = { /* TODO: scroll to root */ },
+                label = { Text("Root") },
+                leadingIcon = { Icon(Icons.Default.Home, null) })
         }
     }
 }
@@ -304,9 +398,17 @@ private fun SubHeader(title: String) {
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.ChatBubbleOutline, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(
+                Icons.Default.ChatBubbleOutline,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(Modifier.width(8.dp))
-            Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                title,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -334,11 +436,26 @@ private fun NodeBranch(node: NeuronNode, depth: Int) {
                 .clip(RoundedCornerShape(12.dp))
                 .clickable { expanded = !expanded }
         ) {
-            Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(10.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.24f)))
+            Row(
+                Modifier
+                    .padding(12.dp)
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.24f))
+                )
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("[${node.data.type}] ${node.id}", style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        "[${node.data.type}] ${node.id}",
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                     if (node.data.content.isNotBlank()) {
                         Text(
                             node.data.content.take(120),
@@ -349,7 +466,10 @@ private fun NodeBranch(node: NeuronNode, depth: Int) {
                         )
                     }
                 }
-                Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null)
+                Icon(
+                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null
+                )
             }
 
             if (node.data.type == NodeType.LEAF && looksLikeChatJson(node.data.content)) {
@@ -357,7 +477,11 @@ private fun NodeBranch(node: NeuronNode, depth: Int) {
             }
         }
 
-        AnimatedVisibility(visible = expanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
             Column { node.getChildNodes().forEach { NodeBranch(it, depth + 1) } }
         }
     }
@@ -412,7 +536,11 @@ private fun ChatSessionCard(session: ChatSession, onOpen: () -> Unit = {}) {
                     Pill(text = "T ${roleCounts["tool"] ?: 0}")
                     Spacer(Modifier.weight(1f))
                     lastTs?.let {
-                        Text("Last • ${prettyDate(it)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            "Last • ${prettyDate(it)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -421,7 +549,11 @@ private fun ChatSessionCard(session: ChatSession, onOpen: () -> Unit = {}) {
         }
 
         // Body: blurred preview when hidden
-        Box(Modifier.fillMaxWidth().padding(12.dp)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
             Column(
                 Modifier
                     .matchParentSize()
@@ -464,7 +596,10 @@ private fun ChatSessionCard(session: ChatSession, onOpen: () -> Unit = {}) {
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilledTonalButton(onClick = { hidden = !hidden }) {
-                    Icon(if (hidden) Icons.Default.Visibility else Icons.Default.VisibilityOff, null)
+                    Icon(
+                        if (hidden) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                        null
+                    )
                     Spacer(Modifier.width(6.dp))
                     Text(if (hidden) "Reveal" else "Hide")
                 }
@@ -497,7 +632,10 @@ private fun Bubble(msg: ChatMessage) {
         else -> MaterialTheme.colorScheme.outline
     }.copy(alpha = 0.35f)
 
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
+    ) {
         Column(Modifier.fillMaxWidth(if (isUser) 0.82f else 0.90f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -511,7 +649,11 @@ private fun Bubble(msg: ChatMessage) {
                     tint = border
                 )
                 Spacer(Modifier.width(6.dp))
-                Text(msg.role, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    msg.role,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             Surface(
                 color = bg,
@@ -524,7 +666,11 @@ private fun Bubble(msg: ChatMessage) {
                 tonalElevation = 2.dp,
                 shadowElevation = 1.dp
             ) {
-                Text(msg.text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(12.dp))
+                Text(
+                    msg.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(12.dp)
+                )
             }
         }
     }
@@ -537,7 +683,11 @@ private fun Pill(text: String) {
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
         border = ButtonDefaults.outlinedButtonBorder
     ) {
-        Text(text, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall)
+        Text(
+            text,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelSmall
+        )
     }
 }
 
@@ -612,7 +762,8 @@ private fun parseChatSession(raw: String): ChatSession? = runCatching {
     ChatSession(title, msgs, createdAt)
 }.getOrNull()
 
-private fun parseIsoToMillis(s: String): Long? = runCatching { Instant.parse(s).toEpochMilli() }.getOrNull()
+private fun parseIsoToMillis(s: String): Long? =
+    runCatching { Instant.parse(s).toEpochMilli() }.getOrNull()
 
 private data class ChatStats(
     val totalChats: Int,
@@ -629,7 +780,8 @@ private data class ChatStats(
                 s.messages.forEach { m ->
                     roles[m.role.lowercase()] = (roles[m.role.lowercase()] ?: 0) + 1
                     m.timestamp?.let { ts ->
-                        val d = Instant.ofEpochMilli(ts).atZone(ZoneId.systemDefault()).toLocalDate()
+                        val d =
+                            Instant.ofEpochMilli(ts).atZone(ZoneId.systemDefault()).toLocalDate()
                         byDate[d] = (byDate[d] ?: 0) + 1
                     }
                 }
@@ -661,11 +813,17 @@ private fun ContributionHeatmap(
     countsByDate: Map<LocalDate, Int>, modifier: Modifier = Modifier, weeks: Int = 18
 ) {
     // Optional stub so screen compiles. Replace with your real heatmap.
-    Box(modifier.fillMaxWidth().height(1.dp)) {}
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(1.dp)
+    ) {}
 }
 
 @Composable
 private fun prettyDate(ts: Long): String = try {
     val dt = java.time.ZonedDateTime.ofInstant(Instant.ofEpochMilli(ts), ZoneId.systemDefault())
     dt.format(DateTimeFormatter.ofPattern("dd MMM, h:mm a"))
-} catch (_: Throwable) { "" }
+} catch (_: Throwable) {
+    ""
+}

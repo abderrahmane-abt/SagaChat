@@ -1,10 +1,9 @@
 package com.dark.plugins.sys.uiAction
 
 import com.dark.plugins.sys.plugins.AppInfo
-import kotlin.compareTo
 import kotlin.math.min
 
- fun levenshtein(lhs: String, rhs: String): Int {
+fun levenshtein(lhs: String, rhs: String): Int {
     val lhsLength = lhs.length
     val rhsLength = rhs.length
     val cost = Array(lhsLength + 1) { IntArray(rhsLength + 1) }
@@ -24,7 +23,7 @@ import kotlin.math.min
     return cost[lhsLength][rhsLength]
 }
 
- fun extractAppNames(input: String): List<String> {
+fun extractAppNames(input: String): List<String> {
     val openIndex = input.indexOf("open")
     if (openIndex == -1) return emptyList()
 
@@ -43,7 +42,7 @@ import kotlin.math.min
         .filter { it.isNotEmpty() }
 }
 
- fun fuzzyFindApp(apps: List<AppInfo>, name: String): AppInfo? {
+fun fuzzyFindApp(apps: List<AppInfo>, name: String): AppInfo? {
     val cleanedName = name.trim().lowercase()
     return apps.minByOrNull {
         levenshtein(it.appName.lowercase(), cleanedName)

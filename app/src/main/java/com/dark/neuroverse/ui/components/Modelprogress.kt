@@ -13,27 +13,27 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.dark.ai_module.workers.ModelManager
+import com.dark.ai_module.model.LoadState
 import com.dark.neuroverse.ui.theme.Coral
 import com.dark.neuroverse.ui.theme.Mint
 
 @Composable
 fun ModelLoadProgressBar(
-    loadState: ModelManager.LoadState,
+    loadState: LoadState,
     modifier: Modifier = Modifier,
     normalColor: Color = Mint,
     errorColor: Color = Coral,
 ) {
     val show = when (loadState) {
-        is ModelManager.LoadState.Loading -> true
-        is ModelManager.LoadState.Error -> true
+        is LoadState.Loading -> true
+        is LoadState.Error -> true
         else -> false
     }
 
 
     val target = when (loadState) {
-        is ModelManager.LoadState.Loading -> loadState.progress.coerceIn(0f, 1f)
-        is ModelManager.LoadState.Error -> 1f // snap to 100% on error
+        is LoadState.Loading -> loadState.progress.coerceIn(0f, 1f)
+        is LoadState.Error -> 1f // snap to 100% on error
         else -> 0f
     }
 
@@ -46,7 +46,7 @@ fun ModelLoadProgressBar(
 
 
     val barColor = when (loadState) {
-        is ModelManager.LoadState.Error -> errorColor
+        is LoadState.Error -> errorColor
         else -> normalColor
     }
 

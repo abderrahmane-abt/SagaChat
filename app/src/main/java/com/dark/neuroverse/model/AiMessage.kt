@@ -17,6 +17,7 @@ data class RunningTool(
     val toolPreview: String,
     val toolOutput: ToolOutput
 )
+
 @Serializable
 data class ToolOutput(
     val toolName: String = "",

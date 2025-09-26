@@ -35,7 +35,6 @@ M60.6169 1.70399V0.359985H69.9289V1.70399L67.2889 2.03998C66.7769 2.10398 66.472
 """.trimIndent()
 )
 
-
 @Composable
 fun IntroComposable() {
     val parsedPaths = remember {
