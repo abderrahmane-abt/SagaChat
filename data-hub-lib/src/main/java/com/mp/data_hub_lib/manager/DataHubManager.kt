@@ -6,11 +6,11 @@ import com.mp.ai_core.EmbeddingManager
 import com.mp.ai_core.NativeLib
 import com.mp.data_hub_lib.BuildConfig
 import com.mp.data_hub_lib.model.DataSetModel
+import com.mp.data_hub_lib.model.Doc
 import com.mp.data_hub_lib.model.GenerationStats
 import com.mp.data_hub_lib.model.RagResult
 import com.mp.data_hub_lib.worker.BrainDecoder
 import com.mp.data_hub_lib.worker.DataHubWorker
-import com.mp.data_hub_lib.worker.Doc
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -280,6 +280,7 @@ object DataHubManager {
             emptyList()
         }
     }
+
     /**
      * Uninstall a dataset by name
      */
@@ -317,7 +318,6 @@ object DataHubManager {
             }
         }
     }
-
 
 
     /**

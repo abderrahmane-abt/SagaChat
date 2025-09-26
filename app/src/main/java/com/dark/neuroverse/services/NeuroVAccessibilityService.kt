@@ -5,7 +5,13 @@ import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.dark.plugins.sys.uiAction.UiCommandQueue
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 class NeuroVAccessibilityService : AccessibilityService() {
@@ -50,7 +56,7 @@ class NeuroVAccessibilityService : AccessibilityService() {
                         } else {
                             Log.w(tag, "Root is null, skipping command")
                         }
-                    }else{
+                    } else {
                         Log.w(tag, "No command to execute")
                     }
                     delay(300)
@@ -72,8 +78,12 @@ class NeuroVAccessibilityService : AccessibilityService() {
                 if (scrollableNode != null) {
                     repeat(times) { index ->
                         delay(500)
-                        val success = scrollableNode.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
-                        Log.d(tag, "Scroll #${index + 1}: ${if (success) "✅ success" else "❌ failed"}")
+                        val success =
+                            scrollableNode.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                        Log.d(
+                            tag,
+                            "Scroll #${index + 1}: ${if (success) "✅ success" else "❌ failed"}"
+                        )
                     }
                 } else {
                     Log.w(tag, "No scrollable node found")
@@ -114,7 +124,11 @@ class NeuroVAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun findNodeByText(node: AccessibilityNodeInfo?, targetText: String, depth: Int = 0): AccessibilityNodeInfo? {
+    private fun findNodeByText(
+        node: AccessibilityNodeInfo?,
+        targetText: String,
+        depth: Int = 0
+    ): AccessibilityNodeInfo? {
         if (node == null) return null
 
         val text = node.text?.toString()?.trim() ?: ""

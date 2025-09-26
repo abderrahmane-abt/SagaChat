@@ -27,10 +27,12 @@ fun loadPluginZipFromPath(path: File): Pair<PluginManifest, ByteBuffer> {
                             manifest = PluginManifestWorker(text).getPluginManifest()
                             Log.d(TAG, "Manifest loaded: $manifest")
                         }
+
                         "classes.dex" -> {
                             dexBuf = ByteBuffer.wrap(zis.readBytes())
                             Log.d(TAG, "classes.dex loaded directly.")
                         }
+
                         "plugin.dex.jar" -> {
                             val jarBytes = zis.readBytes()
                             dexBuf = extractClassesDexFromJar(jarBytes)

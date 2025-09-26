@@ -1,4 +1,5 @@
 package com.dark.userdata.ntds.temp
+
 // List of Subjects
 val subjects = listOf(
     "I",
@@ -58,6 +59,7 @@ val interjections = listOf(
     "Wow",
     "Oops"
 )
+
 // Different sentence patterns as Kotlin functions or templates
 val sentenceStructures = listOf(
     "{subject} {verb}.", // Simple: I eat.
@@ -85,7 +87,8 @@ fun parseUserInput(input: String): String {
     val detectedVerb = verbs.find { lowerInput.contains(it.lowercase()) } ?: verbs.random()
     val detectedObject = objects.find { lowerInput.contains(it.lowercase()) } ?: objects.random()
     val detectedAdj = adjectives.find { lowerInput.contains(it.lowercase()) } ?: adjectives.random()
-    val detectedInterjection = interjections.find { lowerInput.contains(it.lowercase()) } ?: interjections.random()
+    val detectedInterjection =
+        interjections.find { lowerInput.contains(it.lowercase()) } ?: interjections.random()
 
     val structure = sentenceStructures.random()
 
@@ -96,7 +99,6 @@ fun parseUserInput(input: String): String {
         .replace("{adjective}", detectedAdj)
         .replace("{interjection}", detectedInterjection)
 }
-
 
 
 fun generateSentence(): String {

@@ -5,7 +5,13 @@ import android.os.Process
 import android.util.Log
 import com.dark.ai_module.db.DatabaseProvider
 import com.dark.ai_module.db.ModelDAO
+import com.dark.ai_module.model.GenerationParams
+import com.dark.ai_module.model.LoadState
+import com.dark.ai_module.model.ManagerDefaults
+import com.dark.ai_module.model.ModelInitParams
+import com.dark.ai_module.model.ModelParams
 import com.dark.ai_module.model.ModelsData
+import com.dark.ai_module.model.ParamsBundle
 import com.dark.ai_module.model.getDefaultModelData
 import com.mp.ai_core.NativeLib
 import kotlinx.coroutines.CompletableDeferred
@@ -47,38 +53,6 @@ object ModelManager {
     /*  Public types                                                 */
     /* ------------------------------------------------------------- */
 
-    data class ManagerDefaults(
-        val systemPrompt: String = "You are a helpful assistant.",
-        val contextLength: Int = 8_024,
-    )
-
-    data class ParamsBundle(
-        val professional: ModelParams.Professional = ModelParams.Professional(),
-        val emotional: ModelParams.Emotional = ModelParams.Emotional(),
-    )
-
-    sealed class LoadState {
-        object Idle : LoadState()
-        data class Loading(val progress: Float) : LoadState()
-        data class OnLoaded(val model: ModelsData) : LoadState()
-        data class Error(val message: String) : LoadState()
-    }
-
-    data class ModelInitParams(
-        val threads: Int = (Runtime.getRuntime().availableProcessors().coerceAtLeast(2)) / 2,
-        val gpuLayers: Int = 0,
-        val useMMAP: Boolean = true,
-        val useMLOCK: Boolean = false,
-        val ctxSize: Int = 4_048,
-        val temp: Float = 0.7f,
-        val topK: Int = 20,
-        val topP: Float = 0.5f,
-        val minP: Float = 0.0f,
-        val systemPrompt: String = "You are a helpful assistant.",
-        val chatTemplate: String? = null,
-    )
-
-    data class GenerationParams(val maxTokens: Int = 2048)
 
     /* ------------------------------------------------------------- */
     /*  Public state (Flows)                                         */
@@ -175,7 +149,10 @@ object ModelManager {
         queue.send(Request.Blocking(prompt, gen, def))
     }
 
-    suspend fun generateAndWait(prompt: String, gen: GenerationParams = GenerationParams()): String {
+    suspend fun generateAndWait(
+        prompt: String,
+        gen: GenerationParams = GenerationParams()
+    ): String {
         val def = CompletableDeferred<String>()
         queue.send(Request.Blocking(prompt, gen, def))
         return def.await()
@@ -200,7 +177,10 @@ object ModelManager {
                 toolJson = maybeDeduped, // send null if same as last to save bandwidth
                 onToolCalled = { name, args ->
                     if (ToolJsonUtils.isSchemaEcho(args)) {
-                        Log.w(TAG, "Model echoed tool schema inside arguments; upstream should repair.")
+                        Log.w(
+                            TAG,
+                            "Model echoed tool schema inside arguments; upstream should repair."
+                        )
                     }
                     onToolCalled(name, args)
                 },
@@ -238,11 +218,11 @@ object ModelManager {
     fun updateModelParams(
         professional: ModelParams.Professional = ModelParams.Professional(),
         emotional: ModelParams.Emotional = ModelParams.Emotional(),
-    ) { _params.value = ParamsBundle(professional, emotional) }
+    ) {
+        _params.value = ParamsBundle(professional, emotional)
+    }
 
     fun getModel(): StateFlow<ModelsData> = currentModel
-    fun getModelParams(): StateFlow<ParamsBundle> = params
-    fun setCurrentModel(model: ModelsData) { _currentModel.value = model }
 
     /* ------------------------------------------------------------- */
     /*  Public DAO API (IO)                                          */
@@ -252,13 +232,30 @@ object ModelManager {
         ensureDaoInitialized(); return dao.getAllModels()
     }
 
-    suspend fun addModel(model: ModelsData) = withContext(ioDispatcher) { ensureDaoInitialized(); dao.insertModel(model) }
-    suspend fun removeModel(modelName: String) = withContext(ioDispatcher) { ensureDaoInitialized(); dao.getModelByName(modelName)?.let { dao.deleteModel(it) } }
-    suspend fun checkIfInstalled(modelName: String): Boolean = withContext(ioDispatcher) { ensureDaoInitialized(); dao.getModelByName(modelName) != null }
-    suspend fun getFirstModel(): ModelsData? = withContext(ioDispatcher) { ensureDaoInitialized(); dao.getAllModels().firstOrNull()?.firstOrNull() }
-    suspend fun getModel(modelName: String): ModelsData? = withContext(ioDispatcher) { ensureDaoInitialized(); dao.getModelByName(modelName) }
-    suspend fun isAnyModelInstalled(): Boolean = withContext(ioDispatcher) { ensureDaoInitialized(); dao.getAllModels().firstOrNull()?.isNotEmpty() == true }
-    suspend fun getAllModels(): List<ModelsData> = withContext(ioDispatcher) { ensureDaoInitialized(); dao.getAllModels().firstOrNull() ?: emptyList() }
+    suspend fun addModel(model: ModelsData) =
+        withContext(ioDispatcher) { ensureDaoInitialized(); dao.insertModel(model) }
+
+    suspend fun removeModel(modelName: String) = withContext(ioDispatcher) {
+        ensureDaoInitialized(); dao.getModelByName(modelName)?.let { dao.deleteModel(it) }
+    }
+
+    suspend fun checkIfInstalled(modelName: String): Boolean =
+        withContext(ioDispatcher) { ensureDaoInitialized(); dao.getModelByName(modelName) != null }
+
+    suspend fun getFirstModel(): ModelsData? = withContext(ioDispatcher) {
+        ensureDaoInitialized(); dao.getAllModels().firstOrNull()?.firstOrNull()
+    }
+
+    suspend fun getModel(modelName: String): ModelsData? =
+        withContext(ioDispatcher) { ensureDaoInitialized(); dao.getModelByName(modelName) }
+
+    suspend fun isAnyModelInstalled(): Boolean = withContext(ioDispatcher) {
+        ensureDaoInitialized(); dao.getAllModels().firstOrNull()?.isNotEmpty() == true
+    }
+
+    suspend fun getAllModels(): List<ModelsData> = withContext(ioDispatcher) {
+        ensureDaoInitialized(); dao.getAllModels().firstOrNull() ?: emptyList()
+    }
 
     /* ------------------------------------------------------------- */
     /*  PRIVATE internals                                            */
@@ -277,18 +274,29 @@ object ModelManager {
     private val scope = CoroutineScope(SupervisorJob() + genDispatcher)
     private val uiScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    private data class Variant(val path: File, val lib: NativeLib, val init: ModelInitParams, val loadJob: Job?)
+    private data class Variant(
+        val path: File,
+        val lib: NativeLib,
+        val init: ModelInitParams,
+        val loadJob: Job?
+    )
 
     private val models = ConcurrentHashMap<String, Variant>()
     private var activeModelId: String? = null
 
     private val queue = Channel<Request>(capacity = 64)
 
-    @Volatile private var currentGenJob: Job? = null
+    @Volatile
+    private var currentGenJob: Job? = null
     private var processorJob: Job? = null
 
     private sealed interface Request {
-        data class Blocking(val prompt: String, val gen: GenerationParams, val completer: CompletableDeferred<String>) : Request
+        data class Blocking(
+            val prompt: String,
+            val gen: GenerationParams,
+            val completer: CompletableDeferred<String>
+        ) : Request
+
         data class Streaming(
             val prompt: String,
             val gen: GenerationParams,
@@ -299,11 +307,20 @@ object ModelManager {
         ) : Request
     }
 
-    init { startProcessor() }
+    init {
+        startProcessor()
+    }
 
-    private fun ensureDaoInitialized() { check(initGuard.get()) { "ModelManager.init(context) must be called before use." } }
+    private fun ensureDaoInitialized() {
+        check(initGuard.get()) { "ModelManager.init(context) must be called before use." }
+    }
 
-    private fun internalLoadModel(path: File, init: ModelInitParams, forceReload: Boolean, onLoaded: (() -> Unit)? = null) {
+    private fun internalLoadModel(
+        path: File,
+        init: ModelInitParams,
+        forceReload: Boolean,
+        onLoaded: (() -> Unit)? = null
+    ) {
         val id = path.absolutePath
 
         Log.d(TAG, "Loading generation model: ${path.name}")
@@ -341,7 +358,8 @@ object ModelManager {
 
 
     private fun activeModelVariant(): Variant? = activeModelId?.let { models[it] }
-    private fun activeModelOrThrow(): Variant = activeModelVariant() ?: error("No active model selected. Call loadModel() first.")
+    private fun activeModelOrThrow(): Variant =
+        activeModelVariant() ?: error("No active model selected. Call loadModel() first.")
 
     private fun unloadActiveModel() {
         activeModelId?.let { id ->
@@ -365,7 +383,12 @@ object ModelManager {
     private fun startProcessor() {
         processorJob?.cancel()
         processorJob = scope.launch {
-            Log.d(TAG, "processor on ${Thread.currentThread().name}, prio=" + Process.getThreadPriority(Process.myTid()))
+            Log.d(
+                TAG,
+                "processor on ${Thread.currentThread().name}, prio=" + Process.getThreadPriority(
+                    Process.myTid()
+                )
+            )
             queue.consumeEach { req ->
                 try {
                     isGenerating.value = true
@@ -419,7 +442,12 @@ object ModelManager {
             onStart = {},
             onGenerate = { tok -> acc.append(tok); r.onToken(tok) },
             toolsJson = r.toolJson, // already normalized/deduped
-            onToolCall = { name, args -> r.onToolCalled(name, args); Log.d(TAG, "Tool called: $name args=$args") },
+            onToolCall = { name, args ->
+                r.onToolCalled(name, args); Log.d(
+                TAG,
+                "Tool called: $name args=$args"
+            )
+            },
             onError = { msg -> done.completeExceptionally(IllegalStateException(msg)) },
             onDone = { done.complete(Unit) }
         )
@@ -472,7 +500,8 @@ object ModelManager {
                             else -> {}
                         }
                         params.put("required", arr)
-                    } catch (_: Throwable) {}
+                    } catch (_: Throwable) {
+                    }
                 }
                 // Properties ordering (stable for hashing)
                 val props = params.optJSONObject("properties")
@@ -499,7 +528,9 @@ object ModelManager {
         fun maybeDedup(spec: String?): String? {
             if (!DEDUP || spec == null) return spec
             val h = spec.hashCode()
-            return if (lastHash == h) null else { lastHash = h; spec }
+            return if (lastHash == h) null else {
+                lastHash = h; spec
+            }
         }
 
         /** Heuristic: arguments look like a schema echo instead of concrete args. */
@@ -511,12 +542,9 @@ object ModelManager {
                 val first = calls.optJSONObject(0) ?: return false
                 val a = first.optJSONObject("arguments") ?: return false
                 a.has("type") || a.has("properties") || a.has("required")
-            } catch (_: Throwable) { false }
+            } catch (_: Throwable) {
+                false
+            }
         }
     }
-}
-
-object ModelParams {
-    data class Professional(val value: Float = 3.5f)
-    data class Emotional(val value: Float = 7.6f)
 }

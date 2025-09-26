@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowCircleDown
 import androidx.compose.material.icons.outlined.GridView
@@ -35,8 +34,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
@@ -86,19 +83,16 @@ fun SettingsDrawerContent(
     ) {
         // Header
         Text(
-            text = "Chat Management",
-            style = MaterialTheme.typography.headlineMedium.copy(
+            text = "Chat Management", style = MaterialTheme.typography.headlineMedium.copy(
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
-            ),
-            modifier = Modifier.padding(top = 24.dp, bottom = 24.dp)
+            ), modifier = Modifier.padding(top = 24.dp, bottom = 24.dp)
         )
 
         // Chat History Section
         LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item {
                 Row(
@@ -107,20 +101,21 @@ fun SettingsDrawerContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Chat History",
-                        style = MaterialTheme.typography.headlineSmall.copy(
+                        text = "Chat History", style = MaterialTheme.typography.headlineSmall.copy(
                             fontFamily = FontFamily.Serif,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
-                        ),
-                        modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
+                        ), modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
                     )
 
                     // Show loading indicator if any chat operations are in progress
-                    if (uiState is ChatUiState.Loading && (uiState as ChatUiState.Loading).operation.contains("chat", ignoreCase = true)) {
+                    if (uiState is ChatUiState.Loading && (uiState as ChatUiState.Loading).operation.contains(
+                            "chat",
+                            ignoreCase = true
+                        )
+                    ) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp
+                            modifier = Modifier.size(16.dp), strokeWidth = 2.dp
                         )
                     }
                 }
@@ -137,9 +132,7 @@ fun SettingsDrawerContent(
                 }
             } else {
                 items(
-                    items = chatList,
-                    key = { it.id }
-                ) { chat ->
+                    items = chatList, key = { it.id }) { chat ->
                     ChatHistoryItem(
                         chat = chat,
                         isCurrentChat = chat.id == currentChatId,
@@ -162,8 +155,7 @@ fun SettingsDrawerContent(
                                     // Note: Don't call onChatSelected() here as it might interfere with deletion
                                 }
                             }
-                        }
-                    )
+                        })
                 }
             }
         }
@@ -226,11 +218,9 @@ private fun ChatHistoryItem(
                     SkyBlue.copy(0.1f)
                 } else {
                     MaterialTheme.colorScheme.surface
-                },
-                shape = MaterialTheme.shapes.small
+                }, shape = MaterialTheme.shapes.small
             )
-            .padding(horizontal = rDP(12.dp), vertical = rDP(8.dp))
-    ) {
+            .padding(horizontal = rDP(12.dp), vertical = rDP(8.dp))) {
         // Chat name
         Text(
             text = chat.name.ifBlank { "Untitled Chat" },
@@ -259,8 +249,7 @@ private fun ChatHistoryItem(
                 )
             } else {
                 IconButton(
-                    onClick = onDeleteClick,
-                    modifier = Modifier.size(32.dp)
+                    onClick = onDeleteClick, modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         imageVector = Icons.TwoTone.Delete,
@@ -276,10 +265,7 @@ private fun ChatHistoryItem(
 
 @Composable
 private fun ActionButton(
-    text: String,
-    icon: ImageVector,
-    onClick: () -> Unit,
-    enabled: Boolean = true
+    text: String, icon: ImageVector, onClick: () -> Unit, enabled: Boolean = true
 ) {
     Row(
         modifier = Modifier
@@ -290,13 +276,11 @@ private fun ActionButton(
                     MaterialTheme.colorScheme.surface
                 } else {
                     MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
-                },
-                shape = MaterialTheme.shapes.medium
+                }, shape = MaterialTheme.shapes.medium
             )
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
+        horizontalArrangement = Arrangement.SpaceBetween) {
         Text(
             text = text,
             style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif),
@@ -307,9 +291,7 @@ private fun ActionButton(
             }
         )
         Icon(
-            imageVector = icon,
-            contentDescription = text,
-            tint = if (enabled) {
+            imageVector = icon, contentDescription = text, tint = if (enabled) {
                 MaterialTheme.colorScheme.primary
             } else {
                 MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
@@ -320,10 +302,7 @@ private fun ActionButton(
 
 @Composable
 private fun ActionButton(
-    text: String,
-    icon: Int,
-    onClick: () -> Unit,
-    enabled: Boolean = true
+    text: String, icon: Int, onClick: () -> Unit, enabled: Boolean = true
 ) {
     Row(
         modifier = Modifier
@@ -334,13 +313,11 @@ private fun ActionButton(
                     MaterialTheme.colorScheme.surface
                 } else {
                     MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
-                },
-                shape = MaterialTheme.shapes.medium
+                }, shape = MaterialTheme.shapes.medium
             )
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
+        horizontalArrangement = Arrangement.SpaceBetween) {
         Text(
             text = text,
             style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif),
@@ -351,9 +328,7 @@ private fun ActionButton(
             }
         )
         Icon(
-            painter = painterResource(icon),
-            contentDescription = text,
-            tint = if (enabled) {
+            painter = painterResource(icon), contentDescription = text, tint = if (enabled) {
                 MaterialTheme.colorScheme.primary
             } else {
                 MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)

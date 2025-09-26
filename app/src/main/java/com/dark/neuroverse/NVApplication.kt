@@ -1,20 +1,16 @@
 package com.dark.neuroverse
 
 import android.app.Application
-import android.os.Environment
-import android.util.Log
+import com.dark.ai_module.model.ModelParams
 import com.dark.ai_module.workers.ModelManager
-import com.dark.ai_module.workers.ModelParams
 import com.dark.neuroverse.data.UserPrefs
 import com.dark.plugins.manager.PluginManager
 import com.mp.data_hub_lib.manager.DataHubManager
-import com.mp.updatemanager.UpdateCenter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
-import java.io.File
 
 /**
  * NVApplication — trims startup work, avoids blocking main thread,
@@ -28,7 +24,6 @@ class NVApplication : Application() {
         super.onCreate()
         // Synchronous, cheap initializations
         ModelManager.init(applicationContext)
-        UpdateCenter.init(applicationContext)
         PluginManager.init(applicationContext)
         DataHubManager.init(applicationContext)
         // Lightweight background bootstrap

@@ -1,37 +1,20 @@
 package com.dark.neuroverse.viewModel
 
-
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
-import android.content.Context
-import android.net.Uri
-import android.util.Log
-import androidx.lifecycle.ViewModelProvider
 import com.dark.ai_module.model.ModelsData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.ai_module.workers.downloadFile
-import com.dark.neuroverse.util.uriToFile
-import com.mp.ai_core.NativeLib
-import kotlinx.coroutines.Dispatchers
+import com.dark.neuroverse.model.DownloadState
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import java.io.File
 
-
-data class DownloadState(
-    val isDownloading: Boolean = false,
-    val progress: Float = 0f,
-    val isComplete: Boolean = false,
-    val errorMessage: String? = null
-)
-
-
-class ModelScreenViewModel(context: Context) : ViewModel() {
+class ModelScreenViewModel() : ViewModel() {
 
     private val _models = MutableStateFlow<List<ModelsData>>(emptyList())
     val models: StateFlow<List<ModelsData>> = _models
@@ -74,8 +57,7 @@ class ModelScreenViewModel(context: Context) : ViewModel() {
                         downloadJobs.remove(modelData.modeName)
                         _downloadStates.update {
                             it + (modelData.modeName to it[modelData.modeName]!!.copy(
-                                isDownloading = false,
-                                isComplete = true
+                                isDownloading = false, isComplete = true
                             ))
                         }
                     },
@@ -83,18 +65,15 @@ class ModelScreenViewModel(context: Context) : ViewModel() {
                         downloadJobs.remove(modelData.modeName)
                         _downloadStates.update {
                             it + (modelData.modeName to it[modelData.modeName]!!.copy(
-                                isDownloading = false,
-                                errorMessage = e.message
+                                isDownloading = false, errorMessage = e.message
                             ))
                         }
-                    }
-                )
+                    })
             } catch (e: Exception) {
                 downloadJobs.remove(modelData.modeName)
                 _downloadStates.update {
                     it + (modelData.modeName to it[modelData.modeName]!!.copy(
-                        isDownloading = false,
-                        errorMessage = e.message
+                        isDownloading = false, errorMessage = e.message
                     ))
                 }
             }
@@ -113,23 +92,6 @@ class ModelScreenViewModel(context: Context) : ViewModel() {
             it + (modelName to DownloadState(isDownloading = false))
         }
     }
-
-    // In your ViewModel
-    fun loadModelDetailsFromFile(uri: Uri, context: Context, onResult: (File) -> Unit){
-        viewModelScope.launch(Dispatchers.IO) {
-            val path = uriToFile(context, uri)
-            Log.d("FilePicker", "Selected file path: $path")
-            if (path.extension == "gguf") {
-                Log.d("FilePicker", "Selected file path: $path")
-                onResult(path)
-            }
-        }
-    }
-
-    fun loadModel(modelsData: ModelsData){
-        addModel(modelsData)
-    }
-
 
     fun addModel(model: ModelsData) {
         viewModelScope.launch {
@@ -151,22 +113,5 @@ class ModelScreenViewModel(context: Context) : ViewModel() {
             }
             ModelManager.removeModel(modelName)
         }
-    }
-
-    fun getModel(modelName: String, onResult: (ModelsData?) -> Unit) {
-        viewModelScope.launch {
-            val model = ModelManager.getModel(modelName)
-            onResult(model)
-        }
-    }
-}
-
-
-class ModelScreenViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(ModelScreenViewModel::class.java)) {
-            return ModelScreenViewModel(context = context) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

@@ -74,9 +74,21 @@ class DataPackScreenViewModel : ViewModel() {
                 onComplete = {
                     DataHubManager.installPack(file, password = BuildConfig.ALIAS) { success ->
                         if (success) {
-                            updateUiState(dataPack) { it.copy(isDownloading = false, isInstalled = true, progress = 1f) }
+                            updateUiState(dataPack) {
+                                it.copy(
+                                    isDownloading = false,
+                                    isInstalled = true,
+                                    progress = 1f
+                                )
+                            }
                         } else {
-                            updateUiState(dataPack) { it.copy(isDownloading = false, isInstalled = false, progress = 0f) }
+                            updateUiState(dataPack) {
+                                it.copy(
+                                    isDownloading = false,
+                                    isInstalled = false,
+                                    progress = 0f
+                                )
+                            }
                         }
                     }
                 },
@@ -94,7 +106,13 @@ class DataPackScreenViewModel : ViewModel() {
 
         DataHubManager.uninstallPack(dataPack.name)
 
-        updateUiState(dataPack) { it.copy(isInstalled = false, progress = 0f, isDownloading = false) }
+        updateUiState(dataPack) {
+            it.copy(
+                isInstalled = false,
+                progress = 0f,
+                isDownloading = false
+            )
+        }
     }
 
     private fun updateUiState(dataPack: DataPack, update: (DataPackUiState) -> DataPackUiState) {

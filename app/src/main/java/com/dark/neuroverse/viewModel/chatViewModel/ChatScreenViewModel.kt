@@ -9,6 +9,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.dark.ai_module.data.ModelsList
+import com.dark.ai_module.model.LoadState
+import com.dark.ai_module.model.ManagerDefaults
 import com.dark.ai_module.model.ModelsData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
@@ -29,13 +31,30 @@ import com.dark.userdata.ntds.neuron_tree.NeuronTree
 import com.dark.userdata.readBrainFile
 import com.dark.userdata.saveTree
 import com.mp.ai_core.NativeLib
-import com.mp.data_hub_lib.DataNativeLib
 import com.mp.data_hub_lib.manager.DataHubManager
 import com.mp.data_hub_lib.model.RagResult
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.consumeAsFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import org.json.JSONArray
 import org.json.JSONObject
@@ -145,8 +164,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     private val _chatList = MutableStateFlow<List<ChatINFO>>(emptyList())
     val chatList: StateFlow<List<ChatINFO>> = _chatList.asStateFlow()
 
-    private val _modelLoadingState = MutableStateFlow<ModelManager.LoadState>(ModelManager.LoadState.Idle)
-    val modelLoadingState: StateFlow<ModelManager.LoadState> = _modelLoadingState.asStateFlow()
+    private val _modelLoadingState = MutableStateFlow<LoadState>(LoadState.Idle)
+    val modelLoadingState: StateFlow<LoadState> = _modelLoadingState.asStateFlow()
 
     private val _decodingMetrics = MutableSharedFlow<DecodingMetrics>(extraBufferCapacity = 8)
     val decodingMetrics: SharedFlow<DecodingMetrics> = _decodingMetrics.asSharedFlow()
@@ -174,7 +193,9 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
     //region Streaming State
     private var streamingMessageIndex = -1
-    @Volatile private var lastUiUpdateMs = 0L
+
+    @Volatile
+    private var lastUiUpdateMs = 0L
 
     private fun shouldUpdateUi(nowMs: Long): Boolean =
         (nowMs - lastUiUpdateMs) >= UI_UPDATE_THROTTLE_MS
@@ -248,7 +269,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         ModelManager.getFirstModel()?.let { model ->
             ModelManager.loadModelAwait(
                 modelData = model,
-                defaults = ModelManager.ManagerDefaults(
+                defaults = ManagerDefaults(
                     systemPrompt = ModelsList.generalPurposeSystemPrompt
                 ),
                 chatTemplate = ModelsList.chatTemplate,
@@ -280,7 +301,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
                 ModelManager.loadModelAwait(
                     modelData = model,
-                    defaults = ModelManager.ManagerDefaults(systemPrompt = systemPrompt),
+                    defaults = ManagerDefaults(systemPrompt = systemPrompt),
                     chatTemplate = ModelsList.chatTemplate,
                     forceReload = true
                 ) { state ->
@@ -527,7 +548,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             ModelManager.unLoadModel()
             ModelManager.loadModelAwait(
                 modelData = model,
-                defaults = ModelManager.ManagerDefaults(
+                defaults = ManagerDefaults(
                     systemPrompt = "You are a helpful assistant that improves message clarity and accuracy."
                 ),
                 chatTemplate = ModelsList.chatTemplate,
@@ -547,20 +568,21 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         )
     }
 
-    private fun buildOptimizePrompt(userContext: String, originalText: String): String = buildString {
-        appendLine("Improve the following assistant reply for better clarity and accuracy.")
-        appendLine("- Preserve meaning, facts, numbers, code, and URLs.")
-        appendLine("- Make it more concise and well-structured.")
-        appendLine("- Do not add meta commentary.")
-        appendLine()
-        if (userContext.isNotBlank()) {
-            appendLine("[User context]")
-            appendLine(userContext)
+    private fun buildOptimizePrompt(userContext: String, originalText: String): String =
+        buildString {
+            appendLine("Improve the following assistant reply for better clarity and accuracy.")
+            appendLine("- Preserve meaning, facts, numbers, code, and URLs.")
+            appendLine("- Make it more concise and well-structured.")
+            appendLine("- Do not add meta commentary.")
             appendLine()
+            if (userContext.isNotBlank()) {
+                appendLine("[User context]")
+                appendLine(userContext)
+                appendLine()
+            }
+            appendLine("[Original reply to improve]")
+            append(originalText)
         }
-        appendLine("[Original reply to improve]")
-        append(originalText)
-    }
     //endregion
 
     //region RAG Processing
@@ -592,7 +614,11 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                     val finalPrompt = buildRAGPrompt(ragContext, input)
                     ensureGenerationModelReady {
                         viewModelScope.launch {
-                            streamAndRender(prompt = finalPrompt, enableTools = isTool, messageId = messageId)
+                            streamAndRender(
+                                prompt = finalPrompt,
+                                enableTools = isTool,
+                                messageId = messageId
+                            )
                         }
                     }
                 } else {
@@ -634,14 +660,17 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
             ModelManager.loadModelAwait(currentModel) { loadState ->
                 when (loadState) {
-                    is ModelManager.LoadState.OnLoaded -> {
+                    is LoadState.OnLoaded -> {
                         Log.d(TAG, "Generation model ready: ${loadState.model.modeName}")
                         onReady()
                     }
-                    is ModelManager.LoadState.Error -> {
+
+                    is LoadState.Error -> {
                         Log.e(TAG, "Generation model load failed: ${loadState.message}")
-                        _uiState.value = ChatUiState.Error("Model load failed: ${loadState.message}")
+                        _uiState.value =
+                            ChatUiState.Error("Model load failed: ${loadState.message}")
                     }
+
                     else -> Log.d(TAG, "Generation model loading: $loadState")
                 }
             }.onFailure { error ->
@@ -767,6 +796,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 state.inThinkTag = false
                 state.visibleBuffer.append(afterEnd)
             }
+
             state.inThinkTag -> state.thoughtBuffer.append(token)
             lowerToken.contains("<think>") -> {
                 val beforeStart = token.substringBefore("<think>")
@@ -775,6 +805,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 state.inThinkTag = true
                 state.thoughtBuffer.append(afterStart)
             }
+
             else -> state.visibleBuffer.append(token)
         }
     }
@@ -815,6 +846,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 updateInThink(false)
                 visibleBuffer.append(afterEnd)
             }
+
             inThink -> thoughtBuffer.append(token)
             lowerToken.contains("<think>") -> {
                 val beforeStart = token.substringBefore("<think>")
@@ -823,6 +855,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 updateInThink(true)
                 thoughtBuffer.append(afterStart)
             }
+
             else -> visibleBuffer.append(token)
         }
     }
@@ -853,7 +886,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         }
 
         // Try reasoning/answer pattern
-        val reasoningRegex = Regex("(?is)(?:reasoning|thoughts?)\\s*:\\s*(.+?)\\s*(?:final|answer)\\s*:\\s*(.+)")
+        val reasoningRegex =
+            Regex("(?is)(?:reasoning|thoughts?)\\s*:\\s*(.+?)\\s*(?:final|answer)\\s*:\\s*(.+)")
         reasoningRegex.find(rawText)?.let { match ->
             val thought = match.groupValues[1].trim()
             val answer = match.groupValues[2].trim()
@@ -942,7 +976,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                             _uiState.value = ChatUiState.Idle
                         } catch (e: Exception) {
                             Log.e(TAG, "Tool result processing failed", e)
-                            _uiState.value = ChatUiState.Error("Tool execution failed: ${e.message}")
+                            _uiState.value =
+                                ChatUiState.Error("Tool execution failed: ${e.message}")
                         }
                     }
                 }
@@ -954,7 +989,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     private fun repairToolCall(toolName: String, argsJson: String): JSONObject {
-        val lastUserQuery = messages.value.lastOrNull { it.role == Role.User }?.text?.trim().orEmpty()
+        val lastUserQuery =
+            messages.value.lastOrNull { it.role == Role.User }?.text?.trim().orEmpty()
         val selectedToolName = selectedTools.value.second.toolName
         val fallbackTool = toolName.ifBlank { selectedToolName }
 
@@ -1080,7 +1116,10 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 return
             }
 
-            Log.d(TAG, "Saving chat: id=$currentChatId, title='$currentTitle', messages=${currentMessages.size}")
+            Log.d(
+                TAG,
+                "Saving chat: id=$currentChatId, title='$currentTitle', messages=${currentMessages.size}"
+            )
 
             val root = rootNode.value.getNodeDirect("root")
             val history = getDefaultChatHistory(root)
@@ -1219,6 +1258,8 @@ fun ChatScreenViewModel.getCurrentBuffer(messageId: String): String {
 // Extend StreamingState to track last emitted index for getTokenFlow
 private var StreamingState.lastEmittedIndex: Int
     get() = this._lastEmittedIndex ?: 0
-    set(value) { this._lastEmittedIndex = value }
+    set(value) {
+        this._lastEmittedIndex = value
+    }
 
 private var StreamingState._lastEmittedIndex: Int? by mutableStateOf(null)

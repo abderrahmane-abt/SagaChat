@@ -1,6 +1,5 @@
 package com.dark.neuroverse.ui.components
 
-import androidx.appcompat.widget.DialogTitle
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -18,7 +17,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun StandardBottomBar(modifier: Modifier = Modifier, title: String = "Neuro V", item: @Composable (RowScope.() -> Unit)) {
+fun StandardBottomBar(
+    modifier: Modifier = Modifier,
+    title: String = "Neuro V",
+    item: @Composable (RowScope.() -> Unit)
+) {
     Card(
         modifier = modifier,
         shape = CircleShape,

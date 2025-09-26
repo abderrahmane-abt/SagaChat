@@ -114,11 +114,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelsData
 import com.dark.neuroverse.R
 import com.dark.neuroverse.activity.DatahubActivity
-import com.dark.neuroverse.activity.PluginStoreActivity
+import com.dark.neuroverse.activity.PluginHubActivity
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.model.ToolOutput
-import com.dark.neuroverse.ui.components.DataSetSelectorDialog
+import com.dark.neuroverse.ui.components.DataPackSelectorDialog
 import com.dark.neuroverse.ui.components.MarkdownText
 import com.dark.neuroverse.ui.components.ModelLoadProgressBar
 import com.dark.neuroverse.ui.components.RegenerateModelPickerDialog
@@ -131,10 +131,9 @@ import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.SlateGrey
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
-import com.dark.neuroverse.util.writeToolOutputJson
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
-import com.dark.neuroverse.viewModel.chatViewModel.ChattingViewModelFactory
 import com.dark.neuroverse.viewModel.chatViewModel.ChatUiState
+import com.dark.neuroverse.viewModel.chatViewModel.ChattingViewModelFactory
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
 import kotlinx.coroutines.delay
@@ -166,6 +165,7 @@ fun HomeScreen(
                     Toast.LENGTH_LONG
                 ).show()
             }
+
             else -> {}
         }
     }
@@ -190,7 +190,7 @@ fun HomeScreen(
                     context.startActivity(Intent(context, DatahubActivity::class.java))
                 },
                 onPluginStoreClick = {
-                    context.startActivity(Intent(context, PluginStoreActivity::class.java))
+                    context.startActivity(Intent(context, PluginHubActivity::class.java))
                 }
             )
         }
@@ -218,7 +218,10 @@ fun HomeScreen(
                             if (uiState is ChatUiState.Loading) {
                                 Text(
                                     text = (uiState as ChatUiState.Loading).operation,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                                    modifier = Modifier.padding(
+                                        horizontal = 16.dp,
+                                        vertical = 4.dp
+                                    ),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -269,7 +272,7 @@ fun TopBar(
 
             AnimatedVisibility(showDialog) {
                 if (showDialog) {
-                    DataSetSelectorDialog {
+                    DataPackSelectorDialog {
                         showDialog = false
                     }
                 }
@@ -449,6 +452,7 @@ private fun EmptyStateContent(uiState: ChatUiState) {
                     textAlign = TextAlign.Center
                 )
             }
+
             is ChatUiState.Error -> {
                 Icon(
                     painter = painterResource(R.drawable.menu), // Replace with error icon
@@ -471,6 +475,7 @@ private fun EmptyStateContent(uiState: ChatUiState) {
                     modifier = Modifier.padding(horizontal = rDP(32.dp))
                 )
             }
+
             else -> {
                 Text(
                     text = "Ready to chat! Ask me anything. \uD83D\uDE0A \nToolNeuron",
@@ -500,6 +505,7 @@ private fun BottomBar(
         is ChatUiState.Generating,
         is ChatUiState.DecodingStream,
         is ChatUiState.ExecutingTool -> true
+
         else -> false
     }
 
@@ -509,6 +515,7 @@ private fun BottomBar(
         is ChatUiState.Generating,
         is ChatUiState.DecodingStream,
         is ChatUiState.ExecutingTool -> false
+
         is ChatUiState.Error -> uiState.isRetryable
         else -> true
     }
@@ -739,6 +746,7 @@ private fun ChatInputBar(
                             color = MaterialTheme.colorScheme.background
                         )
                     }
+
                     else -> {
                         Icon(
                             painterResource(R.drawable.send_chat),
@@ -978,6 +986,7 @@ private fun RegularChatUI(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+
             false -> {
                 var showRegenerateDialog by remember { mutableStateOf(false) }
                 val actionIconSize = rDP(16.dp)
@@ -1009,7 +1018,11 @@ private fun RegularChatUI(
                                 .size(actionIconSize)
                                 .clickable {
                                     clipboardManager.setText(AnnotatedString(message.text))
-                                    Toast.makeText(context, "Copied to clipboard!", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(
+                                        context,
+                                        "Copied to clipboard!",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
                                 }
                         )
 
@@ -1036,7 +1049,12 @@ private fun RegularChatUI(
                                         putExtra(Intent.EXTRA_TEXT, message.text)
                                         type = "text/plain"
                                     }
-                                    context.startActivity(Intent.createChooser(shareIntent, "Share message"))
+                                    context.startActivity(
+                                        Intent.createChooser(
+                                            shareIntent,
+                                            "Share message"
+                                        )
+                                    )
                                 }
                         )
                     }
@@ -1069,6 +1087,7 @@ private fun ToolChatUI(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+
             false -> {
                 Column {
                     // Tool identifier tag
@@ -1080,7 +1099,10 @@ private fun ToolChatUI(
                     when (message.tool?.toolOutput == null) {
                         true -> {
                             val isLoading = pluginLoading == null
-                            Crossfade(targetState = isLoading, label = "plugin-loading") { loading ->
+                            Crossfade(
+                                targetState = isLoading,
+                                label = "plugin-loading"
+                            ) { loading ->
                                 if (loading) {
                                     // Loading state for plugin
                                     Card(
@@ -1114,11 +1136,13 @@ private fun ToolChatUI(
                                 } else {
                                     // Plugin content
                                     Card(elevation = CardDefaults.cardElevation(rDP(0.dp))) {
-                                        PluginManager.currentPlugin.collectAsState().value?.api?.content()?.invoke()
+                                        PluginManager.currentPlugin.collectAsState().value?.api?.content()
+                                            ?.invoke()
                                     }
                                 }
                             }
                         }
+
                         false -> {
                             // Tool output available
                             ToolOutputToggle(toolOutput = message.tool.toolOutput)
@@ -1176,7 +1200,12 @@ private fun ThinkingChatUI(message: Message) {
                 .clip(RoundedCornerShape(rDP(8.dp)))
                 .background(Color(0xFF0F172A))
                 .border(rDP(1.dp), Color(0xFF334155), RoundedCornerShape(rDP(8.dp)))
-                .animateContentSize(animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing))
+                .animateContentSize(
+                    animationSpec = tween(
+                        durationMillis = 180,
+                        easing = FastOutSlowInEasing
+                    )
+                )
         ) {
             Text(
                 text = if (showThinkingText) "Thought:\n${message.thought}" else "Thinking... (tap to expand)",

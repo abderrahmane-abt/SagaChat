@@ -8,9 +8,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
-import com.dark.ai_module.workers.ModelManager
-import com.dark.plugins.manager.PluginManager
-import kotlinx.serialization.json.Json
 import org.json.JSONObject
 
 typealias ComposableBlock = @Composable () -> Unit

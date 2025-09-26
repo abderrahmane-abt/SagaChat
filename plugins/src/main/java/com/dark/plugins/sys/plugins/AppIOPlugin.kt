@@ -28,7 +28,7 @@ class AppIOPlugin(val context: Context) : PluginApi(context) {
         super.onCreate(data)
         val tasks = data as JSONObject
 
-        when(tasks.getString("action")){
+        when (tasks.getString("action")) {
             "open" -> {
                 val tempPKG = tasks.getString("packageName")
 

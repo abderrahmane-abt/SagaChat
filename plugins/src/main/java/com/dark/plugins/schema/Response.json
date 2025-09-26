@@ -2,7 +2,10 @@
   "example one": {
     "title": "Check For Updates at 12:00",
     "description": "This work-flow Checking For Update of apps from playstore at 12:00 24x7 & Updating them",
-    "tools_called": ["AppIO", "UiNav"],
+    "tools_called": [
+      "AppIO",
+      "UiNav"
+    ],
     "steps": [
       {
         "tool": "AppIO",
@@ -21,14 +24,17 @@
       }
     ]
   },
-  "example 2" : {
+  "example 2": {
     "title": "Scrolling PlayStore",
     "description": "A Simple Scroll Ui Automation",
-    "tools_called": ["AppIO", "UiNav"],
+    "tools_called": [
+      "AppIO",
+      "UiNav"
+    ],
     "steps": [
       {
         "tool": "AppIO",
-        "args" : {
+        "args": {
           "action": "open",
           "packageName": "PlayStore"
         }

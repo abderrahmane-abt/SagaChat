@@ -69,7 +69,7 @@ class UiActionPlugin(private val context: Context) : PluginApi(context) {
     }
 
     @Composable
-    override fun AppContent(){
+    override fun AppContent() {
         NeuroVersePluginTheme {
             Button(onClick = {
 
