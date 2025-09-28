@@ -1,6 +1,8 @@
 package com.dark.userdata
 
 import android.content.Context
+import com.dark.userdata.helpers.MemoryDataTags
+import com.dark.userdata.helpers.createNewMemory
 import com.dark.userdata.ntds.getBrainFilePath
 import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.userdata.ntds.loadEncryptedTree
@@ -14,10 +16,20 @@ import javax.crypto.SecretKey
 
 fun getDefaultBrainStructure(): NeuronTree {
     val root = NeuronNode("root", NodeData("", NodeType.ROOT))
-    val chatHistory = NeuronNode("chatHistory", NodeData("", NodeType.OPERATOR))
-
     val tree = NeuronTree(root)
-    tree.addChild(root.id, chatHistory)
+
+    val chatHistory = NeuronNode("chatHistory", NodeData("", NodeType.OPERATOR))
+    val memoryHistory = NeuronNode("memoryHistory", NodeData("", NodeType.OPERATOR))
+
+    tree.addChild(root.id, chatHistory, memoryHistory)
+
+    createNewMemory(root, MemoryDataTags.Family, JSONObject())
+    createNewMemory(root, MemoryDataTags.Friends, JSONObject())
+    createNewMemory(root, MemoryDataTags.Work, JSONObject())
+    createNewMemory(root, MemoryDataTags.Health, JSONObject())
+    createNewMemory(root, MemoryDataTags.Education, JSONObject())
+    createNewMemory(root, MemoryDataTags.Entertainment, JSONObject())
+    createNewMemory(root, MemoryDataTags.Other, JSONObject())
     return tree
 }
 
@@ -28,6 +40,10 @@ fun readBrainFile(key: SecretKey, context: Context): NeuronTree {
 
 fun getDefaultChatHistory(root: NeuronNode): NeuronNode {
     return NeuronTree(root).getNodeDirect("chatHistory")
+}
+
+fun getDefaultMemoryHistory(root: NeuronNode): NeuronNode {
+    return NeuronTree(root).getNodeDirect("memoryHistory")
 }
 
 fun addNewChat(root: NeuronNode, data: JSONObject): NeuronNode {
