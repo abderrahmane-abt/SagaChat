@@ -13,12 +13,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material.icons.twotone.Delete
 import androidx.compose.material.icons.twotone.FileOpen
+import androidx.compose.material.icons.twotone.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -36,12 +37,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -237,62 +238,35 @@ private fun InstalledModelCard(
         ) {
             // Header row
             Row(
-                Modifier.fillMaxWidth()
+                Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
-                    Column {
-                        Text(
-                            model.modeName, style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold, fontSize = rSp(18.sp)
-                            ), maxLines = 1, overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(Modifier.width(rDP(8.dp)))
-                        Pill(if (isLocalImport) "Local" else "Remote")
-                    }
-                    if (!isLocalImport && model.modelDescription.isNotBlank()) {
-                        Spacer(Modifier.height(rDP(2.dp)))
-                        Text(
-                            model.modelDescription,
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontSize = rSp(12.sp),
-                                color = colors.onSurface.copy(alpha = 0.6f)
-                            ),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Text(
+                        model.modeName, style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold, fontSize = rSp(18.sp)
+                        ), maxLines = 1, overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.width(rDP(8.dp)))
+                    Pill(if (isLocalImport) "Local" else "Remote")
                 }
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.TwoTone.Delete, contentDescription = "Delete", tint = Coral)
-                }
-            }
-
-            // Specs grid
-            SpecGrid(
-                "Size" to ("${model.modelSize} MB"),
-                "Context" to model.modelCtxSize.toString(),
-                "Tools" to model.toolUse.uppercase(),
-                "Path" to model.modelPath,
-            )
-
-            // External page for remote models
-            if (!isLocalImport && model.modelPageLink.isNotBlank()) {
-                Row(
-                    Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End
+                IconButton(
+                    onClick = onDelete,
+                    colors = IconButtonDefaults.iconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.error.copy(0.1f)
+                    ),
+                    shape = RoundedCornerShape(rDP(8.dp))
                 ) {
-                    val ctx = LocalContext.current
-                    IconButton(onClick = {
-                        try {
-                            ctx.startActivity(
-                                Intent(
-                                    Intent.ACTION_VIEW, model.modelPageLink.toUri()
-                                )
-                            )
-                        } catch (_: Exception) {
-                        }
-                    }) {
-                        Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null)
-                    }
+                    Icon(Icons.TwoTone.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                }
+
+                IconButton(
+                    onClick = onDelete,
+                    colors = IconButtonDefaults.iconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primary.copy(0.1f)
+                    ),
+                    shape = RoundedCornerShape(rDP(8.dp))
+                ) {
+                    Icon(Icons.TwoTone.Info, contentDescription = "Delete", tint = MaterialTheme.colorScheme.primary)
                 }
             }
         }
@@ -446,12 +420,9 @@ private fun SpecRow(label: String, value: String) {
             ),
         )
         Text(
-            value,
-            style = MaterialTheme.typography.bodyLarge.copy(
+            value, style = MaterialTheme.typography.bodyLarge.copy(
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-            ),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            ), maxLines = 1, overflow = TextOverflow.Ellipsis
         )
     }
 }

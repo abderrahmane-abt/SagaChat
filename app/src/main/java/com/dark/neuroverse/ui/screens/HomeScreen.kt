@@ -50,17 +50,20 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Web
-import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -76,7 +79,6 @@ import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
@@ -107,6 +109,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -118,7 +121,6 @@ import com.dark.neuroverse.activity.PluginHubActivity
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.model.ToolOutput
-import com.dark.neuroverse.ui.components.DataPackSelectorDialog
 import com.dark.neuroverse.ui.components.MarkdownText
 import com.dark.neuroverse.ui.components.ModelLoadProgressBar
 import com.dark.neuroverse.ui.components.RegenerateModelPickerDialog
@@ -139,7 +141,6 @@ import com.dark.plugins.model.Tools
 import com.dark.userdata.helpers.MemoryDataTags
 import com.mp.data_hub_lib.manager.DataHubManager
 import com.mp.data_hub_lib.model.BrainDoc
-import com.mp.data_hub_lib.model.Doc
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -167,9 +168,7 @@ fun HomeScreen(
         when (val state = uiState) {
             is ChatUiState.Error -> {
                 Toast.makeText(
-                    context,
-                    "Error: ${state.message}",
-                    Toast.LENGTH_LONG
+                    context, "Error: ${state.message}", Toast.LENGTH_LONG
                 ).show()
             }
 
@@ -185,8 +184,7 @@ fun HomeScreen(
     }
 
     ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
+        drawerState = drawerState, drawerContent = {
             SettingsDrawerContent(
                 modifier = Modifier,
                 viewModel = viewModel,
@@ -198,49 +196,41 @@ fun HomeScreen(
                 },
                 onPluginStoreClick = {
                     context.startActivity(Intent(context, PluginHubActivity::class.java))
-                }
-            )
-        }
-    ) {
-        Scaffold(
-            modifier = Modifier
-                .fillMaxSize()
-                .imePadding(),
-            topBar = {
-                Column {
-                    TopBar(
-                        title = chatTitle,
-                        onMenu = { scope.launch { drawerState.open() } },
-                        onLeftMenu = { viewModel.newChat() }
-                    )
-                    ModelLoadProgressBar(loadState = modelState)
+                })
+        }) {
+        Scaffold(modifier = Modifier
+            .fillMaxSize()
+            .imePadding(), topBar = {
+            Column {
+                TopBar(
+                    title = chatTitle,
+                    onMenu = { scope.launch { drawerState.open() } },
+                    onLeftMenu = { viewModel.newChat() })
+                ModelLoadProgressBar(loadState = modelState)
 
-                    // Global loading indicator for UI state
-                    AnimatedVisibility(visible = uiState is ChatUiState.Loading) {
-                        Column {
-                            LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = MaterialTheme.colorScheme.primary
+                // Global loading indicator for UI state
+                AnimatedVisibility(visible = uiState is ChatUiState.Loading) {
+                    Column {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        if (uiState is ChatUiState.Loading) {
+                            Text(
+                                text = (uiState as ChatUiState.Loading).operation,
+                                modifier = Modifier.padding(
+                                    horizontal = 16.dp, vertical = 4.dp
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            if (uiState is ChatUiState.Loading) {
-                                Text(
-                                    text = (uiState as ChatUiState.Loading).operation,
-                                    modifier = Modifier.padding(
-                                        horizontal = 16.dp,
-                                        vertical = 4.dp
-                                    ),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
                         }
                     }
                 }
-            },
-            bottomBar = {
-                BottomBar(viewModel = viewModel, uiState = uiState)
             }
-        ) { innerPadding ->
+        }, bottomBar = {
+            BottomBar(viewModel = viewModel, uiState = uiState)
+        }) { innerPadding ->
             BodyContent(innerPadding, viewModel, uiState)
         }
     }
@@ -249,95 +239,77 @@ fun HomeScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TopBar(
-    title: String = "NeuroV Chat",
-    onMenu: () -> Unit = {},
-    onLeftMenu: () -> Unit = {}
+    title: String = "NeuroV Chat", onMenu: () -> Unit = {}, onLeftMenu: () -> Unit = {}
 ) {
-    TopAppBar(
+    CenterAlignedTopAppBar(
         title = {
-            val capitalizedTitle = title.replaceFirstChar {
-                if (it.isLowerCase()) it.titlecase() else it.toString()
-            }
-
-            Text(
-                text = capitalizedTitle,
-                modifier = Modifier.widthIn(max = rDP(180.dp)),
-                fontSize = rSp(22.sp),
-                color = MaterialTheme.colorScheme.primary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                fontWeight = FontWeight.SemiBold
+        ModelSelection()
+    }, navigationIcon = {
+        IconButton(
+            onClick = onMenu,
+            shape = RoundedCornerShape(rDP(8.dp)),
+            colors = IconButtonDefaults.iconButtonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
             )
-        },
-        navigationIcon = {
-            IconButton(onClick = onMenu) {
-                Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
-            }
-        },
-        actions = {
-            var showDialog by remember { mutableStateOf(false) }
+        ) {
+            Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
+        }
+    }, actions = {
+//        var showDialog by remember { mutableStateOf(false) }
+//
+//        AnimatedVisibility(showDialog) {
+//            if (showDialog) {
+//                DataPackSelectorDialog {
+//                    showDialog = false
+//                }
+//            }
+//        }
+//
+//        Row(
+//            verticalAlignment = Alignment.CenterVertically,
+//            horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
+//        ) {
+//            Button(
+//                onClick = { showDialog = true }, colors = ButtonDefaults.buttonColors(
+//                    containerColor = MaterialTheme.colorScheme.primary
+//                )
+//            ) {
+//                Text(
+//                    "Data Set", style = MaterialTheme.typography.titleMedium.copy(
+//                        color = MaterialTheme.colorScheme.onPrimary
+//                    )
+//                )
+//                Spacer(Modifier.width(rDP(8.dp)))
+//                Box(
+//                    modifier = Modifier
+//                        .size(rDP(7.dp))
+//                        .clip(CircleShape)
+//                        .background(MaterialTheme.colorScheme.onPrimary)
+//                )
+//            }
+//
 
-            AnimatedVisibility(showDialog) {
-                if (showDialog) {
-                    DataPackSelectorDialog {
-                        showDialog = false
-                    }
-                }
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
+            IconButton(
+                onClick = onLeftMenu,
+                shape = RoundedCornerShape(rDP(8.dp)),
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
             ) {
-                Button(
-                    onClick = { showDialog = true },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Text(
-                        "Data Set",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    )
-                    Spacer(Modifier.width(rDP(8.dp)))
-                    Box(
-                        modifier = Modifier
-                            .size(rDP(7.dp))
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.onPrimary)
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .padding(end = rDP(2.dp))
-                        .size(ButtonDefaults.MinHeight)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
-                        .clickable { onLeftMenu() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Add,
-                        contentDescription = "New Chat",
-                        tint = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
+                Icon(Icons.Default.Add, contentDescription = "New Chat")
             }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.background
-        )
+//        }
+    }, colors = TopAppBarDefaults.topAppBarColors(
+        containerColor = MaterialTheme.colorScheme.background
+    )
     )
 }
 
 @Composable
 fun BodyContent(
-    innerPadding: PaddingValues,
-    viewModel: ChatScreenViewModel,
-    uiState: ChatUiState
+    innerPadding: PaddingValues, viewModel: ChatScreenViewModel, uiState: ChatUiState
 ) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
@@ -357,12 +329,11 @@ fun BodyContent(
 
     // Disable auto-scroll when user scrolls up manually
     LaunchedEffect(Unit) {
-        snapshotFlow { listState.isScrollInProgress to isAtBottom }
-            .collect { (scrolling, atBottom) ->
-                if (scrolling && !atBottom) {
-                    autoScrollEnabled = false
-                }
+        snapshotFlow { listState.isScrollInProgress to isAtBottom }.collect { (scrolling, atBottom) ->
+            if (scrolling && !atBottom) {
+                autoScrollEnabled = false
             }
+        }
     }
 
     // Auto-scroll to new messages when enabled
@@ -388,17 +359,13 @@ fun BodyContent(
                     .padding(horizontal = rDP(16.dp)),
                 state = listState,
                 contentPadding = PaddingValues(
-                    bottom = rDP(96.dp),
-                    top = rDP(8.dp),
-                    start = rDP(8.dp),
-                    end = rDP(8.dp)
+                    bottom = rDP(96.dp), top = rDP(8.dp), start = rDP(8.dp), end = rDP(8.dp)
                 )
             ) {
                 items(
                     items = messages,
                     key = { it.id },
-                    contentType = { if (it.role == Role.User) "user" else "assistant" }
-                ) { message ->
+                    contentType = { if (it.role == Role.User) "user" else "assistant" }) { message ->
                     ChatBubble(
                         message = message,
                         viewModel = viewModel,
@@ -429,8 +396,7 @@ fun BodyContent(
                 contentColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.ArrowDownward,
-                    contentDescription = "Jump to bottom"
+                    imageVector = Icons.Rounded.ArrowDownward, contentDescription = "Jump to bottom"
                 )
             }
         }
@@ -498,8 +464,7 @@ private fun EmptyStateContent(uiState: ChatUiState) {
 
 @Composable
 private fun BottomBar(
-    viewModel: ChatScreenViewModel,
-    uiState: ChatUiState
+    viewModel: ChatScreenViewModel, uiState: ChatUiState
 ) {
     var input by remember { mutableStateOf("") }
     val tools by viewModel.toolList.collectAsStateWithLifecycle()
@@ -509,19 +474,14 @@ private fun BottomBar(
 
     // Derive generation state from unified UI state
     val isGenerating = when (uiState) {
-        is ChatUiState.Generating,
-        is ChatUiState.DecodingStream,
-        is ChatUiState.ExecutingTool -> true
+        is ChatUiState.Generating, is ChatUiState.DecodingStream, is ChatUiState.ExecutingTool -> true
 
         else -> false
     }
 
     // Determine if input should be disabled
     val inputEnabled = when (uiState) {
-        is ChatUiState.Loading,
-        is ChatUiState.Generating,
-        is ChatUiState.DecodingStream,
-        is ChatUiState.ExecutingTool -> false
+        is ChatUiState.Loading, is ChatUiState.Generating, is ChatUiState.DecodingStream, is ChatUiState.ExecutingTool -> false
 
         is ChatUiState.Error -> uiState.isRetryable
         else -> true
@@ -548,8 +508,7 @@ private fun BottomBar(
                     input = ""
                 }
             }
-        }
-    )
+        })
 }
 
 @SuppressLint("StateFlowValueCalledInComposition")
@@ -584,24 +543,19 @@ private fun ChatInputBar(
         // Tools list
         AnimatedVisibility(showToolsList) {
             ToolsList(
-                tools = tools,
-                onToolSelected = {
+                tools = tools, onToolSelected = {
                     onToolSelected(it)
                     showToolsList = false
-                }
-            )
+                })
         }
 
         // Model list
         AnimatedVisibility(showModelList) {
             ModelList(
-                selectedModel = selectedModel,
-                modelList = modelList,
-                onModelSelected = {
+                selectedModel = selectedModel, modelList = modelList, onModelSelected = {
                     onModelSelected(it)
                     showModelList = false
-                }
-            )
+                })
         }
 
         // Tool selection and model button row
@@ -619,13 +573,10 @@ private fun ChatInputBar(
                         showToolsList = !showToolsList
                         showModelList = false
                     }
-                },
-                enabled = inputEnabled,
-                colors = ButtonDefaults.textButtonColors(
+                }, enabled = inputEnabled, colors = ButtonDefaults.textButtonColors(
                     containerColor = if (showToolsList) SkyBlue else MaterialTheme.colorScheme.background,
                     contentColor = if (showToolsList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
-                ),
-                shape = RoundedCornerShape(rDP(8.dp))
+                ), shape = RoundedCornerShape(rDP(8.dp))
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -701,8 +652,7 @@ private fun ChatInputBar(
                     cursorColor = MaterialTheme.colorScheme.primary
                 ),
                 textStyle = LocalTextStyle.current.copy(
-                    color = MaterialTheme.colorScheme.primary,
-                    fontSize = rSp(15.sp)
+                    color = MaterialTheme.colorScheme.primary, fontSize = rSp(15.sp)
                 )
             )
 
@@ -771,9 +721,7 @@ private fun ChatInputBar(
 
 @Composable
 private fun ToolChip(
-    tool: Tools,
-    onRemove: () -> Unit,
-    modifier: Modifier = Modifier
+    tool: Tools, onRemove: () -> Unit, modifier: Modifier = Modifier
 ) {
     val accentColor = Color(0xFF0066FF)
     val backgroundColor = accentColor.copy(alpha = 0.2f)
@@ -782,13 +730,10 @@ private fun ToolChip(
         modifier = modifier
             .size(ButtonDefaults.MinHeight)
             .background(color = backgroundColor, shape = RoundedCornerShape(rDP(8.dp)))
-            .clickable { onRemove() },
-        contentAlignment = Alignment.Center
+            .clickable { onRemove() }, contentAlignment = Alignment.Center
     ) {
         Icon(
-            Icons.Default.Web,
-            contentDescription = "Remove ${tool.toolName}",
-            tint = accentColor
+            Icons.Default.Web, contentDescription = "Remove ${tool.toolName}", tint = accentColor
         )
     }
 }
@@ -959,8 +904,7 @@ private fun UserChatUI(message: Message) {
 
 @Composable
 private fun RegularChatUI(
-    message: Message,
-    viewModel: ChatScreenViewModel
+    message: Message, viewModel: ChatScreenViewModel
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -989,8 +933,7 @@ private fun RegularChatUI(
         when (empty) {
             true -> {
                 RobotDecodePlaceholder(
-                    active = true,
-                    modifier = Modifier.fillMaxWidth()
+                    active = true, modifier = Modifier.fillMaxWidth()
                 )
             }
 
@@ -1007,8 +950,7 @@ private fun RegularChatUI(
                         text = generatedMessage,
                         color = MaterialTheme.colorScheme.primary,
                         style = TextStyle.Default.copy(
-                            fontSize = rSp(13.sp),
-                            lineHeight = rSp(20.sp)
+                            fontSize = rSp(13.sp), lineHeight = rSp(20.sp)
                         )
                     )
 
@@ -1026,12 +968,9 @@ private fun RegularChatUI(
                                 .clickable {
                                     clipboardManager.setText(AnnotatedString(message.text))
                                     Toast.makeText(
-                                        context,
-                                        "Copied to clipboard!",
-                                        Toast.LENGTH_SHORT
+                                        context, "Copied to clipboard!", Toast.LENGTH_SHORT
                                     ).show()
-                                }
-                        )
+                                })
 
                         // Regenerate button
                         Icon(
@@ -1040,8 +979,7 @@ private fun RegularChatUI(
                             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                             modifier = Modifier
                                 .size(actionIconSize)
-                                .clickable { showRegenerateDialog = true }
-                        )
+                                .clickable { showRegenerateDialog = true })
 
                         // Share button
                         Icon(
@@ -1058,12 +996,10 @@ private fun RegularChatUI(
                                     }
                                     context.startActivity(
                                         Intent.createChooser(
-                                            shareIntent,
-                                            "Share message"
+                                            shareIntent, "Share message"
                                         )
                                     )
-                                }
-                        )
+                                })
 
                         // Save Memory button
                         Icon(
@@ -1076,23 +1012,29 @@ private fun RegularChatUI(
                                     CoroutineScope(Dispatchers.IO).launch {
                                         Log.d("HomeScreen", "SaveMemory")
                                         DataHubManager.reinitializeEmbeddingModel()
-                                        val data = DataHubManager.getEmbeddingManager().getEmbedding(message.text)
+                                        val data = DataHubManager.getEmbeddingManager()
+                                            .getEmbedding(message.text)
                                         Log.d("HomeScreen", "SaveMemory: $data")
-                                        val memory = listOf(BrainDoc(id = UUID.randomUUID().toString(), text = message.text, embedding = data.getOrNull()?.toList() ?: emptyList()))
+                                        val memory = listOf(
+                                            BrainDoc(
+                                                id = UUID.randomUUID().toString(),
+                                                text = message.text,
+                                                embedding = data.getOrNull()?.toList()
+                                                    ?: emptyList()
+                                            )
+                                        )
                                         Log.d("HomeScreen", "SaveMemory: $memory")
                                         viewModel.addMessageInMemory(memory, MemoryDataTags.Other)
                                         Log.d("HomeScreen", "SaveMemory done")
                                     }
-                                }
-                        )
+                                })
                     }
                 }
 
                 // Regenerate dialog
                 if (showRegenerateDialog) {
                     RegenerateModelPickerDialog(
-                        viewModel = viewModel,
-                        messageId = message.id
+                        viewModel = viewModel, messageId = message.id
                     ) {
                         showRegenerateDialog = false
                     }
@@ -1111,8 +1053,7 @@ private fun ToolChatUI(
         when (decoding) {
             true -> {
                 RobotDecodePlaceholder(
-                    active = true,
-                    modifier = Modifier.fillMaxWidth()
+                    active = true, modifier = Modifier.fillMaxWidth()
                 )
             }
 
@@ -1128,8 +1069,7 @@ private fun ToolChatUI(
                         true -> {
                             val isLoading = pluginLoading == null
                             Crossfade(
-                                targetState = isLoading,
-                                label = "plugin-loading"
+                                targetState = isLoading, label = "plugin-loading"
                             ) { loading ->
                                 if (loading) {
                                     // Loading state for plugin
@@ -1207,34 +1147,29 @@ private fun ThinkingChatUI(message: Message) {
         visible = true,
         enter = fadeIn(animationSpec = tween(120)) + expandVertically(
             animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessLow
+                dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow
             )
         ) + slideInVertically(initialOffsetY = { -it / 6 }),
         exit = fadeOut(animationSpec = tween(120)) + shrinkVertically(
             animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessMedium
+                dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium
             )
         ) + slideOutVertically(targetOffsetY = { -it / 6 })
     ) {
         var showThinkingText by remember { mutableStateOf(false) }
 
         Spacer(Modifier.height(rDP(6.dp)))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { showThinkingText = !showThinkingText }
-                .clip(RoundedCornerShape(rDP(8.dp)))
-                .background(Color(0xFF0F172A))
-                .border(rDP(1.dp), Color(0xFF334155), RoundedCornerShape(rDP(8.dp)))
-                .animateContentSize(
-                    animationSpec = tween(
-                        durationMillis = 180,
-                        easing = FastOutSlowInEasing
-                    )
+        Box(modifier = Modifier
+            .fillMaxWidth()
+            .clickable { showThinkingText = !showThinkingText }
+            .clip(RoundedCornerShape(rDP(8.dp)))
+            .background(Color(0xFF0F172A))
+            .border(rDP(1.dp), Color(0xFF334155), RoundedCornerShape(rDP(8.dp)))
+            .animateContentSize(
+                animationSpec = tween(
+                    durationMillis = 180, easing = FastOutSlowInEasing
                 )
-        ) {
+            )) {
             Text(
                 text = if (showThinkingText) "Thought:\n${message.thought}" else "Thinking... (tap to expand)",
                 modifier = Modifier.padding(rDP(8.dp)),
@@ -1252,23 +1187,15 @@ fun ToolOutputToggle(toolOutput: ToolOutput) {
     var expanded by remember { mutableStateOf(false) }
 
     val shimmerX by rememberInfiniteTransition(label = "shimmer").animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            tween(1200, easing = LinearEasing),
-            RepeatMode.Restart
-        ),
-        label = "shimmerFloat"
+        initialValue = 0f, targetValue = 1f, animationSpec = infiniteRepeatable(
+            tween(1200, easing = LinearEasing), RepeatMode.Restart
+        ), label = "shimmerFloat"
     )
 
     val shimmerBrush = Brush.linearGradient(
         colors = listOf(
-            Coral.copy(alpha = 0.25f),
-            Coral,
-            Coral.copy(alpha = 0.25f)
-        ),
-        start = Offset.Zero,
-        end = Offset(1000f * shimmerX + 1f, 0f)
+            Coral.copy(alpha = 0.25f), Coral, Coral.copy(alpha = 0.25f)
+        ), start = Offset.Zero, end = Offset(1000f * shimmerX + 1f, 0f)
     )
 
     Column(
@@ -1279,21 +1206,16 @@ fun ToolOutputToggle(toolOutput: ToolOutput) {
             modifier = Modifier
                 .clip(RoundedCornerShape(rDP(5.dp)))
                 .border(
-                    1.dp,
-                    MaterialTheme.colorScheme.outlineVariant,
-                    RoundedCornerShape(rDP(5.dp))
+                    1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(rDP(5.dp))
                 )
                 .drawWithContent {
                     drawContent()
                     drawRect(
-                        brush = shimmerBrush,
-                        alpha = 0.25f,
-                        blendMode = BlendMode.SrcOver
+                        brush = shimmerBrush, alpha = 0.25f, blendMode = BlendMode.SrcOver
                     )
                 }
                 .clickable { expanded = !expanded }
-                .padding(horizontal = rDP(12.dp), vertical = rDP(6.dp))
-        ) {
+                .padding(horizontal = rDP(12.dp), vertical = rDP(6.dp))) {
             Text(
                 text = "Show Tool Output",
                 style = MaterialTheme.typography.titleMedium,
@@ -1314,13 +1236,36 @@ fun ToolOutputToggle(toolOutput: ToolOutput) {
 
 @Composable
 fun ToolOutputContent(
-    modifier: Modifier = Modifier,
-    toolOutput: ToolOutput
+    modifier: Modifier = Modifier, toolOutput: ToolOutput
 ) {
     val context = LocalContext.current
     val runningPlugin = PluginManager.runPlugin(context, toolOutput.toolName, toolOutput.output)
 
     Card(modifier = modifier) {
         runningPlugin.api?.ToolPreviewContent(toolOutput.output)
+    }
+}
+
+@Preview
+@Composable
+fun ModelSelection() {
+    Button(
+        onClick = { /*TODO*/ },
+        colors = ButtonDefaults.buttonColors(),
+        shape = RoundedCornerShape(rDP(8.dp)),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Outlined.SmartToy, "Expand"
+            )
+            Spacer(modifier = Modifier.width(rDP(8.dp)))
+            Text(text = "Model Selection", maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(modifier = Modifier.width(rDP(8.dp)))
+            Icon(
+                Icons.Default.KeyboardArrowDown, "Expand"
+            )
+        }
     }
 }

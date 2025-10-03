@@ -14,14 +14,12 @@ fun getDefaultModelData() = ModelsData(
 )
 
 @Entity(
-    tableName = "model_props",
-    foreignKeys = [ForeignKey(
+    tableName = "model_props", foreignKeys = [ForeignKey(
         entity = ModelsData::class,
         parentColumns = ["id"],
         childColumns = ["modelId"],
         onDelete = CASCADE
-    )],
-    indices = [Index("modelId")]
+    )], indices = [Index("modelId")]
 )
 data class ModelProps(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
@@ -35,14 +33,10 @@ data class ModelProps(
 )
 
 data class ModelWithProps(
-    @Embedded val model: ModelsData,
-    @Relation(
-        parentColumn = "id",
-        entityColumn = "modelId"
-    )
-    val props: ModelProps?
+    @Embedded val model: ModelsData, @Relation(
+        parentColumn = "id", entityColumn = "modelId"
+    ) val props: ModelProps?
 )
-
 
 
 @Entity(tableName = "local_models")

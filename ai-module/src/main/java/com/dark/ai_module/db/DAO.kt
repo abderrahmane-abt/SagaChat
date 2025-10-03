@@ -8,6 +8,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.dark.ai_module.model.ModelProps
 import com.dark.ai_module.model.ModelWithProps
 import com.dark.ai_module.model.ModelsData
@@ -62,8 +63,11 @@ interface ModelDAO {
     )
 }
 
-
-@Database(entities = [ModelsData::class], version = 2, exportSchema = false)
+@Database(
+    entities = [ModelsData::class, ModelProps::class],
+    version = 2,
+    exportSchema = false
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun ModelDAO(): ModelDAO
 }
