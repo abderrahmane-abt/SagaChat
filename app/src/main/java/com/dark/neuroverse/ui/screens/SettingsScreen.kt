@@ -55,6 +55,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.ai_module.model.ModelsData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
@@ -89,7 +90,7 @@ fun SettingsScreen(onBackClick: () -> Unit = {}) {
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val currentModel by ModelManager.getModel().collectAsState()
+    val currentModel by ModelManager.currentModel.collectAsStateWithLifecycle()
 
     // Load initial data
     LaunchedEffect(Unit) {

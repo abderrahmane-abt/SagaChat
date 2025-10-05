@@ -7,6 +7,19 @@ import java.io.File
 object ModelsList {
 
     // Chat template with params + optional GBNF block.
+    val simpleChatTemplate = """
+        <|im_start|>system
+        You are a helpful assistant.  Keep responses short and concise.
+        <|im_end|>
+        
+        <|im_start|>user
+        {{user_msg}}
+        <|im_end|>
+        
+        <|im_start|>assistant
+        <|im_end|>
+        """.trimIndent()
+
     val chatTemplate = """
     {# ChatML-ish, llama.cpp minimal-engine safe #}
 

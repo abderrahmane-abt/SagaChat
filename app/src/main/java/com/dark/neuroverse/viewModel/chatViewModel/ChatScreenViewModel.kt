@@ -281,7 +281,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
             if (selectedModel.value.id == model.id) {
                 Log.w(TAG, "UnSelecting model")
-                ModelManager.unLoadModel()
+                ModelManager.unloadModel()
                 isModelLoading.value = false
                 selectedModel.value = ModelsData()
                 return@launch
@@ -289,7 +289,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
             try {
                 _uiState.value = ChatUiState.Loading("Loading model...")
-                ModelManager.unLoadModel()
+                ModelManager.unloadModel()
                 val systemPrompt = if (selectedTools.value.first.isBlank()) {
                     ModelsList.generalPurposeSystemPrompt
                 } else {
@@ -299,8 +299,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 ModelManager.loadModelAwait(
                     modelData = model,
                     defaults = ManagerDefaults(systemPrompt = systemPrompt),
-                    chatTemplate = ModelsList.chatTemplate,
-                    forceReload = true
+                    chatTemplate = ModelsList.simpleChatTemplate,
                 ) { state ->
                     _modelLoadingState.value = state
                     selectedModel.value = model
@@ -579,14 +578,13 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         // Switch model if needed
         if (selectedModel.value.id != model.id) {
             _uiState.value = ChatUiState.Loading("Switching model...")
-            ModelManager.unLoadModel()
+            ModelManager.unloadModel()
             ModelManager.loadModelAwait(
                 modelData = model,
                 defaults = ManagerDefaults(
                     systemPrompt = "You are a helpful assistant that improves message clarity and accuracy."
                 ),
                 chatTemplate = ModelsList.chatTemplate,
-                forceReload = true
             ) { state ->
                 _modelLoadingState.value = state
                 selectedModel.value = model

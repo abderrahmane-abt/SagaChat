@@ -68,7 +68,6 @@ import com.dark.neuroverse.activity.GgufPickerActivity
 import com.dark.neuroverse.model.DownloadState
 import com.dark.neuroverse.ui.components.CollapsableButton
 import com.dark.neuroverse.ui.components.StandardBottomBar
-import com.dark.neuroverse.ui.theme.Coral
 import com.dark.neuroverse.ui.theme.Mint
 import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.Success
@@ -209,7 +208,9 @@ private fun InstalledList(viewModel: ModelScreenViewModel) {
     LazyColumn(Modifier.fillMaxSize()) {
         items(installed, key = { it.modeName }) { model ->
             InstalledModelCard(
-                model = model, onDelete = { viewModel.removeModel(model.modeName) })
+                model = model,
+                onDelete = { viewModel.removeModel(model.modeName) },
+                onInfo = {})
         }
     }
 }
@@ -219,7 +220,7 @@ private fun InstalledList(viewModel: ModelScreenViewModel) {
 // ——————————————————————————————————————————————————————————
 @Composable
 private fun InstalledModelCard(
-    model: ModelsData, onDelete: () -> Unit
+    model: ModelsData, onDelete: () -> Unit, onInfo: () -> Unit
 ) {
     val isLocalImport = model.modelLink.isBlank() && model.modelPageLink.isBlank()
     val colors = MaterialTheme.colorScheme
@@ -250,23 +251,27 @@ private fun InstalledModelCard(
                     Pill(if (isLocalImport) "Local" else "Remote")
                 }
                 IconButton(
-                    onClick = onDelete,
-                    colors = IconButtonDefaults.iconButtonColors(
+                    onClick = onDelete, colors = IconButtonDefaults.iconButtonColors(
                         containerColor = MaterialTheme.colorScheme.error.copy(0.1f)
-                    ),
-                    shape = RoundedCornerShape(rDP(8.dp))
+                    ), shape = RoundedCornerShape(rDP(8.dp))
                 ) {
-                    Icon(Icons.TwoTone.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                    Icon(
+                        Icons.TwoTone.Delete,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.error
+                    )
                 }
 
                 IconButton(
-                    onClick = onDelete,
-                    colors = IconButtonDefaults.iconButtonColors(
+                    onClick = onInfo, colors = IconButtonDefaults.iconButtonColors(
                         containerColor = MaterialTheme.colorScheme.primary.copy(0.1f)
-                    ),
-                    shape = RoundedCornerShape(rDP(8.dp))
+                    ), shape = RoundedCornerShape(rDP(8.dp))
                 ) {
-                    Icon(Icons.TwoTone.Info, contentDescription = "Delete", tint = MaterialTheme.colorScheme.primary)
+                    Icon(
+                        Icons.TwoTone.Info,
+                        contentDescription = "Info",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }

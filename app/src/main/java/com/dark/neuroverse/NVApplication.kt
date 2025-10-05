@@ -26,16 +26,6 @@ class NVApplication : Application() {
         ModelManager.init(applicationContext)
         PluginManager.init(applicationContext)
         DataHubManager.init(applicationContext)
-        // Lightweight background bootstrap
-        appScope.launch {
-            // 1) Apply user-tuned decoding params (with safe fallbacks)
-            val professional = UserPrefs.getModelPParams(applicationContext).firstOrNull() ?: 2.5f
-            val emotional = UserPrefs.getModelEParams(applicationContext).firstOrNull() ?: 7.3f
-            ModelManager.updateModelParams(
-                ModelParams.Professional(professional),
-                ModelParams.Emotional(emotional)
-            )
-        }
     }
 
     companion object {
