@@ -35,7 +35,6 @@ import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import kotlinx.coroutines.launch
 
 class TempActivity : ComponentActivity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
