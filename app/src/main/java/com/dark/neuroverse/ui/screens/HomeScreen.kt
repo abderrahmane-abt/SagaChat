@@ -147,7 +147,6 @@ import java.util.UUID
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onRequestModelChange: () -> Unit,
     onRequestSettingsChange: () -> Unit,
     viewModel: ChatScreenViewModel = viewModel(
         factory = ChattingViewModelFactory(LocalContext.current)
@@ -185,14 +184,20 @@ fun HomeScreen(
                 modifier = Modifier,
                 viewModel = viewModel,
                 onSettingsClick = onRequestSettingsChange,
-                onModelsClick = onRequestModelChange,
                 onChatSelected = { scope.launch { drawerState.close() } },
+                onNewChatClick = {
+                    viewModel.newChat()
+                },
                 onDataHubClick = {
-                    context.startActivity(Intent(context, DatahubActivity::class.java))
+
                 },
                 onPluginStoreClick = {
-                    context.startActivity(Intent(context, PluginHubActivity::class.java))
-                })
+
+                },
+                onModelsClick = {
+
+                },
+            )
         }) {
         Scaffold(modifier = Modifier
             .fillMaxSize()
@@ -237,6 +242,9 @@ fun HomeScreen(
 fun TopBar(
     viewModel: ChatScreenViewModel, onMenu: () -> Unit = {}, onLeftMenu: () -> Unit = {}
 ) {
+    val title by viewModel.chatTitle.collectAsStateWithLifecycle()
+
+
     CenterAlignedTopAppBar(
         title = {
         Crossfade(viewModel.messages.collectAsStateWithLifecycle().value.isEmpty()) {
@@ -248,12 +256,13 @@ fun TopBar(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Chat",
+                        text = title,
+                        modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-
-                    Spacer(Modifier.weight(1f))
 
                     ModelSelection(viewModel, true)
                 }
@@ -265,8 +274,8 @@ fun TopBar(
             onClick = onMenu,
             shape = RoundedCornerShape(rDP(8.dp)),
             colors = IconButtonDefaults.iconButtonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
+                containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+                contentColor = MaterialTheme.colorScheme.primary
             )
         ) {
             Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
@@ -276,8 +285,8 @@ fun TopBar(
             onClick = onLeftMenu,
             shape = RoundedCornerShape(rDP(8.dp)),
             colors = IconButtonDefaults.iconButtonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
+                containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+                contentColor = MaterialTheme.colorScheme.primary
             )
         ) {
             Icon(
@@ -806,20 +815,20 @@ private fun RegularChatUI(
     var generatedMessage by remember { mutableStateOf("") }
 
 
-    LaunchedEffect(message.id, message.text, currentMsgId) {
-        if (currentMsgId == message.id) {
-            val oldLength = generatedMessage.length
-            val newContent = message.text.drop(oldLength)
-
-            newContent.forEach { char ->
-                generatedMessage += char
-                delay(15) // typing speed per token
-            }
-        } else {
-            // For already completed messages, just show full text
-            generatedMessage = message.text
-        }
-    }
+//    LaunchedEffect(message.id, message.text, currentMsgId) {
+//        if (currentMsgId == message.id) {
+//            val oldLength = generatedMessage.length
+//            val newContent = message.text.drop(oldLength)
+//
+//            newContent.forEach { char ->
+//                generatedMessage += char
+//                delay(15) // typing speed per token
+//            }
+//        } else {
+//            // For already completed messages, just show full text
+//            generatedMessage = message.text
+//        }
+//    }
 
 
     Crossfade(targetState = message.text.isEmpty(), label = "assistant-content") { empty ->
@@ -840,7 +849,7 @@ private fun RegularChatUI(
                         .padding(vertical = rDP(14.dp))
                 ) {
                     MarkdownText(
-                        text = generatedMessage,
+                        text = message.text,
                         color = MaterialTheme.colorScheme.primary,
                         style = TextStyle.Default.copy(
                             fontSize = rSp(13.sp), lineHeight = rSp(20.sp)
@@ -1159,8 +1168,8 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
                     IconButton(
                         onClick = { showDialog = true },
                         colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
+                            containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+                            contentColor = MaterialTheme.colorScheme.primary
                         ),
                         shape = RoundedCornerShape(rDP(8.dp)),
                     ) {
@@ -1171,7 +1180,10 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
                 false -> {
                     Button(
                         onClick = { showDialog = true },
-                        colors = ButtonDefaults.buttonColors(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+                            contentColor = MaterialTheme.colorScheme.primary
+                        ),
                         shape = RoundedCornerShape(rDP(8.dp)),
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {

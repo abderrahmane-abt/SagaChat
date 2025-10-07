@@ -237,7 +237,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
                 // Load chat history
                 loadInitialChat()
-                updateChatList()
+                refreshChatListFromDisk()
 
                 // Load tools and models
                 toolList.value = PluginManager.toolsList.value
@@ -361,25 +361,26 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         }
     }
 
-    fun updateChatList() {
-        viewModelScope.launch {
-            try {
-                val chatInfo = mutableListOf<ChatINFO>()
-                val root = rootNode.value.getNodeDirect("root")
-                val history = getDefaultChatHistory(root)
+    private fun refreshChatListFromDisk() {
+        try {
+            // Re‑load the whole brain tree from the encrypted file
+            val tree = readBrainFile(encryptionKey.value, appContext)
 
-                NeuronTree(history).getAllChildrenRecursive().forEach { node ->
-                    if (node.data.content.isNotBlank()) {
-                        val title = runCatching {
-                            JSONObject(node.data.content).optString("title", "Untitled")
-                        }.getOrElse { "Untitled" }
-                        chatInfo.add(ChatINFO(node.id, title))
+            // Build a fresh list of chats
+            val history = getDefaultChatHistory(tree.root)
+            val freshList =
+                NeuronTree(history).getAllChildrenRecursive()
+                    .filter { it.data.content.isNotBlank() }
+                    .map { node ->
+                        val json = JSONObject(node.data.content)
+                        val title = json.optString("title", "Untitled")
+                        ChatINFO(node.id, title)
                     }
-                }
-                _chatList.value = chatInfo
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed updating chat list", e)
-            }
+
+            // Emit once—UI will recompute automatically
+            _chatList.value = freshList
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to refresh chat list", e)
         }
     }
 
@@ -444,7 +445,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 rootNode.value = readBrainFile(encryptionKey.value, appContext)
 
                 // Update chat list
-                updateChatList()
+                refreshChatListFromDisk()
 
                 // Clear current chat if it was deleted
                 if (chatId.value == id) {
@@ -740,7 +741,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
             generateTitleIfNeeded()
             requestSave()
-            updateChatList()
+            refreshChatListFromDisk()
 
             // Clear streaming state
             currentStreamingState = null
@@ -805,6 +806,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 )
             }
         } finally {
+            refreshChatListFromDisk()
             _currentMsgId.value = ""
             if (_uiState.value !is ChatUiState.ExecutingTool) {
                 _uiState.value = ChatUiState.Idle
@@ -1116,22 +1118,119 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     private fun generateTitleIfNeeded() {
+        // Skip if title already exists
         if (_chatTitle.value.isNotBlank()) return
 
-        val firstUserMessage = _messages.value
+        // Only generate after first assistant response
+        val messages = _messages.value
+        if (messages.size < 2) return // Need at least user + assistant message
+
+        val firstUserMessage = messages
             .firstOrNull { it.role == Role.User }
             ?.text
             ?.trim()
             .orEmpty()
 
-        if (firstUserMessage.isNotBlank()) {
-            _chatTitle.value = firstUserMessage.take(48)
+        val firstAssistantMessage = messages
+            .firstOrNull { it.role == Role.Assistant || it.role == Role.Tool }
+            ?.text
+            ?.trim()
+            .orEmpty()
+
+        if (firstUserMessage.isNotBlank() && firstAssistantMessage.isNotBlank()) {
+            viewModelScope.launch {
+                try {
+                    val generatedTitle = generateTitleFromConversation(
+                        firstUserMessage,
+                        firstAssistantMessage
+                    )
+                    _chatTitle.value = generatedTitle
+                    Log.d(TAG, "Auto-generated title: $generatedTitle")
+                    requestSave()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to generate title", e)
+                    // Fallback to simple title
+                    _chatTitle.value = firstUserMessage.take(48)
+                }
+            }
+        }
+    }
+
+    private suspend fun generateTitleFromConversation(
+        userMessage: String,
+        assistantMessage: String
+    ): String = withContext(Dispatchers.IO) {
+        try {
+            // Save current system prompt
+            val originalSystemPrompt = selectedModel.value.systemPrompt
+
+            // Set title generation system prompt
+            val titlePrompt = """
+            Generate a concise, descriptive title (3-6 words) for this conversation.
+            Rules:
+            - Be specific and descriptive
+            - Use title case
+            - No quotes or punctuation at the end
+            - Capture the main topic or question
+            - Keep it under 50 characters
+            
+            User: $userMessage
+            Assistant: ${assistantMessage.take(200)}
+            
+            Title:
+        """.trimIndent()
+
+            ModelManager.setSystemPrompt("You are a title generator. Output only the title, nothing else.")
+
+            val titleBuilder = StringBuilder()
+            var tokenCount = 0
+
+            // Generate title with streaming
+            ModelManager.generateStreaming(
+                prompt = titlePrompt,
+                toolJson = null,
+                onToken = { token ->
+                    if (tokenCount < 15) { // Limit to ~15 tokens for title
+                        titleBuilder.append(token)
+                        tokenCount++
+                    }
+                },
+                onToolCalled = { _, _ -> }
+            )
+
+            // Restore original system prompt
+            ModelManager.setSystemPrompt(originalSystemPrompt)
+
+            // Clean up the generated title
+            val rawTitle = titleBuilder.toString().trim()
+            val cleanTitle = rawTitle
+                .replace(Regex("^[\"']|[\"']$"), "") // Remove quotes
+                .replace(Regex("[.!?]+$"), "") // Remove trailing punctuation
+                .replace(Regex("\\s+"), " ") // Normalize whitespace
+                .take(50) // Limit length
+                .trim()
+
+            // Fallback if generation failed or produced garbage
+            if (cleanTitle.isBlank() || cleanTitle.length < 3) {
+                throw Exception("Generated title too short")
+            }
+
+            cleanTitle
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Title generation failed, using fallback", e)
+            // Fallback: use first few words of user message
+            userMessage
+                .split(" ")
+                .take(6)
+                .joinToString(" ")
+                .take(48)
         }
     }
 
     // Replace your existing performSave() method with this:
 
-    private suspend fun performSave() {
+    private fun performSave() {
         try {
             Log.d(TAG, "=== Starting performSave ===")
 
@@ -1185,17 +1284,21 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
         } catch (e: Exception) {
             Log.e(TAG, "Save operation failed", e)
+        } finally {
+            refreshChatListFromDisk()
         }
     }
 
     // Add this new method specifically for deletion saves
-    private suspend fun performTreeSave() {
+    private fun performTreeSave() {
         try {
             Log.d(TAG, "=== Saving tree structure to disk ===")
             saveTree(rootNode.value, appContext, BuildConfig.ALIAS)
             Log.d(TAG, "Tree structure saved successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Tree save failed", e)
+        } finally {
+            refreshChatListFromDisk()
         }
     }
 
@@ -1260,36 +1363,3 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
     //endregion
 }
-
-fun ChatScreenViewModel.getTokenFlow(messageId: String): Flow<String> = flow {
-    // Continuously emit tokens from the streaming state
-    while (currentCoroutineContext().isActive) {
-        val state = currentStreamingState
-        if (state != null && state.messageId == messageId) {
-            val newTokens = state.rawBuffer.toString().substring(state.lastEmittedIndex)
-            if (newTokens.isNotEmpty()) {
-                emit(newTokens)
-                state.lastEmittedIndex += newTokens.length
-            }
-        }
-        delay(20) // small delay to avoid tight loop
-    }
-}
-
-fun ChatScreenViewModel.getCurrentBuffer(messageId: String): String {
-    val state = currentStreamingState
-    return if (state != null && state.messageId == messageId) {
-        state.visibleBuffer.toString()
-    } else {
-        ""
-    }
-}
-
-// Extend StreamingState to track last emitted index for getTokenFlow
-private var StreamingState.lastEmittedIndex: Int
-    get() = this._lastEmittedIndex ?: 0
-    set(value) {
-        this._lastEmittedIndex = value
-    }
-
-private var StreamingState._lastEmittedIndex: Int? by mutableStateOf(null)

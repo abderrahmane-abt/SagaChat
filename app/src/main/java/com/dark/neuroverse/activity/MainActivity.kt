@@ -2,6 +2,7 @@ package com.dark.neuroverse.activity
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -140,9 +141,6 @@ class MainActivity : ComponentActivity() {
 
                         composable(Screen.Home.route) {
                             HomeScreen(
-                                onRequestModelChange = {
-                                    navController.navigate(Screen.Model.route)
-                                },
                                 onRequestSettingsChange = {
                                     navController.navigate(Screen.Settings.route)
                                 }
@@ -150,10 +148,30 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable(Screen.Settings.route) {
-                            SettingsScreen() {
-                                // Handle back navigation from settings
-                                navController.popBackStack()
-                            }
+                            SettingsScreen(
+                                onDataHubClick = {
+                                    startActivity(
+                                        Intent(
+                                            this@MainActivity,
+                                            DatahubActivity::class.java
+                                        )
+                                    )
+                                },
+                                onPluginStoreClick = {
+                                    startActivity(
+                                        Intent(
+                                            this@MainActivity,
+                                            PluginHubActivity::class.java
+                                        )
+                                    )
+                                },
+                                onBackClick = {
+                                    navController.popBackStack()
+                                },
+                                onModelsClick = {
+                                    navController.navigate(Screen.Model.route)
+                                }
+                            )
                         }
                     }
                 }
@@ -170,7 +188,7 @@ class MainActivity : ComponentActivity() {
         isDirectNavigation: Boolean,
         context: Context
     ): String {
-        val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences(PREF_NAME, MODE_PRIVATE)
 
         // Check if this is a direct navigation request (e.g., from notification)
         if (isDirectNavigation) {
@@ -207,7 +225,7 @@ class MainActivity : ComponentActivity() {
      * Marks intro as shown for this session/period.
      */
     private fun markIntroAsShown(context: Context) {
-        val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences(PREF_NAME, MODE_PRIVATE)
         prefs.edit().putBoolean(KEY_INTRO_SHOWN, true).apply()
         Log.d("MainActivity", "Intro marked as shown")
     }
@@ -216,7 +234,7 @@ class MainActivity : ComponentActivity() {
      * Resets intro preferences - useful for testing or user preference.
      */
     fun resetIntroPreferences() {
-        val prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        val prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
         prefs.edit()
             .putBoolean(KEY_INTRO_SHOWN, false)
             .putBoolean(KEY_FIRST_LAUNCH, true)
@@ -275,7 +293,7 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         // Reset intro shown flag when app goes to background
         // This ensures intro shows again after app has been backgrounded for a while
-        val prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        val prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
         prefs.edit().putBoolean(KEY_INTRO_SHOWN, false).apply()
         Log.d("MainActivity", "App stopped - intro flag reset")
     }

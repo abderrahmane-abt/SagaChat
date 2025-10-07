@@ -8,6 +8,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -23,6 +24,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.ArrowCircleDown
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -49,7 +52,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -58,6 +63,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
+import com.dark.neuroverse.R
 import com.dark.neuroverse.activity.UserDataActivity
 import com.dark.neuroverse.data.UserPrefs
 import com.dark.neuroverse.model.ChatINFO
@@ -76,7 +82,9 @@ import org.json.JSONObject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBackClick: () -> Unit = {}) {
+fun SettingsScreen(onBackClick: () -> Unit = {},     onModelsClick: () -> Unit,
+                   onPluginStoreClick: () -> Unit,
+                   onDataHubClick: () -> Unit,) {
     // UI State
     var isLoading by remember { mutableStateOf(true) }
     var chatList by remember { mutableStateOf<List<ChatINFO>>(emptyList()) }
@@ -173,6 +181,37 @@ fun SettingsScreen(onBackClick: () -> Unit = {}) {
                             emotionalTone = 6.0f
                         })
                 }
+                
+                item {
+                    Spacer(Modifier.height(24.dp))
+
+                    // Action Buttons
+                    ActionButton(
+                        text = "Data Hub",
+                        icon = R.drawable.database_zap,
+                        onClick = onDataHubClick,
+                        enabled = true
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    // Action Buttons
+                    ActionButton(
+                        text = "Plugin Store",
+                        icon = Icons.Outlined.GridView,
+                        onClick = onPluginStoreClick,
+                        enabled = true
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    ActionButton(
+                        text = "Models",
+                        icon = Icons.Outlined.ArrowCircleDown,
+                        onClick = onModelsClick,
+                        enabled = true
+                    )
+                }
 
                 // User Data Section
                 item {
@@ -200,15 +239,8 @@ fun SettingsScreen(onBackClick: () -> Unit = {}) {
                             context.startActivity(Intent(context, UserDataActivity::class.java))
                         })
                 }
-
-                // App Settings Section (commented out as in original)
-                // item {
-                //     AppSettingsSection(
-                //         updateInfo = updateInfo,
-                //         updateViewModel = updateViewModel,
-                //         context = context
-                //     )
-                // }
+                
+                
             }
         }
     }
@@ -539,3 +571,77 @@ private suspend fun clearChatHistory(context: Context, chatList: List<ChatINFO>)
         saveTree(rootNode, context, BuildConfig.ALIAS)
         Log.d("clearChatHistory", "Cleared ${chatList.size} chats")
     }
+
+@Composable
+private fun ActionButton(
+    text: String, icon: ImageVector, onClick: () -> Unit, enabled: Boolean = true
+) {
+    Row(
+        modifier = Modifier
+            .clickable(enabled = enabled) { onClick() }
+            .fillMaxWidth()
+            .background(
+                color = if (enabled) {
+                    MaterialTheme.colorScheme.surface
+                } else {
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+                }, shape = MaterialTheme.shapes.medium
+            )
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif),
+            color = if (enabled) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            }
+        )
+        Icon(
+            imageVector = icon, contentDescription = text, tint = if (enabled) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            }
+        )
+    }
+}
+
+@Composable
+private fun ActionButton(
+    text: String, icon: Int, onClick: () -> Unit, enabled: Boolean = true
+) {
+    Row(
+        modifier = Modifier
+            .clickable(enabled = enabled) { onClick() }
+            .fillMaxWidth()
+            .background(
+                color = if (enabled) {
+                    MaterialTheme.colorScheme.surface
+                } else {
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+                }, shape = MaterialTheme.shapes.medium
+            )
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif),
+            color = if (enabled) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            }
+        )
+        Icon(
+            painter = painterResource(icon), contentDescription = text, tint = if (enabled) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            }
+        )
+    }
+}
