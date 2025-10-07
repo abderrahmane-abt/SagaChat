@@ -1,5 +1,6 @@
 package com.dark.ai_module.workers
 
+import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -32,6 +33,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  *   • OpenRouter cloud models (via OpenRouterExecutor)
  *   • DB persistence (Room)
  */
+@SuppressLint("StaticFieldLeak")
 object ModelManager {
 
     private const val TAG = "ModelManager"
@@ -40,6 +42,7 @@ object ModelManager {
     /*  AIDL Service (for local GGUF models)                               */
     /* ═══════════════════════════════════════════════════════════════════ */
     private var service: IGenerationService? = null
+    private var serviceBoundContext: Context? = null
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder?) {
@@ -87,9 +90,7 @@ object ModelManager {
     fun init(context: Context) {
         if (initGuard.compareAndSet(false, true)) {
             dao = DatabaseProvider.getDatabase(context).ModelDAO()
-            Intent(context, GenerationService::class.java).also { intent ->
-                context.bindService(intent, connection, Context.BIND_AUTO_CREATE)
-            }
+            startService(context)
         }
     }
 
@@ -315,14 +316,54 @@ object ModelManager {
     /*  Graceful Shutdown                                                   */
     /* ═══════════════════════════════════════════════════════════════════ */
     fun shutdown() {
+        // Graceful shutdown of the internal queue + background worker
         queue.close()
         processorJob?.cancel()
         stopGeneration()
         unloadModel()
+
+        // Cancel dispatchers & executor
         genDispatcher.cancel()
         genExecutor.shutdown()
+
+        // Stop OpenRouter (if it was configured)
         openRouterExecutor = null
+
+        // Now unbind the AIDL service
+        shutdownService()
+
         Log.i(TAG, "ModelManager shut down")
+    }
+
+    /**
+     * Explicitly bind the `GenerationService`.
+     * This is equivalent to the `init(context)` logic that was previously
+     * executed only once.
+     *
+     * @param context the context that will be kept until `shutdownService()` is called
+     */
+    fun startService(context: Context) {
+        context.bindService(
+            Intent(context, GenerationService::class.java),
+            connection,
+            Context.BIND_AUTO_CREATE
+        )
+        serviceBoundContext = context.applicationContext   // keep a weak reference
+    }
+
+    /**
+     * Unbind a connected `GenerationService`.
+     * If the service was never bound this is a no‑op.
+     */
+    fun shutdownService() {
+        val ctx = serviceBoundContext ?: return
+        try {
+            ctx.unbindService(connection)
+        } catch (e: IllegalArgumentException) {
+            // Service was already unbound – ignore
+        }
+        service = null
+        serviceBoundContext = null
     }
 
     /* ═══════════════════════════════════════════════════════════════════ */
