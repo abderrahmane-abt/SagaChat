@@ -1,11 +1,6 @@
 package com.dark.neuroverse.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -23,13 +18,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,7 +31,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.RemoveRedEye
 import androidx.compose.material.icons.rounded.ArrowDownward
-import androidx.compose.material3.Divider
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -58,12 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -81,13 +67,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.dark.neuroverse.R
-import com.dark.neuroverse.ui.theme.Coral
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlin.random.Random
 
 /* -------------------------------------------------------------------------- *//*  PUBLIC API                                                               *//* -------------------------------------------------------------------------- */
 @Composable
@@ -100,8 +82,7 @@ fun MarkdownText(
     val blocks = remember(text) { parseMarkdownBlocks(text) }
 
     Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
+        modifier = modifier, verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
     ) {
         blocks.forEach { block ->
             when (block) {
@@ -113,14 +94,11 @@ fun MarkdownText(
                 )
 
                 is MdBlock.Code -> CodeCanvas(
-                    code = block.code,
-                    language = block.lang,
-                    modifier = Modifier.fillMaxWidth()
+                    code = block.code, language = block.lang, modifier = Modifier.fillMaxWidth()
                 )
 
                 is MdBlock.Table -> MarkdownTable(
-                    table = block,
-                    modifier = Modifier.fillMaxWidth()
+                    table = block, modifier = Modifier.fillMaxWidth()
                 )
             }
         }
@@ -317,9 +295,7 @@ fun CodeCanvas(
         // -----------------------------------------------------------------
         if (editing) {
             FullScreenCodeEditor(
-                initialCode = text,
-                language = language,
-                onDismiss = { newCode ->
+                initialCode = text, language = language, onDismiss = { newCode ->
                     text = newCode
                     editing = false
                 })
@@ -423,32 +399,27 @@ private fun FullScreenCodeEditor(
                         contentDescription = "Copy",
                         modifier = Modifier
                             .size(rDP(20.dp))
-                            .clickable { clipboard.setText(AnnotatedString(source)) }
-                    )
+                            .clickable { clipboard.setText(AnnotatedString(source)) })
                     Spacer(Modifier.width(rDP(8.dp)))
                     Icon(
                         painterResource(R.drawable.done),
                         contentDescription = "Done",
                         modifier = Modifier
                             .size(rDP(20.dp))
-                            .clickable { onDismiss(source) }
-                    )
+                            .clickable { onDismiss(source) })
                 }
 
                 /* ---------- Editor ---------- */
                 BasicTextField(
-                    value = source,
-                    onValueChange = { new ->
+                    value = source, onValueChange = { new ->
                         source = new
                         highlighted = highlight(new, language, isDarkMode)
-                    },
-                    textStyle = TextStyle(
+                    }, textStyle = TextStyle(
                         fontFamily = FontFamily.Monospace,
                         fontSize = rSp(13.sp),
                         lineHeight = rSp(20.sp),
                         color = MaterialTheme.colorScheme.onSurface
-                    ),
-                    modifier = Modifier
+                    ), modifier = Modifier
                         .fillMaxSize()
                         .background(
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
@@ -476,9 +447,7 @@ private fun FullScreenCodeEditor(
     }
 }
 
-/* -------------------------------------------------------------------------- */
-/*  FIXED TABLE COMPONENT WITH PROPER CELL WIDTH                              */
-/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- *//*  FIXED TABLE COMPONENT WITH PROPER CELL WIDTH                              *//* -------------------------------------------------------------------------- */
 @Composable
 private fun MarkdownTable(
     table: MdBlock.Table,
@@ -488,7 +457,7 @@ private fun MarkdownTable(
     val numColumns = table.rows.firstOrNull()?.size ?: 1
 
     // 2. Decide on a fixed per‑cell width (you can make this dynamic if you like)
-    val cellWidth   = rDP(150.dp)
+    val cellWidth = rDP(150.dp)
     val dividerWidth = rDP(1.dp)
 
     // 3. Total width of the table (including horizontal padding)
@@ -526,8 +495,7 @@ private fun MarkdownTable(
                             when {
                                 rowIndex == 0 -> MaterialTheme.colorScheme.primary.copy(0.1f)
                                 else -> Color.Transparent
-                            },
-                            shape = RoundedCornerShape(rDP(4.dp))
+                            }, shape = RoundedCornerShape(rDP(4.dp))
                         )
                         .padding(vertical = rDP(12.dp), horizontal = rDP(8.dp))
                         .height(IntrinsicSize.Min), // Forces each box to match the row’s
@@ -548,7 +516,7 @@ private fun MarkdownTable(
                                 color = MaterialTheme.colorScheme.onSurface,
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontWeight = if (rowIndex == 0) FontWeight.SemiBold else FontWeight.Normal,
-                                    textAlign   = TextAlign.Center
+                                    textAlign = TextAlign.Center
                                 ),
                             )
                         }
@@ -579,17 +547,14 @@ private fun MarkdownTable(
 
             // Optional: a bottom divider for the whole table (makes the table feel like a box)
             VerticalDivider(
-                thickness = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                thickness = 1.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
             )
         }
     }
 }
 
 
-/* -------------------------------------------------------------------------- */
-/*  IMPROVED MARKDOWN PARSER WITH FIXED TABLE DETECTION                       */
-/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- *//*  IMPROVED MARKDOWN PARSER WITH FIXED TABLE DETECTION                       *//* -------------------------------------------------------------------------- */
 private fun parseMarkdownBlocks(input: String): List<MdBlock> {
     val out = mutableListOf<MdBlock>()
     val lines = input.lines()
@@ -621,11 +586,7 @@ private fun parseMarkdownBlocks(input: String): List<MdBlock> {
             if (line.isEmpty() || !line.startsWith("|")) break
 
             // Split by pipe and clean up cells
-            val cells = line
-                .removePrefix("|")
-                .removeSuffix("|")
-                .split("|")
-                .map { it.trim() }
+            val cells = line.removePrefix("|").removeSuffix("|").split("|").map { it.trim() }
 
             // Skip empty rows
             if (cells.all { it.isEmpty() }) {
@@ -777,8 +738,7 @@ private fun highlight(
 
     // numbers & annotations
     styleAll(
-        Regex("\\b(?:0x[0-9a-fA-F_]+|[0-9][0-9_]*(?:\\.[0-9_]+)?(?:[eE][+-]?[0-9_]+)?)\\b"),
-        num
+        Regex("\\b(?:0x[0-9a-fA-F_]+|[0-9][0-9_]*(?:\\.[0-9_]+)?(?:[eE][+-]?[0-9_]+)?)\\b"), num
     )
     styleAll(Regex("@[_A-Za-z][_A-Za-z0-9]*"), ann)
 
@@ -884,7 +844,6 @@ private fun highlight(
     return b.toAnnotatedString()
 }
 
-/* -------------------------------------------------------------------------- *//*  RICH TEXT (headings, lists, quotes, inline styles)                       *//* -------------------------------------------------------------------------- */
 @Composable
 fun RichText(
     text: String,
@@ -897,29 +856,28 @@ fun RichText(
     val annotatedText = remember(text) {
         buildAnnotatedString {
             val lines = text.lines()
-            var i = 0
-            while (i < lines.size) {
+            for (i in lines.indices) {
                 val line = lines[i]
                 val t = line.trimStart()
                 when {
                     t.startsWith("# ") -> {
-                        appendStyledHeader(t.removePrefix("# "), style, 1.5f)
+                        appendStyledSegment(t.removePrefix("# "), style, 1.5f, isHeader = true)
                     }
 
                     t.startsWith("## ") -> {
-                        appendStyledHeader(t.removePrefix("## "), style, 1.3f)
+                        appendStyledSegment(t.removePrefix("## "), style, 1.3f, isHeader = true)
                     }
 
                     t.startsWith("### ") -> {
-                        appendStyledHeader(t.removePrefix("### "), style, 1.2f)
+                        appendStyledSegment(t.removePrefix("### "), style, 1.2f, isHeader = true)
                     }
 
                     t.startsWith("#### ") -> {
-                        appendStyledHeader(t.removePrefix("#### "), style, 1.1f)
+                        appendStyledSegment(t.removePrefix("#### "), style, 1.1f, isHeader = true)
                     }
 
                     t.startsWith("##### ") -> {
-                        appendStyledHeader(t.removePrefix("##### "), style, 1.0f)
+                        appendStyledSegment(t.removePrefix("##### "), style, 1.0f, isHeader = true)
                     }
 
                     t.startsWith("> ") -> {
@@ -930,12 +888,13 @@ fun RichText(
                             )
                         ) {
                             append("❝ ")
-                            appendStyledSegment(t.removePrefix("> "))
+                            appendStyledSegment(t.removePrefix("> "), style)
                         }
                         append("\n")
                     }
 
                     t == "---" || t == "***" -> append("\n────────────────\n\n")
+
                     t.startsWith("•") || t.startsWith("- ") || t.startsWith("* ") -> {
                         append("• ")
                         val content = when {
@@ -943,23 +902,22 @@ fun RichText(
                             t.startsWith("- ") -> t.removePrefix("- ")
                             else -> t.removePrefix("* ")
                         }
-                        appendStyledSegment(content)
+                        appendStyledSegment(content, style)
                         append("\n")
                     }
 
                     t.matches(Regex("^\\d+\\. .*")) -> {
                         val parts = t.split(". ", limit = 2)
                         append("${parts[0]}. ")
-                        if (parts.size > 1) appendStyledSegment(parts[1])
+                        if (parts.size > 1) appendStyledSegment(parts[1], style)
                         append("\n")
                     }
 
                     else -> {
-                        appendStyledSegment(line)
+                        appendStyledSegment(line, style)
                         if (i < lines.lastIndex) append("\n")
                     }
                 }
-                i++
             }
         }
     }
@@ -976,97 +934,104 @@ fun RichText(
     }
 }
 
-private fun AnnotatedString.Builder.appendStyledHeader(
+private fun AnnotatedString.Builder.appendStyledSegment(
     text: String,
-    style: TextStyle,
-    scale: Float
+    baseStyle: TextStyle,
+    scale: Float = 1f,
+    isHeader: Boolean = false
 ) {
-    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = style.fontSize * scale)) {
-        append(text)
-    }
-    append("\n\n")
-}
+    if (text.isEmpty()) return
 
-private fun AnnotatedString.Builder.appendStyledSegment(text: String) {
-    if (text.isEmpty()) {
-        append(text)
-        return
-    }
     var idx = 0
     while (idx < text.length) {
         when {
-            text.startsWith("`", idx) && text.indexOf("`", idx + 1) != -1 -> {
-                val end = text.indexOf("`", idx + 1)
-                withStyle(
-                    SpanStyle(
-                        fontFamily = FontFamily.Monospace,
-                        background = Color.Gray.copy(alpha = 0.2f)
-                    )
-                ) {
-                    append(text.substring(idx + 1, end))
-                }
-                idx = end + 1
-            }
-
             text.startsWith("***", idx) && text.indexOf("***", idx + 3) != -1 -> {
                 val end = text.indexOf("***", idx + 3)
                 withStyle(
                     SpanStyle(
                         fontWeight = FontWeight.ExtraBold,
-                        fontStyle = FontStyle.Italic
+                        fontStyle = FontStyle.Italic,
+                        fontSize = baseStyle.fontSize * scale
                     )
-                ) {
-                    append(text.substring(idx + 3, end))
-                }
+                ) { append(text.substring(idx + 3, end)) }
                 idx = end + 3
             }
 
             text.startsWith("**", idx) && text.indexOf("**", idx + 2) != -1 -> {
                 val end = text.indexOf("**", idx + 2)
-                withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold)) {
-                    append(text.substring(idx + 2, end))
-                }
+                withStyle(
+                    SpanStyle(
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = baseStyle.fontSize * scale
+                    )
+                ) { append(text.substring(idx + 2, end)) }
                 idx = end + 2
             }
 
             text.startsWith("*", idx) && text.indexOf("*", idx + 1) != -1 -> {
                 val end = text.indexOf("*", idx + 1)
-                withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
-                    append(text.substring(idx + 1, end))
-                }
+                withStyle(
+                    SpanStyle(
+                        fontStyle = FontStyle.Italic,
+                        fontSize = baseStyle.fontSize * scale
+                    )
+                ) { append(text.substring(idx + 1, end)) }
+                idx = end + 1
+            }
+
+            text.startsWith("`", idx) && text.indexOf("`", idx + 1) != -1 -> {
+                val end = text.indexOf("`", idx + 1)
+                withStyle(
+                    SpanStyle(
+                        fontFamily = FontFamily.Monospace,
+                        background = Color.Gray.copy(alpha = 0.2f),
+                        fontSize = baseStyle.fontSize * scale
+                    )
+                ) { append(text.substring(idx + 1, end)) }
                 idx = end + 1
             }
 
             text.startsWith("~~", idx) && text.indexOf("~~", idx + 2) != -1 -> {
                 val end = text.indexOf("~~", idx + 2)
-                withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) {
-                    append(text.substring(idx + 2, end))
-                }
+                withStyle(
+                    SpanStyle(
+                        textDecoration = TextDecoration.LineThrough,
+                        fontSize = baseStyle.fontSize * scale
+                    )
+                ) { append(text.substring(idx + 2, end)) }
                 idx = end + 2
             }
 
             text.startsWith("__", idx) && text.indexOf("__", idx + 2) != -1 -> {
                 val end = text.indexOf("__", idx + 2)
-                withStyle(SpanStyle(textDecoration = TextDecoration.Underline)) {
-                    append(text.substring(idx + 2, end))
-                }
+                withStyle(
+                    SpanStyle(
+                        textDecoration = TextDecoration.Underline,
+                        fontSize = baseStyle.fontSize * scale
+                    )
+                ) { append(text.substring(idx + 2, end)) }
                 idx = end + 2
             }
 
             else -> {
-                append(text[idx])
+                withStyle(
+                    SpanStyle(
+                        fontWeight = if (isHeader) FontWeight.Bold else FontWeight.Normal,
+                        fontSize = baseStyle.fontSize * scale
+                    )
+                ) { append(text[idx]) }
                 idx++
             }
         }
     }
+
+    if (isHeader) append("\n\n")
 }
 
-/* -------------------------------------------------------------------------- *//*  UI HELPERS                                                               *//* -------------------------------------------------------------------------- */
+
 @Composable
 private fun LanguagePill(label: String) {
     Text(
-        text = label,
-        color = MaterialTheme.colorScheme.primary,
-        fontSize = rSp(11.sp)
+        text = label, color = MaterialTheme.colorScheme.primary, fontSize = rSp(11.sp)
     )
 }

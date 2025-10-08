@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -61,6 +62,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelData
+import com.dark.ai_module.model.ModelProvider
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.neuroverse.viewModel.ModelScreenViewModel
 import com.mp.ai_core.NativeLib
@@ -119,7 +121,11 @@ fun ModelLoadingScreen(
 
     fun saveAndExit(model: ModelData) {
         viewModel.addModel(model)
-        Toast.makeText(context, "Model saved", Toast.LENGTH_SHORT).show()
+        try {
+            Toast.makeText(context, "Model saved", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception){
+            Log.e("ModelLoadingScreen", "Error showing toast: ${e.message}")
+        }
         context.startActivity(Intent(context, MainActivity::class.java))
         activity?.finish()
     }
@@ -209,6 +215,7 @@ fun ModelLoadingScreen(
                                 ctxSize = ctxSize.text.toIntOrNull() ?: 2048,
                                 isToolCalling = toolCalling,
                                 modelPath = f.absolutePath,
+                                providerName = ModelProvider.LocalGGUF.toString(),
                                 chatTemplate = core?.optString("n_embd")
                             )
 
