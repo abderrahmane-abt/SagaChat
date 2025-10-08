@@ -497,7 +497,7 @@ private fun MarkdownTable(
                                 else -> Color.Transparent
                             }, shape = RoundedCornerShape(rDP(4.dp))
                         )
-                        .padding(vertical = rDP(12.dp), horizontal = rDP(8.dp))
+                        .padding(horizontal = rDP(8.dp))
                         .height(IntrinsicSize.Min), // Forces each box to match the row’s
                     horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))
                 ) {
@@ -507,6 +507,7 @@ private fun MarkdownTable(
                     row.forEachIndexed { colIndex, cellText ->
                         Box(
                             modifier = Modifier
+                                .padding(vertical = rDP(12.dp))
                                 .weight(1f)
                                 .fillMaxHeight(),
                             contentAlignment = Alignment.Center
@@ -530,9 +531,7 @@ private fun MarkdownTable(
                                     .background(when {
                                         rowIndex == 0 -> MaterialTheme.colorScheme.primary
                                         else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-                                    }
-
-                                    )
+                                    })
                             )
                         }
                     }
@@ -550,6 +549,11 @@ private fun MarkdownTable(
                 }
             }
         }
+
+        VerticalDivider(
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+        )
     }
 }
 
