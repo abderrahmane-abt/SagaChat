@@ -850,6 +850,8 @@ private fun RegularChatUI(
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
+    val  uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val currentMsgId by viewModel.currentMsgId.collectAsStateWithLifecycle()
 
     Crossfade(targetState = message.text.isEmpty(), label = "assistant-content") { empty ->
         when (empty) {
@@ -862,6 +864,7 @@ private fun RegularChatUI(
             false -> {
                 var showRegenerateDialog by remember { mutableStateOf(false) }
                 val actionIconSize = rDP(16.dp)
+                val isStreaming = uiState is ChatUiState.DecodingStream && currentMsgId == message.id
 
                 Column(
                     modifier = Modifier
@@ -870,6 +873,7 @@ private fun RegularChatUI(
                 ) {
                     MarkdownText(
                         text = message.text,
+                        isStreaming = isStreaming,
                         color = MaterialTheme.colorScheme.primary,
                         style = TextStyle.Default.copy(
                             fontSize = rSp(13.sp), lineHeight = rSp(20.sp)

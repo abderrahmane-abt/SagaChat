@@ -75,37 +75,48 @@ import kotlinx.coroutines.launch
 @Composable
 fun MarkdownText(
     text: String,
+    isStreaming: Boolean,
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary,
     style: TextStyle = MaterialTheme.typography.bodyMedium
 ) {
-    val blocks = remember(text) { parseMarkdownBlocks(text) }
 
-    Column(
-        modifier = modifier, verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
-    ) {
-        blocks.forEach { block ->
-            when (block) {
-                is MdBlock.Text -> RichText(
-                    text = block.content,
-                    modifier = Modifier.fillMaxWidth(),
-                    color = color,
-                    style = style
-                )
+    if (isStreaming) {
+        // Lightweight rendering during streaming
+        Text(
+            text = text,
+            modifier = modifier,
+            color = color,
+            style = style
+        )
+    }else{
+        val blocks = remember(text) { parseMarkdownBlocks(text) }
 
-                is MdBlock.Code -> CodeCanvas(
-                    code = block.code, language = block.lang, modifier = Modifier.fillMaxWidth()
-                )
+        Column(
+            modifier = modifier, verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
+        ) {
+            blocks.forEach { block ->
+                when (block) {
+                    is MdBlock.Text -> RichText(
+                        text = block.content,
+                        modifier = Modifier.fillMaxWidth(),
+                        color = color,
+                        style = style
+                    )
 
-                is MdBlock.Table -> MarkdownTable(
-                    table = block, modifier = Modifier.fillMaxWidth()
-                )
+                    is MdBlock.Code -> CodeCanvas(
+                        code = block.code, language = block.lang, modifier = Modifier.fillMaxWidth()
+                    )
+
+                    is MdBlock.Table -> MarkdownTable(
+                        table = block, modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         }
     }
 }
 
-/* -------------------------------------------------------------------------- *//*  CODE CANVAS – full‑screen edit mode, auto‑follow, lazy rendering           *//* -------------------------------------------------------------------------- */
 @Composable
 fun CodeCanvas(
     modifier: Modifier = Modifier,
@@ -118,6 +129,13 @@ fun CodeCanvas(
     var editing by rememberSaveable { mutableStateOf(false) }
     var follow by rememberSaveable { mutableStateOf(true) }
     var text by rememberSaveable { mutableStateOf(code) }
+
+    // ✅ ADD THIS: Sync text with incoming code when not editing
+    LaunchedEffect(code) {
+        if (!editing) {
+            text = code
+        }
+    }
 
     // flag that tells us whether the *read‑only* dialog is open
     var showReadDialog by remember { mutableStateOf(false) }

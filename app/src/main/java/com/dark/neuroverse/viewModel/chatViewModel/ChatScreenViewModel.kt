@@ -695,7 +695,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             val finalThought = thought?.take(MAX_THOUGHT_SAVE_CHARS)
             updateStreamingMessage(messageId, text, finalThought, isFinal = true)
 
-            generateTitleIfNeeded()
+            if (finalThought == null) generateTitleIfNeeded()
+            else generateTitleFromUserMessage(prompt)
             requestSave()
             refreshChatListFromDisk()
 
@@ -1047,7 +1048,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         if (messages.size < 2) return
 
 
-
         val firstUserMessage = messages
             .firstOrNull { it.role == Role.User }
             ?.text
@@ -1135,6 +1135,34 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 .take(6)
                 .joinToString(" ")
                 .take(48)
+        }
+    }
+
+    private fun generateTitleFromUserMessage(
+        userMessage: String,
+    ) {
+        try {
+            val rawTitle = userMessage.trim()
+            val cleanTitle = rawTitle
+                .replace(Regex("^[\"']|[\"']$"), "")
+                .replace(Regex("[.!?]+$"), "")
+                .replace(Regex("\\s+"), " ")
+                .take(50)
+                .trim()
+
+            if (cleanTitle.isBlank() || cleanTitle.length < 3) {
+                throw Exception("Generated title too short")
+            }
+
+            _chatTitle.value = cleanTitle
+            requestSave()
+        } catch (e: Exception) {
+            _chatTitle.value = userMessage
+                .split(" ")
+                .take(6)
+                .joinToString(" ")
+                .take(48)
+            requestSave()
         }
     }
 
