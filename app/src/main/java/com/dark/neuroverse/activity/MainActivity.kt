@@ -47,7 +47,7 @@ class MainActivity : ComponentActivity() {
         private const val PREF_NAME = "app_preferences"
         private const val KEY_INTRO_SHOWN = "intro_shown"
         private const val KEY_FIRST_LAUNCH = "first_launch"
-        private const val INTRO_DURATION_MS = 2000L // Reduced from 3 seconds
+        private const val INTRO_DURATION_MS = 1500L // Reduced from 3 seconds
     }
 
     private val permission = Manifest.permission.POST_NOTIFICATIONS

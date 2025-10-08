@@ -76,9 +76,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -88,6 +90,7 @@ import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.model.ModelProvider
 import com.dark.ai_module.model.OpenRouterModel
 import com.dark.ai_module.model.toModelData
+import com.dark.neuroverse.R
 import com.dark.neuroverse.activity.GgufPickerActivity
 import com.dark.neuroverse.model.DownloadState
 import com.dark.neuroverse.ui.components.CollapsableButton
@@ -237,6 +240,7 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
 
     var showModelPicker by remember { mutableStateOf(false) }
     var isLoadingModels by remember { mutableStateOf(false) }
+    var showKey by remember { mutableStateOf(false) }
 
     // Auto-load on init
     LaunchedEffect(Unit) {
@@ -292,7 +296,15 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
                         leadingIcon = {
                             Icon(Icons.TwoTone.Key, contentDescription = null)
                         },
-                       // visualTransformation = PasswordVisualTransformation(),
+                        trailingIcon = {
+                            Icon(
+                                painterResource(if (showKey) R.drawable.show else R.drawable.hide),
+                                "Show-Hide",
+                                modifier = Modifier.clickable {
+                                    showKey = !showKey
+                                })
+                        },
+                        visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )

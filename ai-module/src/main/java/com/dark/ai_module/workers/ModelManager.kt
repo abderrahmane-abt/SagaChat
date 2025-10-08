@@ -177,6 +177,11 @@ object ModelManager {
         _currentModel.value = ModelData()
     }
 
+    fun setChatTemplate(template: String) {
+        val svc = service ?: return
+        svc.setChatTemplate(template)
+    }
+
     /* ═══════════════════════════════════════════════════════════════════ */
     /*  Unified Streaming API - Routes to GGUF or OpenRouter               */
     /* ═══════════════════════════════════════════════════════════════════ */
@@ -192,7 +197,7 @@ object ModelManager {
         return when (model.providerName) {
             ModelProvider.OpenRouter.toString() -> {
                 generateOpenRouter(
-                    modelId = model.modelPath, // For OpenRouter, modelPath = model ID
+                    modelId = model.modelUrl?: "",
                     prompt = prompt,
                     systemPrompt = model.systemPrompt,
                     gen = gen,

@@ -769,8 +769,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     private fun buildFullPrompt(prompt: String, existingMessages: List<Message>): String {
         val conversationHistory = existingMessages
             .filter { it.role == Role.User || it.role == Role.Assistant }
-            .map { "${it.role.name}: ${it.text}" }
-            .joinToString("\n")
+            .joinToString("\n") { "${it.role.name}: ${it.text}" }
 
         return buildString {
             appendLine("Conversation History:")
@@ -1047,29 +1046,29 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         val messages = _messages.value
         if (messages.size < 2) return
 
+
+
         val firstUserMessage = messages
             .firstOrNull { it.role == Role.User }
             ?.text
             ?.trim()
             .orEmpty()
 
-        val firstAssistantMessage = messages
-            .firstOrNull { it.role == Role.Assistant || it.role == Role.Tool }
-            ?.text
-            ?.trim()
-            .orEmpty()
-
-        if (firstUserMessage.isNotBlank() && firstAssistantMessage.isNotBlank()) {
+        if (firstUserMessage.isNotBlank()) {
             viewModelScope.launch {
                 try {
+                    _uiState.value = ChatUiState.Generating(_currentMsgId.value ?: "-1", isFirstToken = true)
                     val generatedTitle = generateTitleFromConversation(
                         firstUserMessage,
-                        firstAssistantMessage
                     )
                     _chatTitle.value = generatedTitle
                     requestSave()
                 } catch (e: Exception) {
                     _chatTitle.value = firstUserMessage.take(48)
+                } finally {
+                    if (_uiState.value !is ChatUiState.ExecutingTool) {
+                        _uiState.value = ChatUiState.Idle
+                    }
                 }
             }
         }
@@ -1077,7 +1076,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
     private suspend fun generateTitleFromConversation(
         userMessage: String,
-        assistantMessage: String
     ): String = withContext(Dispatchers.IO) {
         try {
             val originalSystemPrompt = selectedModel.value.systemPrompt
@@ -1092,15 +1090,16 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             - Keep it under 50 characters
             
             User: $userMessage
-            Assistant: ${assistantMessage.take(200)}
             
             Title:
         """.trimIndent()
 
             ModelManager.setSystemPrompt("You are a title generator. Output only the title, nothing else.")
+            ModelManager.setChatTemplate(ModelsList.defaultChatTemplate)
 
             val titleBuilder = StringBuilder()
             var tokenCount = 0
+
 
             ModelManager.generateStreaming(
                 prompt = titlePrompt,

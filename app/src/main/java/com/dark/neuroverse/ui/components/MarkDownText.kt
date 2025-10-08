@@ -16,13 +16,17 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -35,10 +39,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.RemoveRedEye
 import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -56,6 +63,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -92,7 +100,8 @@ fun MarkdownText(
     val blocks = remember(text) { parseMarkdownBlocks(text) }
 
     Column(
-        modifier = modifier, verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
     ) {
         blocks.forEach { block ->
             when (block) {
@@ -104,11 +113,14 @@ fun MarkdownText(
                 )
 
                 is MdBlock.Code -> CodeCanvas(
-                    code = block.code, language = block.lang, modifier = Modifier.fillMaxWidth()
+                    code = block.code,
+                    language = block.lang,
+                    modifier = Modifier.fillMaxWidth()
                 )
 
                 is MdBlock.Table -> MarkdownTable(
-                    table = block, modifier = Modifier.fillMaxWidth()
+                    table = block,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
@@ -129,7 +141,7 @@ fun CodeCanvas(
     var follow by rememberSaveable { mutableStateOf(true) }
     var text by rememberSaveable { mutableStateOf(code) }
 
-    // we also need a flag that tells us whether the *read‑only* dialog is open
+    // flag that tells us whether the *read‑only* dialog is open
     var showReadDialog by remember { mutableStateOf(false) }
 
     // ---------- scroll & coroutine ----------
@@ -165,8 +177,13 @@ fun CodeCanvas(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(rDP(8.dp)))
+            .border(
+                width = 0.5.dp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                shape = RoundedCornerShape(rDP(8.dp))
+            )
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.05f))
-            .padding(horizontal = rDP(10.dp))
+            .padding(rDP(10.dp))
             .widthIn(max = rDP(100.dp))
     ) {
         // ---------- Collapsed card (title + actions) ----------
@@ -187,7 +204,7 @@ fun CodeCanvas(
             )
 
             Icon(
-                Icons.Outlined.RemoveRedEye,   // you can replace with any “read” icon
+                Icons.Outlined.RemoveRedEye,
                 contentDescription = "Read",
                 modifier = Modifier
                     .size(rDP(15.dp))
@@ -210,12 +227,25 @@ fun CodeCanvas(
                     .clickable { editing = !editing })
         }
 
-        Text(
-            text = text,
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(bottom = rDP(12.dp), start = rDP(5.dp))
-        )
+        // ---------- Scrolled preview when collapsed (non‑read mode) ----------
+        if (!editing && !showReadDialog) {
+            val preview = remember(text, language, isDarkMode) {
+                highlight(text, language, isDarkMode)
+            }
+            Text(
+                text = preview,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp)
+                    .horizontalScroll(hScroll),
+                style = TextStyle(
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = rSp(12.sp),
+                    lineHeight = rSp(20.sp)
+                ),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
 
         // -----------------------------------------------------------------
         //  If the user pressed **Read**, show a simple read‑only dialog.
@@ -237,7 +267,7 @@ fun CodeCanvas(
                             Modifier
                                 .fillMaxWidth()
                                 .padding(bottom = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             LanguagePill(language ?: "code")
                             Spacer(Modifier.weight(1f))
@@ -247,6 +277,7 @@ fun CodeCanvas(
                                 modifier = Modifier
                                     .size(20.dp)
                                     .clickable { clipboard.setText(AnnotatedString(text)) })
+                            Spacer(Modifier.width(rDP(8.dp)))
                             Icon(
                                 painterResource(R.drawable.done),
                                 contentDescription = "Close",
@@ -255,10 +286,13 @@ fun CodeCanvas(
                                     .clickable { showReadDialog = false })
                         }
 
-                        // The whole code – selectable, non‑editable
+                        // The whole code – selectable, non‑editable and syntax‑highlighted
+                        val highlighted = remember(text, language, isDarkMode) {
+                            highlight(text, language, isDarkMode)
+                        }
                         SelectionContainer {
                             Text(
-                                text = text,
+                                text = highlighted,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 style = TextStyle(
                                     fontFamily = FontFamily.Monospace,
@@ -269,7 +303,8 @@ fun CodeCanvas(
                                     .fillMaxSize()
                                     .verticalScroll(rememberScrollState())
                                     .horizontalScroll(hScroll),
-                                softWrap = false
+                                softWrap = false,
+                                textAlign = TextAlign.Start
                             )
                         }
                     }
@@ -278,56 +313,39 @@ fun CodeCanvas(
         }
 
         // -----------------------------------------------------------------
-        //  EDITING MODE – full‑screen editor (unchanged from your original)
+        //  EDITING MODE – full‑screen editor (Dialog)
         // -----------------------------------------------------------------
         if (editing) {
             FullScreenCodeEditor(
-                initialCode = text, language = language, onDismiss = { newCode ->
+                initialCode = text,
+                language = language,
+                onDismiss = { newCode ->
                     text = newCode
                     editing = false
                 })
         } else {
-            // -----------------------------------------------------------------
-            //  READ‑ONLY (expanded) view – shown only after the **Read** button
-            //  was tapped.  We keep the lazy‑list implementation so huge blocks
-            //  still render efficiently.
-            // -----------------------------------------------------------------
             if (showReadDialog.not()) {
                 // No expanded view – the card already shows the title only.
                 // The rest of the UI (FAB, etc.) stays hidden in the collapsed state.
             } else {
-                // (This block will never be hit because the dialog already shows
-                // the whole code.  It is kept only for completeness if you ever
-                // want to switch to an in‑place expanded view instead of a dialog.)
+                // Expanded view: show the code with lazy‑scroll list & jump‑to‑bottom FAB
                 val highlighted = remember(text, language, isDarkMode) {
                     highlight(text, language, isDarkMode)
                 }
-                val lines = highlighted.text.split('\n')
-
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .heightIn(max = rDP(260.dp))
-                        .fillMaxWidth()
-                        .padding(horizontal = rDP(12.dp))
-                ) {
-                    items(lines) { line ->
-                        SelectionContainer {
-                            Text(
-                                text = line,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                style = TextStyle(
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = rSp(12.sp),
-                                    lineHeight = rSp(20.sp)
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .horizontalScroll(hScroll),
-                                softWrap = false
-                            )
-                        }
-                    }
+                SelectionContainer {
+                    Text(
+                        text = highlighted,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = rDP(12.dp))
+                            .horizontalScroll(hScroll),
+                        style = TextStyle(
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = rSp(12.sp),
+                            lineHeight = rSp(20.sp)
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
 
                 // Jump‑to‑bottom FAB (visible only when not following)
@@ -343,7 +361,7 @@ fun CodeCanvas(
                         onClick = {
                             follow = true
                             scope.launch {
-                                val last = lines.size - 1
+                                val last = highlightedLinesCount(text)
                                 listState.animateScrollToItem(last)
                                 if (autoScrollHorizontal) hScroll.animateScrollTo(hScroll.maxValue)
                             }
@@ -371,26 +389,32 @@ private fun FullScreenCodeEditor(
     language: String? = null,
     isDarkMode: Boolean = isSystemInDarkTheme()
 ) {
-    var code by rememberSaveable(initialCode) { mutableStateOf(initialCode) }
+    // --------- 1️⃣  Raw source – editable -------------
+    var source by remember { mutableStateOf(initialCode) }   // plain string
+
+    // --------- 2️⃣  Highlighted view for display  ------
+    var highlighted by remember { mutableStateOf(highlight(initialCode, language, isDarkMode)) }
+
     val clipboard = LocalClipboardManager.current
 
     Dialog(
-        onDismissRequest = { onDismiss(code) },
+        onDismissRequest = { onDismiss(source) },   // return the raw code
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Box(
             Modifier
+                .padding(rDP(8.dp))
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(16.dp)
+                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(rDP(8.dp)))
+                .padding(rDP(16.dp))
         ) {
             Column {
-                // Header inside dialog
+                /* ---------- Header ---------- */
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(bottom = rDP(8.dp)),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     LanguagePill(language ?: "code")
                     Spacer(Modifier.weight(1f))
@@ -398,75 +422,174 @@ private fun FullScreenCodeEditor(
                         painterResource(R.drawable.copy),
                         contentDescription = "Copy",
                         modifier = Modifier
-                            .size(20.dp)
-                            .clickable { clipboard.setText(AnnotatedString(code)) })
+                            .size(rDP(20.dp))
+                            .clickable { clipboard.setText(AnnotatedString(source)) }
+                    )
+                    Spacer(Modifier.width(rDP(8.dp)))
                     Icon(
                         painterResource(R.drawable.done),
                         contentDescription = "Done",
                         modifier = Modifier
-                            .size(20.dp)
-                            .clickable { onDismiss(code) })
+                            .size(rDP(20.dp))
+                            .clickable { onDismiss(source) }
+                    )
                 }
 
-                // Editor
+                /* ---------- Editor ---------- */
                 BasicTextField(
-                    value = code, onValueChange = { code = it }, textStyle = TextStyle(
+                    value = source,
+                    onValueChange = { new ->
+                        source = new
+                        highlighted = highlight(new, language, isDarkMode)
+                    },
+                    textStyle = TextStyle(
                         fontFamily = FontFamily.Monospace,
                         fontSize = rSp(13.sp),
                         lineHeight = rSp(20.sp),
                         color = MaterialTheme.colorScheme.onSurface
-                    ), modifier = Modifier
+                    ),
+                    modifier = Modifier
                         .fillMaxSize()
                         .background(
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
                             RoundedCornerShape(rDP(12.dp))
                         )
-                        .padding(horizontal = rDP(12.dp))
+                        .padding(rDP(12.dp))
+                )
+
+                /* ---------- Preview (syntax‑highlighted) ---------- */
+                // This is optional – you can remove it if you only need raw editing.
+                Text(
+                    text = highlighted,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    style = TextStyle(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = rSp(12.sp),
+                        lineHeight = rSp(20.sp)
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
         }
     }
 }
 
-/* -------------------------------------------------------------------------- *//*  SUPPORT FOR TABLES                                                       *//* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+/*  FIXED TABLE COMPONENT WITH PROPER CELL WIDTH                              */
+/* -------------------------------------------------------------------------- */
 @Composable
 private fun MarkdownTable(
-    table: MdBlock.Table, modifier: Modifier = Modifier
+    table: MdBlock.Table,
+    modifier: Modifier = Modifier,
 ) {
-    Column(modifier) {
-        table.rows.forEachIndexed { rowIdx, cells ->
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .background(
-                        if (rowIdx % 2 == 0) MaterialTheme.colorScheme.surfaceVariant
-                        else Color.Transparent
-                    )
-            ) {
-                cells.forEachIndexed { colIdx, cell ->
-                    Text(
-                        text = cell,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        textAlign = table.align.getOrNull(colIdx) ?: TextAlign.Start,
-                        style = MaterialTheme.typography.bodySmall
+    // 1. Determine the number of columns (use a safe fallback of 1)
+    val numColumns = table.rows.firstOrNull()?.size ?: 1
+
+    // 2. Decide on a fixed per‑cell width (you can make this dynamic if you like)
+    val cellWidth   = rDP(150.dp)
+    val dividerWidth = rDP(1.dp)
+
+    // 3. Total width of the table (including horizontal padding)
+    val totalTableWidth = cellWidth * numColumns + dividerWidth * (numColumns - 1) + rDP(32.dp)
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(0.5f),
+                shape = RoundedCornerShape(rDP(8.dp))
+            )
+            .background(
+                color = MaterialTheme.colorScheme.primary.copy(alpha = .01f),
+                shape = RoundedCornerShape(rDP(8.dp))
+            )
+            .padding(rDP(12.dp)),
+    ) {
+        // ----------------------------------------------------------
+        // The entire table occupies a fixed width so that the weight
+        // modifier in the Row below can actually split the space.
+        // ----------------------------------------------------------
+        Column(
+            modifier = Modifier.width(totalTableWidth),
+            verticalArrangement = Arrangement.spacedBy(0.dp)
+        ) {
+            table.rows.forEachIndexed { rowIndex, row ->
+                // Row contents
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            when {
+                                rowIndex == 0 -> MaterialTheme.colorScheme.primary.copy(0.1f)
+                                else -> Color.Transparent
+                            },
+                            shape = RoundedCornerShape(rDP(4.dp))
+                        )
+                        .padding(vertical = rDP(12.dp), horizontal = rDP(8.dp))
+                        .height(IntrinsicSize.Min), // Forces each box to match the row’s
+                    horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))
+                ) {
+                    // --------------------------------------------------------------------------
+                    // Cell loop – weight takes care of equal widths.
+                    // --------------------------------------------------------------------------
+                    row.forEachIndexed { colIndex, cellText ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            RichText(
+                                text = cellText,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = if (rowIndex == 0) FontWeight.SemiBold else FontWeight.Normal,
+                                    textAlign   = TextAlign.Center
+                                ),
+                            )
+                        }
+
+                        //  Vertical divider between cells (except after the last one)
+                        if (colIndex < row.lastIndex) {
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .fillMaxHeight()
+                                    .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                            )
+                        }
+                    }
+                }
+
+                // ------------------------------------------------------------------
+                // One horizontal line *after the header* – change the logic if you
+                // want the bottom line of the table, the top line, or no lines at all.
+                // ------------------------------------------------------------------
+                if (rowIndex != 0 && table.rows.size > 1 && rowIndex < table.rows.size - 1) {
+                    HorizontalDivider(
+                        thickness = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
                     )
                 }
             }
+
+            // Optional: a bottom divider for the whole table (makes the table feel like a box)
+            VerticalDivider(
+                thickness = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+            )
         }
     }
 }
 
-/* -------------------------------------------------------------------------- *//*  MARKDOWN PARSER – now also detects pipe tables                           *//* -------------------------------------------------------------------------- */
-private sealed class MdBlock {
-    data class Text(val content: String) : MdBlock()
-    data class Code(val lang: String?, val code: String) : MdBlock()
 
-    /** `align` stores a `TextAlign` for each column */
-    data class Table(val rows: List<List<String>>, val align: List<TextAlign>) : MdBlock()
-}
-
+/* -------------------------------------------------------------------------- */
+/*  IMPROVED MARKDOWN PARSER WITH FIXED TABLE DETECTION                       */
+/* -------------------------------------------------------------------------- */
 private fun parseMarkdownBlocks(input: String): List<MdBlock> {
     val out = mutableListOf<MdBlock>()
     val lines = input.lines()
@@ -478,7 +601,6 @@ private fun parseMarkdownBlocks(input: String): List<MdBlock> {
     var codeLang: String? = null
     val codeBuf = StringBuilder()
 
-    // flush normal text
     fun flushText() {
         if (textBuf.isNotEmpty()) {
             out += MdBlock.Text(textBuf.toString().trimEnd())
@@ -486,48 +608,79 @@ private fun parseMarkdownBlocks(input: String): List<MdBlock> {
         }
     }
 
-    // ---- table detection ----------------------------------------------------
+    // ----------- improved table detector --------------------------------------
     fun tryParseTable(startIdx: Int): Pair<Int, MdBlock.Table?> {
         var idx = startIdx
         val rows = mutableListOf<List<String>>()
-        while (idx < lines.size && lines[idx].trimStart().startsWith("|")) {
-            // remove leading/trailing pipe, split on '|'
-            val cells = lines[idx].trim().trim('|').split("|").map { it.trim() }
+
+        // collect all consecutive pipe-rows
+        while (idx < lines.size) {
+            val line = lines[idx].trim()
+
+            // Stop if line doesn't start with pipe or is empty
+            if (line.isEmpty() || !line.startsWith("|")) break
+
+            // Split by pipe and clean up cells
+            val cells = line
+                .removePrefix("|")
+                .removeSuffix("|")
+                .split("|")
+                .map { it.trim() }
+
+            // Skip empty rows
+            if (cells.all { it.isEmpty() }) {
+                idx++
+                break
+            }
+
             rows += cells
             idx++
         }
 
-        // need at least header + separator
+        // need at least header + separator row
         if (rows.size < 2) return startIdx to null
 
-        // separator line (e.g. |---|:---:|---:|)
-        val sep = rows[1]
-        val isSeparator = sep.all {
-            it.matches(Regex("-{3,}|:{1,2}-+|-{3,}:"))
+        // Check if second row is a separator (contains only dashes, colons, and spaces)
+        val separatorRow = rows[1]
+        val isSeparator = separatorRow.all { cell ->
+            cell.isEmpty() || cell.matches(Regex("^:?-+:?$"))
         }
+
         if (!isSeparator) return startIdx to null
 
-        // column alignment → TextAlign
-        val align = sep.map {
+        // Parse column alignment from separator
+        val align = separatorRow.map { cell ->
             when {
-                it.startsWith(":") && it.endsWith(":") -> TextAlign.Center
-                it.startsWith(":") -> TextAlign.Start
-                it.endsWith(":") -> TextAlign.End
+                cell.startsWith(":") && cell.endsWith(":") -> TextAlign.Center
+                cell.endsWith(":") -> TextAlign.End
+                cell.startsWith(":") -> TextAlign.Start
                 else -> TextAlign.Start
             }
         }
 
-        // drop separator row
-        val dataRows = rows.filterIndexed { idx2, _ -> idx2 != 1 }
-        return idx to MdBlock.Table(dataRows, align)
+        // Remove separator row and return the table
+        val dataRows = rows.filterIndexed { rowIndex, _ -> rowIndex != 1 }
+
+        // Ensure all rows have the same number of columns
+        val maxCols = dataRows.maxOfOrNull { it.size } ?: align.size
+        val normalizedRows = dataRows.map { row ->
+            if (row.size < maxCols) {
+                row + List(maxCols - row.size) { "" }
+            } else {
+                row.take(maxCols)
+            }
+        }
+
+        return idx to MdBlock.Table(normalizedRows, align)
     }
 
-    // ---- main parsing loop --------------------------------------------------
+    // ---------------- main loop -----------------------------------------------
     while (i < lines.size) {
         val raw = lines[i]
         val trimmed = raw.trimStart()
+
         when {
-            // code fence ---------------------------------------------------------
+            // code block start/end
             trimmed.startsWith("```") -> {
                 if (!inCode) {
                     flushText()
@@ -542,33 +695,37 @@ private fun parseMarkdownBlocks(input: String): List<MdBlock> {
                 i++
                 continue
             }
-            // inside a code block ------------------------------------------------
+
+            // inside code block
             inCode -> {
                 codeBuf.append(raw)
                 if (i != lines.lastIndex) codeBuf.append('\n')
                 i++
                 continue
             }
-            // possible table ----------------------------------------------------
+
+            // potential table
             trimmed.startsWith("|") -> {
-                val (newIdx, table) = tryParseTable(i)
-                if (table != null) {
+                val (newIdx, tbl) = tryParseTable(i)
+                if (tbl != null) {
                     flushText()
-                    out += table
+                    out += tbl
                     i = newIdx
                     continue
                 }
-                // not a true table → plain text
+
+                // not a real table – fall back to plain text
                 textBuf.append(raw)
                 if (i != lines.lastIndex) textBuf.append('\n')
+                i++
             }
-            // ordinary text -----------------------------------------------------
+
             else -> {
                 textBuf.append(raw)
                 if (i != lines.lastIndex) textBuf.append('\n')
+                i++
             }
         }
-        i++
     }
 
     // final flush
@@ -578,6 +735,12 @@ private fun parseMarkdownBlocks(input: String): List<MdBlock> {
         flushText()
     }
     return out
+}
+
+private sealed class MdBlock {
+    data class Text(val content: String) : MdBlock()
+    data class Code(val lang: String?, val code: String) : MdBlock()
+    data class Table(val rows: List<List<String>>, val align: List<TextAlign>) : MdBlock()
 }
 
 /* -------------------------------------------------------------------------- *//*  SYNTAX HIGHLIGHTER (unchanged apart from minor memoisation)             *//* -------------------------------------------------------------------------- */
@@ -599,8 +762,12 @@ private fun highlight(
     val kw = SpanStyle(color = Color(0xFFC678DD), fontWeight = FontWeight.SemiBold)
     val typ = if (!isDarkMode) SpanStyle(color = Color(0xFF795920))
     else SpanStyle(color = Color(0xFFE5C07B))
-    val funDecl = SpanStyle(color = if (isDarkMode) Color(0xFF61AFEF) else Color(0xFF0070C2))
-    val call = SpanStyle(color = if (isDarkMode) Color(0xFF56B6C2) else Color(0xFF0097A7))
+    val funDecl = SpanStyle(
+        color = if (isDarkMode) Color(0xFF61AFEF) else Color(0xFF0070C2)
+    )
+    val call = SpanStyle(
+        color = if (isDarkMode) Color(0xFF56B6C2) else Color(0xFF0097A7)
+    )
 
     // comments / strings first
     styleAll(Regex("//.*"), cmt)
@@ -610,7 +777,8 @@ private fun highlight(
 
     // numbers & annotations
     styleAll(
-        Regex("\\b(?:0x[0-9a-fA-F_]+|[0-9][0-9_]*(?:\\.[0-9_]+)?(?:[eE][+-]?[0-9_]+)?)\\b"), num
+        Regex("\\b(?:0x[0-9a-fA-F_]+|[0-9][0-9_]*(?:\\.[0-9_]+)?(?:[eE][+-]?[0-9_]+)?)\\b"),
+        num
     )
     styleAll(Regex("@[_A-Za-z][_A-Za-z0-9]*"), ann)
 
@@ -705,8 +873,12 @@ private fun highlight(
             Regex("\\b(class|def|function|var|let|const|return|if|else|for|while|switch|case|break|continue|try|catch|finally|throw|new)\\b"),
             kw
         )
-        styleAll(Regex("\\b([A-Z][A-Za-z0-9_]*)\\b"), typ)
-        styleAll(Regex("\\b[a-zA-Z_]\\w*(?=\\s*\\()"), call)
+        styleAll(
+            Regex("\\b([A-Z][A-Za-z0-9_]*)\\b"), typ
+        )
+        styleAll(
+            Regex("\\b[a-zA-Z_]\\w*(?=\\s*\\()"), call
+        )
     }
 
     return b.toAnnotatedString()
@@ -746,10 +918,15 @@ fun RichText(
                         appendStyledHeader(t.removePrefix("#### "), style, 1.1f)
                     }
 
+                    t.startsWith("##### ") -> {
+                        appendStyledHeader(t.removePrefix("##### "), style, 1.0f)
+                    }
+
                     t.startsWith("> ") -> {
                         withStyle(
                             SpanStyle(
-                                fontStyle = FontStyle.Italic, color = color.copy(alpha = 0.7f)
+                                fontStyle = FontStyle.Italic,
+                                color = color.copy(alpha = 0.7f)
                             )
                         ) {
                             append("❝ ")
@@ -800,7 +977,9 @@ fun RichText(
 }
 
 private fun AnnotatedString.Builder.appendStyledHeader(
-    text: String, style: TextStyle, scale: Float
+    text: String,
+    style: TextStyle,
+    scale: Float
 ) {
     withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = style.fontSize * scale)) {
         append(text)
@@ -823,7 +1002,9 @@ private fun AnnotatedString.Builder.appendStyledSegment(text: String) {
                         fontFamily = FontFamily.Monospace,
                         background = Color.Gray.copy(alpha = 0.2f)
                     )
-                ) { append(text.substring(idx + 1, end)) }
+                ) {
+                    append(text.substring(idx + 1, end))
+                }
                 idx = end + 1
             }
 
@@ -831,9 +1012,12 @@ private fun AnnotatedString.Builder.appendStyledSegment(text: String) {
                 val end = text.indexOf("***", idx + 3)
                 withStyle(
                     SpanStyle(
-                        fontWeight = FontWeight.ExtraBold, fontStyle = FontStyle.Italic
+                        fontWeight = FontWeight.ExtraBold,
+                        fontStyle = FontStyle.Italic
                     )
-                ) { append(text.substring(idx + 3, end)) }
+                ) {
+                    append(text.substring(idx + 3, end))
+                }
                 idx = end + 3
             }
 
@@ -881,93 +1065,8 @@ private fun AnnotatedString.Builder.appendStyledSegment(text: String) {
 @Composable
 private fun LanguagePill(label: String) {
     Text(
-        text = label, color = MaterialTheme.colorScheme.primary, fontSize = rSp(11.sp)
+        text = label,
+        color = MaterialTheme.colorScheme.primary,
+        fontSize = rSp(11.sp)
     )
 }
-
-/* -------------------------------------------------------------------------- *//*  PLACEHOLDER – robot like “decoding…” animation                           *//* -------------------------------------------------------------------------- */
-@Composable
-fun RobotDecodePlaceholder(
-    active: Boolean, base: String = "Decoding response", modifier: Modifier = Modifier
-) {
-    val charset = "!@#${'$'}%&*+/:;?=<>[]{}ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789░▒▓█"
-    var shown by remember { mutableStateOf(base) }
-    var step by remember { mutableStateOf(0) }
-
-    // caret blink
-    val blink by rememberInfiniteTransition(label = "caret").animateFloat(
-        initialValue = 1f, targetValue = 0.25f, animationSpec = infiniteRepeatable(
-            animation = tween(500), repeatMode = RepeatMode.Reverse
-        ), label = "caretFloat"
-    )
-
-    // shimmer sweep
-    val shimmerX by rememberInfiniteTransition(label = "shimmer").animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Restart),
-        label = "shimmerFloat"
-    )
-
-    // loop while active
-    LaunchedEffect(active) {
-        if (!active) return@LaunchedEffect
-        val phrases = listOf(
-            "$base …",
-            "Tokenizing …",
-            "Loading KV cache …",
-            "Neurons waking up …",
-            "Planning …",
-            "Reasoning …"
-        )
-        while (active && coroutineContext.isActive) {
-            val seed = phrases[step % phrases.size]
-            val noisy = seed.map { c ->
-                when {
-                    c.isWhitespace() || c == '…' -> c
-                    Random.nextFloat() < 0.20f -> charset.random()
-                    else -> c
-                }
-            }.joinToString("")
-            shown = noisy
-            step++
-            delay(66L) // ~15 fps
-        }
-    }
-
-    // render
-    val caret = "▌"
-    val gradient = Brush.linearGradient(
-        colors = listOf(
-            Coral.copy(alpha = 0.25f), Coral, Coral.copy(alpha = 0.25f)
-        ), start = Offset.Zero, end = Offset(1000f * shimmerX + 1f, 0f)
-    )
-
-    Box(
-        modifier
-            .clip(RoundedCornerShape(rDP(8.dp)))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(rDP(8.dp)))
-            .padding(rDP(9.dp))
-    ) {
-        Text(
-            text = shown,
-            style = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.drawWithContent {
-                drawContent()
-                drawRect(brush = gradient, alpha = 0.25f, blendMode = BlendMode.SrcOver)
-            })
-        Text(
-            text = caret,
-            style = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = blink),
-            modifier = Modifier.align(Alignment.BottomEnd)
-        )
-    }
-}
-
-/* -------------------------------------------------------------------------- *//*  INTERNAL STATE HOLDER                                                    *//* -------------------------------------------------------------------------- */
-private data class CodeUiState(
-    val editing: Boolean = false, val follow: Boolean = true, val text: String
-)
