@@ -226,7 +226,13 @@ fun HomeScreen(
                     viewModel,
                     onMenu = { scope.launch { drawerState.open() } },
                     onLeftMenu = {
-                        context.startActivity(Intent(context, ModelPropEditorActivity::class.java))
+                        if(ModelManager.currentModel.value.modelName == ""){
+                            Toast.makeText(context, "Load a Model First!..", Toast.LENGTH_LONG).show()
+                        }else{
+                            context.startActivity(Intent(context, ModelPropEditorActivity::class.java).apply {
+                                putExtra("modelName", ModelManager.currentModel.value.modelName)
+                            })
+                        }
                     })
                 ModelLoadProgressBar(loadState = modelState)
 
