@@ -102,7 +102,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -130,12 +129,12 @@ import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.SlateGrey
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
+import com.dark.neuroverse.userdata.helpers.MemoryDataTags
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
 import com.dark.neuroverse.viewModel.chatViewModel.ChatUiState
 import com.dark.neuroverse.viewModel.chatViewModel.ChattingViewModelFactory
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
-import com.dark.userdata.helpers.MemoryDataTags
 import com.mp.data_hub_lib.manager.DataHubManager
 import com.mp.data_hub_lib.model.BrainDoc
 import kotlinx.coroutines.CoroutineScope
@@ -222,18 +221,19 @@ fun HomeScreen(
             .fillMaxSize()
             .imePadding(), topBar = {
             Column {
-                TopBar(
-                    viewModel,
-                    onMenu = { scope.launch { drawerState.open() } },
-                    onLeftMenu = {
-                        if(ModelManager.currentModel.value.modelName == ""){
-                            Toast.makeText(context, "Load a Model First!..", Toast.LENGTH_LONG).show()
-                        }else{
-                            context.startActivity(Intent(context, ModelPropEditorActivity::class.java).apply {
+                TopBar(viewModel, onMenu = { scope.launch { drawerState.open() } }, onLeftMenu = {
+                    if (ModelManager.currentModel.value.modelName == "") {
+                        Toast.makeText(context, "Load a Model First!..", Toast.LENGTH_LONG).show()
+                    } else {
+                        context.startActivity(
+                            Intent(
+                                context,
+                                ModelPropEditorActivity::class.java
+                            ).apply {
                                 putExtra("modelName", ModelManager.currentModel.value.modelName)
                             })
-                        }
-                    })
+                    }
+                })
                 ModelLoadProgressBar(loadState = modelState)
 
                 // Global loading indicator for UI state
@@ -253,6 +253,22 @@ fun HomeScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                    }
+                }
+
+                AnimatedVisibility(visible = uiState is ChatUiState.GeneratingTitle) {
+                    Column {
+                        // Small spinner that turns the bar blue – feel free to tweak
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                        Text(
+                            text = "Generating title…",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
 
@@ -404,7 +420,7 @@ fun BodyContent(
                         viewModel = viewModel,
                         uiState = uiState,
                     )
-                    Spacer(Modifier.height(rDP(18.dp)))
+                    Spacer(Modifier.height(rDP(12.dp)))
                 }
             }
         }
@@ -848,7 +864,7 @@ private fun UserChatUI(message: Message) {
         Text(
             text = message.text,
             color = MaterialTheme.colorScheme.primary,
-            style = MaterialTheme.typography.bodyLarge
+            style = MaterialTheme.typography.bodyMedium
         )
     }
 }
@@ -859,10 +875,12 @@ private fun RegularChatUI(
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
-    val  uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val currentMsgId by viewModel.currentMsgId.collectAsStateWithLifecycle()
 
-    Crossfade(targetState = message.text.isEmpty(), label = "assistant-content") { empty ->
+    val showDecoder = uiState is ChatUiState.DecodingStream && currentMsgId == message.id
+
+    Crossfade(targetState = showDecoder, label = "assistant-content") { empty ->
         when (empty) {
             true -> {
                 RobotDecodePlaceholder(
@@ -872,22 +890,28 @@ private fun RegularChatUI(
 
             false -> {
                 var showRegenerateDialog by remember { mutableStateOf(false) }
-                val actionIconSize = rDP(16.dp)
-                val isStreaming = uiState is ChatUiState.DecodingStream && currentMsgId == message.id
+                val actionIconSize = rDP(14.dp)
+                val isStreaming =
+                    uiState is ChatUiState.DecodingStream && currentMsgId == message.id
 
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = rDP(14.dp))
+                        .padding(vertical = rDP(4.dp))
                 ) {
-                    MarkdownText(
-                        text = message.text,
-                        isStreaming = isStreaming,
-                        color = MaterialTheme.colorScheme.primary,
-                        style = TextStyle.Default.copy(
-                            fontSize = rSp(13.sp), lineHeight = rSp(20.sp)
+                    if (message.text.isNotEmpty()) {
+                        MarkdownText(
+                            text = message.text,
+                            isStreaming = isStreaming,
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodyMedium
                         )
-                    )
+                    } else {
+                        Text(
+                            "Error Generating Response....\uD83D\uDE1E",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
 
                     Spacer(Modifier.height(rDP(10.dp)))
 
@@ -1187,8 +1211,9 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
     val modelList by viewModel.modelList.collectAsStateWithLifecycle()
     val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
     val isLoading by viewModel.isModelLoading.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedModelName by remember { mutableStateOf("") }
-
+    val isGeneratingTitle = uiState is ChatUiState.GeneratingTitle
     LaunchedEffect(selectedModel) {
         selectedModelName = if (selectedModel.modelName == "") "Select Model"
         else selectedModel.modelName
@@ -1199,7 +1224,7 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
             when (it) {
                 true -> {
                     IconButton(
-                        onClick = { showDialog = true },
+                        onClick = { if (!isGeneratingTitle) showDialog = true },
                         colors = IconButtonDefaults.iconButtonColors(
                             containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
                             contentColor = MaterialTheme.colorScheme.primary
@@ -1212,7 +1237,7 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
 
                 false -> {
                     Button(
-                        onClick = { showDialog = true },
+                        onClick = { if (!isGeneratingTitle) showDialog = true },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
                             contentColor = MaterialTheme.colorScheme.primary

@@ -29,12 +29,10 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.outlined.RemoveRedEye
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Done
-import androidx.compose.material.icons.rounded.ModeEdit
 import androidx.compose.material.icons.rounded.ModeEditOutline
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -56,7 +54,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -71,30 +68,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.dark.neuroverse.R
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
 import kotlinx.coroutines.launch
 
-/* -------------------------------------------------------------------------- *//*  PUBLIC API                                                               *//* -------------------------------------------------------------------------- */
 @Composable
 fun MarkdownText(
     text: String,
     isStreaming: Boolean,
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary,
-    style: TextStyle = MaterialTheme.typography.bodyMedium
+    style: TextStyle = MaterialTheme.typography.bodySmall
 ) {
-
     if (isStreaming) {
-        // Lightweight rendering during streaming
         Text(
-            text = text,
-            modifier = modifier,
-            color = color,
-            style = style
+            text = text, modifier = modifier, color = color, style = style
         )
-    }else{
+    } else {
         val blocks = remember(text) { parseMarkdownBlocks(text) }
 
         Column(
@@ -196,6 +186,7 @@ fun CodeCanvas(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))
         ) {
+            val iconsSize = rDP(15.dp)
             // Title – first line of the code (or the whole string if it’s a single line)
             Text(
                 text = language?.trim() ?: "Text",
@@ -208,14 +199,14 @@ fun CodeCanvas(
                 Icons.Outlined.RemoveRedEye,
                 contentDescription = "Read",
                 modifier = Modifier
-                    .size(rDP(15.dp))
+                    .size(iconsSize)
                     .clickable { showReadDialog = true })
 
             Icon(
                 Icons.Rounded.ContentCopy,
                 contentDescription = "Copy",
                 modifier = Modifier
-                    .size(rDP(15.dp))
+                    .size(iconsSize)
                     .clickable {
                         clipboard.setText(AnnotatedString(text))
                     })
@@ -224,7 +215,7 @@ fun CodeCanvas(
                 imageVector = (if (!editing) Icons.Rounded.ModeEditOutline else Icons.Rounded.Done),
                 contentDescription = "Edit",
                 modifier = Modifier
-                    .size(rDP(15.dp))
+                    .size(iconsSize)
                     .clickable { editing = !editing })
         }
 
@@ -239,10 +230,8 @@ fun CodeCanvas(
                     .fillMaxWidth()
                     .padding(8.dp)
                     .horizontalScroll(hScroll),
-                style = TextStyle(
+                style = MaterialTheme.typography.bodyMedium.copy(
                     fontFamily = FontFamily.Monospace,
-                    fontSize = rSp(12.sp),
-                    lineHeight = rSp(20.sp)
                 ),
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -260,7 +249,9 @@ fun CodeCanvas(
                     Modifier
                         .padding(rDP(8.dp))
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(rDP(8.dp)))
+                        .background(
+                            MaterialTheme.colorScheme.surface, RoundedCornerShape(rDP(8.dp))
+                        )
                         .padding(rDP(16.dp))
                 ) {
                     Column {
@@ -532,8 +523,7 @@ private fun MarkdownTable(
                             modifier = Modifier
                                 .padding(vertical = rDP(12.dp))
                                 .weight(1f)
-                                .fillMaxHeight(),
-                            contentAlignment = Alignment.Center
+                                .fillMaxHeight(), contentAlignment = Alignment.Center
                         ) {
                             RichText(
                                 text = cellText,
@@ -551,10 +541,12 @@ private fun MarkdownTable(
                                 modifier = Modifier
                                     .width(1.dp)
                                     .fillMaxHeight()
-                                    .background(when {
-                                        rowIndex == 0 -> MaterialTheme.colorScheme.primary
-                                        else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-                                    })
+                                    .background(
+                                        when {
+                                            rowIndex == 0 -> MaterialTheme.colorScheme.primary
+                                            else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                        }
+                                    )
                             )
                         }
                     }
@@ -574,8 +566,7 @@ private fun MarkdownTable(
         }
 
         VerticalDivider(
-            thickness = 1.dp,
-            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+            thickness = 1.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
         )
     }
 }
@@ -874,7 +865,7 @@ fun RichText(
     text: String,
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary,
-    style: TextStyle = MaterialTheme.typography.bodyMedium,
+    style: TextStyle = MaterialTheme.typography.bodySmall,
     fontFamily: FontFamily = FontFamily.Serif,
     fontWeight: FontWeight = FontWeight.Light
 ) {
@@ -908,8 +899,7 @@ fun RichText(
                     t.startsWith("> ") -> {
                         withStyle(
                             SpanStyle(
-                                fontStyle = FontStyle.Italic,
-                                color = color.copy(alpha = 0.7f)
+                                fontStyle = FontStyle.Italic, color = color.copy(alpha = 0.7f)
                             )
                         ) {
                             append("❝ ")
@@ -963,7 +953,8 @@ private fun AnnotatedString.Builder.appendStyledSegment(
     text: String,
     baseStyle: TextStyle,
     scale: Float = 1f,
-    isHeader: Boolean = false
+    isHeader: Boolean = false,
+    color: Color = Color.Unspecified
 ) {
     if (text.isEmpty()) return
 
@@ -976,7 +967,8 @@ private fun AnnotatedString.Builder.appendStyledSegment(
                     SpanStyle(
                         fontWeight = FontWeight.ExtraBold,
                         fontStyle = FontStyle.Italic,
-                        fontSize = baseStyle.fontSize * scale
+                        fontSize = baseStyle.fontSize * scale,
+                        color = color
                     )
                 ) { append(text.substring(idx + 3, end)) }
                 idx = end + 3
@@ -987,7 +979,8 @@ private fun AnnotatedString.Builder.appendStyledSegment(
                 withStyle(
                     SpanStyle(
                         fontWeight = FontWeight.ExtraBold,
-                        fontSize = baseStyle.fontSize * scale
+                        fontSize = baseStyle.fontSize * scale,
+                        color = color
                     )
                 ) { append(text.substring(idx + 2, end)) }
                 idx = end + 2
@@ -998,7 +991,8 @@ private fun AnnotatedString.Builder.appendStyledSegment(
                 withStyle(
                     SpanStyle(
                         fontStyle = FontStyle.Italic,
-                        fontSize = baseStyle.fontSize * scale
+                        fontSize = baseStyle.fontSize * scale,
+                        color = color
                     )
                 ) { append(text.substring(idx + 1, end)) }
                 idx = end + 1
@@ -1010,7 +1004,8 @@ private fun AnnotatedString.Builder.appendStyledSegment(
                     SpanStyle(
                         fontFamily = FontFamily.Monospace,
                         background = Color.Gray.copy(alpha = 0.2f),
-                        fontSize = baseStyle.fontSize * scale
+                        fontSize = baseStyle.fontSize * scale,
+                        color = color
                     )
                 ) { append(text.substring(idx + 1, end)) }
                 idx = end + 1
@@ -1021,7 +1016,8 @@ private fun AnnotatedString.Builder.appendStyledSegment(
                 withStyle(
                     SpanStyle(
                         textDecoration = TextDecoration.LineThrough,
-                        fontSize = baseStyle.fontSize * scale
+                        fontSize = baseStyle.fontSize * scale,
+                        color = color
                     )
                 ) { append(text.substring(idx + 2, end)) }
                 idx = end + 2
@@ -1032,20 +1028,56 @@ private fun AnnotatedString.Builder.appendStyledSegment(
                 withStyle(
                     SpanStyle(
                         textDecoration = TextDecoration.Underline,
-                        fontSize = baseStyle.fontSize * scale
+                        fontSize = baseStyle.fontSize * scale,
+                        color = color
                     )
                 ) { append(text.substring(idx + 2, end)) }
                 idx = end + 2
             }
 
             else -> {
-                withStyle(
-                    SpanStyle(
-                        fontWeight = if (isHeader) FontWeight.Bold else FontWeight.Normal,
-                        fontSize = baseStyle.fontSize * scale
-                    )
-                ) { append(text[idx]) }
-                idx++
+                val char = text[idx]
+
+                // Check if this is a high surrogate (first part of emoji)
+                val isHighSurrogate = Character.isHighSurrogate(char)
+
+                // Get the codepoint (handles surrogate pairs correctly)
+                val codePoint = if (isHighSurrogate && idx + 1 < text.length) {
+                    Character.toCodePoint(char, text[idx + 1])
+                } else {
+                    char.code
+                }
+
+                // Check if codepoint is an emoji
+                val isEmoji = codePoint in 0x1F300..0x1FAF8 ||  // Emoticons & symbols
+                        codePoint in 0x2600..0x27BF ||     // Misc symbols & dingbats
+                        codePoint in 0x1F900..0x1F9FF ||   // Supplemental symbols
+                        codePoint in 0x1F600..0x1F64F ||   // Emoticons
+                        codePoint in 0x1F680..0x1F6FF ||   // Transport & map
+                        codePoint == 0xFE0F ||             // Variation selector
+                        codePoint == 0x200D                // Zero-width joiner
+
+                if (isEmoji) {
+                    // Append emoji without color styling
+                    if (isHighSurrogate && idx + 1 < text.length) {
+                        append(char)
+                        append(text[idx + 1])
+                        idx += 2
+                    } else {
+                        append(char)
+                        idx++
+                    }
+                } else {
+                    // Apply styling to regular characters
+                    withStyle(
+                        SpanStyle(
+                            fontWeight = if (isHeader) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = baseStyle.fontSize * scale,
+                            color = color
+                        )
+                    ) { append(char) }
+                    idx++
+                }
             }
         }
     }
