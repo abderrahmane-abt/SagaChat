@@ -54,28 +54,28 @@ ToolNeuron helps **any user** get productive with AI:
 
 ### Coding & Data 💻
 
-✅ **Code Canvas** – AI-generated code is editable, copyable.
-✅ **Table & Data Support** – Structured output for clarity.
-✅ **Save & Export** – Save code and chat snippets directly to files (upcoming).
+- **Code Canvas** – AI-generated code is editable, copyable.
+- **Table & Data Support** – Structured output for clarity.
+- **Save & Export** – Save code and chat snippets directly to files (upcoming).
 
 ### Plugins 🛠️
 
-✅ **Web Search & Web Scraper** – Extend AI capabilities.
-✅ **Plugin Support** – Build or install custom plugins for tasks like document viewing, editing, or media processing.
+- **Web Search & Web Scraper** – Extend AI capabilities.
+- **Plugin Support** – Build or install custom plugins for tasks like document viewing, editing, or media processing.
 
 ### Privacy & Flexibility 🔒
 
-✅ **Fully Offline Capable** – Your data stays on your device.
-✅ **Import Any Model** – Bring models from device storage (GGUF for now).
-✅ **Future-Ready** – Memory architecture to simulate human-like AI memory (coming soon).
+- **Fully Offline Capable** – Your data stays on your device.
+- **Import Any Model** – Bring models from device storage (GGUF for now).
+- **Future-Ready** – Memory architecture to simulate human-like AI memory (coming soon).
 
 ---
 
 ## Preview 📸
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/f50ceb8a-5a32-4fa7-9ab4-e1223b983eb6" width="220">
-  <img src="https://github.com/user-attachments/assets/c7187a51-b245-4305-b2d0-9cb2a1e467a9" width="220">
+  <img src="https://github.com/user-attachments/assets/f50ceb8a-5a32-4fa7-9ab4-e1223b983eb6" width="220" alt="">
+  <img src="https://github.com/user-attachments/assets/c7187a51-b245-4305-b2d0-9cb2a1e467a9" width="220" alt="">
 </p>
 
 ---
