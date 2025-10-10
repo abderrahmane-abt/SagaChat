@@ -74,8 +74,9 @@ ToolNeuron helps **any user** get productive with AI:
 ## Preview 📸
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/f50ceb8a-5a32-4fa7-9ab4-e1223b983eb6" width="220" alt="">
-  <img src="https://github.com/user-attachments/assets/c7187a51-b245-4305-b2d0-9cb2a1e467a9" width="220" alt="">
+  <img src="https://github.com/user-attachments/assets/f4d2c28a-a297-4c08-83e5-391f8bd82d89" width="220" alt="">
+  <img src="https://github.com/user-attachments/assets/257022d7-8d3b-42a3-97c7-589d8f09fa47" width="220" alt="">
+  <img src="https://github.com/user-attachments/assets/4be156dd-cc55-4eb0-9d89-790f8f11db1e" width="220" alt="">
 </p>
 
 ---
@@ -86,7 +87,7 @@ ToolNeuron helps **any user** get productive with AI:
 * Open **AI Chat** → Start chatting → Switch models → Use plugins → Attach data.
 * Fully **offline capable**, no account required.
 
----
+
 
 ## Coming Soon 🔮
 
@@ -97,6 +98,7 @@ ToolNeuron helps **any user** get productive with AI:
 * **Cross-Platform Desktop Sync:** Linux, Windows, macOS support.
 
 ---
+
 
 ## Architecture 🏗️
 
