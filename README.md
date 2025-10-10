@@ -10,9 +10,8 @@ ToolNeuron is the ultimate **AI-native mobile ecosystem** for Android. Whether y
   <img src="https://img.shields.io/badge/Platform-Android_14%2B-informational" />
   <img src="https://img.shields.io/badge/Built%20With-Kotlin%20%7C%20Jetpack%20Compose-purple" />
   <a href="#license"><img src="https://img.shields.io/badge/License-Apache_2.0-green" /></a>
-  <a href="https://discord.gg/vjGEyQev"><img src="https://img.shields.io/badge/Discord-Join%20ToolNeuron-5865F2?logo=discord&logoColor=white"/></a>
+  <a href="https://discord.gg/SvgGaxwk"><img src="https://img.shields.io/badge/Discord-Join%20ToolNeuron-5865F2?logo=discord&logoColor=white"/></a>
 </p>
-
 ---
 
 ## What is ToolNeuron? 🧠
@@ -111,7 +110,7 @@ ToolNeuron helps **any user** get productive with AI:
 
 ## Community & Support 🌍
 
-💬 Discord: [Join ToolNeuron](https://discord.gg/vjGEyQev)
+💬 Discord: [Join ToolNeuron](https://discord.gg/SvgGaxwk)
 🐙 GitHub: [ToolNeuron Repo](https://github.com/Siddhesh2377/NeuroVerse)
 
 ---
