@@ -30,6 +30,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -492,14 +493,14 @@ fun TempScreen() {
     var currentTheme by remember { mutableStateOf(myThemes.last()) } // default Sage Garden
 
     // Animate colors
-    val primary by animateColorAsState(currentTheme.primary)
-    val secondary by animateColorAsState(currentTheme.secondary)
-    val accent by animateColorAsState(currentTheme.accent)
-    val background by animateColorAsState(currentTheme.background)
-    val star by animateColorAsState(currentTheme.star)
-    val starGlow by animateColorAsState(currentTheme.starGlow)
+    val primary by animateColorAsState(currentTheme.primary, tween(durationMillis = 600))
+    val secondary by animateColorAsState(currentTheme.secondary, tween(durationMillis = 600))
+    val accent by animateColorAsState(currentTheme.accent, tween(durationMillis = 600))
+    val background by animateColorAsState(currentTheme.background, tween(durationMillis = 600))
+    val star by animateColorAsState(currentTheme.star, tween(durationMillis = 600))
+    val starGlow by animateColorAsState(currentTheme.starGlow, tween(durationMillis = 600))
 
-    Scaffold(containerColor = background) { padding ->
+    Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         Column(
             Modifier
                 .fillMaxSize()
