@@ -16,6 +16,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -533,19 +534,18 @@ fun TempScreen() {
             Spacer(Modifier.height(32.dp))
 
             // Buttons row
-            LazyRow(
+            FlowRow(
                 Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                items(myThemes) { theme ->
+                myThemes.forEach {
                     Button(
-                        onClick = { currentTheme = theme },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray)
+                        onClick = { currentTheme = it },
+                        colors = ButtonDefaults.buttonColors()
                     ) {
-                        Text(theme.name, color = Color.Black)
+                        Text(it.name)
                     }
                 }
             }
