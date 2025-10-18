@@ -919,7 +919,7 @@ private fun RegularChatUI(
                         .fillMaxWidth()
                         .padding(vertical = rDP(4.dp))
                 ) {
-                    if (message.text.isNotEmpty()) {
+                    if (message.text.isNotEmpty() && uiState is ChatUiState.Idle) {
                         MarkdownText(
                             text = message.text,
                             isStreaming = isStreaming,
