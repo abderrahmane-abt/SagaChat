@@ -591,7 +591,7 @@ fun TempScreen() {
             verticalArrangement = Arrangement.Center
         ) {
             Card(
-                Modifier.size(370.dp),
+                Modifier.size(200.dp),
                 shape = CircleShape,
                 elevation = CardDefaults.outlinedCardElevation(0.dp)
             ) {
@@ -842,55 +842,6 @@ fun rememberSoundPlayer(context: Context, @RawRes soundResId: Int): () -> Unit {
     return {
         if (soundId != 0) {
             soundPool.play(soundId, 1f, 1f, 1, 0, 1f)
-        }
-    }
-}
-
-@Composable
-fun QuickPresetButtons(
-    neuralState: NeuralNetworkState, coroutineScope: CoroutineScope
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)
-    ) {
-        Text(
-            "Quick Presets",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Button(onClick = {
-                coroutineScope.launch {
-                    neuralState.setLayers(2, 800)
-                    delay(200)
-                    neuralState.setNeuronCount(16, 800)
-                }
-            }) {
-                Text("Simple")
-            }
-
-            Button(onClick = {
-                coroutineScope.launch {
-                    neuralState.setLayers(3, 800)
-                    delay(200)
-                    neuralState.setNeuronCount(36, 800)
-                }
-            }) {
-                Text("Balanced")
-            }
-
-            Button(onClick = {
-                coroutineScope.launch {
-                    neuralState.setLayers(5, 1000)
-                    delay(200)
-                    neuralState.setNeuronCount(60, 1000)
-                }
-            }) {
-                Text("Complex")
-            }
         }
     }
 }
