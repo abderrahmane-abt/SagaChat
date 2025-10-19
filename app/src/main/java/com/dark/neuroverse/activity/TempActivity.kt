@@ -1,9 +1,13 @@
 package com.dark.neuroverse.activity
 
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.SoundPool
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.annotation.RawRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.LinearEasing
@@ -23,10 +27,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -35,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -50,7 +52,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.dark.neuroverse.R
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import kotlinx.coroutines.delay
 import kotlin.math.PI
@@ -489,7 +493,11 @@ fun colorsILike() {
 @Composable
 fun TempScreen() {
     val neuralState = rememberNeuralNetworkState()
-
+    val context = LocalContext.current
+    val interfaceSwitched = rememberSoundPlayer(context, R.raw.interface_switch)
+    val interfaceError = rememberSoundPlayer(context, R.raw.error_interface)
+    val interfaceStages = rememberSoundPlayer(context, R.raw.stages_interface)
+    val interfaceSuccess = rememberSoundPlayer(context, R.raw.interface_success)
     // Current theme state
     var currentTheme by remember { mutableStateOf(myThemes.last()) } // default Sage Garden
 
@@ -542,8 +550,10 @@ fun TempScreen() {
             ) {
                 myThemes.forEach {
                     Button(
-                        onClick = { currentTheme = it },
-                        colors = ButtonDefaults.buttonColors()
+                        onClick = {
+                            interfaceSwitched()
+                            currentTheme = it
+                        }, colors = ButtonDefaults.buttonColors()
                     ) {
                         Text(it.name)
                     }
@@ -614,3 +624,31 @@ val myThemes = listOf(
         starGlow = Color(0xFF689F38)
     )
 )
+
+@Composable
+fun rememberSoundPlayer(context: Context, @RawRes soundResId: Int): () -> Unit {
+    val soundPool = remember {
+        SoundPool.Builder().setMaxStreams(5).setAudioAttributes(
+            AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
+        ).build()
+    }
+
+    var soundId by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        soundId = soundPool.load(context, soundResId, 1)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            soundPool.release()
+        }
+    }
+
+    return {
+        if (soundId != 0) {
+            soundPool.play(soundId, 1f, 1f, 1, 0, 1f)
+        }
+    }
+}
