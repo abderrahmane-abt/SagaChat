@@ -9,7 +9,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.RawRes
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -21,6 +24,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -42,9 +46,12 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -56,23 +63,39 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.dark.neuroverse.R
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.random.Random
 
+class TempActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            NeuroVerseTheme {
+                TempScreen()
+            }
+        }
+    }
+}
+
 data class Neuron(
     val id: Int,
-    var angle: Float,
-    var radius: Float,
+    val angle: Float,
+    val radius: Float,
     val orbitSpeed: Float,
     val pulsePhase: Float,
     val baseSize: Float,
-    val layer: Int
+    val layer: Int,
+    val alpha: Animatable<Float, AnimationVector1D> = Animatable(0f) // For fade in/out
 )
 
+// OPTIMIZED: Simpler state class without animations
 class NeuralNetworkState {
     private var _spikeIntensity = mutableFloatStateOf(0f)
     val spikeIntensity: State<Float> = _spikeIntensity
@@ -89,6 +112,16 @@ class NeuralNetworkState {
     private var _targetFps = mutableIntStateOf(60)
     val targetFps: State<Int> = _targetFps
 
+    // Direct values without Animatable for better performance
+    private var _currentLayers = mutableIntStateOf(3)
+    val currentLayers: State<Int> = _currentLayers
+
+    private var _currentNeuronCount = mutableIntStateOf(24)
+    val currentNeuronCount: State<Int> = _currentNeuronCount
+
+    private var _isAnimating = mutableStateOf(false)
+    val isAnimating: State<Boolean> = _isAnimating
+
     fun spike(intensity: Float) {
         _spikeIntensity.floatValue = intensity.coerceIn(0f, 1f)
     }
@@ -97,7 +130,6 @@ class NeuralNetworkState {
         _spikeIntensity.floatValue = 0f
     }
 
-    // Speed controls (0.1f to 5f recommended)
     fun setRotationSpeed(speed: Float) {
         _rotationSpeed.floatValue = speed.coerceIn(0.1f, 10f)
     }
@@ -117,10 +149,31 @@ class NeuralNetworkState {
         _orbitSpeed.floatValue = clampedSpeed
     }
 
-    // FPS control (15 to 120)
     fun setTargetFps(fps: Int) {
         _targetFps.intValue = fps.coerceIn(15, 120)
     }
+
+    // Simplified: Direct updates without animation
+    suspend fun setLayers(layers: Int, durationMillis: Int = 800) {
+        if (_isAnimating.value) return // Prevent concurrent animations
+
+        _isAnimating.value = true
+        _currentLayers.intValue = layers.coerceIn(1, 10)
+        delay(durationMillis.toLong())
+        _isAnimating.value = false
+    }
+
+    suspend fun setNeuronCount(count: Int, durationMillis: Int = 800) {
+        if (_isAnimating.value) return // Prevent concurrent animations
+
+        _isAnimating.value = true
+        _currentNeuronCount.intValue = count.coerceIn(6, 100)
+        delay(durationMillis.toLong())
+        _isAnimating.value = false
+    }
+
+    fun getCurrentLayers(): Int = _currentLayers.intValue
+    fun getCurrentNeuronCount(): Int = _currentNeuronCount.intValue
 }
 
 @Composable
@@ -132,38 +185,18 @@ fun rememberNeuralNetworkState(): NeuralNetworkState {
 fun FuturisticNeuralAnimation(
     modifier: Modifier = Modifier,
     state: NeuralNetworkState = rememberNeuralNetworkState(),
-    neuronCount: Int = 24,
-    layers: Int = 3,
     primaryColor: Color = Color(0xFF00F5FF),
     secondaryColor: Color = Color(0xFFFF006E),
     accentColor: Color = Color(0xFF8338EC),
     backgroundColor: Color = Color(0xFF0A0E27),
     starColor: Color = Color.White,
     starGlowColor: Color? = null,
-    baseRotationDuration: Int = 6000, // Base duration in milliseconds
-    basePulseDuration: Int = 2000,    // Base pulse duration
-    baseOrbitDuration: Int = 4000     // Base orbit duration
+    baseRotationDuration: Int = 6000,
+    basePulseDuration: Int = 2000,
+    baseOrbitDuration: Int = 4000
 ) {
-    val neurons = remember {
-        mutableListOf<Neuron>().apply {
-            repeat(layers) { layer ->
-                val neuronsInLayer = neuronCount / layers
-                repeat(neuronsInLayer) { i ->
-                    add(
-                        Neuron(
-                            id = layer * neuronsInLayer + i,
-                            angle = (i * 360f / neuronsInLayer) + (layer * 15f),
-                            radius = 80f + (layer * 60f),
-                            orbitSpeed = 0.3f + (Random.nextFloat() * 0.4f) * (if (layer % 2 == 0) 1f else -1f),
-                            pulsePhase = Random.nextFloat() * 360f,
-                            baseSize = 3f + Random.nextFloat() * 2f,
-                            layer = layer
-                        )
-                    )
-                }
-            }
-        }
-    }
+    // Use dynamic neurons that respond to state changes
+    val neurons = rememberDynamicNeurons(state)
 
     val stars = remember {
         List(170) {
@@ -178,18 +211,15 @@ fun FuturisticNeuralAnimation(
         0.5f + 0.5f * sin((fraction * 2 * PI - PI / 2).toFloat())
     }
 
-    // Dynamic speeds from state
     val rotationSpeedMultiplier = state.rotationSpeed.value
     val pulseSpeedMultiplier = state.pulseSpeed.value
     val orbitSpeedMultiplier = state.orbitSpeed.value
     val fps = state.targetFps.value
 
-    // Calculate actual durations based on speed multipliers
     val actualRotationDuration = (baseRotationDuration / rotationSpeedMultiplier).toInt()
     val actualPulseDuration = (basePulseDuration / pulseSpeedMultiplier).toInt()
     val actualOrbitDuration = (baseOrbitDuration / orbitSpeedMultiplier).toInt()
 
-    // Frame limiting
     val frameDelay = 1000L / fps
 
     val time by infiniteTransition.animateFloat(
@@ -217,7 +247,6 @@ fun FuturisticNeuralAnimation(
     val spikeValue = state.spikeIntensity.value
     val effectiveStarGlow = starGlowColor ?: primaryColor
 
-    // Auto-decay spike with frame control
     LaunchedEffect(spikeValue) {
         if (spikeValue > 0f) {
             delay(frameDelay)
@@ -229,14 +258,17 @@ fun FuturisticNeuralAnimation(
         val center = Offset(size.width / 2, size.height / 2)
         val maxRadius = size.minDimension / 2 * 0.85f
 
+        // Calculate positions with alpha for fade effects
         val positions = neurons.map { neuron ->
             val animAngle = (neuron.angle + time * neuron.orbitSpeed) * PI / 180
             val r = (neuron.radius / 240f) * maxRadius
             val spikeBoost = if (spikeValue > 0) r * 0.3f * spikeValue else 0f
 
-            Offset(
-                x = center.x + (r + spikeBoost) * cos(animAngle).toFloat(),
-                y = center.y + (r + spikeBoost) * sin(animAngle).toFloat()
+            Triple(
+                Offset(
+                    x = center.x + (r + spikeBoost) * cos(animAngle).toFloat(),
+                    y = center.y + (r + spikeBoost) * sin(animAngle).toFloat()
+                ), neuron, neuron.alpha.value // Include alpha for fading
             )
         }
 
@@ -291,69 +323,72 @@ fun FuturisticNeuralAnimation(
             }
         }
 
-        // === ORBITING PARTICLES (using orbit animation) ===
-        positions.forEachIndexed { i, pos ->
-            val orbitPhase = (orbit + i * 40f) % 360f
-            val orbitRadius = 18f + sin((pulse + i * 20f) * PI / 180).toFloat() * 5f
-            repeat(3) { orbitIndex ->
-                val orbitAngle = (orbitPhase + orbitIndex * 120f) * PI / 180
-                val orbitPos = Offset(
-                    x = pos.x + orbitRadius * cos(orbitAngle).toFloat(),
-                    y = pos.y + orbitRadius * sin(orbitAngle).toFloat()
-                )
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            accentColor.copy(alpha = 0.8f), Color.Transparent
-                        ), center = orbitPos, radius = 4f
-                    ), center = orbitPos, radius = 2f
-                )
+        // === ORBITING PARTICLES ===
+        positions.forEach { (pos, neuron, alpha) ->
+            if (alpha > 0.1f) { // Only draw if visible
+                val orbitPhase = (orbit + neuron.id * 40f) % 360f
+                val orbitRadius = 18f + sin((pulse + neuron.id * 20f) * PI / 180).toFloat() * 5f
+                repeat(3) { orbitIndex ->
+                    val orbitAngle = (orbitPhase + orbitIndex * 120f) * PI / 180
+                    val orbitPos = Offset(
+                        x = pos.x + orbitRadius * cos(orbitAngle).toFloat(),
+                        y = pos.y + orbitRadius * sin(orbitAngle).toFloat()
+                    )
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                accentColor.copy(alpha = 0.8f * alpha), Color.Transparent
+                            ), center = orbitPos, radius = 4f
+                        ), center = orbitPos, radius = 2f
+                    )
+                }
             }
         }
 
         // === CONNECTIONS ===
-        neurons.forEachIndexed { i, neuron ->
-            val pos = positions[i]
-
-            neurons.forEachIndexed { j, other ->
-                if (i < j) {
-                    val otherPos = positions[j]
-                    val distance = kotlin.math.sqrt(
-                        (pos.x - otherPos.x).pow(2) + (pos.y - otherPos.y).pow(2)
-                    )
-
-                    val connectionThreshold = maxRadius * 0.45f
-                    if (distance < connectionThreshold) {
-                        val strength = 1f - (distance / connectionThreshold)
-                        val alpha = strength * 0.6f * (1f + spikeValue * 2f)
-                        val flowPhase = ((time + neuron.id * 30f) % 360f) / 360f
-
-                        drawLine(
-                            brush = Brush.linearGradient(
-                                colors = listOf(
-                                    primaryColor.copy(alpha = alpha * 0.3f),
-                                    secondaryColor.copy(alpha = alpha * 0.8f),
-                                    accentColor.copy(alpha = alpha * 0.6f),
-                                    primaryColor.copy(alpha = alpha * 0.3f)
-                                ), start = pos, end = otherPos
-                            ),
-                            start = pos,
-                            end = otherPos,
-                            strokeWidth = (1f + strength * 2f) * (1f + spikeValue),
-                            cap = StrokeCap.Round
+        positions.forEachIndexed { i, (pos, neuron, alpha) ->
+            if (alpha > 0.1f) {
+                positions.forEachIndexed { j, (otherPos, _, otherAlpha) ->
+                    if (i < j && otherAlpha > 0.1f) {
+                        val distance = kotlin.math.sqrt(
+                            (pos.x - otherPos.x).pow(2) + (pos.y - otherPos.y).pow(2)
                         )
 
-                        if (strength > 0.7f) {
-                            val particlePos = Offset(
-                                x = pos.x + (otherPos.x - pos.x) * flowPhase,
-                                y = pos.y + (otherPos.y - pos.y) * flowPhase
+                        val connectionThreshold = maxRadius * 0.45f
+                        if (distance < connectionThreshold) {
+                            val strength = 1f - (distance / connectionThreshold)
+                            val combinedAlpha = (alpha + otherAlpha) / 2f
+                            val connectionAlpha =
+                                strength * 0.6f * (1f + spikeValue * 2f) * combinedAlpha
+                            val flowPhase = ((time + neuron.id * 30f) % 360f) / 360f
+
+                            drawLine(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(
+                                        primaryColor.copy(alpha = connectionAlpha * 0.3f),
+                                        secondaryColor.copy(alpha = connectionAlpha * 0.8f),
+                                        accentColor.copy(alpha = connectionAlpha * 0.6f),
+                                        primaryColor.copy(alpha = connectionAlpha * 0.3f)
+                                    ), start = pos, end = otherPos
+                                ),
+                                start = pos,
+                                end = otherPos,
+                                strokeWidth = (1f + strength * 2f) * (1f + spikeValue),
+                                cap = StrokeCap.Round
                             )
 
-                            drawCircle(
-                                color = accentColor.copy(alpha = 0.9f),
-                                radius = 2f * (1f + spikeValue),
-                                center = particlePos
-                            )
+                            if (strength > 0.7f) {
+                                val particlePos = Offset(
+                                    x = pos.x + (otherPos.x - pos.x) * flowPhase,
+                                    y = pos.y + (otherPos.y - pos.y) * flowPhase
+                                )
+
+                                drawCircle(
+                                    color = accentColor.copy(alpha = 0.9f * combinedAlpha),
+                                    radius = 2f * (1f + spikeValue),
+                                    center = particlePos
+                                )
+                            }
                         }
                     }
                 }
@@ -361,46 +396,49 @@ fun FuturisticNeuralAnimation(
         }
 
         // === NEURONS ===
-        neurons.forEachIndexed { i, neuron ->
-            val pos = positions[i]
-            val pulseVal = sin((pulse + neuron.pulsePhase) * PI / 180).toFloat()
-            val size = neuron.baseSize * (1f + pulseVal * 0.3f) * (1f + spikeValue * 0.8f)
+        positions.forEach { (pos, neuron, alpha) ->
+            if (alpha > 0.01f) { // Draw even very faint neurons for smooth transitions
+                val pulseVal = sin((pulse + neuron.pulsePhase) * PI / 180).toFloat()
+                val size = neuron.baseSize * (1f + pulseVal * 0.3f) * (1f + spikeValue * 0.8f)
 
-            // Outer glow
-            val glowSize = size * (3f + spikeValue * 3f)
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        primaryColor.copy(alpha = (0.5f + spikeValue * 0.5f)),
-                        secondaryColor.copy(alpha = 0.2f),
-                        Color.Transparent
-                    ), center = pos, radius = glowSize
-                ), center = pos, radius = glowSize
-            )
-
-            // Ring
-            drawCircle(
-                color = accentColor.copy(alpha = 0.7f + pulseVal * 0.3f),
-                center = pos,
-                radius = size * 1.3f
-            )
-
-            // Core
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color.White,
-                        if (spikeValue > 0.3f) accentColor else primaryColor,
-                        secondaryColor
-                    ), center = pos, radius = size
-                ), center = pos, radius = size
-            )
-
-            // Spark
-            if (spikeValue > 0.5f) {
+                // Outer glow
+                val glowSize = size * (3f + spikeValue * 3f)
                 drawCircle(
-                    color = Color.White.copy(alpha = spikeValue), center = pos, radius = size * 0.4f
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            primaryColor.copy(alpha = (0.5f + spikeValue * 0.5f) * alpha),
+                            secondaryColor.copy(alpha = 0.2f * alpha),
+                            Color.Transparent
+                        ), center = pos, radius = glowSize
+                    ), center = pos, radius = glowSize
                 )
+
+                // Ring
+                drawCircle(
+                    color = accentColor.copy(alpha = (0.7f + pulseVal * 0.3f) * alpha),
+                    center = pos,
+                    radius = size * 1.3f
+                )
+
+                // Core
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = alpha),
+                            (if (spikeValue > 0.3f) accentColor else primaryColor).copy(alpha = alpha),
+                            secondaryColor.copy(alpha = alpha)
+                        ), center = pos, radius = size
+                    ), center = pos, radius = size
+                )
+
+                // Spark
+                if (spikeValue > 0.5f) {
+                    drawCircle(
+                        color = Color.White.copy(alpha = spikeValue * alpha),
+                        center = pos,
+                        radius = size * 0.4f
+                    )
+                }
             }
         }
 
@@ -427,87 +465,122 @@ fun FuturisticNeuralAnimation(
     }
 }
 
-class TempActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContent {
-            NeuroVerseTheme {
-                TempScreen()
+@Composable
+fun rememberDynamicNeurons(
+    state: NeuralNetworkState
+): SnapshotStateList<Neuron> {
+    val neurons = remember { mutableStateListOf<Neuron>() }
+    val currentLayers = state.getCurrentLayers()
+    val currentNeuronCount = state.getCurrentNeuronCount()
+
+    LaunchedEffect(currentLayers, currentNeuronCount) {
+        val targetSize = currentNeuronCount
+
+        // OPTIMIZED: Remove excess neurons quickly
+        if (neurons.size > targetSize) {
+            val neuronsToRemove = neurons.size - targetSize
+            val toRemove = neurons.takeLast(neuronsToRemove)
+
+            // Fade out in parallel
+            toRemove.forEach { neuron ->
+                launch {
+                    neuron.alpha.animateTo(
+                        0f, animationSpec = tween(150, easing = FastOutSlowInEasing)
+                    )
+                }
+            }
+
+            delay(170)
+
+            // Batch removal
+            repeat(neuronsToRemove) {
+                if (neurons.isNotEmpty()) {
+                    neurons.removeAt(neurons.lastIndex)
+                }
+            }
+        }
+
+        // OPTIMIZED: Add new neurons in batches
+        if (neurons.size < targetSize) {
+            val neuronsToAdd = targetSize - neurons.size
+            val newNeurons = mutableListOf<Neuron>()
+
+            repeat(neuronsToAdd) {
+                val id = neurons.size + it
+                val layer = (id * currentLayers) / targetSize
+                val neuronsInLayer = maxOf(1, targetSize / currentLayers)
+                val posInLayer = id % neuronsInLayer
+
+                newNeurons.add(
+                    Neuron(
+                        id = id,
+                        angle = (posInLayer * 360f / neuronsInLayer) + (layer * 15f),
+                        radius = 80f + (layer * 60f),
+                        orbitSpeed = 0.3f + (Random.nextFloat() * 0.4f) * (if (layer % 2 == 0) 1f else -1f),
+                        pulsePhase = Random.nextFloat() * 360f,
+                        baseSize = 3f + Random.nextFloat() * 2f,
+                        layer = layer
+                    )
+                )
+            }
+
+            neurons.addAll(newNeurons)
+
+            // Animate in smaller batches
+            val batchSize = 8
+            newNeurons.chunked(batchSize).forEach { batch ->
+                batch.forEach { neuron ->
+                    launch {
+                        neuron.alpha.animateTo(
+                            1f, animationSpec = tween(200, easing = FastOutSlowInEasing)
+                        )
+                    }
+                }
+                delay(30)
             }
         }
     }
-}
 
-fun colorsILike() {
-
-    //3. Arctic Dawn (Warm Ice)
-    var primaryColor = Color(0xFF00BCD4)
-    var secondaryColor = Color(0xFF00ACC1)
-    var accentColor = Color(0xFF0F3438)
-    var backgroundColor = Color(0xFFEFF8FA)
-    var starColor = Color(0xFF006064)
-    var starGlowColor = Color(0xFF00BCD4)
-
-    //4. Arctic Teal (My Favorite for "Cold")
-    primaryColor = Color(0xFF00E5CC)
-    secondaryColor = Color(0xFF00BFA5)
-    accentColor = Color(0xFF64FFDA)
-    backgroundColor = Color(0xFF051015)
-    starColor = Color(0xFFB2DFDB)
-    starGlowColor = Color(0xFF00E5CC)
-
-    //1. Crimson Blood (Deep Red)
-    primaryColor = Color(0xFFFF1744)
-    secondaryColor = Color(0xFFF50057)
-    accentColor = Color(0xFFFF4081)
-    backgroundColor = Color(0xFF1A0308)
-    starColor = Color(0xFFFFCDD2)
-    starGlowColor = Color(0xFFFF1744)
-
-    //3. Coral Dawn (Warm Light)
-    primaryColor = Color(0xFFFF5252)
-    secondaryColor = Color(0xFFFF1744)
-    accentColor = Color(0xFFD32F2F)
-    backgroundColor = Color(0xFFFFF5F5)
-    starColor = Color(0xFF6D1B1B)
-    starGlowColor = Color(0xFFFF5252)
-
-    //2. Midnight Moss (Very Minimal)
-    primaryColor = Color(0xFF689F38)
-    secondaryColor = Color(0xFF558B2F)
-    accentColor = Color(0xFF8BC34A)
-    backgroundColor = Color(0xFF0D1A0A)
-    starColor = Color(0xFFDCEDC8)
-    starGlowColor = Color(0xFF689F38)
-
-    //2. Sage Garden (Minimal Light)
-    primaryColor = Color(0xFF689F38)
-    secondaryColor = Color(0xFF558B2F)
-    accentColor = Color(0xFF33691E)
-    backgroundColor = Color(0xFFF9FDF7)
-    starColor = Color(0xFF33691E)
-    starGlowColor = Color(0xFF689F38)
+    return neurons
 }
 
 @Composable
 fun TempScreen() {
     val neuralState = rememberNeuralNetworkState()
+    val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
-    val interfaceSwitched = rememberSoundPlayer(context, R.raw.interface_switch)
-    val interfaceError = rememberSoundPlayer(context, R.raw.error_interface)
-    val interfaceStages = rememberSoundPlayer(context, R.raw.stages_interface)
-    val interfaceSuccess = rememberSoundPlayer(context, R.raw.interface_success)
-    // Current theme state
-    var currentTheme by remember { mutableStateOf(myThemes.last()) } // default Sage Garden
 
-    // Animate colors
-    val primary by animateColorAsState(currentTheme.primary, tween(durationMillis = 600))
-    val secondary by animateColorAsState(currentTheme.secondary, tween(durationMillis = 600))
-    val accent by animateColorAsState(currentTheme.accent, tween(durationMillis = 600))
-    val background by animateColorAsState(currentTheme.background, tween(durationMillis = 600))
-    val star by animateColorAsState(currentTheme.star, tween(durationMillis = 600))
-    val starGlow by animateColorAsState(currentTheme.starGlow, tween(durationMillis = 600))
+    val interfaceSwitched = rememberSoundPlayer(context, R.raw.interface_switch)
+    val interfaceSuccess = rememberSoundPlayer(context, R.raw.interface_success)
+
+    var currentTheme by remember { mutableStateOf(myThemes.last()) }
+
+    val primary by animateColorAsState(
+        currentTheme.primary,
+        tween(durationMillis = 600),
+        label = "primary"
+    )
+    val secondary by animateColorAsState(
+        currentTheme.secondary,
+        tween(durationMillis = 600),
+        label = "secondary"
+    )
+    val accent by animateColorAsState(
+        currentTheme.accent,
+        tween(durationMillis = 600),
+        label = "accent"
+    )
+    val background by animateColorAsState(
+        currentTheme.background,
+        tween(durationMillis = 600),
+        label = "background"
+    )
+    val star by animateColorAsState(currentTheme.star, tween(durationMillis = 600), label = "star")
+    val starGlow by animateColorAsState(
+        currentTheme.starGlow,
+        tween(durationMillis = 600),
+        label = "starGlow"
+    )
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         Column(
@@ -525,8 +598,6 @@ fun TempScreen() {
                 FuturisticNeuralAnimation(
                     modifier = Modifier.fillMaxSize(),
                     state = neuralState,
-                    neuronCount = 44,
-                    layers = 2,
                     primaryColor = primary,
                     secondaryColor = secondary,
                     accentColor = accent,
@@ -539,23 +610,145 @@ fun TempScreen() {
                 )
             }
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(24.dp))
 
-            // Buttons row
+            // === LAYER CONTROLS ===
+            Text(
+                "Layers",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(8.dp)
+            )
+
             FlowRow(
                 Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.Center,
+                maxItemsInEachRow = 5
             ) {
-                myThemes.forEach {
+                listOf(1, 2, 3, 4, 5).forEach { layers ->
+                    Button(
+                        onClick = {
+                            interfaceSuccess()
+                            // OPTIMIZED: Direct call, no coroutine needed
+                            coroutineScope.launch {
+                                neuralState.setLayers(layers)
+                            }
+                        }, modifier = Modifier.padding(4.dp), colors = ButtonDefaults.buttonColors()
+                    ) {
+                        Text("$layers")
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // === NEURON COUNT CONTROLS ===
+            Text(
+                "Neuron Count",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(8.dp)
+            )
+
+            FlowRow(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.Center,
+                maxItemsInEachRow = 5
+            ) {
+                listOf(12, 24, 36, 48, 60).forEach { count ->
+                    Button(
+                        onClick = {
+                            interfaceSuccess()
+                            // OPTIMIZED: Direct call
+                            coroutineScope.launch {
+                                neuralState.setNeuronCount(count)
+                            }
+                        }, modifier = Modifier.padding(4.dp), colors = ButtonDefaults.buttonColors()
+                    ) {
+                        Text("$count")
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // === QUICK PRESETS ===
+            Text(
+                "Quick Presets",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(8.dp)
+            )
+
+            FlowRow(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.Center,
+                maxItemsInEachRow = 3
+            ) {
+                Button(
+                    onClick = {
+                        interfaceSuccess()
+                        coroutineScope.launch {
+                            neuralState.setLayers(2)
+                            neuralState.setNeuronCount(24)
+                        }
+                    }, modifier = Modifier.padding(4.dp)
+                ) {
+                    Text("Simple")
+                }
+
+                Button(
+                    onClick = {
+                        interfaceSuccess()
+                        coroutineScope.launch {
+                            neuralState.setLayers(3)
+                            neuralState.setNeuronCount(46)
+                        }
+                    }, modifier = Modifier.padding(4.dp)
+                ) {
+                    Text("Balanced")
+                }
+
+                Button(
+                    onClick = {
+                        interfaceSuccess()
+                        coroutineScope.launch {
+                            neuralState.setLayers(5)
+                            neuralState.setNeuronCount(80)
+                        }
+                    }, modifier = Modifier.padding(4.dp)
+                ) {
+                    Text("Complex")
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // === THEME CONTROLS ===
+            Text(
+                "Themes",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(8.dp)
+            )
+
+            FlowRow(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp), horizontalArrangement = Arrangement.Center
+            ) {
+                myThemes.forEach { theme ->
                     Button(
                         onClick = {
                             interfaceSwitched()
-                            currentTheme = it
-                        }, colors = ButtonDefaults.buttonColors()
+                            currentTheme = theme
+                        }, modifier = Modifier.padding(4.dp), colors = ButtonDefaults.buttonColors(
+                            containerColor = theme.primary
+                        )
                     ) {
-                        Text(it.name)
+                        Text(theme.name, maxLines = 1)
                     }
                 }
             }
@@ -649,6 +842,55 @@ fun rememberSoundPlayer(context: Context, @RawRes soundResId: Int): () -> Unit {
     return {
         if (soundId != 0) {
             soundPool.play(soundId, 1f, 1f, 1, 0, 1f)
+        }
+    }
+}
+
+@Composable
+fun QuickPresetButtons(
+    neuralState: NeuralNetworkState, coroutineScope: CoroutineScope
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)
+    ) {
+        Text(
+            "Quick Presets",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(onClick = {
+                coroutineScope.launch {
+                    neuralState.setLayers(2, 800)
+                    delay(200)
+                    neuralState.setNeuronCount(16, 800)
+                }
+            }) {
+                Text("Simple")
+            }
+
+            Button(onClick = {
+                coroutineScope.launch {
+                    neuralState.setLayers(3, 800)
+                    delay(200)
+                    neuralState.setNeuronCount(36, 800)
+                }
+            }) {
+                Text("Balanced")
+            }
+
+            Button(onClick = {
+                coroutineScope.launch {
+                    neuralState.setLayers(5, 1000)
+                    delay(200)
+                    neuralState.setNeuronCount(60, 1000)
+                }
+            }) {
+                Text("Complex")
+            }
         }
     }
 }
