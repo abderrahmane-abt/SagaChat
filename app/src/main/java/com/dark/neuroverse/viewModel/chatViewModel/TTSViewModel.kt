@@ -192,4 +192,9 @@ class TTSViewModel(context: Context) : ViewModel() {
             .replace(Regex("\\s+"), " ")   // collapse whitespace
             .trim()
     }
+
+    override fun onCleared() {
+        super.onCleared()
+        unLoadTTS()
+    }
 }
