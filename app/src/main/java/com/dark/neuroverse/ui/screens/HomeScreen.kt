@@ -316,7 +316,7 @@ fun HomeScreen(
         }, bottomBar = {
             BottomBar(viewModel = chatScreenViewModel, uiState = uiState)
         }) { innerPadding ->
-            BodyContent(innerPadding, chatScreenViewModel, uiState, ttsViewModel)
+            BodyContent(innerPadding, chatScreenViewModel, ttsViewModel)
         }
     }
 }
@@ -384,38 +384,37 @@ fun TopBar(
 fun BodyContent(
     innerPadding: PaddingValues,
     viewModel: ChatScreenViewModel,
-    uiState: ChatUiState,
     ttsViewModel: TTSViewModel
 ) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-
-    // Optimized auto-scroll management
     var userScrolled by remember { mutableStateOf(false) }
 
     val isAtBottom by remember {
         derivedStateOf {
-            val totalItems = listState.layoutInfo.totalItemsCount
-            if (totalItems == 0) return@derivedStateOf true
-            val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            lastVisibleIndex >= totalItems - 1
+            val info = listState.layoutInfo
+            if (info.totalItemsCount == 0) return@derivedStateOf true
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+            lastVisible >= info.totalItemsCount - 1
         }
     }
 
-    // Only scroll when new messages arrive AND user hasn't manually scrolled
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty() && !userScrolled) {
-            // Debounce scroll during streaming
-            delay(50)
-            listState.animateScrollToItem(messages.lastIndex)
+            listState.scrollToItem(messages.lastIndex)
         }
     }
 
-    // Detect manual user scroll
-    LaunchedEffect(listState.isScrollInProgress, isAtBottom) {
+    LaunchedEffect(listState.isScrollInProgress) {
         if (listState.isScrollInProgress && !isAtBottom) {
             userScrolled = true
+        }
+    }
+
+    LaunchedEffect(messages.isEmpty()) {
+        if (messages.isEmpty()) {
+            userScrolled = false
         }
     }
 
@@ -425,35 +424,37 @@ fun BodyContent(
             .padding(innerPadding)
     ) {
         if (messages.isEmpty()) {
-            EmptyStateContent(uiState)
+            EmptyStateContent(viewModel.uiState.collectAsStateWithLifecycle().value)
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 state = listState,
                 contentPadding = PaddingValues(
-                    bottom = rDP(96.dp), top = rDP(8.dp), start = rDP(24.dp), end = rDP(24.dp)
+                    bottom = rDP(96.dp),
+                    top = rDP(8.dp),
+                    start = rDP(24.dp),
+                    end = rDP(24.dp)
                 )
             ) {
                 items(
                     items = messages,
                     key = { it.id },
-                    contentType = { if (it.role == Role.User) "user" else "assistant" }) { message ->
+                    contentType = { it.role }
+                ) { message ->
                     ChatBubble(
                         message = message,
                         viewModel = viewModel,
-                        ttsViewModel = ttsViewModel,
-                        uiState = uiState,
+                        ttsViewModel = ttsViewModel
                     )
                     Spacer(Modifier.height(rDP(12.dp)))
                 }
             }
         }
 
-        // Jump to bottom FAB
         AnimatedVisibility(
             visible = !isAtBottom && messages.isNotEmpty(),
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(tween(150)),
+            exit = fadeOut(tween(150)),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(end = rDP(12.dp), bottom = rDP(20.dp))
@@ -462,14 +463,15 @@ fun BodyContent(
                 onClick = {
                     userScrolled = false
                     scope.launch {
-                        listState.animateScrollToItem(messages.lastIndex)
+                        listState.scrollToItem(messages.lastIndex)
                     }
                 },
                 containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.ArrowDownward, contentDescription = "Jump to bottom"
+                    imageVector = Icons.Rounded.ArrowDownward,
+                    contentDescription = "Jump to bottom"
                 )
             }
         }
@@ -836,55 +838,26 @@ private fun ChatBubble(
     message: Message,
     viewModel: ChatScreenViewModel,
     ttsViewModel: TTSViewModel,
-    uiState: ChatUiState,
 ) {
     val isUser = message.role == Role.User
-
-    var debouncedIsStreaming by remember { mutableStateOf(false) }
-
-    val isWaitingForFirstToken = message.text.isEmpty() && when (uiState) {
-        is ChatUiState.Generating -> uiState.messageId == message.id
-        else -> false
-    }
-
-    val isThisMessageStreaming = when (uiState) {
-        is ChatUiState.DecodingStream -> uiState.messageId == message.id
-        is ChatUiState.Generating -> uiState.messageId == message.id && uiState.isFirstToken
-        else -> false
-    }
-
-    val isThisMessageExecutingTool = when (uiState) {
-        is ChatUiState.ExecutingTool -> uiState.messageId == message.id
-        else -> false
-    }
-
-    LaunchedEffect(isThisMessageStreaming) {
-        if (isThisMessageStreaming) {
-            // Immediately set to streaming mode (use plain Text)
-            debouncedIsStreaming = true
-        } else {
-            // Wait 300ms before switching to markdown mode
-            delay(500)
-            debouncedIsStreaming = false
-        }
-    }
+    val isWaitingForFirstToken = viewModel.isMessageWaitingForFirstToken(message.id, message.text)
+    val isThisMessageExecutingTool = viewModel.isMessageExecutingTool(message.id)
 
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
     ) {
         Column {
-            // Show thinking section for assistant messages
             val showThinking = !isUser && !message.thought.isNullOrBlank()
             if (showThinking) {
                 ThinkingChatUI(message)
                 Spacer(Modifier.height(rDP(8.dp)))
             }
 
-            // Main message content based on role
             when (message.role) {
                 Role.User -> UserChatUI(
-                    message = message, viewModel = viewModel, ttsViewModel = ttsViewModel
+                    message = message,
+                    ttsViewModel = ttsViewModel
                 ) {
                     viewModel.deleteMessage(it)
                 }
@@ -896,7 +869,6 @@ private fun ChatBubble(
                         message = message,
                         viewModel = viewModel,
                         ttsViewModel = ttsViewModel,
-                        isStreaming = debouncedIsStreaming
                     )
                 }
 
@@ -946,7 +918,6 @@ private fun DecodingPlaceholder() {
 @Composable
 private fun UserChatUI(
     message: Message,
-    viewModel: ChatScreenViewModel,
     ttsViewModel: TTSViewModel,
     onMessageDelete: (String) -> Unit = {}
 ) {
@@ -957,7 +928,6 @@ private fun UserChatUI(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val isPlayingAudio by ttsViewModel.isPlaying.collectAsStateWithLifecycle()
-    var showRegenerateDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier.widthIn(max = rDP(240.dp)), horizontalAlignment = Alignment.End
@@ -1020,15 +990,6 @@ private fun UserChatUI(
                         }
                     })
 
-            // Regenerate button
-            Icon(
-                painter = painterResource(R.drawable.regen),
-                contentDescription = "Regenerate response",
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                modifier = Modifier
-                    .size(actionIconSize)
-                    .clickable { showRegenerateDialog = true })
-
             // Share button
             Icon(
                 imageVector = Icons.Rounded.Share,
@@ -1059,15 +1020,6 @@ private fun UserChatUI(
                     .clickable { onMessageDelete(message.id) })
         }
     }
-
-    // Regenerate dialog
-    if (showRegenerateDialog) {
-        RegenerateModelPickerDialog(
-            viewModel = viewModel, messageId = message.id
-        ) {
-            showRegenerateDialog = false
-        }
-    }
 }
 
 
@@ -1076,13 +1028,20 @@ private fun RegularChatUI(
     message: Message,
     viewModel: ChatScreenViewModel,
     ttsViewModel: TTSViewModel,
-    isStreaming: Boolean
 ) {
     LocalClipboard.current
     val context = LocalContext.current
     val isPlayingAudio by ttsViewModel.isPlaying.collectAsStateWithLifecycle()
     var showRegenerateDialog by remember { mutableStateOf(false) }
     val actionIconSize = rDP(14.dp)
+
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val isStreaming = when (uiState) {
+        is ChatUiState.DecodingStream -> (uiState as ChatUiState.DecodingStream).messageId == message.id
+        is ChatUiState.Generating -> (uiState as ChatUiState.Generating).messageId == message.id
+        else -> false
+    }
+
 
     Column(
         modifier = Modifier

@@ -475,11 +475,11 @@ private fun MarkdownTable(
     val numColumns = table.rows.firstOrNull()?.size ?: 1
 
     // 2. Decide on a fixed per‑cell width (you can make this dynamic if you like)
-    val cellWidth = rDP(150.dp)
+    val cellWidth = rDP(110.dp)
     val dividerWidth = rDP(1.dp)
 
     // 3. Total width of the table (including horizontal padding)
-    val totalTableWidth = cellWidth * numColumns + dividerWidth * (numColumns - 1) + rDP(32.dp)
+    val totalTableWidth = cellWidth * numColumns + dividerWidth * (numColumns - 1)
 
     Box(
         modifier = modifier
@@ -493,8 +493,7 @@ private fun MarkdownTable(
             .background(
                 color = MaterialTheme.colorScheme.primary.copy(alpha = .01f),
                 shape = RoundedCornerShape(rDP(8.dp))
-            )
-            .padding(rDP(12.dp)),
+            ),
     ) {
         // ----------------------------------------------------------
         // The entire table occupies a fixed width so that the weight
@@ -513,11 +512,11 @@ private fun MarkdownTable(
                             when {
                                 rowIndex == 0 -> MaterialTheme.colorScheme.primary.copy(0.1f)
                                 else -> Color.Transparent
-                            }, shape = RoundedCornerShape(rDP(4.dp))
+                            }, shape = RoundedCornerShape(rDP(8.dp), rDP(8.dp))
                         )
                         .padding(horizontal = rDP(8.dp))
                         .height(IntrinsicSize.Min), // Forces each box to match the row’s
-                    horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))
+                    horizontalArrangement = Arrangement.spacedBy(rDP(2.dp))
                 ) {
                     // --------------------------------------------------------------------------
                     // Cell loop – weight takes care of equal widths.
@@ -864,7 +863,7 @@ fun RichText(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary,
     style: TextStyle = MaterialTheme.typography.bodySmall,
-    fontFamily: FontFamily = FontFamily.Serif,
+    fontFamily: FontFamily = FontFamily.Default,
     fontWeight: FontWeight = FontWeight.Light
 ) {
     val annotatedText = remember(text) {

@@ -76,7 +76,7 @@ object ChatManager {
         messages: List<Message>,
         chatTitle: String,
         chatId: String,
-        rootNode: NeuronNode,            // <- the live root
+        rootNode: NeuronNode,
         appContext: Context
     ) {
         try {
@@ -88,14 +88,14 @@ object ChatManager {
             }
 
             Log.d(TAG, "Messages: $messages")
-
             Log.d(TAG, "Root node: $rootNode")
-
             Log.d(TAG, "Saving chat: id=$chatId, title='$chatTitle', messages=${messages.size}")
 
-            // 1️⃣  build the JSON payload
+            val currentTimestamp = System.currentTimeMillis()
+
             val jsonData = JSONObject().apply {
                 put("title", chatTitle)
+                put("timestamp", currentTimestamp)
                 put(
                     "conversations", JSONArray(
                         Json.encodeToString(
@@ -106,10 +106,7 @@ object ChatManager {
                 )
             }
 
-            // 2️⃣  mutate the real tree (rootNode is the live root that UI is watching)
             val chatHistory = getDefaultChatHistory(rootNode)
-
-            // 3️⃣  either update an existing leaf or create a new one
             val existingNode = if (chatId.isNotBlank()) {
                 chatHistory.children.firstOrNull { it.id == chatId }
             } else null
@@ -129,7 +126,6 @@ object ChatManager {
                 }
             }
 
-            // 4️⃣  write the *same* tree that already contains the new node
             saveTree(NeuronTree(rootNode), appContext, BuildConfig.ALIAS)
             Log.d(TAG, "Chat saved successfully")
 
@@ -137,10 +133,10 @@ object ChatManager {
             Log.e(TAG, "Failed to save chat", e)
             UIStateManager.setStateError("Failed to save chat", cause = e)
         } finally {
-            // keep the UI up‑to‑date
             refreshChats()
         }
     }
+
     /**
      * Creates a new empty chat.
      */

@@ -10,6 +10,7 @@ import com.dark.ai_module.model.LoadState
 import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.ai_module.workers.ModelManager.service
+import com.dark.neuroverse.model.ChatUiState
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.model.RunningTool
@@ -26,8 +27,11 @@ import com.dark.plugins.model.Tools
 import com.mp.data_hub_lib.manager.DataHubManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
@@ -76,6 +80,12 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
     val toolList = ToolCallingManager.toolList
     val selectedTool = ToolCallingManager.selectedTool
+
+    val isGenerating: StateFlow<Boolean> = uiState.map { state ->
+        state is ChatUiState.Generating ||
+                state is ChatUiState.DecodingStream ||
+                state is ChatUiState.ExecutingTool
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     init {
         initializeViewModel()
@@ -499,10 +509,15 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         }
     }
 
-    fun forceTitleRegeneration() {
-        viewModelScope.launch {
-            ChatManager.generateTitleIfNeeded(useAI = true, forceRegenerate = true)
-            saveCurrentChat()
+    fun isMessageWaitingForFirstToken(messageId: String, messageText: String): Boolean {
+        return messageText.isEmpty() && uiState.value.let { state ->
+            state is ChatUiState.Generating && state.messageId == messageId
+        }
+    }
+
+    fun isMessageExecutingTool(messageId: String): Boolean {
+        return uiState.value.let { state ->
+            state is ChatUiState.ExecutingTool && state.messageId == messageId
         }
     }
     //endregion

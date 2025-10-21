@@ -5,7 +5,7 @@ import java.util.UUID
 
 @Serializable
 data class ChatList(
-    val id: String, val name: String
+    val id: String, val name: String,   val timestamp: Long = System.currentTimeMillis()
 )
 
 @Serializable

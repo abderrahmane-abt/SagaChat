@@ -51,18 +51,22 @@ object UserDataManager {
         onError: (Exception) -> Unit = {}
     ) {
         try {
-            // Grab the history node from the live root
             val history = getDefaultChatHistory(_rootNode.value)
 
-            // Walk the *children* – they are the actual chat nodes
             val freshList = history.children
                 .filter { it.data.content.isNotBlank() }
-                .map { node ->
-                    val json = JSONObject(node.data.content)
-                    val title = json.optString("title", "Untitled")
-                    ChatList(node.id, title)
+                .mapNotNull { node ->
+                    try {
+                        val json = JSONObject(node.data.content)
+                        val title = json.optString("title", "Untitled")
+                        val timestamp = json.optLong("timestamp", System.currentTimeMillis())
+                        ChatList(node.id, title, timestamp)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error parsing chat node ${node.id}", e)
+                        null
+                    }
                 }
-                .sortedByDescending { it.id }     // newest first
+                .sortedByDescending { it.timestamp }
 
             Log.d(TAG, "Chat list refreshed: ${freshList.size} chats")
             onLoaded(freshList)
