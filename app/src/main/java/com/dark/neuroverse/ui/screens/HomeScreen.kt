@@ -2,6 +2,7 @@ package com.dark.neuroverse.ui.screens
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.ClipData
 import android.content.Intent
 import android.util.Log
 import android.widget.Toast
@@ -85,11 +86,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -98,12 +100,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -135,12 +138,13 @@ import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
 import com.dark.neuroverse.viewModel.chatViewModel.ChattingViewModelFactory
 import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModel
 import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModelFactory
-import com.dark.neuroverse.viewModel.chatViewModel.ToolCallingManager
+import com.dark.neuroverse.worker.ToolCallingManager
+import com.dark.neuroverse.worker.UIStateManager
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -160,12 +164,13 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val modelState by chatScreenViewModel.modelLoadingState.collectAsStateWithLifecycle()
-    val uiState by chatScreenViewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by UIStateManager.uiState.collectAsStateWithLifecycle()
 
-    // Token tracking
-    val tokenCount: MutableStateFlow<Int> = MutableStateFlow(0)
-    val lastTokenUpdate: MutableStateFlow<Long> = MutableStateFlow(System.currentTimeMillis())
-    val tkPerSecond by remember { mutableStateOf(MutableStateFlow(0)) }
+    // Optimized token tracking with throttling
+    var tokenCount by remember { mutableIntStateOf(0) }
+    var lastTokenUpdate by remember { mutableLongStateOf(0L) }
+    var tkPerSecond by remember { mutableIntStateOf(0) }
+    var lastDisplayUpdate by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(uiState) {
         when (val state = uiState) {
@@ -176,20 +181,30 @@ fun HomeScreen(
             }
 
             is ChatUiState.DecodingStream -> {
-                tokenCount.value++
-                lastTokenUpdate.value = System.currentTimeMillis()
+                tokenCount++
+                val currentTime = System.currentTimeMillis()
+
+                // Throttle display updates to every 100ms
+                if (currentTime - lastDisplayUpdate > 100) {
+                    val elapsedTime = currentTime - lastTokenUpdate
+                    if (elapsedTime > 0 && lastTokenUpdate > 0) {
+                        tkPerSecond = (tokenCount * 1000 / elapsedTime).toInt()
+                    }
+                    lastDisplayUpdate = currentTime
+                }
+
+                if (lastTokenUpdate == 0L) {
+                    lastTokenUpdate = currentTime
+                }
             }
 
             else -> {
-                if (lastTokenUpdate.value > 0) {
-                    val currentTime = System.currentTimeMillis()
-                    val elapsedTime = currentTime - lastTokenUpdate.value
-
-                    if (elapsedTime > 0) { // Ensure elapsedTime is greater than zero to avoid division by zero
-                        tkPerSecond.value = (tokenCount.value / (elapsedTime / 1000.0)).toInt()
-                        tokenCount.value = 0
-                        lastTokenUpdate.value = currentTime
-                    }
+                // Reset counters when generation stops
+                if (tokenCount > 0) {
+                    tokenCount = 0
+                    lastTokenUpdate = 0L
+                    tkPerSecond = 0
+                    lastDisplayUpdate = 0L
                 }
             }
         }
@@ -256,7 +271,7 @@ fun HomeScreen(
                         )
                         if (uiState is ChatUiState.Loading) {
                             Text(
-                                text = (uiState as ChatUiState.Loading).operation,
+                                text = (uiState as ChatUiState.Loading).message,
                                 modifier = Modifier.padding(
                                     horizontal = 16.dp, vertical = 4.dp
                                 ),
@@ -269,7 +284,6 @@ fun HomeScreen(
 
                 AnimatedVisibility(visible = uiState is ChatUiState.GeneratingTitle) {
                     Column {
-                        // Small spinner that turns the bar blue – feel free to tweak
                         LinearProgressIndicator(
                             modifier = Modifier.fillMaxWidth(),
                             color = MaterialTheme.colorScheme.secondary
@@ -283,8 +297,8 @@ fun HomeScreen(
                     }
                 }
 
-                // Token rate display
-                AnimatedVisibility(visible = uiState is ChatUiState.DecodingStream) {
+                // Optimized token rate display - only show when actually decoding
+                AnimatedVisibility(visible = uiState is ChatUiState.DecodingStream && tkPerSecond > 0) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -292,7 +306,7 @@ fun HomeScreen(
                             .padding(horizontal = 16.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = "Tokens/s: ${tkPerSecond.collectAsState().value}",
+                            text = "Tokens/s: $tkPerSecond",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -302,7 +316,7 @@ fun HomeScreen(
         }, bottomBar = {
             BottomBar(viewModel = chatScreenViewModel, uiState = uiState)
         }) { innerPadding ->
-            BodyContent(innerPadding, chatScreenViewModel, uiState, ttsViewModel)
+            BodyContent(innerPadding, chatScreenViewModel, ttsViewModel)
         }
     }
 }
@@ -313,28 +327,27 @@ fun TopBar(
     viewModel: ChatScreenViewModel, onMenu: () -> Unit = {}, onLeftMenu: () -> Unit = {}
 ) {
     val title by viewModel.chatTitle.collectAsStateWithLifecycle()
+    val messages by viewModel.messages.collectAsStateWithLifecycle()
 
     CenterAlignedTopAppBar(
         title = {
-        Crossfade(viewModel.messages.collectAsStateWithLifecycle().value.isEmpty()) {
-            if (it) {
-                ModelSelection(viewModel, false)
-            } else {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = title,
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.titleLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+        if (messages.isEmpty()) {
+            ModelSelection(viewModel, false)
+        } else {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = title,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
 
-                    ModelSelection(viewModel, true)
-                }
+                ModelSelection(viewModel, true)
             }
         }
     }, navigationIcon = {
@@ -371,40 +384,37 @@ fun TopBar(
 fun BodyContent(
     innerPadding: PaddingValues,
     viewModel: ChatScreenViewModel,
-    uiState: ChatUiState,
     ttsViewModel: TTSViewModel
 ) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-
-    // Auto-scroll management
-    var autoScrollEnabled by remember { mutableStateOf(true) }
+    var userScrolled by remember { mutableStateOf(false) }
 
     val isAtBottom by remember {
         derivedStateOf {
-            val totalItems = listState.layoutInfo.totalItemsCount
-            if (totalItems == 0) return@derivedStateOf true
-            val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            lastVisibleIndex >= totalItems - 1
+            val info = listState.layoutInfo
+            if (info.totalItemsCount == 0) return@derivedStateOf true
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+            lastVisible >= info.totalItemsCount - 1
         }
     }
 
-    // Disable auto-scroll when user scrolls up manually
-    LaunchedEffect(Unit) {
-        snapshotFlow { listState.isScrollInProgress to isAtBottom }.collect { (scrolling, atBottom) ->
-            if (scrolling && !atBottom) {
-                autoScrollEnabled = false
-            }
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty() && !userScrolled) {
+            listState.scrollToItem(messages.lastIndex)
         }
     }
 
-    // Auto-scroll to new messages when enabled
-    LaunchedEffect(messages.size, autoScrollEnabled) {
-        if (messages.isNotEmpty() && autoScrollEnabled) {
-            scope.launch {
-                listState.animateScrollToItem(messages.lastIndex)
-            }
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (listState.isScrollInProgress && !isAtBottom) {
+            userScrolled = true
+        }
+    }
+
+    LaunchedEffect(messages.isEmpty()) {
+        if (messages.isEmpty()) {
+            userScrolled = false
         }
     }
 
@@ -414,53 +424,54 @@ fun BodyContent(
             .padding(innerPadding)
     ) {
         if (messages.isEmpty()) {
-            EmptyStateContent(uiState)
+            EmptyStateContent(viewModel.uiState.collectAsStateWithLifecycle().value)
         } else {
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = rDP(16.dp)),
+                modifier = Modifier.fillMaxSize(),
                 state = listState,
                 contentPadding = PaddingValues(
-                    bottom = rDP(96.dp), top = rDP(8.dp), start = rDP(8.dp), end = rDP(8.dp)
+                    bottom = rDP(96.dp),
+                    top = rDP(8.dp),
+                    start = rDP(24.dp),
+                    end = rDP(24.dp)
                 )
             ) {
                 items(
                     items = messages,
                     key = { it.id },
-                    contentType = { if (it.role == Role.User) "user" else "assistant" }) { message ->
+                    contentType = { it.role }
+                ) { message ->
                     ChatBubble(
                         message = message,
                         viewModel = viewModel,
-                        ttsViewModel = ttsViewModel,
-                        uiState = uiState,
+                        ttsViewModel = ttsViewModel
                     )
                     Spacer(Modifier.height(rDP(12.dp)))
                 }
             }
         }
 
-        // Jump to bottom FAB
         AnimatedVisibility(
             visible = !isAtBottom && messages.isNotEmpty(),
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(tween(150)),
+            exit = fadeOut(tween(150)),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(end = rDP(12.dp), bottom = rDP(20.dp))
         ) {
             SmallFloatingActionButton(
                 onClick = {
-                    autoScrollEnabled = true
+                    userScrolled = false
                     scope.launch {
-                        listState.animateScrollToItem(messages.lastIndex)
+                        listState.scrollToItem(messages.lastIndex)
                     }
                 },
                 containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.ArrowDownward, contentDescription = "Jump to bottom"
+                    imageVector = Icons.Rounded.ArrowDownward,
+                    contentDescription = "Jump to bottom"
                 )
             }
         }
@@ -483,7 +494,7 @@ private fun EmptyStateContent(uiState: ChatUiState) {
                 )
                 Spacer(Modifier.height(rDP(16.dp)))
                 Text(
-                    text = uiState.operation,
+                    text = uiState.message,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = rSp(16.sp),
                     textAlign = TextAlign.Center
@@ -492,7 +503,7 @@ private fun EmptyStateContent(uiState: ChatUiState) {
 
             is ChatUiState.Error -> {
                 Icon(
-                    painter = painterResource(R.drawable.menu), // Replace with error icon
+                    painter = painterResource(R.drawable.menu),
                     contentDescription = "Error",
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(rDP(48.dp))
@@ -532,7 +543,7 @@ private fun BottomBar(
 ) {
     var input by remember { mutableStateOf("") }
     val tools by ToolCallingManager.toolList.collectAsStateWithLifecycle()
-    val selectedTools by ToolCallingManager.selectedTools.collectAsStateWithLifecycle()
+    val selectedTools by ToolCallingManager.selectedTool.collectAsStateWithLifecycle()
 
     // Derive generation state from unified UI state
     val isGenerating = when (uiState) {
@@ -556,7 +567,7 @@ private fun BottomBar(
         onRag = viewModel::setRag,
         onToolSelected = viewModel::selectTool,
         selectedTools = if (selectedTools.first.isEmpty()) emptyList() else listOf(selectedTools.second),
-        onToolRemoved = { viewModel.unSelectTool() },
+        onToolRemoved = { viewModel.unselectTool() },
         onSend = {
             when {
                 isGenerating -> viewModel.stopGenerating()
@@ -827,40 +838,43 @@ private fun ChatBubble(
     message: Message,
     viewModel: ChatScreenViewModel,
     ttsViewModel: TTSViewModel,
-    uiState: ChatUiState,
 ) {
     val isUser = message.role == Role.User
-
-    // Check if this specific message is being processed
-    val isThisMessageDecoding = when (uiState) {
-        is ChatUiState.DecodingStream -> uiState.messageId == message.id
-        is ChatUiState.Generating -> uiState.messageId == message.id && uiState.isFirstToken
-        is ChatUiState.ExecutingTool -> uiState.messageId == message.id
-        else -> false
-    }
+    val isWaitingForFirstToken = viewModel.isMessageWaitingForFirstToken(message.id, message.text)
+    val isThisMessageExecutingTool = viewModel.isMessageExecutingTool(message.id)
 
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
     ) {
         Column {
-            // Show thinking section for assistant messages
             val showThinking = !isUser && !message.thought.isNullOrBlank()
             if (showThinking) {
                 ThinkingChatUI(message)
                 Spacer(Modifier.height(rDP(8.dp)))
             }
 
-            // Main message content based on role
             when (message.role) {
-                Role.User -> UserChatUI(message) {
+                Role.User -> UserChatUI(
+                    message = message,
+                    ttsViewModel = ttsViewModel
+                ) {
                     viewModel.deleteMessage(it)
                 }
 
-                Role.Assistant -> RegularChatUI(message, viewModel, ttsViewModel)
+                Role.Assistant -> if (isWaitingForFirstToken) {
+                    DecodingPlaceholder()
+                } else {
+                    RegularChatUI(
+                        message = message,
+                        viewModel = viewModel,
+                        ttsViewModel = ttsViewModel,
+                    )
+                }
+
                 Role.Tool -> ToolChatUI(
                     message = message,
-                    isDecoding = isThisMessageDecoding,
+                    isDecoding = isThisMessageExecutingTool,
                 )
             }
         }
@@ -868,16 +882,55 @@ private fun ChatBubble(
 }
 
 @Composable
+private fun DecodingPlaceholder() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = rDP(8.dp)),
+        horizontalArrangement = Arrangement.Start,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Animated dots
+        val infiniteTransition = rememberInfiniteTransition(label = "decoding")
+        val alpha by infiniteTransition.animateFloat(
+            initialValue = 0.3f, targetValue = 1f, animationSpec = infiniteRepeatable(
+                animation = tween(800, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ), label = "alpha"
+        )
+
+        Text(
+            text = "Decoding",
+            color = MaterialTheme.colorScheme.primary.copy(alpha = alpha),
+            style = MaterialTheme.typography.bodyMedium,
+            fontStyle = FontStyle.Italic
+        )
+
+        Text(
+            text = "...",
+            color = MaterialTheme.colorScheme.primary.copy(alpha = alpha),
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(start = rDP(4.dp))
+        )
+    }
+}
+
+@Composable
 private fun UserChatUI(
-    message: Message, onMessageDelete: (String) -> Unit = {}
+    message: Message,
+    ttsViewModel: TTSViewModel,
+    onMessageDelete: (String) -> Unit = {}
 ) {
     val radius = with(LocalDensity.current) { rDP(12.dp) }
     val corner = RoundedCornerShape(radius)
     val actionIconSize = rDP(14.dp)
+    val clipboardManager = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val isPlayingAudio by ttsViewModel.isPlaying.collectAsStateWithLifecycle()
 
     Column(
-        modifier = Modifier.widthIn(max = rDP(240.dp)),
-        horizontalAlignment = Alignment.End
+        modifier = Modifier.widthIn(max = rDP(240.dp)), horizontalAlignment = Alignment.End
     ) {
         // Message text
         Text(
@@ -890,159 +943,217 @@ private fun UserChatUI(
             style = MaterialTheme.typography.bodyMedium
         )
 
-        Spacer(modifier = Modifier.height(rDP(8.dp)))
+        Spacer(modifier = Modifier.height(rDP(10.dp)))
 
-        Icon(
-            Icons.Rounded.DeleteOutline,
-            contentDescription = "Delete",
-            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-            modifier = Modifier
-                .padding(end = rDP(8.dp))
-                .size(actionIconSize)
-                .clickable { onMessageDelete(message.id) })
+        // Action buttons - same as Assistant
+        Row(horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))) {
+            // Copy button
+            Icon(
+                painter = painterResource(R.drawable.copy),
+                contentDescription = "Copy text",
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .size(actionIconSize)
+                    .clickable {
+                        scope.launch {
+                            clipboardManager.setClipEntry(
+                                ClipEntry(
+                                    ClipData.newPlainText(
+                                        "message", message.text
+                                    )
+                                )
+                            )
+                            Toast.makeText(
+                                context, "Copied to clipboard!", Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                        Toast.makeText(
+                            context, "Copied to clipboard!", Toast.LENGTH_SHORT
+                        ).show()
+                    })
+
+            // TTS button
+            Icon(
+                painter = painterResource(if (isPlayingAudio) R.drawable.stop else R.drawable.speaker),
+                contentDescription = "Play/Stop audio",
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .size(actionIconSize)
+                    .clickable {
+                        CoroutineScope(Dispatchers.IO).launch {
+                            if (isPlayingAudio) {
+                                ttsViewModel.onClickStop()
+                            } else {
+                                ttsViewModel.initTTS(context)
+                                ttsViewModel.onGenerate(message.text, 3)
+                            }
+                        }
+                    })
+
+            // Share button
+            Icon(
+                imageVector = Icons.Rounded.Share,
+                contentDescription = "Share",
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .size(actionIconSize)
+                    .clickable {
+                        val shareIntent = Intent().apply {
+                            action = Intent.ACTION_SEND
+                            putExtra(Intent.EXTRA_TEXT, message.text)
+                            type = "text/plain"
+                        }
+                        context.startActivity(
+                            Intent.createChooser(
+                                shareIntent, "Share message"
+                            )
+                        )
+                    })
+
+            // Delete button
+            Icon(
+                Icons.Rounded.DeleteOutline,
+                contentDescription = "Delete",
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .size(actionIconSize)
+                    .clickable { onMessageDelete(message.id) })
+        }
     }
 }
 
 
 @Composable
 private fun RegularChatUI(
-    message: Message, viewModel: ChatScreenViewModel, ttsViewModel: TTSViewModel,
+    message: Message,
+    viewModel: ChatScreenViewModel,
+    ttsViewModel: TTSViewModel,
 ) {
-    val clipboardManager = LocalClipboardManager.current
+    LocalClipboard.current
     val context = LocalContext.current
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val currentMsgId by viewModel.currentMsgId.collectAsStateWithLifecycle()
-
     val isPlayingAudio by ttsViewModel.isPlaying.collectAsStateWithLifecycle()
+    var showRegenerateDialog by remember { mutableStateOf(false) }
+    val actionIconSize = rDP(14.dp)
 
-    val showDecoder = uiState is ChatUiState.DecodingStream && currentMsgId == message.id
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val isStreaming = when (uiState) {
+        is ChatUiState.DecodingStream -> (uiState as ChatUiState.DecodingStream).messageId == message.id
+        is ChatUiState.Generating -> (uiState as ChatUiState.Generating).messageId == message.id
+        else -> false
+    }
 
-    Crossfade(targetState = showDecoder, label = "assistant-content") { empty ->
-        when (empty) {
-            true -> {
-                RobotDecodePlaceholder(
-                    active = true, modifier = Modifier.fillMaxWidth()
-                )
-            }
 
-            false -> {
-                var showRegenerateDialog by remember { mutableStateOf(false) }
-                val actionIconSize = rDP(14.dp)
-                val isStreaming =
-                    uiState is ChatUiState.DecodingStream && currentMsgId == message.id
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = rDP(4.dp))
+    ) {
+        // ✅ Use Crossfade for smooth transition between streaming/markdown
+        Crossfade(isStreaming, label = "content-transition") {
+            when (it) {
+                true -> {
+                    Text(
+                        text = message.text,
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = rDP(4.dp))
-                ) {
-
+                false -> {
                     MarkdownText(
                         text = message.text,
-                        isStreaming = isStreaming,
                         color = MaterialTheme.colorScheme.primary,
                         style = MaterialTheme.typography.bodyMedium
                     )
-
-
-                    Spacer(Modifier.height(rDP(10.dp)))
-
-                    // Action buttons
-                    Row(horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))) {
-                        // Copy button
-                        Icon(
-                            painter = painterResource(R.drawable.copy),
-                            contentDescription = "Copy text",
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                            modifier = Modifier
-                                .size(actionIconSize)
-                                .clickable {
-                                    clipboardManager.setText(AnnotatedString(message.text))
-                                    Toast.makeText(
-                                        context, "Copied to clipboard!", Toast.LENGTH_SHORT
-                                    ).show()
-                                })
-
-                        Icon(
-                            painter = painterResource(if (isPlayingAudio) R.drawable.stop else R.drawable.speaker),
-                            contentDescription = "Copy text",
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                            modifier = Modifier
-                                .size(actionIconSize)
-                                .clickable {
-                                    CoroutineScope(Dispatchers.IO).launch {
-                                        if (isPlayingAudio) {
-                                            ttsViewModel.onClickStop()
-                                        } else {
-                                            ttsViewModel.initTTS(context)
-                                            ttsViewModel.onGenerate(message.text, 1)
-                                        }
-                                    }
-                                })
-
-                        // Regenerate button
-                        Icon(
-                            painter = painterResource(R.drawable.regen),
-                            contentDescription = "Regenerate response",
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                            modifier = Modifier
-                                .size(actionIconSize)
-                                .clickable { showRegenerateDialog = true })
-
-                        // Share button
-                        Icon(
-                            imageVector = Icons.Rounded.Share,
-                            contentDescription = "Share",
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                            modifier = Modifier
-                                .size(actionIconSize)
-                                .clickable {
-                                    val shareIntent = Intent().apply {
-                                        action = Intent.ACTION_SEND
-                                        putExtra(Intent.EXTRA_TEXT, message.text)
-                                        type = "text/plain"
-                                    }
-                                    context.startActivity(
-                                        Intent.createChooser(
-                                            shareIntent, "Share message"
-                                        )
-                                    )
-                                })
-
-                        Icon(
-                            painterResource(R.drawable.resource_continue),
-                            contentDescription = "Continue",
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                            modifier = Modifier
-                                .size(actionIconSize)
-                                .clickable {
-                                    CoroutineScope(Dispatchers.IO).launch {
-                                        viewModel.continueGenerating(message)
-                                    }
-                                })
-
-                        // Save Memory button
-                        Icon(
-                            Icons.Rounded.DeleteOutline,
-                            contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                            modifier = Modifier
-                                .size(actionIconSize)
-                                .clickable {
-                                    viewModel.deleteMessage(message.id)
-                                })
-                    }
-                }
-
-                // Regenerate dialog
-                if (showRegenerateDialog) {
-                    RegenerateModelPickerDialog(
-                        viewModel = viewModel, messageId = message.id
-                    ) {
-                        showRegenerateDialog = false
-                    }
                 }
             }
+        }
+
+        Spacer(Modifier.height(rDP(10.dp)))
+
+        // Action buttons (without Continue)
+        Row(horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))) {
+            // Copy button
+            Icon(
+                painter = painterResource(R.drawable.copy),
+                contentDescription = "Copy text",
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .size(actionIconSize)
+                    .clickable {
+                        ClipEntry(ClipData.newPlainText("message", message.text))
+                        Toast.makeText(
+                            context, "Copied to clipboard!", Toast.LENGTH_SHORT
+                        ).show()
+                    })
+
+            // TTS button
+            Icon(
+                painter = painterResource(if (isPlayingAudio) R.drawable.stop else R.drawable.speaker),
+                contentDescription = "Play/Stop audio",
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .size(actionIconSize)
+                    .clickable {
+                        CoroutineScope(Dispatchers.IO).launch {
+                            if (isPlayingAudio) {
+                                ttsViewModel.onClickStop()
+                            } else {
+                                ttsViewModel.initTTS(context)
+                                ttsViewModel.onGenerate(message.text, 3)
+                            }
+                        }
+                    })
+
+            // Regenerate button
+            Icon(
+                painter = painterResource(R.drawable.regen),
+                contentDescription = "Regenerate response",
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .size(actionIconSize)
+                    .clickable { showRegenerateDialog = true })
+
+            // Share button
+            Icon(
+                imageVector = Icons.Rounded.Share,
+                contentDescription = "Share",
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .size(actionIconSize)
+                    .clickable {
+                        val shareIntent = Intent().apply {
+                            action = Intent.ACTION_SEND
+                            putExtra(Intent.EXTRA_TEXT, message.text)
+                            type = "text/plain"
+                        }
+                        context.startActivity(
+                            Intent.createChooser(
+                                shareIntent, "Share message"
+                            )
+                        )
+                    })
+
+            // Delete button
+            Icon(
+                Icons.Rounded.DeleteOutline,
+                contentDescription = "Delete",
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .size(actionIconSize)
+                    .clickable {
+                        viewModel.deleteMessage(message.id)
+                    })
+        }
+    }
+
+    // Regenerate dialog
+    if (showRegenerateDialog) {
+        RegenerateModelPickerDialog(
+            viewModel = viewModel, messageId = message.id
+        ) {
+            showRegenerateDialog = false
         }
     }
 }
@@ -1052,57 +1163,51 @@ private fun ToolChatUI(
     message: Message,
     isDecoding: Boolean,
 ) {
-    Crossfade(targetState = isDecoding, label = "tool-content") { decoding ->
-        when (decoding) {
-            true -> {
-                RobotDecodePlaceholder(
-                    active = true, modifier = Modifier.fillMaxWidth()
-                )
+    if (isDecoding) {
+        RobotDecodePlaceholder(
+            active = true, modifier = Modifier.fillMaxWidth()
+        )
+    } else {
+        Column {
+            // Tool identifier tag
+            AssistTag(message.tool?.toolName ?: "Unknown Tool")
+            Spacer(Modifier.height(rDP(6.dp)))
+            val toolOutput = message.tool?.toolOutput
+            val out = remember(toolOutput) {
+                try {
+                    val outputString = toolOutput?.output ?: ""
+
+                    when {
+                        outputString.isBlank() -> {
+                            JSONObject().apply {
+                                put("err", "Tool not executed yet")
+                            }
+                        }
+
+                        else -> {
+                            JSONObject(outputString)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("ToolChatUI", "Parse error: ${e.message}", e)
+                    JSONObject().apply {
+                        put("err", "Failed to parse: ${e.message}")
+                    }
+                }
             }
 
-            false -> {
-                Column {
-                    // Tool identifier tag
-                    AssistTag(message.tool?.toolName ?: "Unknown Tool")
-                    Spacer(Modifier.height(rDP(6.dp)))
-                    val toolOutput = message.tool?.toolOutput
-                    val out = remember(toolOutput) {
-                        try {
-                            val outputString = toolOutput?.output ?: ""
-
-                            when {
-                                outputString.isBlank() -> {
-                                    JSONObject().apply {
-                                        put("err", "Tool not executed yet")
-                                    }
-                                }
-
-                                else -> {
-                                    JSONObject(outputString)
-                                }
-                            }
-                        } catch (e: Exception) {
-                            Log.e("ToolChatUI", "Parse error: ${e.message}", e)
-                            JSONObject().apply {
-                                put("err", "Failed to parse: ${e.message}")
-                            }
-                        }
+            when (message.tool?.toolOutput == null) {
+                true -> {
+                    Card(elevation = CardDefaults.cardElevation(rDP(0.dp))) {
+                        PluginManager.currentPlugin.collectAsState().value?.api?.ToolPreviewContent(
+                            out.toString()
+                        )
                     }
+                }
 
-                    when (message.tool?.toolOutput == null) {
-                        true -> {
-                            Card(elevation = CardDefaults.cardElevation(rDP(0.dp))) {
-                                PluginManager.currentPlugin.collectAsState().value?.api?.ToolPreviewContent(
-                                    out.toString()
-                                )
-                            }
-                        }
-
-                        false -> {
-                            // Tool output available
-                            ToolOutputToggle(toolOutput = message.tool.toolOutput, out = out)
-                        }
-                    }
+                false -> {
+                    // Tool output available
+                    ToolOutputToggle(toolOutput = message.tool.toolOutput, out = out)
                 }
             }
         }
@@ -1249,7 +1354,6 @@ fun ToolOutputContent(
             runningPlugin.api?.ToolPreviewContent(toolOutput.output)
         }
     }
-
 }
 
 @Composable
@@ -1257,52 +1361,43 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
     var showDialog by remember { mutableStateOf(false) }
     val modelList by viewModel.modelList.collectAsStateWithLifecycle()
     val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
-    val isLoading by viewModel.isModelLoading.collectAsStateWithLifecycle()
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var selectedModelName by remember { mutableStateOf("") }
+    val uiState by UIStateManager.uiState.collectAsStateWithLifecycle()
     val isGeneratingTitle = uiState is ChatUiState.GeneratingTitle
-    LaunchedEffect(selectedModel) {
-        selectedModelName = if (selectedModel.modelName == "") "Select Model"
+
+    val selectedModelName = remember(selectedModel) {
+        if (selectedModel.modelName == "") "Select Model"
         else selectedModel.modelName
     }
 
     Column {
-        Crossfade(isCompact) {
-            when (it) {
-                true -> {
-                    IconButton(
-                        onClick = { if (!isGeneratingTitle) showDialog = true },
-                        colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
-                            contentColor = MaterialTheme.colorScheme.primary
-                        ),
-                        shape = RoundedCornerShape(rDP(8.dp)),
-                    ) {
-                        Icon(Icons.Outlined.SmartToy, "Model")
-                    }
-                }
-
-                false -> {
-                    Button(
-                        onClick = { if (!isGeneratingTitle) showDialog = true },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
-                            contentColor = MaterialTheme.colorScheme.primary
-                        ),
-                        shape = RoundedCornerShape(rDP(8.dp)),
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.SmartToy, "Model")
-                            Spacer(modifier = Modifier.width(rDP(8.dp)))
-                            Crossfade(selectedModelName) { modelName ->
-                                Text(
-                                    text = modelName, maxLines = 1, overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(rDP(8.dp)))
-                            Icon(Icons.Default.KeyboardArrowDown, "Expand")
-                        }
-                    }
+        if (isCompact) {
+            IconButton(
+                onClick = { if (!isGeneratingTitle) showDialog = true },
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+                    contentColor = MaterialTheme.colorScheme.primary
+                ),
+                shape = RoundedCornerShape(rDP(8.dp)),
+            ) {
+                Icon(Icons.Outlined.SmartToy, "Model")
+            }
+        } else {
+            Button(
+                onClick = { if (!isGeneratingTitle) showDialog = true },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+                    contentColor = MaterialTheme.colorScheme.primary
+                ),
+                shape = RoundedCornerShape(rDP(8.dp)),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.SmartToy, "Model")
+                    Spacer(modifier = Modifier.width(rDP(8.dp)))
+                    Text(
+                        text = selectedModelName, maxLines = 1, overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.width(rDP(8.dp)))
+                    Icon(Icons.Default.KeyboardArrowDown, "Expand")
                 }
             }
         }
@@ -1335,7 +1430,7 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = rDP(6.dp))
-                                        .clickable(enabled = !isLoading) {
+                                        .clickable {
                                             Log.d("ModelSelection", "Selected model: $model")
                                             viewModel.selectModel(model)
                                         }, colors = CardDefaults.cardColors(
@@ -1364,23 +1459,13 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
                                             )
                                         }
                                         Spacer(Modifier.weight(1f))
-                                        when {
-                                            isLoading && model.modelName == modelList.find { it.modelName == selectedModel.modelName }?.modelName -> {
-                                                CircularProgressIndicator(
-                                                    strokeWidth = 2.dp,
-                                                    modifier = Modifier.size(rDP(20.dp)),
-                                                    color = Mint
-                                                )
-                                            }
-
-                                            isSelected -> {
-                                                Icon(
-                                                    imageVector = Icons.Default.Check,
-                                                    contentDescription = "Loaded",
-                                                    tint = Mint,
-                                                    modifier = Modifier.size(rDP(20.dp))
-                                                )
-                                            }
+                                        if (isSelected) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = "Loaded",
+                                                tint = Mint,
+                                                modifier = Modifier.size(rDP(20.dp))
+                                            )
                                         }
                                     }
                                 }

@@ -4,8 +4,8 @@ import kotlinx.serialization.Serializable
 import java.util.UUID
 
 @Serializable
-data class ChatINFO(
-    val id: String, val name: String
+data class ChatList(
+    val id: String, val name: String,   val timestamp: Long = System.currentTimeMillis()
 )
 
 @Serializable
