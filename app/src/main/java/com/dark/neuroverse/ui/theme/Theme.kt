@@ -1,16 +1,20 @@
 package com.dark.neuroverse.ui.theme
 
 import android.annotation.SuppressLint
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
@@ -43,15 +47,40 @@ private val BoldColorScheme = lightColorScheme(
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Black,
-    onPrimary = White,
-    secondary = Grey,
-    background = SoftWhite,
-    onBackground = Black,
-    surface = White,
-    onSurface = Black,
-    primaryContainer = PrimaryContainer
+    // Primary roles — main brand identity
+    primary = Color(0xFF696FC7),       // Brand accent (buttons, highlights)
+    onPrimary = Color(0xFFFFFFFF),     // Text/icons on primary
+
+    // Secondary roles — supporting visuals
+    secondary = Color(0xFFA7AAE1),     // For chips, secondary buttons
+    onSecondary = Color(0xFF1C1C1C),   // Text/icons on secondary
+
+    // Tertiary roles — decorative, playful accents
+    tertiary = Color(0xFFF2AEBB),      // Use sparingly for highlights, icons, or illustrations
+    onTertiary = Color(0xFF1C1C1C),
+
+    // Background and surface roles — large areas
+    background = Color(0xFFFFFBFE),    // Light neutral background (Material baseline)
+    onBackground = Color(0xFF000000),
+
+    surface = Color(0xFFFFFFFF),       // Cards, sheets, app bars
+    onSurface = Color(0xFF000000),
+
+    // Container versions for filled components (elevated buttons, FABs, etc.)
+    primaryContainer = Color(0xFFE2E4FF),
+    onPrimaryContainer = Color(0xFF1A1C54),
+
+    secondaryContainer = Color(0xFFE7E9FF),
+    onSecondaryContainer = Color(0xFF232555),
+
+    tertiaryContainer = Color(0xFFF5D3C4),
+    onTertiaryContainer = Color(0xFF3A1C17),
+
+    // Error colors — standard Material defaults
+    error = Color(0xFFBA1A1A),
+    onError = Color(0xFFFFFFFF),
 )
+
 
 /**
  * Scales a base dp size based on current screen width (responsive).
@@ -116,17 +145,29 @@ fun TextStyle.scaled(designWidth: Float = 360f): TextStyle =
 @Composable
 fun NeuroVerseTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    dynamicColor: Boolean = true, // toggle if you ever want static fallback
     content: @Composable () -> Unit
 ) {
+    val context = LocalContext.current
+
     val colorScheme = when {
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            // Android 12–14: regular dynamic colors
+            if (darkTheme) dynamicDarkColorScheme(context)
+            else dynamicLightColorScheme(context)
+        }
+
+        else -> {
+            // Fallback to your static colors
+            if (darkTheme) DarkColorScheme else LightColorScheme
+        }
     }
 
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography(),
-        motionScheme = MotionScheme.expressive(),
+        motionScheme = MotionScheme.expressive(), // expressive motion = subtle, fluid animations
         content = content
     )
 }
+

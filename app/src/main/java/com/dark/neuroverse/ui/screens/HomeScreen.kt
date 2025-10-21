@@ -3,8 +3,10 @@ package com.dark.neuroverse.ui.screens
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.ClipData
+import android.content.Context
 import android.content.Intent
 import android.util.Log
+import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -104,6 +106,7 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -217,6 +220,14 @@ fun HomeScreen(
         }
     }
 
+    val imm = LocalContext.current.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+    val token = LocalView.current.windowToken
+    LaunchedEffect(drawerState.isOpen) {
+        if (drawerState.isOpen) {
+            imm.hideSoftInputFromWindow(token, 0)
+        }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState, drawerContent = {
             SettingsDrawerContent(
@@ -239,8 +250,7 @@ fun HomeScreen(
             )
         }) {
         Scaffold(modifier = Modifier
-            .fillMaxSize()
-            .imePadding(), topBar = {
+            .fillMaxSize(), topBar = {
             Column {
                 TopBar(
                     chatScreenViewModel,
@@ -316,7 +326,13 @@ fun HomeScreen(
         }, bottomBar = {
             BottomBar(viewModel = chatScreenViewModel, uiState = uiState)
         }) { innerPadding ->
-            BodyContent(innerPadding, chatScreenViewModel, ttsViewModel)
+            Box(
+                modifier = Modifier
+                    .padding(innerPadding)
+                    .fillMaxSize()
+            ) {
+                BodyContent(innerPadding, chatScreenViewModel, ttsViewModel)
+            }
         }
     }
 }
@@ -344,7 +360,7 @@ fun TopBar(
                     style = MaterialTheme.typography.titleLarge,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.primary
                 )
 
                 ModelSelection(viewModel, true)
@@ -355,8 +371,8 @@ fun TopBar(
             onClick = onMenu,
             shape = RoundedCornerShape(rDP(8.dp)),
             colors = IconButtonDefaults.iconButtonColors(
-                containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
-                contentColor = MaterialTheme.colorScheme.primary
+                containerColor = MaterialTheme.colorScheme.secondary,
+                contentColor = MaterialTheme.colorScheme.onSecondary
             )
         ) {
             Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
@@ -599,9 +615,9 @@ private fun ChatInputBar(
 
     Column(
         modifier = Modifier
+            .imePadding()
             .fillMaxWidth()
             .navigationBarsPadding()
-            .imePadding()
             .background(MaterialTheme.colorScheme.surface),
         verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
     ) {
