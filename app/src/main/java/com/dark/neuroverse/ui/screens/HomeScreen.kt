@@ -2,6 +2,7 @@ package com.dark.neuroverse.ui.screens
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.ClipData
 import android.content.Intent
 import android.util.Log
 import android.widget.Toast
@@ -99,11 +100,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -330,52 +331,52 @@ fun TopBar(
 
     CenterAlignedTopAppBar(
         title = {
-            if (messages.isEmpty()) {
-                ModelSelection(viewModel, false)
-            } else {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = title,
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.titleLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+        if (messages.isEmpty()) {
+            ModelSelection(viewModel, false)
+        } else {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = title,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
 
-                    ModelSelection(viewModel, true)
-                }
+                ModelSelection(viewModel, true)
             }
-        }, navigationIcon = {
-            IconButton(
-                onClick = onMenu,
-                shape = RoundedCornerShape(rDP(8.dp)),
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
-                    contentColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
-                Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
-            }
-        }, actions = {
-            IconButton(
-                onClick = onLeftMenu,
-                shape = RoundedCornerShape(rDP(8.dp)),
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
-                    contentColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.settings), contentDescription = "New Chat"
-                )
-            }
-        }, colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.background
-        )
+        }
+    }, navigationIcon = {
+        IconButton(
+            onClick = onMenu,
+            shape = RoundedCornerShape(rDP(8.dp)),
+            colors = IconButtonDefaults.iconButtonColors(
+                containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+                contentColor = MaterialTheme.colorScheme.primary
+            )
+        ) {
+            Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
+        }
+    }, actions = {
+        IconButton(
+            onClick = onLeftMenu,
+            shape = RoundedCornerShape(rDP(8.dp)),
+            colors = IconButtonDefaults.iconButtonColors(
+                containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+                contentColor = MaterialTheme.colorScheme.primary
+            )
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.settings), contentDescription = "New Chat"
+            )
+        }
+    }, colors = TopAppBarDefaults.topAppBarColors(
+        containerColor = MaterialTheme.colorScheme.background
+    )
     )
 }
 
@@ -430,17 +431,13 @@ fun BodyContent(
                 modifier = Modifier.fillMaxSize(),
                 state = listState,
                 contentPadding = PaddingValues(
-                    bottom = rDP(96.dp),
-                    top = rDP(8.dp),
-                    start = rDP(24.dp),
-                    end = rDP(24.dp)
+                    bottom = rDP(96.dp), top = rDP(8.dp), start = rDP(24.dp), end = rDP(24.dp)
                 )
             ) {
                 items(
                     items = messages,
                     key = { it.id },
-                    contentType = { if (it.role == Role.User) "user" else "assistant" }
-                ) { message ->
+                    contentType = { if (it.role == Role.User) "user" else "assistant" }) { message ->
                     ChatBubble(
                         message = message,
                         viewModel = viewModel,
@@ -728,13 +725,11 @@ private fun ChatInputBar(
                         if (ModelManager.isModelLoaded()) {
                             onSend()
                         } else {
-                            Toast
-                                .makeText(
-                                    context,
-                                    "Model is not loaded..! \nPlease Load Model..!",
-                                    Toast.LENGTH_LONG
-                                )
-                                .show()
+                            Toast.makeText(
+                                context,
+                                "Model is not loaded..! \nPlease Load Model..!",
+                                Toast.LENGTH_LONG
+                            ).show()
                         }
                     }, contentAlignment = Alignment.Center
             ) {
@@ -888,7 +883,9 @@ private fun ChatBubble(
 
             // Main message content based on role
             when (message.role) {
-                Role.User -> UserChatUI(message) {
+                Role.User -> UserChatUI(
+                    message = message, viewModel = viewModel, ttsViewModel = ttsViewModel
+                ) {
                     viewModel.deleteMessage(it)
                 }
 
@@ -924,13 +921,10 @@ private fun DecodingPlaceholder() {
         // Animated dots
         val infiniteTransition = rememberInfiniteTransition(label = "decoding")
         val alpha by infiniteTransition.animateFloat(
-            initialValue = 0.3f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
+            initialValue = 0.3f, targetValue = 1f, animationSpec = infiniteRepeatable(
                 animation = tween(800, easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Reverse
-            ),
-            label = "alpha"
+            ), label = "alpha"
         )
 
         Text(
@@ -951,15 +945,22 @@ private fun DecodingPlaceholder() {
 
 @Composable
 private fun UserChatUI(
-    message: Message, onMessageDelete: (String) -> Unit = {}
+    message: Message,
+    viewModel: ChatScreenViewModel,
+    ttsViewModel: TTSViewModel,
+    onMessageDelete: (String) -> Unit = {}
 ) {
     val radius = with(LocalDensity.current) { rDP(12.dp) }
     val corner = RoundedCornerShape(radius)
     val actionIconSize = rDP(14.dp)
+    val clipboardManager = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val isPlayingAudio by ttsViewModel.isPlaying.collectAsStateWithLifecycle()
+    var showRegenerateDialog by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier.widthIn(max = rDP(240.dp)),
-        horizontalAlignment = Alignment.End
+        modifier = Modifier.widthIn(max = rDP(240.dp)), horizontalAlignment = Alignment.End
     ) {
         // Message text
         Text(
@@ -972,62 +973,9 @@ private fun UserChatUI(
             style = MaterialTheme.typography.bodyMedium
         )
 
-        Spacer(modifier = Modifier.height(rDP(8.dp)))
+        Spacer(modifier = Modifier.height(rDP(10.dp)))
 
-        Icon(
-            Icons.Rounded.DeleteOutline,
-            contentDescription = "Delete",
-            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-            modifier = Modifier
-                .padding(end = rDP(8.dp))
-                .size(actionIconSize)
-                .clickable { onMessageDelete(message.id) })
-    }
-}
-
-
-@Composable
-private fun RegularChatUI(
-    message: Message,
-    viewModel: ChatScreenViewModel,
-    ttsViewModel: TTSViewModel,
-    isStreaming: Boolean
-) {
-    val clipboardManager = LocalClipboardManager.current
-    val context = LocalContext.current
-
-    val isPlayingAudio by ttsViewModel.isPlaying.collectAsStateWithLifecycle()
-    var showRegenerateDialog by remember { mutableStateOf(false) }
-    val actionIconSize = rDP(14.dp)
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = rDP(4.dp))
-    ) {
-        Crossfade(isStreaming) {
-            when(it){
-                true -> {
-                    Text(
-                        text = message.text,
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-                false -> {
-                    MarkdownText(
-                        text = message.text,
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(rDP(10.dp)))
-
-        // Action buttons
+        // Action buttons - same as Assistant
         Row(horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))) {
             // Copy button
             Icon(
@@ -1037,14 +985,24 @@ private fun RegularChatUI(
                 modifier = Modifier
                     .size(actionIconSize)
                     .clickable {
-                        clipboardManager.setText(AnnotatedString(message.text))
-                        Toast
-                            .makeText(
-                                context, "Copied to clipboard!", Toast.LENGTH_SHORT
+                        scope.launch {
+                            clipboardManager.setClipEntry(
+                                ClipEntry(
+                                    ClipData.newPlainText(
+                                        "message", message.text
+                                    )
+                                )
                             )
-                            .show()
+                            Toast.makeText(
+                                context, "Copied to clipboard!", Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                        Toast.makeText(
+                            context, "Copied to clipboard!", Toast.LENGTH_SHORT
+                        ).show()
                     })
 
+            // TTS button
             Icon(
                 painter = painterResource(if (isPlayingAudio) R.drawable.stop else R.drawable.speaker),
                 contentDescription = "Play/Stop audio",
@@ -1091,16 +1049,131 @@ private fun RegularChatUI(
                         )
                     })
 
+            // Delete button
             Icon(
-                painterResource(R.drawable.resource_continue),
-                contentDescription = "Continue",
+                Icons.Rounded.DeleteOutline,
+                contentDescription = "Delete",
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .size(actionIconSize)
+                    .clickable { onMessageDelete(message.id) })
+        }
+    }
+
+    // Regenerate dialog
+    if (showRegenerateDialog) {
+        RegenerateModelPickerDialog(
+            viewModel = viewModel, messageId = message.id
+        ) {
+            showRegenerateDialog = false
+        }
+    }
+}
+
+
+@Composable
+private fun RegularChatUI(
+    message: Message,
+    viewModel: ChatScreenViewModel,
+    ttsViewModel: TTSViewModel,
+    isStreaming: Boolean
+) {
+    LocalClipboard.current
+    val context = LocalContext.current
+    val isPlayingAudio by ttsViewModel.isPlaying.collectAsStateWithLifecycle()
+    var showRegenerateDialog by remember { mutableStateOf(false) }
+    val actionIconSize = rDP(14.dp)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = rDP(4.dp))
+    ) {
+        // ✅ Use Crossfade for smooth transition between streaming/markdown
+        Crossfade(isStreaming, label = "content-transition") {
+            when (it) {
+                true -> {
+                    Text(
+                        text = message.text,
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                false -> {
+                    MarkdownText(
+                        text = message.text,
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(rDP(10.dp)))
+
+        // Action buttons (without Continue)
+        Row(horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))) {
+            // Copy button
+            Icon(
+                painter = painterResource(R.drawable.copy),
+                contentDescription = "Copy text",
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .size(actionIconSize)
+                    .clickable {
+                        ClipEntry(ClipData.newPlainText("message", message.text))
+                        Toast.makeText(
+                            context, "Copied to clipboard!", Toast.LENGTH_SHORT
+                        ).show()
+                    })
+
+            // TTS button
+            Icon(
+                painter = painterResource(if (isPlayingAudio) R.drawable.stop else R.drawable.speaker),
+                contentDescription = "Play/Stop audio",
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                 modifier = Modifier
                     .size(actionIconSize)
                     .clickable {
                         CoroutineScope(Dispatchers.IO).launch {
-                            viewModel.continueGenerating(message)
+                            if (isPlayingAudio) {
+                                ttsViewModel.onClickStop()
+                            } else {
+                                ttsViewModel.initTTS(context)
+                                ttsViewModel.onGenerate(message.text, 3)
+                            }
                         }
+                    })
+
+            // Regenerate button
+            Icon(
+                painter = painterResource(R.drawable.regen),
+                contentDescription = "Regenerate response",
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .size(actionIconSize)
+                    .clickable { showRegenerateDialog = true })
+
+            // Share button
+            Icon(
+                imageVector = Icons.Rounded.Share,
+                contentDescription = "Share",
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .size(actionIconSize)
+                    .clickable {
+                        val shareIntent = Intent().apply {
+                            action = Intent.ACTION_SEND
+                            putExtra(Intent.EXTRA_TEXT, message.text)
+                            type = "text/plain"
+                        }
+                        context.startActivity(
+                            Intent.createChooser(
+                                shareIntent, "Share message"
+                            )
+                        )
                     })
 
             // Delete button
