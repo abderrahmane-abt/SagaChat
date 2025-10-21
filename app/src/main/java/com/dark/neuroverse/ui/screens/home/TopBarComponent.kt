@@ -107,8 +107,8 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
             IconButton(
                 onClick = { if (!isGeneratingTitle) showDialog = true },
                 colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.secondary.copy(0.1f),
-                    contentColor = MaterialTheme.colorScheme.secondary
+                    containerColor = colorScheme.secondary.copy(0.1f),
+                    contentColor = colorScheme.secondary
                 ),
                 shape = RoundedCornerShape(rDP(8.dp)),
             ) {
@@ -154,7 +154,6 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
 
                         LazyColumn(
                             modifier = Modifier.heightIn(min = rDP(150.dp), max = rDP(320.dp)),
-                            contentPadding = PaddingValues(vertical = rDP(8.dp))
                         ) {
                             items(modelList) { model ->
                                 val isSelected = model.modelName == selectedModel.modelName
@@ -162,13 +161,13 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(vertical = rDP(6.dp))
+                                        .padding(vertical = rDP(1.5.dp))
                                         .clickable {
                                             Log.d("ModelSelection", "Selected model: $model")
                                             viewModel.selectModel(model)
                                         }, colors = CardDefaults.cardColors(
                                         containerColor = if (isSelected) Mint.copy(alpha = 0.15f)
-                                        else MaterialTheme.colorScheme.background
+                                        else colorScheme.secondary.copy(0.1f)
                                     ), elevation = CardDefaults.cardElevation(rDP(0.dp))
                                 ) {
                                     Row(
@@ -187,7 +186,7 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
                                             Text(
                                                 text = if (isSelected) "Currently Loaded" else "Tap to Load",
                                                 style = MaterialTheme.typography.bodySmall.copy(
-                                                    color = if (isSelected) Mint else Color.Gray
+                                                    color = if (isSelected) Color.Unspecified else Color.Gray
                                                 )
                                             )
                                         }

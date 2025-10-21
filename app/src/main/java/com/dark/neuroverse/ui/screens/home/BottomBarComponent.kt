@@ -86,168 +86,169 @@ fun ChatInputBar(
         modifier = Modifier
             .imePadding()
             .fillMaxWidth()
-            .navigationBarsPadding()
-            .background(MaterialTheme.colorScheme.surface),
+            .background(MaterialTheme.colorScheme.secondary.copy(0.1f)),
         verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
     ) {
-        // Tools list
-        AnimatedVisibility(visible = showToolsList) {
-            ToolsList(
-                tools = tools, onToolSelected = {
-                    onToolSelected(it)
-                    showToolsList = false
-                })
-        }
-
-        // Tool selection and model button row
-        Row(
-            modifier = Modifier
-                .padding(top = rDP(16.dp))
-                .padding(horizontal = rDP(16.dp))
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
-        ) {
-            Button(
-                onClick = {
-                    if (inputEnabled) {
-                        showToolsList = !showToolsList
-                    }
-                }, enabled = inputEnabled, colors = ButtonDefaults.buttonColors(
-                    containerColor = if (showToolsList) SkyBlue else MaterialTheme.colorScheme.background,
-                    contentColor = if (showToolsList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
-                ), shape = RoundedCornerShape(rDP(8.dp))
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
-                ) {
-                    Icon(painterResource(R.drawable.tools), contentDescription = "Tools")
-                    Text(text = "Tools", fontSize = rSp(14.sp))
-                }
+        Column(Modifier.navigationBarsPadding()) {
+            // Tools list
+            AnimatedVisibility(visible = showToolsList) {
+                ToolsList(
+                    tools = tools, onToolSelected = {
+                        onToolSelected(it)
+                        showToolsList = false
+                    })
             }
 
-            // Selected tools chips
-            LazyRow(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(rDP(4.dp))
-            ) {
-                items(selectedTools, key = { it.toolName }) { tool ->
-                    ToolChip(
-                        tool = tool,
-                        onRemove = { onToolRemoved(tool) },
-                        modifier = Modifier.animateItem()
-                    )
-                }
-            }
-
-            // RAG toggle button
-            IconButton(
-                onClick = {
-                    if (inputEnabled) {
-                        isRag = !isRag
-                        onRag(isRag)
-                    }
-                },
-                enabled = inputEnabled,
-                modifier = Modifier.size(rDP(36.dp)),
-                shape = RoundedCornerShape(rDP(8.dp)),
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = if (isRag) CyberViolet.copy(0.2f) else MaterialTheme.colorScheme.background,
-                    contentColor = if (isRag) CyberViolet else MaterialTheme.colorScheme.primary,
-                )
-            ) {
-                Icon(painterResource(R.drawable.database_zap), contentDescription = "Toggle RAG")
-            }
-        }
-
-        // Input row
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = rDP(8.dp))
-                .padding(bottom = rDP(4.dp))
-                .padding(end = rDP(18.dp)),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TextField(
-                value = value,
-                onValueChange = onValueChange,
-                enabled = inputEnabled,
+            // Tool selection and model button row
+            Row(
                 modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = rDP(6.dp)),
-                placeholder = {
-                    Text(
-                        text = if (inputEnabled) "Say Anything…" else "Processing...",
-                        color = SlateGrey,
-                        fontSize = rSp(14.sp)
-                    )
-                },
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    cursorColor = MaterialTheme.colorScheme.primary
-                ),
-                textStyle = LocalTextStyle.current.copy(
-                    color = MaterialTheme.colorScheme.primary, fontSize = rSp(15.sp)
-                )
-            )
-
-            Spacer(Modifier.width(rDP(8.dp)))
-
-
-
-
-            Box(
-                modifier = Modifier
-                    .size(rDP(36.dp))
-                    .clip(CircleShape)
-                    .background(
-                        if (inputEnabled || isGenerating) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                    )
-                    .clickable(enabled = inputEnabled || isGenerating) {
-                        if (ModelManager.isModelLoaded()) {
-                            onSend()
-                        } else {
-                            Toast.makeText(
-                                context,
-                                "Model is not loaded..! \nPlease Load Model..!",
-                                Toast.LENGTH_LONG
-                            ).show()
+                    .padding(top = rDP(16.dp))
+                    .padding(horizontal = rDP(16.dp))
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
+            ) {
+                Button(
+                    onClick = {
+                        if (inputEnabled) {
+                            showToolsList = !showToolsList
                         }
-                    }, contentAlignment = Alignment.Center
-            ) {
-                when {
-                    isGenerating -> {
-                        Icon(
-                            Icons.Rounded.Stop,
-                            modifier = Modifier.padding(rDP(8.dp)),
-                            contentDescription = "Stop",
-                            tint = MaterialTheme.colorScheme.background
-                        )
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(rDP(28.dp)),
-                            trackColor = MaterialTheme.colorScheme.background.copy(alpha = 0.3f),
-                            color = MaterialTheme.colorScheme.background
-                        )
+                    }, enabled = inputEnabled, colors = ButtonDefaults.buttonColors(
+                        containerColor = if (showToolsList) SkyBlue else MaterialTheme.colorScheme.background,
+                        contentColor = if (showToolsList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
+                    ), shape = RoundedCornerShape(rDP(8.dp))
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
+                    ) {
+                        Icon(painterResource(R.drawable.tools), contentDescription = "Tools")
+                        Text(text = "Tools", fontSize = rSp(14.sp))
                     }
+                }
 
-                    else -> {
-                        Icon(
-                            painterResource(R.drawable.send_chat),
-                            modifier = Modifier.padding(rDP(8.dp)),
-                            contentDescription = "Send",
-                            tint = if (inputEnabled) MaterialTheme.colorScheme.background
-                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                // Selected tools chips
+                LazyRow(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(rDP(4.dp))
+                ) {
+                    items(selectedTools, key = { it.toolName }) { tool ->
+                        ToolChip(
+                            tool = tool,
+                            onRemove = { onToolRemoved(tool) },
+                            modifier = Modifier.animateItem()
                         )
                     }
                 }
 
+                // RAG toggle button
+                IconButton(
+                    onClick = {
+                        if (inputEnabled) {
+                            isRag = !isRag
+                            onRag(isRag)
+                        }
+                    },
+                    enabled = inputEnabled,
+                    modifier = Modifier.size(rDP(36.dp)),
+                    shape = RoundedCornerShape(rDP(8.dp)),
+                    colors = IconButtonDefaults.iconButtonColors(
+                        containerColor = if (isRag) CyberViolet.copy(0.2f) else MaterialTheme.colorScheme.background,
+                        contentColor = if (isRag) CyberViolet else MaterialTheme.colorScheme.primary,
+                    )
+                ) {
+                    Icon(painterResource(R.drawable.database_zap), contentDescription = "Toggle RAG")
+                }
+            }
+
+            // Input row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = rDP(8.dp))
+                    .padding(bottom = rDP(4.dp))
+                    .padding(end = rDP(18.dp)),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    enabled = inputEnabled,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = rDP(6.dp)),
+                    placeholder = {
+                        Text(
+                            text = if (inputEnabled) "Say Anything…" else "Processing...",
+                            color = SlateGrey,
+                            fontSize = rSp(14.sp)
+                        )
+                    },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        cursorColor = MaterialTheme.colorScheme.primary
+                    ),
+                    textStyle = LocalTextStyle.current.copy(
+                        color = MaterialTheme.colorScheme.primary, fontSize = rSp(15.sp)
+                    )
+                )
+
+                Spacer(Modifier.width(rDP(8.dp)))
+
+
+
+
+                Box(
+                    modifier = Modifier
+                        .size(rDP(36.dp))
+                        .clip(CircleShape)
+                        .background(
+                            if (inputEnabled || isGenerating) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                        )
+                        .clickable(enabled = inputEnabled || isGenerating) {
+                            if (ModelManager.isModelLoaded()) {
+                                onSend()
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    "Model is not loaded..! \nPlease Load Model..!",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }, contentAlignment = Alignment.Center
+                ) {
+                    when {
+                        isGenerating -> {
+                            Icon(
+                                Icons.Rounded.Stop,
+                                modifier = Modifier.padding(rDP(8.dp)),
+                                contentDescription = "Stop",
+                                tint = MaterialTheme.colorScheme.background
+                            )
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(rDP(28.dp)),
+                                trackColor = MaterialTheme.colorScheme.background.copy(alpha = 0.3f),
+                                color = MaterialTheme.colorScheme.background
+                            )
+                        }
+
+                        else -> {
+                            Icon(
+                                painterResource(R.drawable.send_chat),
+                                modifier = Modifier.padding(rDP(8.dp)),
+                                contentDescription = "Send",
+                                tint = if (inputEnabled) MaterialTheme.colorScheme.background
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                            )
+                        }
+                    }
+
+                }
             }
         }
     }
