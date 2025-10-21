@@ -1,4 +1,4 @@
-package com.dark.neuroverse.ui.screens
+package com.dark.neuroverse.ui.screens.home
 
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -11,6 +11,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -69,12 +70,14 @@ import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
@@ -147,7 +150,6 @@ import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -220,7 +222,8 @@ fun HomeScreen(
         }
     }
 
-    val imm = LocalContext.current.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+    val imm =
+        LocalContext.current.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
     val token = LocalView.current.windowToken
     LaunchedEffect(drawerState.isOpen) {
         if (drawerState.isOpen) {
@@ -230,27 +233,28 @@ fun HomeScreen(
 
     ModalNavigationDrawer(
         drawerState = drawerState, drawerContent = {
-            SettingsDrawerContent(
-                modifier = Modifier,
-                viewModel = chatScreenViewModel,
-                onSettingsClick = onRequestSettingsChange,
-                onChatSelected = { scope.launch { drawerState.close() } },
-                onNewChatClick = {
-                    chatScreenViewModel.newChat()
-                },
-                onDataHubClick = {
-                    onDataHubClick()
-                },
-                onPluginStoreClick = {
-                    onPluginStoreClick()
-                },
-                onModelsClick = {
-                    onModelsClick()
-                },
-            )
+            ModalDrawerSheet(drawerState) {
+                SettingsDrawerContent(
+                    modifier = Modifier,
+                    viewModel = chatScreenViewModel,
+                    onSettingsClick = onRequestSettingsChange,
+                    onChatSelected = { scope.launch { drawerState.close() } },
+                    onNewChatClick = {
+                        chatScreenViewModel.newChat()
+                    },
+                    onDataHubClick = {
+                        onDataHubClick()
+                    },
+                    onPluginStoreClick = {
+                        onPluginStoreClick()
+                    },
+                    onModelsClick = {
+                        onModelsClick()
+                    },
+                )
+            }
         }) {
-        Scaffold(modifier = Modifier
-            .fillMaxSize(), topBar = {
+        Scaffold(modifier = Modifier.fillMaxSize(), topBar = {
             Column {
                 TopBar(
                     chatScreenViewModel,
@@ -330,6 +334,7 @@ fun HomeScreen(
                 modifier = Modifier
                     .padding(innerPadding)
                     .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
             ) {
                 BodyContent(innerPadding, chatScreenViewModel, ttsViewModel)
             }
@@ -371,8 +376,8 @@ fun TopBar(
             onClick = onMenu,
             shape = RoundedCornerShape(rDP(8.dp)),
             colors = IconButtonDefaults.iconButtonColors(
-                containerColor = MaterialTheme.colorScheme.secondary,
-                contentColor = MaterialTheme.colorScheme.onSecondary
+                containerColor = MaterialTheme.colorScheme.secondary.copy(0.1f),
+                contentColor = MaterialTheme.colorScheme.secondary
             )
         ) {
             Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
@@ -382,8 +387,8 @@ fun TopBar(
             onClick = onLeftMenu,
             shape = RoundedCornerShape(rDP(8.dp)),
             colors = IconButtonDefaults.iconButtonColors(
-                containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
-                contentColor = MaterialTheme.colorScheme.primary
+                containerColor = MaterialTheme.colorScheme.secondary.copy(0.1f),
+                contentColor = MaterialTheme.colorScheme.secondary
             )
         ) {
             Icon(
@@ -398,9 +403,7 @@ fun TopBar(
 
 @Composable
 fun BodyContent(
-    innerPadding: PaddingValues,
-    viewModel: ChatScreenViewModel,
-    ttsViewModel: TTSViewModel
+    innerPadding: PaddingValues, viewModel: ChatScreenViewModel, ttsViewModel: TTSViewModel
 ) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
@@ -446,21 +449,12 @@ fun BodyContent(
                 modifier = Modifier.fillMaxSize(),
                 state = listState,
                 contentPadding = PaddingValues(
-                    bottom = rDP(96.dp),
-                    top = rDP(8.dp),
-                    start = rDP(24.dp),
-                    end = rDP(24.dp)
+                    bottom = rDP(96.dp), top = rDP(8.dp), start = rDP(24.dp), end = rDP(24.dp)
                 )
             ) {
-                items(
-                    items = messages,
-                    key = { it.id },
-                    contentType = { it.role }
-                ) { message ->
+                items(items = messages, key = { it.id }, contentType = { it.role }) { message ->
                     ChatBubble(
-                        message = message,
-                        viewModel = viewModel,
-                        ttsViewModel = ttsViewModel
+                        message = message, viewModel = viewModel, ttsViewModel = ttsViewModel
                     )
                     Spacer(Modifier.height(rDP(12.dp)))
                 }
@@ -486,8 +480,7 @@ fun BodyContent(
                 contentColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.ArrowDownward,
-                    contentDescription = "Jump to bottom"
+                    imageVector = Icons.Rounded.ArrowDownward, contentDescription = "Jump to bottom"
                 )
             }
         }
@@ -595,6 +588,7 @@ private fun BottomBar(
         })
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
 @SuppressLint("StateFlowValueCalledInComposition")
 @Composable
 private fun ChatInputBar(
@@ -730,7 +724,9 @@ private fun ChatInputBar(
 
             Spacer(Modifier.width(rDP(8.dp)))
 
-            // Send/Stop button
+
+
+
             Box(
                 modifier = Modifier
                     .size(rDP(36.dp))
@@ -776,6 +772,7 @@ private fun ChatInputBar(
                         )
                     }
                 }
+
             }
         }
     }
@@ -872,8 +869,7 @@ private fun ChatBubble(
 
             when (message.role) {
                 Role.User -> UserChatUI(
-                    message = message,
-                    ttsViewModel = ttsViewModel
+                    message = message, ttsViewModel = ttsViewModel
                 ) {
                     viewModel.deleteMessage(it)
                 }
@@ -933,9 +929,7 @@ private fun DecodingPlaceholder() {
 
 @Composable
 private fun UserChatUI(
-    message: Message,
-    ttsViewModel: TTSViewModel,
-    onMessageDelete: (String) -> Unit = {}
+    message: Message, ttsViewModel: TTSViewModel, onMessageDelete: (String) -> Unit = {}
 ) {
     val radius = with(LocalDensity.current) { rDP(12.dp) }
     val corner = RoundedCornerShape(radius)
@@ -1385,13 +1379,15 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
         else selectedModel.modelName
     }
 
+
+
     Column {
         if (isCompact) {
             IconButton(
                 onClick = { if (!isGeneratingTitle) showDialog = true },
                 colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
-                    contentColor = MaterialTheme.colorScheme.primary
+                    containerColor = MaterialTheme.colorScheme.secondary.copy(0.1f),
+                    contentColor = MaterialTheme.colorScheme.secondary
                 ),
                 shape = RoundedCornerShape(rDP(8.dp)),
             ) {
@@ -1401,8 +1397,8 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
             Button(
                 onClick = { if (!isGeneratingTitle) showDialog = true },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
-                    contentColor = MaterialTheme.colorScheme.primary
+                    containerColor = MaterialTheme.colorScheme.secondary.copy(0.1f),
+                    contentColor = MaterialTheme.colorScheme.secondary
                 ),
                 shape = RoundedCornerShape(rDP(8.dp)),
             ) {
