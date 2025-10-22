@@ -48,8 +48,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -92,7 +90,6 @@ import com.dark.neuroverse.ui.theme.rSp
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
 import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModel
 import com.dark.plugins.manager.PluginManager
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -106,17 +103,6 @@ fun ChatBubble(
     val isUser = message.role == Role.User
     val isWaitingForFirstToken = viewModel.isMessageWaitingForFirstToken(message.id, message.text)
     val isThisMessageExecutingTool = viewModel.isMessageExecutingTool(message.id)
-
-    LaunchedEffect(Unit) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                ttsViewModel.initTTS()
-            } catch (e: Exception) {
-                Log.e("ChatScreen", "Failed to initialize TTS", e)
-                // Show error to user if needed
-            }
-        }
-    }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -191,8 +177,7 @@ private fun DecodingPlaceholder() {
 
 @Composable
 private fun UserChatUI(
-    message: Message,
-    onMessageDelete: (String) -> Unit = {}
+    message: Message, onMessageDelete: (String) -> Unit = {}
 ) {
     val radius = with(LocalDensity.current) { rDP(12.dp) }
     val corner = RoundedCornerShape(radius)
@@ -202,8 +187,7 @@ private fun UserChatUI(
     val scope = rememberCoroutineScope()
 
     Column(
-        modifier = Modifier.widthIn(max = rDP(240.dp)),
-        horizontalAlignment = Alignment.End
+        modifier = Modifier.widthIn(max = rDP(240.dp)), horizontalAlignment = Alignment.End
     ) {
         // Message text
         Text(
@@ -212,7 +196,7 @@ private fun UserChatUI(
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
                 .padding(horizontal = rDP(14.dp), vertical = rDP(8.dp)),
             text = message.text,
-            color = MaterialTheme.colorScheme.primary,
+            color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.bodyMedium
         )
 
@@ -234,12 +218,9 @@ private fun UserChatUI(
                             )
                         }
                         Toast.makeText(
-                            context,
-                            "Copied to clipboard!",
-                            Toast.LENGTH_SHORT
+                            context, "Copied to clipboard!", Toast.LENGTH_SHORT
                         ).show()
-                    }
-            )
+                    })
 
             // Share button
             Icon(
@@ -257,8 +238,7 @@ private fun UserChatUI(
                         context.startActivity(
                             Intent.createChooser(shareIntent, "Share message")
                         )
-                    }
-            )
+                    })
 
             // Delete button
             Icon(
@@ -267,8 +247,7 @@ private fun UserChatUI(
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                 modifier = Modifier
                     .size(actionIconSize)
-                    .clickable { onMessageDelete(message.id) }
-            )
+                    .clickable { onMessageDelete(message.id) })
         }
     }
 }
@@ -309,15 +288,16 @@ private fun RegularChatUI(
                 true -> {
                     Text(
                         text = message.text,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+
                 false -> {
                     MarkdownText(
                         text = message.text,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -342,24 +322,21 @@ private fun RegularChatUI(
                             )
                         }
                         Toast.makeText(
-                            context,
-                            "Copied to clipboard!",
-                            Toast.LENGTH_SHORT
+                            context, "Copied to clipboard!", Toast.LENGTH_SHORT
                         ).show()
-                    }
-            )
+                    })
 
             // ✅ TTS button - Fixed implementation
             Box(contentAlignment = Alignment.Center) {
                 // Show progress indicator if playing
                 if (isPlayingAudio && audioProgress > 0f) {
                     CircularProgressIndicator(
-                    progress = { audioProgress },
-                    modifier = Modifier.size(actionIconSize + 4.dp),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                    strokeWidth = 2.dp,
-                    trackColor = ProgressIndicatorDefaults.circularIndeterminateTrackColor,
-                    strokeCap = ProgressIndicatorDefaults.CircularDeterminateStrokeCap,
+                        progress = { audioProgress },
+                        modifier = Modifier.size(actionIconSize + 4.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                        strokeWidth = 2.dp,
+                        trackColor = ProgressIndicatorDefaults.circularIndeterminateTrackColor,
+                        strokeCap = ProgressIndicatorDefaults.CircularDeterminateStrokeCap,
                     )
                 }
 
@@ -377,11 +354,12 @@ private fun RegularChatUI(
                             if (isPlayingAudio) {
                                 ttsViewModel.stopPlayback()
                             } else {
-                                // ✅ Just call generateAndPlayAudio - no need to init again
-                                ttsViewModel.generateAndPlayAudio(message.text)
+                                scope.launch(Dispatchers.IO) {
+                                    val normalizer = ttsViewModel.normalizeText(message.text)
+                                    ttsViewModel.generateAndPlayAudio(normalizer)
+                                }
                             }
-                        }
-                )
+                        })
             }
 
             // Regenerate button
@@ -391,8 +369,7 @@ private fun RegularChatUI(
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                 modifier = Modifier
                     .size(actionIconSize)
-                    .clickable { showRegenerateDialog = true }
-            )
+                    .clickable { showRegenerateDialog = true })
 
             // Share button
             Icon(
@@ -410,8 +387,7 @@ private fun RegularChatUI(
                         context.startActivity(
                             Intent.createChooser(shareIntent, "Share message")
                         )
-                    }
-            )
+                    })
 
             // Delete button
             Icon(
@@ -420,48 +396,16 @@ private fun RegularChatUI(
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                 modifier = Modifier
                     .size(actionIconSize)
-                    .clickable { viewModel.deleteMessage(message.id) }
-            )
+                    .clickable { viewModel.deleteMessage(message.id) })
         }
     }
 
     // Regenerate dialog
     if (showRegenerateDialog) {
         RegenerateModelPickerDialog(
-            viewModel = viewModel,
-            messageId = message.id
+            viewModel = viewModel, messageId = message.id
         ) {
             showRegenerateDialog = false
-        }
-    }
-}
-
-@Composable
-fun TtsStatusIndicator(ttsViewModel: TTSViewModel) {
-    val generationStatus by ttsViewModel.generationStatus.collectAsStateWithLifecycle()
-    val audioProgress by ttsViewModel.audioProgress.collectAsStateWithLifecycle()
-
-    generationStatus?.let { status ->
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = status,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            if (audioProgress > 0f) {
-                Text(
-                    text = "${(audioProgress * 100).toInt()}%",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
         }
     }
 }
