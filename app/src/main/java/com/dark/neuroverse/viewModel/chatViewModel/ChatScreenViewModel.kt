@@ -26,12 +26,15 @@ import com.dark.neuroverse.worker.UserDataManager
 import com.dark.plugins.model.Tools
 import com.mp.data_hub_lib.manager.DataHubManager
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
@@ -451,6 +454,224 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         )
 
         saveCurrentChat()
+    }
+    //endregion
+
+    //region Tool-Summarization
+
+    /**
+     * Summarizes tool output with streaming UI updates.
+     * Works like regeneration - streams the summary and updates the message in real-time.
+     * Uses TextGenerationWorker for proper streaming management.
+     *
+     * @param messageId The ID of the message containing the tool output to summarize
+     */
+    fun summarizeToolOutput(messageId: String) {
+        if (selectedModel.value.modelName == "") {
+            UIStateManager.setStateError("No model selected")
+            return
+        }
+        // Find the message
+        val message = messages.value.find { it.id == messageId }
+        if (message == null) {
+            Log.w(TAG, "Cannot summarize: message not found")
+            UIStateManager.setStateError("Message not found")
+            return
+        }
+
+        // Validate it's a tool message with output
+        if (message.role != Role.Tool || message.tool == null) {
+            Log.w(TAG, "Cannot summarize: not a tool message")
+            UIStateManager.setStateError("Not a tool message")
+            return
+        }
+
+        val toolOutput = message.tool.toolOutput.toString()
+        if (toolOutput.isBlank()) {
+            Log.w(TAG, "Cannot summarize: tool output is empty")
+            UIStateManager.setStateError("Tool output is empty")
+            return
+        }
+
+        // Prevent concurrent operations
+        if (UIStateManager.isGenerating()) {
+            Log.w(TAG, "Cannot summarize: already generating")
+            return
+        }
+
+        currentGenerationJob?.cancel()
+        currentGenerationJob = viewModelScope.launch {
+            try {
+                executeSummarization(messageId, message.tool.toolName, toolOutput)
+            } catch (e: CancellationException) {
+                Log.d(TAG, "Summarization cancelled")
+                UIStateManager.setStateIdle()
+            } catch (e: Exception) {
+                Log.e(TAG, "Summarization failed", e)
+                UIStateManager.setStateError("Summarization failed", cause = e)
+            }
+        }
+    }
+
+    private suspend fun executeSummarization(
+        messageId: String,
+        toolName: String,
+        toolOutput: String
+    ) {
+        // Save current model configuration
+        val originalModel = selectedModel.value
+        val needsModelSwitch = originalModel.systemPrompt != ModelsList.toolSummarizationSystemPrompt
+
+        // Clear existing message text (prepare for streaming)
+        ChatManager.updateStreamingMessage(
+            messageId = messageId,
+            text = "",
+            thought = null,
+            isFinal = false
+        )
+
+        try {
+            // Switch to summarization model if needed
+            if (needsModelSwitch) {
+                UIStateManager.toggleSwitchingModels(true)
+                ModelManager.unloadModel()
+
+                val summarizationModel = originalModel.copy(
+                    systemPrompt = ModelsList.toolSummarizationSystemPrompt,
+                    chatTemplate = ModelsList.toolSummarizationChatTemplate
+                )
+
+                ModelManager.loadModelAwait(
+                    modelData = summarizationModel
+                ) { state ->
+                    _modelLoadingState.value = state
+                    if (state is LoadState.OnLoaded) {
+                        selectedModel.value = summarizationModel
+                    }
+                }
+
+                UIStateManager.toggleSwitchingModels(false)
+            }
+
+            // Build summarization prompt
+            val summarizationPrompt = buildString {
+                appendLine("Tool: $toolName")
+                appendLine()
+                appendLine("Output:")
+                appendLine(toolOutput)
+                appendLine()
+                appendLine("Provide a clear, concise summary of the above tool output.")
+            }
+
+            // Use TextGenerationWorker for streaming (just like normal generation)
+            TextGenerationWorker.streamAndRender(
+                prompt = summarizationPrompt,
+                appContext = appContext,
+                enableTools = false, // No tool calling during summarization
+                messageId = messageId,
+                isRegeneration = true, // Treat like regeneration for metrics
+                existingMessages = emptyList(), // No conversation history needed
+                onToolExecution = { /* Not applicable */ }
+            )
+
+            // Restore original model if we switched
+            if (needsModelSwitch) {
+                UIStateManager.toggleSwitchingModels(true)
+                ModelManager.unloadModel()
+
+                ModelManager.loadModelAwait(
+                    modelData = originalModel
+                ) { state ->
+                    _modelLoadingState.value = state
+                    if (state is LoadState.OnLoaded) {
+                        selectedModel.value = originalModel
+                    }
+                }
+
+                UIStateManager.toggleSwitchingModels(false)
+            }
+
+            // Save the chat with the summary
+            saveCurrentChat()
+            Log.d(TAG, "Tool output summarized successfully for message: $messageId")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during summarization", e)
+
+            // Try to restore original model on error
+            if (needsModelSwitch && originalModel.id.isNotEmpty()) {
+                try {
+                    ModelManager.unloadModel()
+                    ModelManager.loadModelAwait(originalModel) { state ->
+                        _modelLoadingState.value = state
+                        if (state is LoadState.OnLoaded) {
+                            selectedModel.value = originalModel
+                        }
+                    }
+                } catch (restoreError: Exception) {
+                    Log.e(TAG, "Failed to restore original model", restoreError)
+                }
+            }
+
+            throw e
+        }
+    }
+
+    /**
+     * Alternative: Batch summarize multiple tool outputs in sequence.
+     * Useful when user wants to summarize all tool outputs in a conversation.
+     */
+    fun summarizeAllToolOutputs() {
+        val toolMessages = messages.value.filter {
+            it.role == Role.Tool &&
+                    it.tool != null &&
+                    it.tool.toolOutput.toString().isNotBlank()
+        }
+
+        if (toolMessages.isEmpty()) {
+            Log.w(TAG, "No tool messages to summarize")
+            UIStateManager.setStateError("No tool outputs found")
+            return
+        }
+
+        if (UIStateManager.isGenerating()) {
+            Log.w(TAG, "Cannot summarize: already generating")
+            return
+        }
+
+        currentGenerationJob?.cancel()
+        currentGenerationJob = viewModelScope.launch {
+            try {
+                UIStateManager.setStateLoading("Summarizing ${toolMessages.size} tool outputs...")
+
+                for ((index, message) in toolMessages.withIndex()) {
+                    if (!currentCoroutineContext().isActive) break
+
+                    Log.d(TAG, "Summarizing tool output ${index + 1}/${toolMessages.size}")
+
+                    executeSummarization(
+                        messageId = message.id,
+                        toolName = message.tool?.toolName ?: "Unknown Tool",
+                        toolOutput = message.tool?.toolOutput.toString()
+                    )
+
+                    // Small delay between summarizations
+                    if (index < toolMessages.size - 1) {
+                        delay(500)
+                    }
+                }
+
+                UIStateManager.setStateIdle()
+                Log.d(TAG, "All tool outputs summarized successfully")
+
+            } catch (e: CancellationException) {
+                Log.d(TAG, "Batch summarization cancelled")
+                UIStateManager.setStateIdle()
+            } catch (e: Exception) {
+                Log.e(TAG, "Batch summarization failed", e)
+                UIStateManager.setStateError("Batch summarization failed", cause = e)
+            }
+        }
     }
     //endregion
 

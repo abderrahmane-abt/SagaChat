@@ -1,14 +1,15 @@
 package com.dark.neuroverse.ui.screens
 
 import android.content.Intent
-import android.util.Log
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,11 +29,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowCircleDown
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material.icons.twotone.CheckCircle
 import androidx.compose.material.icons.twotone.Cloud
@@ -59,7 +55,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Surface
@@ -77,6 +75,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -87,6 +89,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.data.ModelsList.getModelList
 import com.dark.ai_module.model.ModelData
@@ -125,10 +130,12 @@ fun ModelsScreen(onNext: () -> Unit) {
     val tabs = listOf("GGUF", "OpenRouter", "Installed")
 
     Scaffold { innerPadding ->
+        val isDialogOpen by viewModel.isDialogOpened.collectAsStateWithLifecycle()
         Column(
             Modifier
                 .padding(innerPadding)
-                .fillMaxSize(),
+                .fillMaxSize()
+                .blur(if (isDialogOpen) rDP(10.dp) else rDP(0.dp), BlurredEdgeTreatment.Unbounded),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Header
@@ -220,7 +227,7 @@ private fun MarketplaceList(viewModel: ModelScreenViewModel) {
         items(models) { modelData ->
             val state = downloadStates[modelData.modelUrl.toString()] ?: DownloadState()
             ModelCard(
-                modelsData = modelData,
+                modelData = modelData,
                 isDownloading = state.isDownloading,
                 progress = state.progress,
                 onDownloadComplete = state.isComplete,
@@ -236,10 +243,10 @@ private fun MarketplaceList(viewModel: ModelScreenViewModel) {
 @Composable
 private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
     val context = LocalContext.current
-    val openRouterApiKey by viewModel.openRouterApiKey.collectAsState()
-    val openRouterBaseUrl by viewModel.openRouterBaseUrl.collectAsState()
-    val openRouterInstalled by viewModel.openRouterInstalledModels.collectAsState()
-    val availableModels by viewModel.availableModels.collectAsState()
+    val openRouterApiKey by viewModel.openRouterApiKey.collectAsStateWithLifecycle()
+    val openRouterBaseUrl by viewModel.openRouterBaseUrl.collectAsStateWithLifecycle()
+    val openRouterInstalled by viewModel.openRouterInstalledModels.collectAsStateWithLifecycle()
+    val availableModels by viewModel.availableModels.collectAsStateWithLifecycle()
 
     var showModelPicker by remember { mutableStateOf(false) }
     var isLoadingModels by remember { mutableStateOf(false) }
@@ -253,6 +260,10 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
             viewModel.fetchAvailableModels()
             isLoadingModels = false
         }
+    }
+
+    LaunchedEffect(showModelPicker) {
+        viewModel.setIsDialogOpen(showModelPicker)
     }
 
     LazyColumn(
@@ -452,7 +463,7 @@ private fun OpenRouterModelItem(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(rDP(8.dp)),
-        color = MaterialTheme.colorScheme.primary.copy(0.1f)
+        color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Row(
             modifier = Modifier
@@ -481,7 +492,7 @@ private fun OpenRouterModelItem(
 
             IconButton(
                 onClick = onDelete, colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                    containerColor = MaterialTheme.colorScheme.background
                 )
             ) {
                 Icon(
@@ -503,104 +514,144 @@ private fun ModelPickerDialog(
     onModelSelected: (OpenRouterModel) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
+
     val filteredModels = remember(searchQuery, availableModels, selectedModels) {
         availableModels.filter { it.name.contains(searchQuery, ignoreCase = true) }
-            .filter { it !in selectedModels } // Hide already selected
+            .filter { it !in selectedModels }
     }
 
-    Log.d("ModelPickerDialog", "Filtered models: $filteredModels")
-
-    AlertDialog(onDismissRequest = onDismiss, title = {
+    AlertDialog(onDismissRequest = onDismiss, confirmButton = {}, dismissButton = {
+        TextButton(onClick = onDismiss) { Text("Close") }
+    }, title = {
         Text(
-            "Select Model",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold
+            text = "Select Model",
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
         )
     }, text = {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = rDP(500.dp)),
+                .heightIn(max = rDP(520.dp)),
             verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
         ) {
+            // Search Field
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 placeholder = { Text("Search models...") },
                 leadingIcon = {
-                    Icon(Icons.TwoTone.Search, contentDescription = null)
+                    Icon(Icons.TwoTone.Search, contentDescription = "Search")
                 },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(rDP(12.dp))
             )
 
-            HorizontalDivider()
+            HorizontalDivider(modifier = Modifier.padding(vertical = rDP(6.dp)))
 
+            // Empty State
             if (filteredModels.isEmpty()) {
                 EmptyStateCard(
                     icon = Icons.TwoTone.SearchOff,
                     title = "No models found",
-                    subtitle = if (searchQuery.isBlank()) "Try fetching models first" else "Try a different search"
+                    subtitle = if (searchQuery.isBlank()) "Try fetching models first" else "Try a different keyword"
                 )
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(rDP(4.dp))
+                    verticalArrangement = Arrangement.spacedBy(rDP(6.dp))
                 ) {
-                    items(filteredModels) { modelId ->
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onModelSelected(modelId)
-                                    onDismiss() // Close the dialog after selecting the model
-                                },
-                            shape = RoundedCornerShape(rDP(8.dp)),
-                            color = MaterialTheme.colorScheme.surfaceVariant
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(rDP(12.dp)),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    modelId.name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
-
-                                // Add small tool icon if model supports tool calling
-                                if (modelId.supportsTools) {
-                                    Icon(
-                                        painterResource(R.drawable.hammer), // or any tool icon you like
-                                        contentDescription = "Supports tool calling",
-                                        tint = MaterialTheme.colorScheme.secondary,
-                                        modifier = Modifier.size(rDP(16.dp))
-                                    )
-                                }
-                                Icon(
-                                    Icons.Filled.Add,
-                                    contentDescription = "Add",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(rDP(16.dp))
-                                )
-                            }
-
-                        }
+                    items(filteredModels) { model ->
+                        ModelListItem(
+                            model = model, onClick = {
+                                onModelSelected(model)
+                                onDismiss()
+                            })
                     }
                 }
             }
         }
-    }, confirmButton = {}, dismissButton = {
-        TextButton(onClick = onDismiss) {
-            Text("Close")
-        }
     })
 }
+
+@Composable
+private fun ModelListItem(model: OpenRouterModel, onClick: () -> Unit) {
+    var isPressed by remember { mutableStateOf(false) }
+
+    val backgroundColor by animateColorAsState(
+        if (isPressed) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+        else MaterialTheme.colorScheme.surfaceVariant
+    )
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(rDP(10.dp)))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() }) {
+                isPressed = true
+                onClick()
+            }, color = backgroundColor, tonalElevation = 1.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(rDP(12.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDP(6.dp))
+        ) {
+            // --- Model Name Row ---
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = model.name,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                    maxLines = 2, // allow wrapping instead of truncating
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (model.supportsTools) {
+                        Icon(
+                            painter = painterResource(R.drawable.hammer),
+                            contentDescription = "Supports Tools",
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier
+                                .padding(end = rDP(4.dp))
+                                .size(rDP(18.dp))
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Filled.Add,
+                        contentDescription = "Add Model",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(rDP(20.dp))
+                    )
+                }
+            }
+
+            // --- Details Line ---
+            Column(verticalArrangement = Arrangement.spacedBy(rDP(2.dp))) {
+                Text(
+                    text = "Context Size: ${model.ctxSize}",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                )
+                Text(
+                    text = "Temperature: ${model.temperature} | Top-P: ${model.topP}",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                )
+            }
+        }
+    }
+}
+
 
 @Composable
 private fun EmptyStateCard(
@@ -639,6 +690,9 @@ private fun EmptyStateCard(
 private fun InstalledList(viewModel: ModelScreenViewModel) {
     val installed by viewModel.models.collectAsState()
 
+    val showModelDialog by viewModel.isDialogOpened.collectAsState()
+    var selectedModel by remember { mutableStateOf<ModelData?>(null) }
+
     if (installed.isEmpty()) {
         Box(
             modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
@@ -651,21 +705,170 @@ private fun InstalledList(viewModel: ModelScreenViewModel) {
         }
     } else {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = rDP(8.dp))
+            modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = rDP(4.dp))
         ) {
             items(installed, key = { it.id }) { model ->
                 InstalledModelCard(
                     model = model,
                     onDelete = { viewModel.removeModel(model.modelName) },
-                    onInfo = {})
+                    onInfo = {
+                        selectedModel = model
+                        viewModel.setIsDialogOpen(true)
+                    })
+            }
+        }
+
+        AnimatedVisibility(visible = showModelDialog) {
+            FileDetailDialog(model = selectedModel ?: ModelData(), onDismiss = {
+                viewModel.setIsDialogOpen(false)
+            }, onSelect = {
+
+            })
+        }
+    }
+}
+
+
+@Composable
+fun ModelCard(
+    modelData: ModelData,
+    isDownloading: Boolean = false,
+    onDownloadComplete: Boolean = false,
+    progress: Float = 0f,
+    viewModel: ModelScreenViewModel,
+    onDownload: () -> Unit = {}
+) {
+    var isInstalled by remember { mutableStateOf(false) }
+
+    LaunchedEffect(modelData.modelName) {
+        viewModel.checkIfInstalled(modelData.modelName) { isInstalled = it }
+    }
+
+    LaunchedEffect(onDownloadComplete) {
+        if (onDownloadComplete) isInstalled = true
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = rDP(16.dp), vertical = rDP(6.dp))
+            .clip(RoundedCornerShape(rDP(14.dp))), colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ), elevation = CardDefaults.cardElevation(defaultElevation = rDP(2.dp))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(rDP(16.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
+        ) {
+            // --- Model Title ---
+            Text(
+                text = modelData.modelName, style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold, fontSize = rSp(18.sp)
+                ), maxLines = 2, overflow = TextOverflow.Ellipsis
+            )
+
+            // --- Specs as Pills ---
+            Row(horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
+                Pill(text = "Context: ${modelData.ctxSize}")
+                Pill(text = if (modelData.isToolCalling) "Tools: YES" else "Tools: NO")
+            }
+
+            // --- Progress Indicator ---
+            AnimatedVisibility(visible = isDownloading) {
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(rDP(6.dp))
+                        .clip(RoundedCornerShape(rDP(6.dp))),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                    strokeCap = ProgressIndicatorDefaults.LinearStrokeCap,
+                )
+            }
+
+            // --- Actions ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(rDP(10.dp)),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Download / Cancel / Installed Button
+                Button(
+                    onClick = {
+                        when {
+                            !isInstalled && isDownloading -> {
+                                viewModel.cancelDownload(
+                                    modelData.modelName, modelData.modelUrl.toString()
+                                )
+                            }
+
+                            !isInstalled && !isDownloading -> onDownload()
+                        }
+                    }, colors = if (!isInstalled) ButtonDefaults.buttonColors()
+                    else ButtonDefaults.buttonColors(
+                        containerColor = Success.copy(alpha = 0.2f), contentColor = Success
+                    ), shape = RoundedCornerShape(rDP(12.dp)), modifier = Modifier.weight(1f)
+                ) {
+                    AnimatedContent(
+                        targetState = when {
+                            isInstalled -> "Installed"
+                            isDownloading -> "Cancel"
+                            else -> "Download"
+                        }
+                    ) { label ->
+                        Text(label)
+                    }
+                }
+
+                // Delete Button (visible only if installed)
+                AnimatedVisibility(visible = isInstalled) {
+                    IconButton(
+                        onClick = {
+                            viewModel.removeModel(modelData.modelName)
+                            isInstalled = false
+                        }, colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        ), modifier = Modifier.size(rDP(44.dp))
+                    ) {
+                        Icon(
+                            imageVector = Icons.TwoTone.Delete,
+                            contentDescription = "Delete",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
             }
         }
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// CARDS
-// ═══════════════════════════════════════════════════════════════════════════
+@Composable
+private fun Pill(
+    modifier: Modifier = Modifier,
+    text: String,
+    isRemote: Boolean = false,
+) {
+    val bgColor = if (!isRemote) Mint.copy(alpha = 0.15f) else SkyBlue.copy(alpha = 0.15f)
+    val textColor = if (!isRemote) Mint else SkyBlue
+
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(rDP(12.dp)),
+        color = bgColor,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
+    ) {
+        Text(
+            text = text, style = MaterialTheme.typography.labelMedium.copy(
+                color = textColor, fontWeight = FontWeight.SemiBold
+            ), modifier = Modifier.padding(horizontal = rDP(10.dp), vertical = rDP(4.dp))
+        )
+    }
+}
+
 @Composable
 private fun InstalledModelCard(
     model: ModelData, onDelete: () -> Unit, onInfo: () -> Unit
@@ -673,42 +876,47 @@ private fun InstalledModelCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = rDP(16.dp), vertical = rDP(6.dp)),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondary.copy(0.1f)
-        )
+            .padding(horizontal = rDP(16.dp), vertical = rDP(8.dp))
+            .clip(RoundedCornerShape(rDP(8.dp))), colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ), elevation = CardDefaults.cardElevation(defaultElevation = rDP(0.dp))
     ) {
         Column(
             Modifier
                 .fillMaxWidth()
                 .padding(rDP(14.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDP(10.dp))
+            verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
         ) {
+            // --- Header Row ---
             Row(
                 Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(rDP(4.dp))
+                ) {
                     Text(
-                        model.modelName, style = MaterialTheme.typography.titleLarge.copy(
+                        text = model.modelName, style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold, fontSize = rSp(18.sp)
-                        ), maxLines = 1, overflow = TextOverflow.Ellipsis
+                        ), maxLines = 2, overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(Modifier.height(rDP(4.dp)))
+
                     Pill(
-                        text = if (model.providerName == ModelProvider.LocalGGUF.toString()) "Local" else "OpenRouter",
+                        text = if (model.providerName == ModelProvider.LocalGGUF.toString()) "Local Model"
+                        else "OpenRouter",
                         isRemote = model.providerName != ModelProvider.LocalGGUF.toString()
                     )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
+                Row(horizontalArrangement = Arrangement.spacedBy(rDP(6.dp))) {
                     IconButton(
                         onClick = onInfo, colors = IconButtonDefaults.iconButtonColors(
                             containerColor = MaterialTheme.colorScheme.primaryContainer
                         )
                     ) {
                         Icon(
-                            Icons.TwoTone.Info,
-                            contentDescription = "Info",
+                            imageVector = Icons.TwoTone.Info,
+                            contentDescription = "Model Info",
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -719,127 +927,82 @@ private fun InstalledModelCard(
                         )
                     ) {
                         Icon(
-                            Icons.TwoTone.Delete,
-                            contentDescription = "Delete",
+                            imageVector = Icons.TwoTone.Delete,
+                            contentDescription = "Delete Model",
                             tint = MaterialTheme.colorScheme.error
                         )
                     }
                 }
             }
+
+            // --- Optional Model Stats Section ---
+            HorizontalDivider(modifier = Modifier.alpha(0.5f))
+            Column(
+                verticalArrangement = Arrangement.spacedBy(rDP(4.dp))
+            ) {
+                Text(
+                    text = "Context size: ${model.ctxSize} tokens",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                )
+                Text(
+                    text = "Temperature: ${model.temp}",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                )
+            }
         }
     }
 }
 
-// com.dark.neuroverse.ui.screens.ModelsScreen.kt
-
 @Composable
-fun ModelCard(
-    modelsData: ModelData,
-    isDownloading: Boolean = false,
-    onDownloadComplete: Boolean = false,
-    progress: Float = 0f,
-    viewModel: ModelScreenViewModel,
-    onDownload: () -> Unit = {}
+private fun FileDetailDialog(
+    model: ModelData, onDismiss: () -> Unit, onSelect: () -> Unit
 ) {
-    // One‑shot query for “is this model on disk?”
-    var isInstalled by remember { mutableStateOf(false) }
-
-    LaunchedEffect(modelsData.modelName) {
-        viewModel.checkIfInstalled(modelsData.modelName) { isInstalled = it }
-    }
-
-    // Cease the flag once a download finishes
-    LaunchedEffect(onDownloadComplete) {
-        if (onDownloadComplete) isInstalled = true
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = rDP(16.dp), vertical = rDP(6.dp)),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondary.copy(0.1f)
-        )
+    Dialog(
+        onDismissRequest = onDismiss, properties = DialogProperties(dismissOnBackPress = true, usePlatformDefaultWidth = false)
     ) {
-        Column(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDP(14.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
+                .padding(horizontal = rDP(16.dp)),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surface
         ) {
-            Text(
-                modelsData.modelName,
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            SpecGrid(
-                "Context" to modelsData.ctxSize.toString(),
-                "Tools" to if (modelsData.isToolCalling) "YES" else "NO"
-            )
-
-            // Progress bar – visible only while downloading
-            AnimatedVisibility(visible = isDownloading) {
-                LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth(), progress = { progress })
-            }
-
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(rDP(8.dp)),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                Modifier.padding(rDP(20.dp)), verticalArrangement = Arrangement.spacedBy(rDP(10.dp))
             ) {
-                Button(
-                    onClick = {
-                        when {
-                            !isInstalled && isDownloading -> {
-                                viewModel.cancelDownload(
-                                    modelsData.modelName, modelsData.modelUrl.toString()   // ← key
-                                )
-                            }
+                Text(
+                    text = "Model Details",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)
+                )
 
-                            !isInstalled && !isDownloading -> onDownload()
-                            // otherwise – do nothing; button is disabled
-                        }
-                    }, colors = if (!isInstalled) {
-                        ButtonDefaults.buttonColors()
-                    } else {
-                        ButtonDefaults.buttonColors(
-                            containerColor = Success.copy(alpha = 0.2f), contentColor = Success
-                        )
-                    }
-                ) {
-                    AnimatedContent(
-                        targetState = isInstalled,
-                        transitionSpec = { fadeIn() togetherWith fadeOut() }) { installed ->
-                        if (installed) {
-                            Icon(Icons.Filled.Check, contentDescription = null)
-                        } else {
-                            AnimatedContent(
-                                targetState = isDownloading,
-                                transitionSpec = { fadeIn() togetherWith fadeOut() }) { downloading ->
-                                if (downloading) Icon(Icons.Filled.Stop, contentDescription = null)
-                                else Icon(Icons.Filled.ArrowCircleDown, contentDescription = null)
-                            }
-                        }
-                    }
-                }
+                Spacer(Modifier.height(rDP(6.dp)))
 
-                AnimatedVisibility(visible = isInstalled) {
-                    IconButton(
-                        onClick = {
-                            viewModel.removeModel(modelsData.modelName)
-                            isInstalled = false      // immediately reflect the change
-                        }, colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer
-                        )
-                    ) {
-                        Icon(
-                            Icons.TwoTone.Delete,
-                            contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.error
-                        )
+                // --- Core Info ---
+                InfoRow("Name", model.modelName)
+                InfoRow("Provider", model.providerName)
+                InfoRow("Type", model.modelType.name)
+                InfoRow("Context Size", model.ctxSize.toString())
+                InfoRow("Threads", model.threads.toString())
+                InfoRow("GPU Layers", model.gpuLayers.toString())
+                InfoRow("Temp / Top-P / Top-K", "${model.temp} / ${model.topP} / ${model.topK}")
+                InfoRow("Max Tokens", model.maxTokens.toString())
+                InfoRow("Tool Calling", if (model.isToolCalling) "Yes" else "No")
+                InfoRow("Imported", if (model.isImported) "Yes" else "No")
+                InfoRow("File Path", model.modelPath)
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = rDP(6.dp)))
+
+                // --- Action Buttons ---
+                Row(horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
+                    OutlinedButton(onClick = onDismiss) {
+                        Text("Close")
+                    }
+                    Button(onClick = onSelect, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) {
+                        Text("Delete")
                     }
                 }
             }
@@ -847,46 +1010,18 @@ fun ModelCard(
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// UI HELPERS
-// ═══════════════════════════════════════════════════════════════════════════
 @Composable
-private fun Pill(text: String, isRemote: Boolean = false) {
-    Surface(
-        shape = RoundedCornerShape(rDP(12.dp)),
-        color = if (!isRemote) Mint.copy(alpha = 0.2f) else SkyBlue.copy(alpha = 0.2f)
+private fun InfoRow(label: String, value: String) {
+    Column(
+        modifier = Modifier.fillMaxWidth()
     ) {
         Text(
-            text, modifier = Modifier.padding(
-                horizontal = rDP(10.dp), vertical = rDP(4.dp)
-            ), style = MaterialTheme.typography.labelMedium.copy(
-                color = if (!isRemote) Mint else SkyBlue, fontWeight = FontWeight.Bold
-            )
+            label, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
         )
-    }
-}
-
-@Composable
-private fun SpecGrid(vararg pairs: Pair<String, String>) {
-    Column(verticalArrangement = Arrangement.spacedBy(rDP(6.dp))) {
-        pairs.forEach { (k, v) -> SpecRow(k, v) }
-    }
-}
-
-@Composable
-private fun SpecRow(label: String, value: String) {
-    Row(
-        Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween
-    ) {
+        Spacer(Modifier.height(3.dp))
         Text(
-            label, style = MaterialTheme.typography.bodyLarge.copy(
-                color = MaterialTheme.colorScheme.primary
-            )
-        )
-        Text(
-            value, style = MaterialTheme.typography.bodyLarge.copy(
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-            ), maxLines = 1, overflow = TextOverflow.Ellipsis
+            value,
+            style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
         )
     }
 }
