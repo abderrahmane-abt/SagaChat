@@ -424,8 +424,6 @@ fun RagResultCard(rag: RagResult) {
     }
 }
 
-
-
 @Composable
 private fun ThinkingChatUI(message: Message) {
     AnimatedVisibility(
