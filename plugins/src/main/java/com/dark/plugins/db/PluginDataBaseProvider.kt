@@ -11,17 +11,17 @@ import com.dark.plugins.model.PluginTypeConverters
 
 @Database(entities = [InstalledPlugin::class], version = 1, exportSchema = true)
 @TypeConverters(PluginTypeConverters::class)
-abstract class DatabaseProvider : RoomDatabase() {
+abstract class PluginDataBaseProvider : RoomDatabase() {
     abstract fun getInstalledPluginDao(): PluginLocalDBDao
 
     companion object {
         @Volatile
-        private var INSTANCE: DatabaseProvider? = null
+        private var INSTANCE: PluginDataBaseProvider? = null
 
-        fun getDatabase(context: Context): DatabaseProvider {
+        fun getDatabase(context: Context): PluginDataBaseProvider {
             return INSTANCE ?: synchronized(this) {
                 Room.databaseBuilder(
-                    context.applicationContext, DatabaseProvider::class.java, "local_plugin_db"
+                    context.applicationContext, PluginDataBaseProvider::class.java, "local_plugin_db"
                 ).build()
             }
         }

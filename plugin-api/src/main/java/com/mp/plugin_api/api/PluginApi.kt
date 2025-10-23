@@ -1,4 +1,4 @@
-package com.dark.plugins.api
+package com.mp.plugin_api.api
 
 import android.content.Context
 import androidx.annotation.CallSuper
@@ -16,54 +16,42 @@ typealias ComposableBlock = @Composable () -> Unit
 @Stable
 interface ComposePlugin {
     @Keep
-            /** Return top-level UI to render. Host will call this frequently; avoid heavy work. */
     fun content(): ComposableBlock
 
     @Keep
     fun toolPreviewContent(data: String): ComposableBlock
 }
 
-@Keep
-@Immutable
-data class PluginInfo(
-    val name: String = "", val description: String = ""
-)
 
 @Keep
-open class PluginApi(ctx: Context) : ComposePlugin {
+open class PluginApi : ComposePlugin {
 
-    protected val appContext: Context = ctx.applicationContext
-
-    open fun getPluginInfo(): PluginInfo = PluginInfo()
-
+    @Keep
     @MainThread
     @CallSuper
-    open fun onCreate(data: Any) {
+    open fun onCreate() {
     }
 
+    @Keep
     @MainThread
     @CallSuper
     open fun onDestroy() {
     }
 
+    @Keep
     @Composable
     open fun AppContent() {
         Text("Hello From Default Plugin :)")
     }
 
+    @Keep
     @Composable
     open fun ToolPreviewContent(data: String) {
         Text("Hello From Default Plugin :)")
     }
 
     @Keep
-    override fun content(): ComposableBlock = { AppContent() }
-
-    @Keep
-    override fun toolPreviewContent(data: String): ComposableBlock = { ToolPreviewContent(data) }
-
-    @Keep
-    open fun runTool(
+    open fun onToolCalled(
         context: Context,
         toolName: String,
         args: JSONObject,
@@ -71,4 +59,10 @@ open class PluginApi(ctx: Context) : ComposePlugin {
     ) {
 
     }
+
+    @Keep
+    override fun content(): ComposableBlock = { AppContent() }
+
+    @Keep
+    override fun toolPreviewContent(data: String): ComposableBlock = { ToolPreviewContent(data) }
 }

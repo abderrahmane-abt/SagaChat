@@ -1,4 +1,4 @@
-package com.dark.plugins.ui.theme
+package com.mp.plugin_api.theme
 
 import androidx.compose.ui.graphics.Color
 
