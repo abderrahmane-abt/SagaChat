@@ -75,7 +75,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.neuroverse.activity.MainActivity
 import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.viewModel.PluginStoreScreenViewModel
-import com.dark.plugins.model.PluginLocalDB
+import com.dark.plugins.model.InstalledPlugin
 import com.dark.plugins.model.PluginManifest
 import com.dark.plugins.model.Tools
 import com.dark.plugins.ui.theme.rDP
@@ -189,7 +189,7 @@ fun PluginHubScreen(
 
 @Composable
 private fun PluginCard(
-    plugin: PluginLocalDB, isRunning: Boolean, isCurrent: Boolean, onDelete: () -> Unit
+    plugin: InstalledPlugin, isRunning: Boolean, isCurrent: Boolean, onDelete: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
 
@@ -406,7 +406,7 @@ private fun PluginManifest.authorText(): String {
     }.getOrDefault("")
 }
 
-private fun PluginLocalDB.manifestJsonOrNull(): String? {
+private fun InstalledPlugin.manifestJsonOrNull(): String? {
     fun read(name: String): String? = runCatching {
         val f = this.javaClass.getDeclaredField(name)
         f.isAccessible = true

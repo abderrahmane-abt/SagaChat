@@ -78,12 +78,11 @@ object ToolRunner {
         code: String,
         meta: Map<String, Any?> = emptyMap(),
         details: String? = null
-    ) =
-        org.json.JSONObject().apply {
+    ) = JSONObject().apply {
             put("ok", false); put("error", code)
             details?.let { put("details", it) }
             if (meta.isNotEmpty()) put(
                 "meta",
-                org.json.JSONObject().apply { meta.forEach { (k, v) -> put(k, v) } })
+                JSONObject().apply { meta.forEach { (k, v) -> put(k, v) } })
         }
 }

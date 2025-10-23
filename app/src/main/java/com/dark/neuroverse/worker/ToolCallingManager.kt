@@ -160,9 +160,9 @@ object ToolCallingManager {
                     }
 
                     // Success path
-                    Log.d(TAG, "Tool executed successfully")
+                    Log.d(TAG, "Tool executed successfully with result: $result")
                     val toolOutput = writeToolOutputJson(result.toString()) ?: ToolOutput()
-
+                    Log.d(TAG, "Tool output: $toolOutput")
                     ChatManager.updateToolPreview(messageId, toolOutput)
                     UIStateManager.setStateIdle()
 

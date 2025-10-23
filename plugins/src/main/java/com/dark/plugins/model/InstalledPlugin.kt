@@ -8,7 +8,7 @@ import androidx.room.PrimaryKey
  * Local DB row describing an installed plugin.
  */
 @Entity(tableName = "plugins")
-data class PluginLocalDB(
+data class InstalledPlugin(
     @PrimaryKey
     val pluginName: String,           // unique, used as primary key
     val pluginDescription: String = "",

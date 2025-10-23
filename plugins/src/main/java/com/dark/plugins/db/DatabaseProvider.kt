@@ -5,23 +5,23 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
-import com.dark.plugins.model.PluginLocalDB
+import com.dark.plugins.model.InstalledPlugin
 import com.dark.plugins.model.PluginTypeConverters
 
 
-@Database(entities = [PluginLocalDB::class], version = 1, exportSchema = true)
+@Database(entities = [InstalledPlugin::class], version = 1, exportSchema = true)
 @TypeConverters(PluginTypeConverters::class)
-abstract class LocalPluginDBManager : RoomDatabase() {
-    abstract fun getPluginLocalDBDao(): PluginLocalDBDao
+abstract class DatabaseProvider : RoomDatabase() {
+    abstract fun getInstalledPluginDao(): PluginLocalDBDao
 
     companion object {
         @Volatile
-        private var INSTANCE: LocalPluginDBManager? = null
+        private var INSTANCE: DatabaseProvider? = null
 
-        fun getInstance(context: Context): LocalPluginDBManager {
+        fun getDatabase(context: Context): DatabaseProvider {
             return INSTANCE ?: synchronized(this) {
                 Room.databaseBuilder(
-                    context.applicationContext, LocalPluginDBManager::class.java, "local_plugin_db"
+                    context.applicationContext, DatabaseProvider::class.java, "local_plugin_db"
                 ).build()
             }
         }

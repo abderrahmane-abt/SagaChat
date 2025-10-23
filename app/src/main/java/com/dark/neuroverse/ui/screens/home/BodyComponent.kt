@@ -538,7 +538,9 @@ fun ToolOutputToggle(toolOutput: ToolOutput, out: JSONObject) {
 
     val shimmerBrush = Brush.linearGradient(
         colors = listOf(
-            Coral.copy(alpha = 0.25f), Coral, Coral.copy(alpha = 0.25f)
+            Coral.copy(alpha = 0.25f),
+            Coral,
+            Coral.copy(alpha = 0.25f)
         ), start = Offset.Zero, end = Offset(1000f * shimmerX + 1f, 0f)
     )
 

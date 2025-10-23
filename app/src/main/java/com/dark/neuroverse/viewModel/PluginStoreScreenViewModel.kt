@@ -7,7 +7,7 @@ import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewModelScope
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.LoadedPlugin
-import com.dark.plugins.model.PluginLocalDB
+import com.dark.plugins.model.InstalledPlugin
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -17,13 +17,13 @@ import java.io.File
 class PluginStoreScreenViewModel : ViewModel() {
 
     // Installed plugins -> map to your UI model
-    val pluginsList: StateFlow<List<PluginLocalDB>> =
+    val pluginsList: StateFlow<List<InstalledPlugin>> =
         PluginManager.installedPlugins
             .map { rows -> rows.map(::mapToPluginModel) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     // Also expose raw DB rows if you prefer them directly in UI
-    val installedPlugins: StateFlow<List<PluginLocalDB>> =
+    val installedPlugins: StateFlow<List<InstalledPlugin>> =
         PluginManager.installedPlugins
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -92,7 +92,7 @@ class PluginStoreScreenViewModel : ViewModel() {
 
     // ---- Helpers ----
 
-    private fun mapToPluginModel(row: PluginLocalDB): PluginLocalDB {
+    private fun mapToPluginModel(row: InstalledPlugin): InstalledPlugin {
         return row
     }
 }
