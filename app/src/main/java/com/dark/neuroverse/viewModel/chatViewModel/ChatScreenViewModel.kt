@@ -396,9 +396,12 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         val userContext =
             messages.value.take(messageIndex).lastOrNull { it.role == Role.User }?.text.orEmpty()
 
+        val ragResult =
+            messages.value.take(messageIndex).lastOrNull { it.role == Role.User }?.ragResult
+
         // Clear existing message
         ChatManager.updateStreamingMessage(
-            messageId = messageId, text = "", thought = null, isFinal = false
+            messageId = messageId, text = "", thought = null, isFinal = false, ragResult = ragResult,
         )
 
         // Switch model if needed
@@ -444,6 +447,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             enableTools = false,
             messageId = messageId,
             isRegeneration = true,
+            ragResult = ragResult,
             existingMessages = messages.value
         )
 

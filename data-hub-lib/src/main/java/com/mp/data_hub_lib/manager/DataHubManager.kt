@@ -89,13 +89,6 @@ object DataHubManager {
                     // Initialize worker
                     dataHubWorker = DataHubWorker(context.applicationContext)
 
-                    // Initialize embedding model if path exists
-                    if (File(embeddingModelPath).exists()) {
-                        initializeEmbeddingModel()
-                    } else {
-                        Log.w(TAG, "Embedding model not found at: $embeddingModelPath")
-                    }
-
                     // Load installed datasets
                     loadInstalledDatasets()
 

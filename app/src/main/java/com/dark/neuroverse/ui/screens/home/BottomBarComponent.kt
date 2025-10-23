@@ -143,9 +143,8 @@ fun ChatInputWithDataHubDialog(
                                 )
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(12.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Column {
                                         Text(dataset.modelName, style = MaterialTheme.typography.bodyLarge)
@@ -157,6 +156,8 @@ fun ChatInputWithDataHubDialog(
                                             )
                                         }
                                     }
+
+                                    Spacer(Modifier.weight(1f))
 
                                     if (isSelected) {
                                         Icon(
