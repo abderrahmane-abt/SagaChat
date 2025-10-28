@@ -294,7 +294,7 @@ object DataHubManager {
     /**
      * Search documents using embedding
      */
-    private suspend fun searchDocuments(queryEmbedding: FloatArray, topK: Int): List<Doc> {
+    private fun searchDocuments(queryEmbedding: FloatArray, topK: Int): List<Doc> {
         return try {
             val results = BrainDecoder.search(queryEmbedding, topK)
             Log.d(TAG, "Document search completed: ${results.size} results")
@@ -476,28 +476,6 @@ object DataHubManager {
             Result.failure(e)
         }
     }
-
-    @Deprecated(
-        "Use searchDocuments directly", ReplaceWith("searchDocuments(queryEmbedding, topK)")
-    )
-    fun search(queryEmbedding: FloatArray, topK: Int = 5): List<Doc> {
-        return try {
-            BrainDecoder.search(queryEmbedding, topK)
-        } catch (e: Exception) {
-            Log.e(TAG, "Legacy search method failed", e)
-            emptyList()
-        }
-    }
-
-    // Accessor methods - these now properly manage instance separation
-    fun getNative(): NativeLib? {
-        Log.w(
-            TAG, "getNative() is deprecated - use separate instances for generation and embedding"
-        )
-        return null // Don't expose the native instance to prevent misuse
-    }
-
-    fun getWorker(): DataHubWorker? = dataHubWorker
 
     /**
      * Cleanup resources

@@ -415,7 +415,10 @@ object ModelManager {
 
     //region Embedding-Generation
     suspend fun generateEmbeddings(input: String): FloatArray = withContext(Dispatchers.IO) {
-        service ?: return@withContext FloatArray(0)
+        service ?: {
+            Log.e(TAG, "Service not bound")
+            FloatArray(0)
+        }
         return@withContext service!!.embed(input)
     }
     //endregion
