@@ -14,6 +14,7 @@ import com.dark.ai_module.model.GenerationParams
 import com.dark.ai_module.model.LoadState
 import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.model.ModelProvider
+import com.dark.ai_module.model.ModelType
 import com.mp.ai_core.services.GenerationService
 import com.mp.ai_core.services.IGenerationCallback
 import com.mp.ai_core.services.IGenerationService
@@ -560,6 +561,16 @@ object ModelManager {
     suspend fun getSTTModel(): ModelData? = withContext(Dispatchers.IO) {
         ensureDaoInitialized()
         dao.getSTTModel()
+    }
+
+    suspend fun isEmbeddingModelInstalled(): Boolean = withContext(Dispatchers.IO) {
+        ensureDaoInitialized()
+        getAllModels().firstOrNull()?.modelType == ModelType.EMBEDDING
+    }
+
+    suspend fun addEmbeddingModel(model: ModelData) = withContext(Dispatchers.IO) {
+        ensureDaoInitialized()
+        dao.insertModel(model.copy(modelType = ModelType.EMBEDDING))
     }
 
     private fun ensureDaoInitialized() {

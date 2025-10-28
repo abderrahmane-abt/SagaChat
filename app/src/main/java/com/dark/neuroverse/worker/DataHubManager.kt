@@ -4,8 +4,10 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
 import com.dark.ai_module.model.LoadState
+import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.model.ModelType
 import com.dark.ai_module.workers.ModelManager
+import com.dark.neuroverse.util.copyAssetToFile
 import com.mp.ai_core.NativeLib
 import com.mp.data_hub_lib.BuildConfig
 import com.mp.data_hub_lib.model.DataSetModel
@@ -79,6 +81,28 @@ object DataHubManager {
                     // Initialize worker
                     dataHubWorker = DataHubWorker(context.applicationContext)
 
+                    if (!ModelManager.isEmbeddingModelInstalled()) {
+                        copyAssetToFile(
+                            context,
+                            "embedding.gguf",
+                            File(context.filesDir, "models/embedd"),
+                            "embedding.gguf"
+                        ).let {
+                            scope.launch {
+                                ModelManager.addEmbeddingModel(
+                                    ModelData(
+                                        modelName = "embedding.gguf",
+                                        modelPath = File(
+                                            context.filesDir,
+                                            "models/embedd/embedding.gguf"
+                                        ).absolutePath
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+
                     // Load installed datasets
                     loadInstalledDatasets()
 
@@ -139,28 +163,38 @@ object DataHubManager {
      * Install a dataset pack
      */
     fun installPack(packFile: File, password: String, onResult: (Boolean) -> Unit) {
+        Log.d(TAG, "Starting pack installation for ${packFile.name}")
+
         val worker = dataHubWorker
         if (worker == null) {
-            Log.e(TAG, "DataHubWorker not initialized")
+            Log.e(TAG, "❌ DataHubWorker not initialized — cannot continue")
             onResult(false)
             return
         }
 
         scope.launch {
             try {
+                Log.d(TAG, "🚀 Launching worker to install data pack: ${packFile.absolutePath}")
                 worker.installDataPack(packFile, password) { success ->
                     if (success) {
-                        // Refresh dataset list
-                        scope.launch { loadInstalledDatasets() }
+                        Log.d(TAG, "✅ Data pack installed successfully: ${packFile.name}")
+                        scope.launch {
+                            Log.d(TAG, "🔄 Refreshing installed datasets...")
+                            loadInstalledDatasets()
+                            Log.d(TAG, "📦 Datasets reloaded successfully")
+                        }
+                    } else {
+                        Log.e(TAG, "⚠️ Data pack installation failed: ${packFile.name}")
                     }
                     onResult(success)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to install pack", e)
+                Log.e(TAG, "💥 Exception while installing pack: ${e.message}", e)
                 onResult(false)
             }
         }
     }
+
 
     /**
      * Load a dataset pack
