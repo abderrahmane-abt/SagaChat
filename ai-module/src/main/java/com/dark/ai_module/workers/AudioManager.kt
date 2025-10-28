@@ -312,8 +312,8 @@ object AudioManager {
 
         svc.generateTts(
             req.text, req.speakerId, object : IAudioCallback.Stub() {
-                override fun onAudioChunk(samples: FloatArray, progress: Float) {
-                    req.onProgress(progress)
+                override fun onAudioChunk(samples: FloatArray) {
+                    req.onProgress(0f)
                     req.onAudioChunk(samples)
                 }
 
