@@ -162,8 +162,6 @@ fun ModelLoadingScreen(
         }
     }
 
-    infoJson?.getJSONObject("core")
-
     Scaffold(
         topBar = {
             TopAppBar(
