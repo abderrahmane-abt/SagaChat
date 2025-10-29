@@ -14,7 +14,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 class NVApplication : Application() {
-
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
@@ -23,12 +22,10 @@ class NVApplication : Application() {
             UserDataManager.init(applicationContext)
             ChatManager.refreshChats()
             ModelManager.init(applicationContext)
-            //AudioManager.init(applicationContext)
+            AudioManager.init(applicationContext)
             PluginManager.init(applicationContext)
             DataHubManager.init(applicationContext)
             initOpenRouterFromPrefs(applicationContext)
         }
     }
-
-
 }
