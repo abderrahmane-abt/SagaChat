@@ -384,8 +384,7 @@ fun RagResultCard(rag: RagResult) {
                     Text(
                         text = "Stats → Docs: ${stats.tokenCount}, Time: ${stats.totalTime}ms, TPS: ${
                             String.format(
-                                "%.2f",
-                                stats.tokensPerSecond
+                                "%.2f", stats.tokensPerSecond
                             )
                         }",
                         style = MaterialTheme.typography.bodySmall,
@@ -942,24 +941,36 @@ fun ToolOutputToggle(
                         horizontalArrangement = Arrangement.spacedBy(rDP(6.dp)),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = "Summarize",
-                            tint = if (isGenerating) MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                alpha = 0.5f
+                        Crossfade(targetState = isGenerating) {
+                            when (it) {
+                                true -> {
+                                    CircularProgressIndicator(modifier = Modifier.size(rDP(16.dp)))
+                                }
+
+                                false -> {
+                                    Icon(
+                                        imageVector = Icons.Default.AutoAwesome,
+                                        contentDescription = "Summarize",
+                                        tint = if (isGenerating) MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                            alpha = 0.5f
+                                        )
+                                        else Coral,
+                                        modifier = Modifier.size(rDP(16.dp))
+                                    )
+                                }
+                            }
+                        }
+                        Crossfade(targetState = if (isGenerating) "Summarizing..." else "Summarize") {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (isGenerating) MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                    alpha = 0.5f
+                                )
+                                else Coral,
+                                fontWeight = FontWeight.SemiBold
                             )
-                            else Coral,
-                            modifier = Modifier.size(rDP(16.dp))
-                        )
-                        Text(
-                            text = "Summarize",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = if (isGenerating) MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                alpha = 0.5f
-                            )
-                            else Coral,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        }
                     }
                 }
             }

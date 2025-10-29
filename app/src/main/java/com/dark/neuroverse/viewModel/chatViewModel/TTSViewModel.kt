@@ -214,7 +214,7 @@ class TTSViewModel() : ViewModel() {
     }
 
     private fun initAudioTrack() {
-        val ttsInfo = JSONObject(AudioManager.getAudioInfo())
+        val ttsInfo = JSONObject(AudioManager.getAudioInfo()).getJSONObject("tts")
         val sampleRate = ttsInfo.getInt("sample_rate")
 
 

@@ -21,6 +21,7 @@ import androidx.core.view.WindowCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.dark.ai_module.workers.AudioManager
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.model.Screen
@@ -283,6 +284,7 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         Log.d("MainActivity", "App destroyed - shutting down ModelManager")
         ModelManager.shutdown()
+        AudioManager.shutdown()
     }
 
     override fun onStop() {

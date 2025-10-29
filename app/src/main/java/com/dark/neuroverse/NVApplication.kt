@@ -23,10 +23,12 @@ class NVApplication : Application() {
             UserDataManager.init(applicationContext)
             ChatManager.refreshChats()
             ModelManager.init(applicationContext)
-            AudioManager.init(applicationContext)
+            //AudioManager.init(applicationContext)
             PluginManager.init(applicationContext)
             DataHubManager.init(applicationContext)
             initOpenRouterFromPrefs(applicationContext)
         }
     }
+
+
 }
