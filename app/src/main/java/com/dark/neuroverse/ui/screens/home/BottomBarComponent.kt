@@ -2,10 +2,12 @@ package com.dark.neuroverse.ui.screens.home
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -18,7 +20,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -52,7 +53,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -79,14 +79,15 @@ import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
 import com.dark.neuroverse.viewModel.stt.STTEvent
 import com.dark.neuroverse.viewModel.stt.STTViewModel
-import com.dark.plugins.model.Tools
 import com.dark.neuroverse.worker.DataHubManager
+import com.dark.plugins.model.Tools
 import com.mp.data_hub_lib.model.DataSetModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -137,41 +138,32 @@ fun ChatInputWithDataHubDialog(
         DatasetSelectionDialog(
             datasets = datasets,
             currentDataset = currentDataset,
-            onDismiss = { showDialog = false }
-        )
+            onDismiss = { showDialog = false })
     }
 }
 
 @Composable
 private fun DatasetSelectionDialog(
-    datasets: List<DataSetModel>,
-    currentDataset: DataSetModel?,
-    onDismiss: () -> Unit
+    datasets: List<DataSetModel>, currentDataset: DataSetModel?, onDismiss: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Select Dataset") },
-        text = {
-            if (datasets.isEmpty()) {
-                Text("No datasets installed", color = Color.Gray)
-            } else {
-                LazyColumn {
-                    items(datasets) { dataset ->
-                        DatasetItem(
-                            dataset = dataset,
-                            isSelected = currentDataset?.modelName == dataset.modelName
-                        )
-                    }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("Select Dataset") }, text = {
+        if (datasets.isEmpty()) {
+            Text("No datasets installed", color = Color.Gray)
+        } else {
+            LazyColumn {
+                items(datasets) { dataset ->
+                    DatasetItem(
+                        dataset = dataset,
+                        isSelected = currentDataset?.modelName == dataset.modelName
+                    )
                 }
             }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
         }
-    )
+    }, confirmButton = {}, dismissButton = {
+        TextButton(onClick = onDismiss) {
+            Text("Cancel")
+        }
+    })
 }
 
 @Composable
@@ -188,8 +180,7 @@ private fun DatasetItem(dataset: DataSetModel, isSelected: Boolean) {
                         if (!success) Log.e("DataHub", "Failed to set dataset")
                     }
                 }
-            },
-        colors = CardDefaults.cardColors(
+            }, colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.background
         )
     ) {
@@ -242,7 +233,7 @@ fun ChatInputBar(
     var showToolsList by remember { mutableStateOf(false) }
     var isRag by remember { mutableStateOf(false) }
     var isRecording by remember { mutableStateOf(false) }
-    var recordingJob by remember { mutableStateOf<Job?>(null) }
+    val stopRecordingFlag = remember { AtomicBoolean(false) }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -251,17 +242,9 @@ fun ChatInputBar(
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
-        val message = if (granted) "Microphone permission granted" else "Microphone permission denied"
+        val message =
+            if (granted) "Microphone permission granted" else "Microphone permission denied"
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-    }
-
-    // Cleanup recording job on dispose
-    DisposableEffect(Unit) {
-        onDispose {
-            recordingJob?.cancel()
-            recordingJob = null
-            isRecording = false
-        }
     }
 
     // Handle STT events
@@ -281,12 +264,10 @@ fun ChatInputBar(
         Column(Modifier.navigationBarsPadding()) {
             AnimatedVisibility(visible = showToolsList) {
                 ToolsList(
-                    tools = tools,
-                    onToolSelected = {
+                    tools = tools, onToolSelected = {
                         onToolSelected(it)
                         showToolsList = false
-                    }
-                )
+                    })
             }
 
             ToolsAndModelRow(
@@ -302,8 +283,7 @@ fun ChatInputBar(
                         isRag = !isRag
                         onRag(isRag)
                     }
-                }
-            )
+                })
 
             InputRow(
                 value = value,
@@ -318,17 +298,9 @@ fun ChatInputBar(
                         context = context,
                         sttReady = sttUiState.isReady,
                         isRecording = isRecording,
+                        stopRecordingFlag = stopRecordingFlag,
                         permissionLauncher = permissionLauncher,
-                        onRecordingStateChange = { recording ->
-                            isRecording = recording
-                            if (!recording) {
-                                recordingJob?.cancel()
-                                recordingJob = null
-                            }
-                        },
-                        onRecordingStart = { job ->
-                            recordingJob = job
-                        },
+                        onRecordingStateChange = { isRecording = it },
                         sttViewModel = sttViewModel,
                         scope = scope
                     )
@@ -343,46 +315,20 @@ fun ChatInputBar(
                             Toast.LENGTH_LONG
                         ).show()
                     }
-                }
-            )
+                })
         }
-    }
-}
-
-private fun handleSTTEvent(
-    event: STTEvent,
-    context: android.content.Context,
-    currentValue: String,
-    onValueChange: (String) -> Unit
-) {
-    when (event) {
-        is STTEvent.TranscriptionSuccess -> {
-            val newText = if (currentValue.isBlank()) event.text else "$currentValue ${event.text}"
-            onValueChange(newText)
-            Toast.makeText(context, "Transcribed! ${event.text}", Toast.LENGTH_SHORT).show()
-        }
-        is STTEvent.TranscriptionFailed -> {
-            Toast.makeText(context, "Transcription failed: ${event.message}", Toast.LENGTH_SHORT).show()
-        }
-        is STTEvent.NoSpeechDetected -> {
-            Toast.makeText(context, "No speech detected", Toast.LENGTH_SHORT).show()
-        }
-        is STTEvent.Error -> {
-            Toast.makeText(context, event.message, Toast.LENGTH_SHORT).show()
-        }
-        else -> {}
     }
 }
 
 private fun handleSTTButtonClick(
-    context: android.content.Context,
+    context: Context,
     sttReady: Boolean,
     isRecording: Boolean,
-    permissionLauncher: androidx.activity.result.ActivityResultLauncher<String>,
+    stopRecordingFlag: AtomicBoolean,
+    permissionLauncher: ActivityResultLauncher<String>,
     onRecordingStateChange: (Boolean) -> Unit,
-    onRecordingStart: (Job) -> Unit,
     sttViewModel: STTViewModel,
-    scope: kotlinx.coroutines.CoroutineScope
+    scope: CoroutineScope
 ) {
     if (!sttReady) {
         Toast.makeText(context, "STT not initialized", Toast.LENGTH_SHORT).show()
@@ -390,8 +336,7 @@ private fun handleSTTButtonClick(
     }
 
     val hasPermission = ContextCompat.checkSelfPermission(
-        context,
-        Manifest.permission.RECORD_AUDIO
+        context, Manifest.permission.RECORD_AUDIO
     ) == PackageManager.PERMISSION_GRANTED
 
     if (!hasPermission) {
@@ -400,28 +345,71 @@ private fun handleSTTButtonClick(
     }
 
     if (isRecording) {
+        // Signal to stop recording
+        stopRecordingFlag.set(true)
         onRecordingStateChange(false)
     } else {
+        // Start recording
+        stopRecordingFlag.set(false)
         onRecordingStateChange(true)
-        val job = scope.launch(Dispatchers.IO) {
-            var audioFile: File? = null
+
+        scope.launch(Dispatchers.IO) {
             try {
-                audioFile = recordAudioUntilStopped(context) { !isRecording }
-                withContext(Dispatchers.Main) {
-                    Log.d("ChatInputBar", "Starting transcription: ${audioFile.absolutePath}")
-                    sttViewModel.transcribeFile(audioFile.absolutePath)
+                val audioFile = recordAudioUntilStopped(context) { stopRecordingFlag.get() }
+
+                // Check if we have valid audio
+                if (audioFile.exists() && audioFile.length() > 1000) {
+                    withContext(Dispatchers.Main) {
+                        Log.d("ChatInputBar", "Starting transcription: ${audioFile.absolutePath}")
+                        sttViewModel.transcribeFile(audioFile.absolutePath)
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Recording too short or empty", Toast.LENGTH_SHORT)
+                            .show()
+                    }
                 }
+            } catch (_: CancellationException) {
+                Log.d("ChatInputBar", "Recording cancelled")
             } catch (e: Exception) {
                 Log.e("ChatInputBar", "Recording error", e)
                 withContext(Dispatchers.Main) {
-                    if (e !is kotlinx.coroutines.CancellationException) {
-                        Toast.makeText(context, "Recording error: ${e.message}", Toast.LENGTH_SHORT).show()
-                    }
+                    Toast.makeText(context, "Recording error: ${e.message}", Toast.LENGTH_SHORT)
+                        .show()
+                }
+            } finally {
+                withContext(Dispatchers.Main) {
                     onRecordingStateChange(false)
                 }
             }
         }
-        onRecordingStart(job)
+    }
+}
+
+private fun handleSTTEvent(
+    event: STTEvent, context: Context, currentValue: String, onValueChange: (String) -> Unit
+) {
+    when (event) {
+        is STTEvent.TranscriptionSuccess -> {
+            val newText = if (currentValue.isBlank()) event.text else "$currentValue ${event.text}"
+            onValueChange(newText)
+            Toast.makeText(context, "Transcribed! ${event.text}", Toast.LENGTH_SHORT).show()
+        }
+
+        is STTEvent.TranscriptionFailed -> {
+            Toast.makeText(context, "Transcription failed: ${event.message}", Toast.LENGTH_SHORT)
+                .show()
+        }
+
+        is STTEvent.NoSpeechDetected -> {
+            Toast.makeText(context, "No speech detected", Toast.LENGTH_SHORT).show()
+        }
+
+        is STTEvent.Error -> {
+            Toast.makeText(context, event.message, Toast.LENGTH_SHORT).show()
+        }
+
+        else -> {}
     }
 }
 
@@ -445,13 +433,10 @@ private fun ToolsAndModelRow(
         horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
     ) {
         Button(
-            onClick = onToolsClick,
-            enabled = isToolCalling,
-            colors = ButtonDefaults.buttonColors(
+            onClick = onToolsClick, enabled = isToolCalling, colors = ButtonDefaults.buttonColors(
                 containerColor = if (showToolsList) SkyBlue else MaterialTheme.colorScheme.background,
                 contentColor = if (showToolsList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
-            ),
-            shape = RoundedCornerShape(rDP(8.dp))
+            ), shape = RoundedCornerShape(rDP(8.dp))
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -463,8 +448,7 @@ private fun ToolsAndModelRow(
         }
 
         LazyRow(
-            modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(rDP(4.dp))
+            modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(rDP(4.dp))
         ) {
             items(selectedTools, key = { it.toolName }) { tool ->
                 ToolChip(
@@ -525,9 +509,7 @@ private fun InputRow(
                         isTranscribing -> "Transcribing..."
                         inputEnabled -> "Say Anything…"
                         else -> "Processing..."
-                    },
-                    color = SlateGrey,
-                    fontSize = rSp(14.sp)
+                    }, color = SlateGrey, fontSize = rSp(14.sp)
                 )
             },
             colors = TextFieldDefaults.colors(
@@ -539,8 +521,7 @@ private fun InputRow(
                 cursorColor = MaterialTheme.colorScheme.primary
             ),
             textStyle = LocalTextStyle.current.copy(
-                color = MaterialTheme.colorScheme.primary,
-                fontSize = rSp(15.sp)
+                color = MaterialTheme.colorScheme.primary, fontSize = rSp(15.sp)
             )
         )
 
@@ -556,18 +537,14 @@ private fun InputRow(
         Spacer(Modifier.width(rDP(8.dp)))
 
         SendButton(
-            inputEnabled = inputEnabled,
-            isGenerating = isGenerating,
-            onSend = onSend
+            inputEnabled = inputEnabled, isGenerating = isGenerating, onSend = onSend
         )
     }
 }
 
 @Composable
 private fun SendButton(
-    inputEnabled: Boolean,
-    isGenerating: Boolean,
-    onSend: () -> Unit
+    inputEnabled: Boolean, isGenerating: Boolean, onSend: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -594,6 +571,7 @@ private fun SendButton(
                     color = MaterialTheme.colorScheme.background
                 )
             }
+
             else -> {
                 Icon(
                     painterResource(R.drawable.send_chat),
@@ -609,9 +587,7 @@ private fun SendButton(
 
 @Composable
 private fun ToolChip(
-    tool: Tools,
-    onRemove: () -> Unit,
-    modifier: Modifier = Modifier
+    tool: Tools, onRemove: () -> Unit, modifier: Modifier = Modifier
 ) {
     val accentColor = Color(0xFF0066FF)
     val backgroundColor = accentColor.copy(alpha = 0.2f)
@@ -620,13 +596,10 @@ private fun ToolChip(
         modifier = modifier
             .size(ButtonDefaults.MinHeight)
             .background(color = backgroundColor, shape = RoundedCornerShape(rDP(8.dp)))
-            .clickable { onRemove() },
-        contentAlignment = Alignment.Center
+            .clickable { onRemove() }, contentAlignment = Alignment.Center
     ) {
         Icon(
-            Icons.Default.Web,
-            contentDescription = "Remove ${tool.toolName}",
-            tint = accentColor
+            Icons.Default.Web, contentDescription = "Remove ${tool.toolName}", tint = accentColor
         )
     }
 }
