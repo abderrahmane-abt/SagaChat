@@ -112,6 +112,7 @@ class TTSViewModel() : ViewModel() {
                 track.play()
 
                 val startTime = TimeSource.Monotonic.markNow()
+                Log.d(TAG, "Generating audio from SID : $speakerId")
 
                 AudioManager.generateTts(text, speakerId, onAudioChunk = { chunk ->
                     generatedAudio += chunk
