@@ -121,7 +121,7 @@ class TTSViewModel() : ViewModel() {
                     _audioProgress.value = currentSampleIndex.toFloat() / totalSamples
                 })
 
-                val ttsInfo = JSONObject(AudioManager.getAudioInfo())
+                val ttsInfo = JSONObject(AudioManager.getAudioInfo()).getJSONObject("tts")
                 val audioDuration =
                     ttsInfo.let { totalSamples / it.getInt("sample_rate").toFloat() }
                 val elapsed = startTime.elapsedNow().inWholeMilliseconds.toFloat() / 1000
