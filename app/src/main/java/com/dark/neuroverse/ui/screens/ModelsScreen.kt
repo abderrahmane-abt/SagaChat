@@ -39,25 +39,19 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material.icons.twotone.CheckCircle
 import androidx.compose.material.icons.twotone.Cloud
 import androidx.compose.material.icons.twotone.CloudOff
 import androidx.compose.material.icons.twotone.Delete
 import androidx.compose.material.icons.twotone.FileOpen
 import androidx.compose.material.icons.twotone.GraphicEq
-import androidx.compose.material.icons.twotone.Image
 import androidx.compose.material.icons.twotone.Info
 import androidx.compose.material.icons.twotone.Inventory
 import androidx.compose.material.icons.twotone.Key
 import androidx.compose.material.icons.twotone.Link
-import androidx.compose.material.icons.twotone.Mic
-import androidx.compose.material.icons.twotone.RecordVoiceOver
 import androidx.compose.material.icons.twotone.Search
 import androidx.compose.material.icons.twotone.SearchOff
-import androidx.compose.material.icons.twotone.TextFields
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -87,7 +81,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -98,7 +91,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -129,16 +121,17 @@ import com.dark.neuroverse.viewModel.ModelScreenViewModel
 
 // Navigation Rail Categories
 private enum class ModelCategory(
-    val label: String,
-    val shortLabel: String,
-    val icon: ImageVector
+    val label: String, val shortLabel: String, val icon: Int
 ) {
-    TEXT("Text Models", "T", Icons.TwoTone.TextFields),
-    VLM("Vision Models", "VL", Icons.TwoTone.Image),
-    OPENROUTER("OpenRouter", "OR", Icons.TwoTone.Cloud),
-    STT("Speech-to-Text", "ST", Icons.TwoTone.Mic),
-    TTS("Text-to-Speech", "TS", Icons.TwoTone.RecordVoiceOver),
-    INSTALLED("Installed", "IN", Icons.TwoTone.Inventory)
+    TEXT("Text Models", "T", R.drawable.text_ai_models), VLM(
+        "Vision Models", "VL", R.drawable.vl_models
+    ),
+    OPENROUTER("OpenRouter", "OR", R.drawable.open_router), STT(
+        "Speech-to-Text", "ST", R.drawable.stt_models
+    ),
+    TTS("Text-to-Speech", "TS", R.drawable.tts_models), INSTALLED(
+        "Installed", "IN", R.drawable.installed_models
+    )
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
@@ -147,11 +140,9 @@ fun ModelsScreen() {
     val context = LocalContext.current
     val viewModel: ModelScreenViewModel = viewModel()
 
-    val installedModels by viewModel.models.collectAsState()
-    val openRouterInstalled by viewModel.openRouterInstalledModels.collectAsState()
+    val radius = rDP(18.dp)
 
     var selectedCategory by remember { mutableIntStateOf(0) }
-    val isDialogOpen by viewModel.isDialogOpened.collectAsStateWithLifecycle()
 
     Scaffold(
         floatingActionButton = {
@@ -168,13 +159,11 @@ fun ModelsScreen() {
                     elevation = FloatingActionButtonDefaults.elevation(8.dp)
                 ) {
                     Icon(
-                        Icons.TwoTone.FileOpen,
-                        contentDescription = "Import Model"
+                        Icons.TwoTone.FileOpen, contentDescription = "Import Model"
                     )
                 }
             }
-        }
-    ) { innerPadding ->
+        }) { innerPadding ->
         Row(
             modifier = Modifier
                 .fillMaxSize()
@@ -184,7 +173,6 @@ fun ModelsScreen() {
             EnhancedNavigationRail(
                 selectedCategory = selectedCategory,
                 onCategorySelected = { selectedCategory = it },
-                installedCount = installedModels.size + openRouterInstalled.size
             )
 
             // Main Content
@@ -192,10 +180,13 @@ fun ModelsScreen() {
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
+                    .background(
+                        MaterialTheme.colorScheme.surfaceContainer,
+                        RoundedCornerShape(topStart = radius, bottomStart = radius)
+                    )
             ) {
                 AnimatedContent(
-                    targetState = selectedCategory,
-                    transitionSpec = {
+                    targetState = selectedCategory, transitionSpec = {
                         (slideInHorizontally(
                             animationSpec = spring(
                                 dampingRatio = Spring.DampingRatioLowBouncy,
@@ -203,14 +194,12 @@ fun ModelsScreen() {
                             )
                         ) { it } + fadeIn(tween(300))).togetherWith(
                             slideOutHorizontally(
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioLowBouncy,
-                                    stiffness = Spring.StiffnessLow
-                                )
-                            ) { -it } + fadeOut(tween(300))
-                        )
-                    },
-                    label = "category_transition"
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioLowBouncy,
+                                stiffness = Spring.StiffnessLow
+                            )
+                        ) { -it } + fadeOut(tween(300)))
+                    }, label = "category_transition"
                 ) { category ->
                     when (category) {
                         ModelCategory.TEXT.ordinal -> MarketplaceList(viewModel, "Text")
@@ -228,20 +217,16 @@ fun ModelsScreen() {
 
 @Composable
 private fun EnhancedNavigationRail(
-    selectedCategory: Int,
-    onCategorySelected: (Int) -> Unit,
-    installedCount: Int
+    selectedCategory: Int, onCategorySelected: (Int) -> Unit
 ) {
     NavigationRail(
-        modifier = Modifier.fillMaxHeight(),
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        header = {
+        modifier = Modifier, containerColor = MaterialTheme.colorScheme.background, header = {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(vertical = rDP(16.dp))
             ) {
                 Icon(
-                    Icons.Rounded.SmartToy,
+                    painter = painterResource(R.drawable.ai_model),
                     contentDescription = null,
                     modifier = Modifier.size(rDP(32.dp)),
                     tint = MaterialTheme.colorScheme.primary
@@ -253,15 +238,13 @@ private fun EnhancedNavigationRail(
                     fontWeight = FontWeight.Bold
                 )
             }
-        }
-    ) {
+        }) {
         Spacer(Modifier.height(rDP(12.dp)))
 
-        ModelCategory.values().forEachIndexed { index, category ->
+        ModelCategory.entries.forEachIndexed { index, category ->
             val selected = selectedCategory == index
             val scale by animateFloatAsState(
-                targetValue = if (selected) 1.05f else 1f,
-                animationSpec = spring(
+                targetValue = if (selected) 1.05f else 1f, animationSpec = spring(
                     dampingRatio = Spring.DampingRatioMediumBouncy,
                     stiffness = Spring.StiffnessMedium
                 )
@@ -273,39 +256,17 @@ private fun EnhancedNavigationRail(
                 icon = {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            category.icon,
+                            painter = painterResource(category.icon),
                             contentDescription = category.label,
                             modifier = Modifier
                                 .size(rDP(24.dp))
                                 .scale(scale)
                         )
-                        // Badge for installed count
-                        if (category == ModelCategory.INSTALLED && installedCount > 0) {
-                            Surface(
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .size(rDP(16.dp)),
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.error
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text(
-                                        installedCount.toString(),
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontSize = rSp(9.sp),
-                                            fontWeight = FontWeight.Bold
-                                        ),
-                                        color = MaterialTheme.colorScheme.onError
-                                    )
-                                }
-                            }
-                        }
                     }
                 },
                 label = {
                     Text(
-                        category.shortLabel,
-                        style = MaterialTheme.typography.labelSmall.copy(
+                        category.shortLabel, style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                         )
                     )
@@ -319,8 +280,7 @@ private fun EnhancedNavigationRail(
 @Composable
 private fun ComingSoonScreen(featureName: String) {
     Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+        modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -362,12 +322,9 @@ private fun MarketplaceList(viewModel: ModelScreenViewModel, filterType: String)
     ) {
         item {
             Text(
-                "$filterType Models",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Serif
-                ),
-                modifier = Modifier.padding(bottom = rDP(8.dp))
+                "$filterType Models", style = MaterialTheme.typography.headlineMedium.copy(
+                    fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif
+                ), modifier = Modifier.padding(bottom = rDP(8.dp))
             )
         }
 
@@ -379,8 +336,7 @@ private fun MarketplaceList(viewModel: ModelScreenViewModel, filterType: String)
                 progress = state.progress,
                 onDownloadComplete = state.isComplete,
                 viewModel = viewModel,
-                onDownload = { viewModel.startDownload(modelData, context) }
-            )
+                onDownload = { viewModel.startDownload(modelData, context) })
         }
     }
 }
@@ -414,11 +370,9 @@ fun EnhancedModelCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(rDP(20.dp)))
-            .clickable { isExpanded = !isExpanded },
-        colors = CardDefaults.cardColors(
+            .clickable { isExpanded = !isExpanded }, colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = cardElevation)
+        ), elevation = CardDefaults.cardElevation(defaultElevation = cardElevation)
     ) {
         Column(
             modifier = Modifier
@@ -436,8 +390,7 @@ fun EnhancedModelCard(
                     Text(
                         text = modelData.modelName,
                         style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = rSp(20.sp)
+                            fontWeight = FontWeight.Bold, fontSize = rSp(20.sp)
                         ),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
@@ -500,9 +453,7 @@ fun EnhancedModelCard(
 
             // Progress Indicator
             AnimatedVisibility(
-                visible = isDownloading,
-                enter = fadeIn() + scaleIn(),
-                exit = fadeOut() + scaleOut()
+                visible = isDownloading, enter = fadeIn() + scaleIn(), exit = fadeOut() + scaleOut()
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
                     Row(
@@ -510,8 +461,7 @@ fun EnhancedModelCard(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            "Downloading...",
-                            style = MaterialTheme.typography.labelMedium
+                            "Downloading...", style = MaterialTheme.typography.labelMedium
                         )
                         Text(
                             "${(progress * 100).toInt()}%",
@@ -542,10 +492,10 @@ fun EnhancedModelCard(
                         when {
                             !isInstalled && isDownloading -> {
                                 viewModel.cancelDownload(
-                                    modelData.modelName,
-                                    modelData.modelUrl.toString()
+                                    modelData.modelName, modelData.modelUrl.toString()
                                 )
                             }
+
                             !isInstalled && !isDownloading -> onDownload()
                         }
                     },
@@ -557,8 +507,7 @@ fun EnhancedModelCard(
                     ),
                     shape = RoundedCornerShape(rDP(16.dp)),
                     elevation = ButtonDefaults.buttonElevation(
-                        defaultElevation = rDP(2.dp),
-                        pressedElevation = rDP(6.dp)
+                        defaultElevation = rDP(2.dp), pressedElevation = rDP(6.dp)
                     )
                 ) {
                     AnimatedContent(
@@ -573,8 +522,7 @@ fun EnhancedModelCard(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                label,
-                                style = MaterialTheme.typography.labelLarge.copy(
+                                label, style = MaterialTheme.typography.labelLarge.copy(
                                     fontWeight = FontWeight.Bold
                                 )
                             )
@@ -612,15 +560,11 @@ fun EnhancedModelCard(
 
 @Composable
 private fun AnimatedPill(
-    text: String,
-    isHighlighted: Boolean = false
+    text: String, isHighlighted: Boolean = false
 ) {
     val backgroundColor by animateColorAsState(
-        targetValue = if (isHighlighted)
-            Mint.copy(alpha = 0.2f)
-        else
-            MaterialTheme.colorScheme.surfaceVariant,
-        animationSpec = tween(300)
+        targetValue = if (isHighlighted) Mint.copy(alpha = 0.2f)
+        else MaterialTheme.colorScheme.surfaceVariant, animationSpec = tween(300)
     )
 
     val textColor by animateColorAsState(
@@ -629,16 +573,12 @@ private fun AnimatedPill(
     )
 
     Surface(
-        shape = RoundedCornerShape(rDP(16.dp)),
-        color = backgroundColor
+        shape = RoundedCornerShape(rDP(16.dp)), color = backgroundColor
     ) {
         Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium.copy(
-                color = textColor,
-                fontWeight = FontWeight.SemiBold
-            ),
-            modifier = Modifier.padding(horizontal = rDP(12.dp), vertical = rDP(6.dp))
+            text = text, style = MaterialTheme.typography.labelMedium.copy(
+                color = textColor, fontWeight = FontWeight.SemiBold
+            ), modifier = Modifier.padding(horizontal = rDP(12.dp), vertical = rDP(6.dp))
         )
     }
 }
@@ -646,18 +586,15 @@ private fun AnimatedPill(
 @Composable
 private fun DetailRow(label: String, value: String) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
-            label,
-            style = MaterialTheme.typography.bodyMedium.copy(
+            label, style = MaterialTheme.typography.bodyMedium.copy(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
         )
         Text(
-            value,
-            style = MaterialTheme.typography.bodyMedium.copy(
+            value, style = MaterialTheme.typography.bodyMedium.copy(
                 fontWeight = FontWeight.SemiBold
             )
         )
@@ -696,12 +633,9 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
     ) {
         item {
             Text(
-                "OpenRouter Configuration",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Serif
-                ),
-                modifier = Modifier.padding(bottom = rDP(8.dp))
+                "OpenRouter Configuration", style = MaterialTheme.typography.headlineMedium.copy(
+                    fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif
+                ), modifier = Modifier.padding(bottom = rDP(8.dp))
             )
         }
 
@@ -752,8 +686,7 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
                                 Icon(
                                     painterResource(
                                         if (showKey) R.drawable.show else R.drawable.hide
-                                    ),
-                                    "Toggle visibility"
+                                    ), "Toggle visibility"
                                 )
                             }
                         },
@@ -790,14 +723,12 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
                             enabled = !isLoadingModels,
                             shape = RoundedCornerShape(rDP(16.dp)),
                             elevation = ButtonDefaults.buttonElevation(
-                                defaultElevation = rDP(2.dp),
-                                pressedElevation = rDP(6.dp)
+                                defaultElevation = rDP(2.dp), pressedElevation = rDP(6.dp)
                             )
                         ) {
                             if (isLoadingModels) {
                                 CircularProgressIndicator(
-                                    modifier = Modifier.size(rDP(20.dp)),
-                                    strokeWidth = 2.dp
+                                    modifier = Modifier.size(rDP(20.dp)), strokeWidth = 2.dp
                                 )
                                 Spacer(Modifier.width(rDP(12.dp)))
                             }
@@ -856,8 +787,7 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
                                 Text(
                                     "${openRouterInstalled.size}",
                                     modifier = Modifier.padding(
-                                        horizontal = rDP(12.dp),
-                                        vertical = rDP(6.dp)
+                                        horizontal = rDP(12.dp), vertical = rDP(6.dp)
                                     ),
                                     style = MaterialTheme.typography.labelLarge,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -880,8 +810,7 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
                             openRouterInstalled.forEach { modelId ->
                                 OpenRouterModelItem(
                                     modelId = modelId,
-                                    onDelete = { viewModel.removeOpenRouterModel(modelId.id) }
-                                )
+                                    onDelete = { viewModel.removeOpenRouterModel(modelId.id) })
                             }
                         }
                     }
@@ -892,8 +821,7 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
                         enabled = availableModels.isNotEmpty(),
                         shape = RoundedCornerShape(rDP(16.dp)),
                         elevation = ButtonDefaults.buttonElevation(
-                            defaultElevation = rDP(2.dp),
-                            pressedElevation = rDP(6.dp)
+                            defaultElevation = rDP(2.dp), pressedElevation = rDP(6.dp)
                         )
                     ) {
                         Icon(
@@ -903,8 +831,7 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
                         )
                         Spacer(Modifier.width(rDP(8.dp)))
                         Text(
-                            "Add Model",
-                            style = MaterialTheme.typography.labelLarge.copy(
+                            "Add Model", style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.Bold
                             )
                         )
@@ -924,23 +851,19 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
                 viewModel.addOpenRouterModel(routerModel)
                 viewModel.addModel(routerModel.toModelData())
                 showModelPicker = false
-            }
-        )
+            })
     }
 }
 
 @Composable
 private fun OpenRouterModelItem(
-    modelId: OpenRouterModel,
-    onDelete: () -> Unit
+    modelId: OpenRouterModel, onDelete: () -> Unit
 ) {
     var isPressed by remember { mutableStateOf(false) }
 
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.96f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
+        targetValue = if (isPressed) 0.96f else 1f, animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium
         )
     )
 
@@ -960,8 +883,7 @@ private fun OpenRouterModelItem(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
                     shape = CircleShape,
@@ -979,12 +901,9 @@ private fun OpenRouterModelItem(
                 }
                 Spacer(Modifier.width(rDP(12.dp)))
                 Text(
-                    modelId.name,
-                    style = MaterialTheme.typography.bodyLarge.copy(
+                    modelId.name, style = MaterialTheme.typography.bodyLarge.copy(
                         fontWeight = FontWeight.SemiBold
-                    ),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    ), maxLines = 1, overflow = TextOverflow.Ellipsis
                 )
             }
 
@@ -1024,70 +943,62 @@ private fun ModelPickerDialog(
     }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Close", fontWeight = FontWeight.Bold)
-            }
-        },
-        title = {
-            Text(
-                text = "Select Model",
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    fontWeight = FontWeight.Bold
-                )
+        onDismissRequest = onDismiss, confirmButton = {}, dismissButton = {
+        TextButton(onClick = onDismiss) {
+            Text("Close", fontWeight = FontWeight.Bold)
+        }
+    }, title = {
+        Text(
+            text = "Select Model", style = MaterialTheme.typography.headlineSmall.copy(
+                fontWeight = FontWeight.Bold
             )
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = rDP(520.dp)),
-                verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
-            ) {
-                // Search Field
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search models...") },
-                    leadingIcon = {
-                        Icon(Icons.TwoTone.Search, contentDescription = "Search")
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(rDP(16.dp))
+        )
+    }, text = {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = rDP(520.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
+        ) {
+            // Search Field
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Search models...") },
+                leadingIcon = {
+                    Icon(Icons.TwoTone.Search, contentDescription = "Search")
+                },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(rDP(16.dp))
+            )
+
+            HorizontalDivider(modifier = Modifier.alpha(0.3f))
+
+            // Empty State
+            if (filteredModels.isEmpty()) {
+                EmptyStateCard(
+                    icon = Icons.TwoTone.SearchOff,
+                    title = "No models found",
+                    subtitle = if (searchQuery.isBlank()) "Try fetching models first"
+                    else "Try a different keyword"
                 )
-
-                HorizontalDivider(modifier = Modifier.alpha(0.3f))
-
-                // Empty State
-                if (filteredModels.isEmpty()) {
-                    EmptyStateCard(
-                        icon = Icons.TwoTone.SearchOff,
-                        title = "No models found",
-                        subtitle = if (searchQuery.isBlank()) "Try fetching models first"
-                        else "Try a different keyword"
-                    )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(rDP(10.dp))
-                    ) {
-                        items(filteredModels, key = { it.id }) { model ->
-                            ModelListItem(
-                                model = model,
-                                onClick = {
-                                    onModelSelected(model)
-                                    onDismiss()
-                                }
-                            )
-                        }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(rDP(10.dp))
+                ) {
+                    items(filteredModels, key = { it.id }) { model ->
+                        ModelListItem(
+                            model = model, onClick = {
+                                onModelSelected(model)
+                                onDismiss()
+                            })
                     }
                 }
             }
-        },
-        shape = RoundedCornerShape(rDP(24.dp))
+        }
+    }, shape = RoundedCornerShape(rDP(24.dp))
     )
 }
 
@@ -1102,10 +1013,8 @@ private fun ModelListItem(model: OpenRouterModel, onClick: () -> Unit) {
     )
 
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
+        targetValue = if (isPressed) 0.97f else 1f, animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium
         )
     )
 
@@ -1115,8 +1024,7 @@ private fun ModelListItem(model: OpenRouterModel, onClick: () -> Unit) {
             .scale(scale)
             .clip(RoundedCornerShape(rDP(16.dp)))
             .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
+                interactionSource = remember { MutableInteractionSource() }, indication = null
             ) {
                 isPressed = true
                 onClick()
@@ -1196,9 +1104,7 @@ private fun ModelListItem(model: OpenRouterModel, onClick: () -> Unit) {
 
 @Composable
 private fun EmptyStateCard(
-    icon: ImageVector,
-    title: String,
-    subtitle: String
+    icon: ImageVector, title: String, subtitle: String
 ) {
     Column(
         modifier = Modifier
@@ -1246,8 +1152,7 @@ private fun InstalledList(viewModel: ModelScreenViewModel) {
 
     if (installed.isEmpty()) {
         Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
+            modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
         ) {
             EmptyStateCard(
                 icon = Icons.TwoTone.Inventory,
@@ -1263,12 +1168,9 @@ private fun InstalledList(viewModel: ModelScreenViewModel) {
         ) {
             item {
                 Text(
-                    "Installed Models",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Serif
-                    ),
-                    modifier = Modifier.padding(bottom = rDP(8.dp))
+                    "Installed Models", style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif
+                    ), modifier = Modifier.padding(bottom = rDP(8.dp))
                 )
             }
 
@@ -1279,8 +1181,7 @@ private fun InstalledList(viewModel: ModelScreenViewModel) {
                     onInfo = {
                         selectedModel = model
                         viewModel.setIsDialogOpen(true)
-                    }
-                )
+                    })
             }
         }
     }
@@ -1296,16 +1197,13 @@ private fun InstalledList(viewModel: ModelScreenViewModel) {
             onSelect = {
                 selectedModel?.let { viewModel.removeModel(it.modelName) }
                 viewModel.setIsDialogOpen(false)
-            }
-        )
+            })
     }
 }
 
 @Composable
 private fun InstalledModelCard(
-    model: ModelData,
-    onDelete: () -> Unit,
-    onInfo: () -> Unit
+    model: ModelData, onDelete: () -> Unit, onInfo: () -> Unit
 ) {
     var isExpanded by remember { mutableStateOf(false) }
 
@@ -1318,11 +1216,9 @@ private fun InstalledModelCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(rDP(20.dp)))
-            .clickable { isExpanded = !isExpanded },
-        colors = CardDefaults.cardColors(
+            .clickable { isExpanded = !isExpanded }, colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = cardElevation)
+        ), elevation = CardDefaults.cardElevation(defaultElevation = cardElevation)
     ) {
         Column(
             Modifier
@@ -1341,18 +1237,13 @@ private fun InstalledModelCard(
                     verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
                 ) {
                     Text(
-                        text = model.modelName,
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = rSp(20.sp)
-                        ),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        text = model.modelName, style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold, fontSize = rSp(20.sp)
+                        ), maxLines = 2, overflow = TextOverflow.Ellipsis
                     )
 
                     AnimatedPill(
-                        text = if (model.providerName == ModelProvider.LocalGGUF.toString())
-                            "Local Model"
+                        text = if (model.providerName == ModelProvider.LocalGGUF.toString()) "Local Model"
                         else "OpenRouter",
                         isHighlighted = model.providerName == ModelProvider.LocalGGUF.toString()
                     )
@@ -1422,15 +1313,11 @@ private fun InstalledModelCard(
 
 @Composable
 private fun FileDetailDialog(
-    model: ModelData,
-    onDismiss: () -> Unit,
-    onSelect: () -> Unit
+    model: ModelData, onDismiss: () -> Unit, onSelect: () -> Unit
 ) {
     Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            dismissOnBackPress = true,
-            usePlatformDefaultWidth = false
+        onDismissRequest = onDismiss, properties = DialogProperties(
+            dismissOnBackPress = true, usePlatformDefaultWidth = false
         )
     ) {
         Surface(
@@ -1442,8 +1329,7 @@ private fun FileDetailDialog(
             tonalElevation = rDP(6.dp)
         ) {
             Column(
-                Modifier.padding(rDP(24.dp)),
-                verticalArrangement = Arrangement.spacedBy(rDP(16.dp))
+                Modifier.padding(rDP(24.dp)), verticalArrangement = Arrangement.spacedBy(rDP(16.dp))
             ) {
                 // Header
                 Row(
@@ -1466,8 +1352,7 @@ private fun FileDetailDialog(
                     }
                     Spacer(Modifier.width(rDP(16.dp)))
                     Text(
-                        text = "Model Details",
-                        style = MaterialTheme.typography.headlineSmall.copy(
+                        text = "Model Details", style = MaterialTheme.typography.headlineSmall.copy(
                             fontWeight = FontWeight.Bold
                         )
                     )
@@ -1494,14 +1379,12 @@ private fun FileDetailDialog(
                     item { InfoRow("Threads", model.threads.toString()) }
                     item {
                         InfoRow(
-                            "Tool Calling",
-                            if (model.isToolCalling) "Enabled" else "Disabled"
+                            "Tool Calling", if (model.isToolCalling) "Enabled" else "Disabled"
                         )
                     }
                     item {
                         InfoRow(
-                            "Imported",
-                            if (model.isImported) "Yes" else "No"
+                            "Imported", if (model.isImported) "Yes" else "No"
                         )
                     }
                     item { InfoRow("File Path", model.modelPath) }
@@ -1520,8 +1403,7 @@ private fun FileDetailDialog(
                         shape = RoundedCornerShape(rDP(16.dp))
                     ) {
                         Text(
-                            "Close",
-                            style = MaterialTheme.typography.labelLarge.copy(
+                            "Close", style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.Bold
                             )
                         )
@@ -1534,13 +1416,11 @@ private fun FileDetailDialog(
                         ),
                         shape = RoundedCornerShape(rDP(16.dp)),
                         elevation = ButtonDefaults.buttonElevation(
-                            defaultElevation = rDP(2.dp),
-                            pressedElevation = rDP(6.dp)
+                            defaultElevation = rDP(2.dp), pressedElevation = rDP(6.dp)
                         )
                     ) {
                         Text(
-                            "Delete",
-                            style = MaterialTheme.typography.labelLarge.copy(
+                            "Delete", style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.Bold
                             )
                         )
@@ -1554,19 +1434,15 @@ private fun FileDetailDialog(
 @Composable
 private fun InfoRow(label: String, value: String) {
     Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(rDP(4.dp))
+        modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(rDP(4.dp))
     ) {
         Text(
-            label,
-            style = MaterialTheme.typography.labelLarge.copy(
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary
+            label, style = MaterialTheme.typography.labelLarge.copy(
+                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary
             )
         )
         Text(
-            value,
-            style = MaterialTheme.typography.bodyMedium.copy(
+            value, style = MaterialTheme.typography.bodyMedium.copy(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         )
