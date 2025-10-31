@@ -153,11 +153,7 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable(Screen.Model.route) {
-                            ModelsScreen {
-                                navController.navigate(Screen.Home.route) {
-                                    popUpTo(Screen.Model.route) { inclusive = true }
-                                }
-                            }
+                            ModelsScreen()
                         }
 
                         composable(Screen.Home.route) {
