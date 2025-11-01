@@ -2,6 +2,7 @@ package com.dark.neuroverse.worker
 
 import android.util.Log
 import com.dark.neuroverse.model.ChatUiState
+import com.dark.neuroverse.model.DecodingStage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -78,6 +79,21 @@ object UIStateManager {
             setStateLoading("Switching models...")
         } else {
             setStateIdle()
+        }
+    }
+
+    fun setStateDecodingStage(messageId: String, stage: DecodingStage, startTimeNs: Long) {
+        _uiState.value = ChatUiState.DecodingStream(
+            messageId = messageId,
+            startTimeNs = startTimeNs,
+            stage = stage
+        )
+    }
+
+    fun updateDecodingStage(stage: DecodingStage) {
+        val currentState = _uiState.value
+        if (currentState is ChatUiState.DecodingStream) {
+            _uiState.value = currentState.copy(stage = stage)
         }
     }
 

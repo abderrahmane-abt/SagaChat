@@ -26,7 +26,7 @@ sealed class ChatUiState {
     ) : ChatUiState()
 
     data class DecodingStream(
-        val messageId: String, val startTimeNs: Long
+        val messageId: String, val startTimeNs: Long,  val stage: DecodingStage = DecodingStage.Decoding
     ) : ChatUiState()
 
     data class ExecutingTool(

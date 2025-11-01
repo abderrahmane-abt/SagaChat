@@ -21,6 +21,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -44,7 +46,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.rounded.Build
+import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Draw
+import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Token
 import androidx.compose.material3.Card
@@ -91,6 +97,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.neuroverse.R
 import com.dark.neuroverse.model.ChatUiState
+import com.dark.neuroverse.model.DecodingStage
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.ui.components.MarkdownText
@@ -124,44 +131,56 @@ fun ChatBubble(
     val isWaitingForFirstToken = remember(message.id, message.text) {
         derivedStateOf { viewModel.isMessageWaitingForFirstToken(message.id, message.text) }
     }.value
+    var visible by remember { mutableStateOf(false) }
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
-    ) {
-        Column {
-            val showThinking = !isUser && !message.thought.isNullOrBlank()
-            if (showThinking) {
-                ThinkingChatUI(message)
-                Spacer(Modifier.height(rDP(8.dp)))
-            }
+    LaunchedEffect(Unit) {
+        visible = true
+    }
+    AnimatedVisibility(
+        visible = visible, enter = slideInVertically(
+        initialOffsetY = { it / 2 }) + fadeIn() + scaleIn(
+        initialScale = 0.8f, animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium
+        )
+    ), exit = fadeOut() + scaleOut()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
+        ) {
+            Column {
+                val showThinking = !isUser && !message.thought.isNullOrBlank()
+                if (showThinking) {
+                    ThinkingChatUI(message)
+                    Spacer(Modifier.height(rDP(8.dp)))
+                }
 
-            AnimatedContent(
-                targetState = message.role to isWaitingForFirstToken, transitionSpec = {
-                    fadeIn(tween(150)) togetherWith fadeOut(tween(150))
-                }, label = "message-content"
-            ) { (role, waiting) ->
-                when (role) {
-                    Role.User -> UserChatUI(
-                        message = message, onMessageDelete = { viewModel.deleteMessage(it) })
+                AnimatedContent(
+                    targetState = message.role to isWaitingForFirstToken, transitionSpec = {
+                        fadeIn(tween(150)) togetherWith fadeOut(tween(150))
+                    }, label = "message-content"
+                ) { (role, waiting) ->
+                    when (role) {
+                        Role.User -> UserChatUI(
+                            message = message, onMessageDelete = { viewModel.deleteMessage(it) })
 
-                    Role.Assistant -> {
-                        if (waiting) {
-                            DecodingPlaceholder()
-                        } else {
-                            RegularChatUI(
-                                message = message,
-                                viewModel = viewModel,
-                                ttsViewModel = ttsViewModel,
-                            )
+                        Role.Assistant -> {
+                            if (waiting) {
+                                DecodingPlaceholder()
+                            } else {
+                                RegularChatUI(
+                                    message = message,
+                                    viewModel = viewModel,
+                                    ttsViewModel = ttsViewModel,
+                                )
+                            }
                         }
-                    }
 
-                    Role.Tool -> ToolChatUI(
-                        message = message,
-                        viewModel = viewModel,
-                        ttsViewModel = ttsViewModel,
-                        onMessageDelete = { viewModel.deleteMessage(message.id) })
+                        Role.Tool -> ToolChatUI(
+                            message = message,
+                            viewModel = viewModel,
+                            ttsViewModel = ttsViewModel,
+                            onMessageDelete = { viewModel.deleteMessage(message.id) })
+                    }
                 }
             }
         }
@@ -266,21 +285,58 @@ private fun RegularChatUI(
             .padding(vertical = rDP(4.dp))
     ) {
         Crossfade(
-            targetState = isStreaming, animationSpec = tween(200), label = "content-transition"
-        ) { streaming ->
-            if (streaming) {
-                Text(
-                    text = message.text,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            } else {
-                MarkdownText(
-                    text = message.text,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+            targetState = uiState,
+            animationSpec = tween(200),
+            label = "content-transition"
+        ) { state ->
+            when (state) {
+                is ChatUiState.DecodingStream -> {
+                    if (state.messageId == message.id) {
+                        // Show stage-specific UI
+                        DecodingStageLayout(stage = state.stage)
+                    } else {
+                        MarkdownText(
+                            text = message.text,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+                is ChatUiState.Generating -> {
+                    if (state.messageId == message.id) {
+                        // Smooth transition from Decoding to visible text
+                        AnimatedContent(
+                            targetState = message.text.isNotEmpty(),
+                            transitionSpec = {
+                                fadeIn(tween(300)) togetherWith fadeOut(tween(150))
+                            }
+                        ) { hasText ->
+                            if (hasText) {
+                                Text(
+                                    text = message.text,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            } else {
+                                DecodingStageLayout(stage = DecodingStage.Decoding)
+                            }
+                        }
+                    } else {
+                        MarkdownText(
+                            text = message.text,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+                else -> {
+                    MarkdownText(
+                        text = message.text,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
         }
 
@@ -718,6 +774,64 @@ private fun ToolMessageActions(
         )
     }
 }
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun DecodingStageLayout(stage: DecodingStage) {
+    val (icon, text) = when (stage) {
+        DecodingStage.PreparingPrompt -> Icons.Rounded.Build to "Preparing your prompt..."
+        DecodingStage.EncodingInput -> Icons.Rounded.Code to "Encoding the input..."
+        DecodingStage.LoadingModel -> Icons.Rounded.Memory to "Loading the model..."
+        DecodingStage.Decoding -> Icons.Rounded.Token to "Decoding the response..."
+        DecodingStage.Rendering -> Icons.Rounded.Draw to "Rendering text..."
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(rDP(10.dp)))
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.03f)
+                    )
+                )
+            )
+            .border(
+                1.dp,
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                RoundedCornerShape(rDP(10.dp))
+            )
+            .padding(horizontal = rDP(14.dp), vertical = rDP(10.dp)),
+        verticalArrangement = Arrangement.spacedBy(rDP(10.dp))
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(rDP(16.dp))
+            )
+            Text(
+                text,
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = rSp(13.sp),
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Medium
+            )
+        }
+        LinearWavyProgressIndicator(
+            Modifier
+                .fillMaxWidth()
+                .height(rDP(4.dp))
+        )
+    }
+}
+
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable

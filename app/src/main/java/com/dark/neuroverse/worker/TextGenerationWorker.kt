@@ -8,6 +8,7 @@ import com.dark.neuroverse.model.ChatUiState
 import com.dark.neuroverse.model.CodeCanvas
 import com.dark.neuroverse.model.DecodeType
 import com.dark.neuroverse.model.DecodingMetrics
+import com.dark.neuroverse.model.DecodingStage
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.model.StreamingState
@@ -78,15 +79,25 @@ object TextGenerationWorker {
         var firstTokenReceived = false
         _currentMsgId.value = messageId
 
-        UIStateManager.setStateDecoding(messageId, startTimeNs)
-        if (enableTools){
+        // STAGE 1: Preparing Prompt
+        UIStateManager.setStateDecodingStage(
+            messageId,
+            DecodingStage.PreparingPrompt,
+            startTimeNs
+        )
+
+        if (enableTools) {
             UIStateManager.setStateDecodingTool()
         }
+
         currentStreamingState = StreamingState(messageId = messageId)
-        startBatchedUIUpdates(messageId)
 
         suspend fun finalizeMessage(text: String, thought: String?) {
             batchingJob?.cancel()
+
+            // STAGE 5: Rendering
+            UIStateManager.updateDecodingStage(DecodingStage.Rendering)
+            delay(100) // Brief visual feedback
 
             val finalThought = thought?.take(MAX_THOUGHT_SAVE_CHARS)
             val codeCanvases = extractCodeCanvases(text)
@@ -100,16 +111,22 @@ object TextGenerationWorker {
                 codeCanvas = codeCanvases
             )
 
-            ChatManager.generateTitleIfNeeded(useAI = finalThought == null)
-
-            UserDataManager.refreshChatListFromDisk {
-                Log.e(TAG, "Error refreshing chat list")
+            // Launch these off the critical path
+            CoroutineScope(Dispatchers.IO).launch {
+                ChatManager.generateTitleIfNeeded(useAI = finalThought == null)
+                UserDataManager.refreshChatListFromDisk {
+                    Log.e(TAG, "Error refreshing chat list")
+                }
             }
 
             currentStreamingState = null
         }
 
         try {
+            // STAGE 2: Encoding Input
+            UIStateManager.updateDecodingStage(DecodingStage.EncodingInput)
+            delay(50) // Give UI time to update
+
             val fullPrompt = buildFullPrompt(prompt, existingMessages)
             val toolJson = if (enableTools) {
                 ToolCallingManager.toolDefinitionBuilder(
@@ -117,28 +134,42 @@ object TextGenerationWorker {
                 ).toString()
             } else ""
 
-            ModelManager.generateStreaming(
-                prompt = fullPrompt, gen = GenerationParams(
-                maxTokens = ModelManager.currentModel.value.maxTokens
-            ), toolJson = toolJson, onToken = { token ->
-                if (!firstTokenReceived) {
-                    firstTokenReceived = true
-                    val firstTokenTimeNs = System.nanoTime()
-                    emitDecodingMetrics(
-                        type = if (isRegeneration) DecodeType.REGENERATE else DecodeType.NORMAL,
-                        startTimeNs = startTimeNs,
-                        firstTokenTimeNs = firstTokenTimeNs,
-                        messageId = messageId
-                    )
-                    UIStateManager.setStateGenerating(messageId, isFirstToken = true)
-                }
+            // STAGE 3: Loading Model (if not already loaded)
+            if (!ModelManager.isModelLoaded()) {
+                UIStateManager.updateDecodingStage(DecodingStage.LoadingModel)
+            }
 
-                currentStreamingState?.let { state ->
-                    addTokenToBatch(token, state)
+            // STAGE 4: Decoding
+            UIStateManager.updateDecodingStage(DecodingStage.Decoding)
+            startBatchedUIUpdates(messageId)
+
+            ModelManager.generateStreaming(
+                prompt = fullPrompt,
+                gen = GenerationParams(
+                    maxTokens = ModelManager.currentModel.value.maxTokens
+                ),
+                toolJson = toolJson,
+                onToken = { token ->
+                    if (!firstTokenReceived) {
+                        firstTokenReceived = true
+                        val firstTokenTimeNs = System.nanoTime()
+                        emitDecodingMetrics(
+                            type = if (isRegeneration) DecodeType.REGENERATE else DecodeType.NORMAL,
+                            startTimeNs = startTimeNs,
+                            firstTokenTimeNs = firstTokenTimeNs,
+                            messageId = messageId
+                        )
+                        UIStateManager.setStateGenerating(messageId, isFirstToken = true)
+                    }
+
+                    currentStreamingState?.let { state ->
+                        addTokenToBatch(token, state)
+                    }
+                },
+                onToolCalled = { toolName, argsJson ->
+                    handleToolExecution(appContext, toolName, argsJson, messageId, onToolExecution)
                 }
-            }, onToolCalled = { toolName, argsJson ->
-                handleToolExecution(appContext, toolName, argsJson, messageId, onToolExecution)
-            })
+            )
 
             // Process final output
             currentStreamingState?.let { state ->
@@ -155,7 +186,9 @@ object TextGenerationWorker {
             batchingJob?.cancel()
             currentStreamingState?.let { state ->
                 finalizeMessage(
-                    state.visibleBuffer.toString(), state.thoughtBuffer.toString().ifBlank { null })
+                    state.visibleBuffer.toString(),
+                    state.thoughtBuffer.toString().ifBlank { null }
+                )
             }
             throw e
         } catch (e: Exception) {
@@ -163,11 +196,15 @@ object TextGenerationWorker {
             batchingJob?.cancel()
             currentStreamingState?.let { state ->
                 finalizeMessage(
-                    state.visibleBuffer.toString(), state.thoughtBuffer.toString().ifBlank { null })
+                    state.visibleBuffer.toString(),
+                    state.thoughtBuffer.toString().ifBlank { null }
+                )
             }
         } finally {
-            UserDataManager.refreshChatListFromDisk {
-                Log.e(TAG, "Error refreshing chat list")
+            CoroutineScope(Dispatchers.IO).launch {
+                UserDataManager.refreshChatListFromDisk {
+                    Log.e(TAG, "Error refreshing chat list")
+                }
             }
             _currentMsgId.value = ""
             if (UIStateManager.uiState.value !is ChatUiState.ExecutingTool) {

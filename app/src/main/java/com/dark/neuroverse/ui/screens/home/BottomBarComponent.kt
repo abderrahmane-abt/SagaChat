@@ -73,8 +73,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.R
 import com.dark.neuroverse.ui.components.FuturisticNeuralAnimation
-import com.dark.neuroverse.ui.components.NeuralAnimationConfig
-import com.dark.neuroverse.ui.components.NeuralNetworkState
 import com.dark.neuroverse.ui.components.NeuralThemes
 import com.dark.neuroverse.ui.theme.CyberViolet
 import com.dark.neuroverse.ui.theme.SkyBlue
@@ -137,6 +135,7 @@ fun ChatInputWithDataHubDialog(
         inputEnabled = inputEnabled,
         sttViewModel = sttViewModel
     )
+    
 
     if (showDialog) {
         DatasetSelectionDialog(
@@ -499,14 +498,7 @@ private fun InputRow(
             .padding(end = rDP(18.dp)),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Neural Animation with theme based on state
-        val currentTheme = when {
-            isRecording -> NeuralThemes.CoralDawn
-            isTranscribing -> NeuralThemes.ArcticTeal
-            isGenerating -> NeuralThemes.CrimsonBlood
-            !inputEnabled -> NeuralThemes.SageGarden
-            else -> NeuralThemes.ArcticDawn
-        }
+
 
         TextField(
             value = value,
@@ -522,9 +514,7 @@ private fun InputRow(
                         isTranscribing -> "Transcribing..."
                         inputEnabled -> "Say Anything…"
                         else -> "Processing..."
-                    },
-                    color = SlateGrey,
-                    fontSize = rSp(14.sp)
+                    }, color = SlateGrey, fontSize = rSp(14.sp)
                 )
             },
             colors = TextFieldDefaults.colors(
@@ -536,36 +526,24 @@ private fun InputRow(
                 cursorColor = MaterialTheme.colorScheme.primary
             ),
             textStyle = LocalTextStyle.current.copy(
-                color = MaterialTheme.colorScheme.primary,
-                fontSize = rSp(15.sp)
+                color = MaterialTheme.colorScheme.primary, fontSize = rSp(15.sp)
             )
         )
 
         Spacer(Modifier.width(rDP(4.dp)))
 
-        FuturisticNeuralAnimation(
-            config = currentTheme.copy(
-                initialLayers = 3,
-                initialNeuronCount = 24,
-                starCount = 0
-            ),
-            modifier = Modifier
-                .size(rDP(36.dp))
-                .clip(CircleShape)
+
+        STTButton(
+            isRecording = isRecording,
+            isProcessing = isTranscribing,
+            isReady = sttReady,
+            onClick = onSTTClick
         )
-//        STTButton(
-//            isRecording = isRecording,
-//            isProcessing = isTranscribing,
-//            isReady = sttReady,
-//            onClick = onSTTClick
-//        )
 
         Spacer(Modifier.width(rDP(8.dp)))
 
         SendButton(
-            inputEnabled = inputEnabled,
-            isGenerating = isGenerating,
-            onSend = onSend
+            inputEnabled = inputEnabled, isGenerating = isGenerating, onSend = onSend
         )
     }
 }
@@ -582,8 +560,9 @@ private fun SendButton(
                 if (inputEnabled || isGenerating) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
             )
-            .clickable(enabled = inputEnabled || isGenerating) { onSend() },
-        contentAlignment = Alignment.Center
+            .clickable(enabled = inputEnabled || isGenerating) {
+                onSend()
+            }, contentAlignment = Alignment.Center
     ) {
         when {
             isGenerating -> {

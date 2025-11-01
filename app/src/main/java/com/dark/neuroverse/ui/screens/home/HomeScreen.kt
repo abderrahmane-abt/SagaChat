@@ -410,9 +410,15 @@ fun BodyContent(
                     bottom = rDP(96.dp), top = rDP(8.dp), start = rDP(24.dp), end = rDP(24.dp)
                 )
             ) {
-                items(items = messages, key = { it.id }, contentType = { it.role }) { message ->
+                items(
+                    items = messages,
+                    key = { it.id },
+                    contentType = { it.role }
+                ) { message ->
                     ChatBubble(
-                        message = message, viewModel = viewModel, ttsViewModel = ttsViewModel
+                        message = message,
+                        viewModel = viewModel,
+                        ttsViewModel = ttsViewModel
                     )
                     Spacer(Modifier.height(rDP(12.dp)))
                 }
