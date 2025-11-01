@@ -67,9 +67,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.OutlinedTextField
@@ -78,6 +80,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -91,6 +94,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -215,12 +219,14 @@ fun ModelsScreen() {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun EnhancedNavigationRail(
     selectedCategory: Int, onCategorySelected: (Int) -> Unit
 ) {
     NavigationRail(
-        modifier = Modifier, containerColor = MaterialTheme.colorScheme.background, header = {
+        containerColor = MaterialTheme.colorScheme.background,
+        header = {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(vertical = rDP(16.dp))
@@ -238,43 +244,69 @@ private fun EnhancedNavigationRail(
                     fontWeight = FontWeight.Bold
                 )
             }
-        }) {
-        Spacer(Modifier.height(rDP(12.dp)))
-
-        ModelCategory.entries.forEachIndexed { index, category ->
-            val selected = selectedCategory == index
-            val scale by animateFloatAsState(
-                targetValue = if (selected) 1.05f else 1f, animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            )
-
-            NavigationRailItem(
-                selected = selected,
-                onClick = { onCategorySelected(index) },
-                icon = {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            painter = painterResource(category.icon),
-                            contentDescription = category.label,
-                            modifier = Modifier
-                                .size(rDP(24.dp))
-                                .scale(scale)
-                        )
-                    }
-                },
-                label = {
-                    Text(
-                        category.shortLabel, style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                        )
+        }
+    ) {
+        Column(
+            modifier = Modifier.fillMaxHeight(),
+            verticalArrangement = Arrangement.Top,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(Modifier.height(rDP(12.dp)))
+            ModelCategory.entries.forEachIndexed { index, category ->
+                val selected = selectedCategory == index
+                val scale by animateFloatAsState(
+                    targetValue = if (selected) 1.05f else 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
                     )
-                },
-                modifier = Modifier.padding(vertical = rDP(4.dp))
-            )
+                )
+
+                NavigationRailItem(
+                    selected = selected,
+                    onClick = { onCategorySelected(index) },
+                    icon = {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .background(
+                                    color = if (selected)
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                    else Color.Transparent,
+                                    shape = MaterialShapes.Cookie7Sided.toShape()
+                                )
+                                .padding(rDP(8.dp))
+                        ) {
+                            Icon(
+                                painter = painterResource(category.icon),
+                                contentDescription = category.label,
+                                modifier = Modifier
+                                    .size(rDP(24.dp))
+                                    .scale(scale),
+                                tint = if (selected)
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                    },
+                    label = {
+                        Text(
+                            category.shortLabel,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        )
+                    },
+                    modifier = Modifier.padding(vertical = rDP(4.dp)),
+                    colors = NavigationRailItemDefaults.colors(
+                        indicatorColor = Color.Transparent
+                    )
+                )
+            }
         }
     }
+
 }
 
 @Composable
