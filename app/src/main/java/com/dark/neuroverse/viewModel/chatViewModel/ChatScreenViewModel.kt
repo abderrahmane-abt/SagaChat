@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
@@ -674,18 +675,20 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     fun saveCurrentChat() {
-        viewModelScope.launch {
-            try {
-                ChatManager.saveChat(
-                    messages = messages.value,
-                    chatTitle = chatTitle.value,
-                    chatId = chatId.value,
-                    rootNode = UserDataManager.getRootNode(),
-                    appContext = appContext
-                )
-                Log.d(TAG, "Chat saved successfully")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error saving chat", e)
+        if (chatTitle.value != "") {
+            viewModelScope.launch {
+                try {
+                    ChatManager.saveChat(
+                        messages = messages.value,
+                        chatTitle = chatTitle.value,
+                        chatId = chatId.value,
+                        rootNode = UserDataManager.getRootNode(),
+                        appContext = appContext
+                    )
+                    Log.d(TAG, "Chat saved successfully")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error saving chat", e)
+                }
             }
         }
     }

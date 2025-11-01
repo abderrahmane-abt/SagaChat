@@ -78,6 +78,7 @@ import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
 import com.dark.neuroverse.viewModel.chatViewModel.ChattingViewModelFactory
 import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModel
+import com.dark.neuroverse.worker.ChatManager
 import com.dark.neuroverse.worker.ToolCallingManager
 import com.dark.neuroverse.worker.UIStateManager
 import kotlinx.coroutines.CoroutineScope
@@ -113,6 +114,12 @@ fun HomeScreen(
 
     // Snackbar host for errors - positioned at TOP
     val snackbarHostState = remember { SnackbarHostState() }
+
+    val chatTitle by ChatManager.currentChatTitle.collectAsStateWithLifecycle()
+
+    LaunchedEffect(chatTitle) {
+        chatScreenViewModel.saveCurrentChat()
+    }
 
     // Handle error states with top snackbar
     LaunchedEffect(uiState) {

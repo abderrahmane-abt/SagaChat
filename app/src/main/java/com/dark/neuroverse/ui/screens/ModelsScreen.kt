@@ -6,6 +6,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.Spring.DampingRatioMediumBouncy
 import androidx.compose.animation.core.animateDpAsState
@@ -18,9 +19,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -78,7 +76,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -113,8 +110,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.data.ModelsList.getModelList
@@ -1127,8 +1122,6 @@ private fun EmptyStateCard(
 @Composable
 private fun InstalledList(viewModel: ModelScreenViewModel) {
     val installed by viewModel.models.collectAsState()
-    val showModelDialog by viewModel.isDialogOpened.collectAsState()
-    var selectedModel by remember { mutableStateOf<ModelData?>(null) }
 
     if (installed.isEmpty()) {
         Box(
@@ -1156,35 +1149,16 @@ private fun InstalledList(viewModel: ModelScreenViewModel) {
 
             items(installed, key = { it.id }) { model ->
                 InstalledModelCard(
-                    model = model,
-                    onDelete = { viewModel.removeModel(model.modelName) },
-                    onInfo = {
-                        selectedModel = model
-                        viewModel.setIsDialogOpen(true)
-                    })
+                    model = model, onDelete = { viewModel.removeModel(model.modelName) })
             }
         }
-    }
-
-    AnimatedVisibility(
-        visible = showModelDialog,
-        enter = fadeIn(),
-        exit = fadeOut()
-    ) {
-        FileDetailDialog(
-            model = selectedModel ?: ModelData(),
-            onDismiss = { viewModel.setIsDialogOpen(false) },
-            onSelect = {
-                selectedModel?.let { viewModel.removeModel(it.modelName) }
-                viewModel.setIsDialogOpen(false)
-            })
     }
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun InstalledModelCard(
-    model: ModelData, onDelete: () -> Unit, onInfo: () -> Unit
+    model: ModelData, onDelete: () -> Unit
 ) {
     var isExpanded by remember { mutableStateOf(false) }
 
@@ -1193,11 +1167,17 @@ private fun InstalledModelCard(
         animationSpec = spring(dampingRatio = DampingRatioMediumBouncy)
     )
 
+    val haptic = LocalHapticFeedback.current
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(rDP(20.dp)))
-            .clickable { isExpanded = !isExpanded }, colors = CardDefaults.cardColors(
+            .animateContentSize(
+                animationSpec = spring(
+                    DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium
+                )
+            )
+            .clip(RoundedCornerShape(rDP(20.dp))), colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         ), elevation = CardDefaults.cardElevation(defaultElevation = cardElevation)
     ) {
@@ -1211,7 +1191,7 @@ private fun InstalledModelCard(
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(rDP(2.dp))
             ) {
                 Text(
                     text = model.modelName,
@@ -1219,13 +1199,16 @@ private fun InstalledModelCard(
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold, fontSize = rSp(20.sp)
                     ),
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
 
                 Row(horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
-                    IconButton (
-                        onClick = onInfo,
+                    IconButton(
+                        onClick = {
+                            isExpanded = !isExpanded
+                            haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+                        },
                         shape = MaterialShapes.Square.toShape(),
                         colors = IconButtonDefaults.iconButtonColors(
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -1266,8 +1249,8 @@ private fun InstalledModelCard(
             // Expandable Details
             AnimatedVisibility(
                 visible = isExpanded,
-                enter = fadeIn(spring()) + scaleIn(spring()),
-                exit = fadeOut(spring()) + scaleOut(spring())
+                enter = fadeIn(),
+                exit = fadeOut()
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(rDP(12.dp))) {
                     HorizontalDivider(modifier = Modifier.alpha(0.3f))
@@ -1290,143 +1273,5 @@ private fun InstalledModelCard(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun FileDetailDialog(
-    model: ModelData, onDismiss: () -> Unit, onSelect: () -> Unit
-) {
-    Dialog(
-        onDismissRequest = onDismiss, properties = DialogProperties(
-            dismissOnBackPress = true, usePlatformDefaultWidth = false
-        )
-    ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = rDP(20.dp)),
-            shape = RoundedCornerShape(rDP(28.dp)),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = rDP(6.dp)
-        ) {
-            Column(
-                Modifier.padding(rDP(24.dp)), verticalArrangement = Arrangement.spacedBy(rDP(16.dp))
-            ) {
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.size(rDP(48.dp))
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.TwoTone.Info,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(rDP(24.dp))
-                            )
-                        }
-                    }
-                    Spacer(Modifier.width(rDP(16.dp)))
-                    Text(
-                        text = "Model Details", style = MaterialTheme.typography.headlineSmall.copy(
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                }
-
-                HorizontalDivider(modifier = Modifier.alpha(0.3f))
-
-                // Scrollable Content
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = rDP(400.dp)),
-                    verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
-                ) {
-                    item { InfoRow("Name", model.modelName) }
-                    item { InfoRow("Provider", model.providerName) }
-                    item { InfoRow("Type", model.modelType.name) }
-                    item { InfoRow("Context Size", "${model.ctxSize} tokens") }
-                    item { InfoRow("Temperature", model.temp.toString()) }
-                    item { InfoRow("Top-P", model.topP.toString()) }
-                    item { InfoRow("Top-K", model.topK.toString()) }
-                    item { InfoRow("Max Tokens", model.maxTokens.toString()) }
-                    item { InfoRow("GPU Layers", model.gpuLayers.toString()) }
-                    item { InfoRow("Threads", model.threads.toString()) }
-                    item {
-                        InfoRow(
-                            "Tool Calling", if (model.isToolCalling) "Enabled" else "Disabled"
-                        )
-                    }
-                    item {
-                        InfoRow(
-                            "Imported", if (model.isImported) "Yes" else "No"
-                        )
-                    }
-                    item { InfoRow("File Path", model.modelPath) }
-                }
-
-                HorizontalDivider(modifier = Modifier.alpha(0.3f))
-
-                // Action Buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(rDP(16.dp))
-                    ) {
-                        Text(
-                            "Close", style = MaterialTheme.typography.labelLarge.copy(
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                    }
-                    Button(
-                        onClick = onSelect,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error
-                        ),
-                        shape = RoundedCornerShape(rDP(16.dp)),
-                        elevation = ButtonDefaults.buttonElevation(
-                            defaultElevation = rDP(2.dp), pressedElevation = rDP(6.dp)
-                        )
-                    ) {
-                        Text(
-                            "Delete", style = MaterialTheme.typography.labelLarge.copy(
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun InfoRow(label: String, value: String) {
-    Column(
-        modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(rDP(4.dp))
-    ) {
-        Text(
-            label, style = MaterialTheme.typography.labelLarge.copy(
-                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary
-            )
-        )
-        Text(
-            value, style = MaterialTheme.typography.bodyMedium.copy(
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        )
     }
 }

@@ -384,7 +384,7 @@ object ChatManager {
      * @param forceRegenerate If true, regenerates title even if one exists
      */
     suspend fun generateTitleIfNeeded(
-        useAI: Boolean = true, forceRegenerate: Boolean = false
+        useAI: Boolean = false, forceRegenerate: Boolean = false
     ) = withContext(Dispatchers.IO) {
         // Skip if title already exists (unless forcing regeneration)
         if (_currentChatTitle.value.isNotBlank() && !forceRegenerate) {
@@ -479,7 +479,7 @@ object ChatManager {
                 val cleanTitle = cleanTitleString(rawTitle)
 
                 if (cleanTitle.isBlank() || cleanTitle.length < 3) {
-                    throw Exception("Generated title too short: '$cleanTitle'")
+                    return@withContext generateTitleFromText(userMessage)
                 }
 
                 Log.d(TAG, "AI-generated title: $cleanTitle")
@@ -488,7 +488,7 @@ object ChatManager {
             } catch (e: Exception) {
                 Log.e(TAG, "AI title generation failed, using fallback", e)
                 // Fallback to simple extraction
-                generateTitleFromText(userMessage)
+                return@withContext generateTitleFromText(userMessage)
             }
         }
 
