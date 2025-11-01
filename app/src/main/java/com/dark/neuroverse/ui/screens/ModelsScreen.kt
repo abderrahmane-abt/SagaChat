@@ -3,6 +3,7 @@ package com.dark.neuroverse.ui.screens
 import android.content.Intent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
@@ -194,23 +195,8 @@ fun ModelsScreen() {
                         RoundedCornerShape(topStart = radius, bottomStart = radius)
                     )
             ) {
-                AnimatedContent(
-                    targetState = selectedCategory, transitionSpec = {
-                        (slideInVertically(
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioLowBouncy,
-                                stiffness = Spring.StiffnessLow
-                            )
-                        ) { it } + fadeIn()).togetherWith(
-                            slideOutVertically(
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioLowBouncy,
-                                stiffness = Spring.StiffnessLow
-                            )
-                        ) { -it } + fadeOut())
-                    }, label = "category_transition"
-                ) { category ->
-                    when (category) {
+                Crossfade(selectedCategory, label = "category_transition") {
+                    when (it) {
                         ModelCategory.TEXT.ordinal -> MarketplaceList(viewModel, "Text")
                         ModelCategory.VLM.ordinal -> ComingSoonScreen("VL-Models")
                         ModelCategory.OPENROUTER.ordinal -> OpenRouterTab(viewModel)
