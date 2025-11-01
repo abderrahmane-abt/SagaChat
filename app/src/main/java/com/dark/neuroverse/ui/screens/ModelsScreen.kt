@@ -2,19 +2,21 @@ package com.dark.neuroverse.ui.screens
 
 import android.content.Intent
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -23,6 +25,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -40,6 +43,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.twotone.BreakfastDining
 import androidx.compose.material.icons.twotone.CheckCircle
 import androidx.compose.material.icons.twotone.Cloud
 import androidx.compose.material.icons.twotone.CloudOff
@@ -50,6 +54,7 @@ import androidx.compose.material.icons.twotone.Info
 import androidx.compose.material.icons.twotone.Inventory
 import androidx.compose.material.icons.twotone.Key
 import androidx.compose.material.icons.twotone.Link
+import androidx.compose.material.icons.twotone.QuestionMark
 import androidx.compose.material.icons.twotone.Search
 import androidx.compose.material.icons.twotone.SearchOff
 import androidx.compose.material3.AlertDialog
@@ -102,6 +107,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -117,7 +124,6 @@ import com.dark.ai_module.model.toModelData
 import com.dark.neuroverse.R
 import com.dark.neuroverse.activity.GgufPickerActivity
 import com.dark.neuroverse.model.DownloadState
-import com.dark.neuroverse.ui.theme.Mint
 import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
@@ -127,14 +133,14 @@ import com.dark.neuroverse.viewModel.ModelScreenViewModel
 private enum class ModelCategory(
     val label: String, val shortLabel: String, val icon: Int
 ) {
-    TEXT("Text Models", "T", R.drawable.text_ai_models), VLM(
-        "Vision Models", "VL", R.drawable.vl_models
+    TEXT("Text Models", "TXT", R.drawable.text_ai_models), VLM(
+        "Vision Models", "VLM", R.drawable.vl_models
     ),
-    OPENROUTER("OpenRouter", "OR", R.drawable.open_router), STT(
-        "Speech-to-Text", "ST", R.drawable.stt_models
+    OPENROUTER("OpenRouter", "OPR", R.drawable.open_router), STT(
+        "Speech-to-Text", "STT", R.drawable.stt_models
     ),
-    TTS("Text-to-Speech", "TS", R.drawable.tts_models), INSTALLED(
-        "Installed", "IN", R.drawable.installed_models
+    TTS("Text-to-Speech", "TSS", R.drawable.tts_models), INSTALLED(
+        "Installed", "INM", R.drawable.installed_models
     )
 }
 
@@ -191,13 +197,16 @@ fun ModelsScreen() {
             ) {
                 AnimatedContent(
                     targetState = selectedCategory, transitionSpec = {
-                        (slideInHorizontally(
+                        (slideIntoContainer(
+                            towards = AnimatedContentTransitionScope.SlideDirection.Down,
                             animationSpec = spring(
+
                                 dampingRatio = Spring.DampingRatioLowBouncy,
                                 stiffness = Spring.StiffnessLow
                             )
                         ) { it } + fadeIn(tween(300))).togetherWith(
-                            slideOutHorizontally(
+                            slideOutOfContainer(
+                            towards = AnimatedContentTransitionScope.SlideDirection.Up,
                             animationSpec = spring(
                                 dampingRatio = Spring.DampingRatioLowBouncy,
                                 stiffness = Spring.StiffnessLow
@@ -225,8 +234,7 @@ private fun EnhancedNavigationRail(
     selectedCategory: Int, onCategorySelected: (Int) -> Unit
 ) {
     NavigationRail(
-        containerColor = MaterialTheme.colorScheme.background,
-        header = {
+        containerColor = MaterialTheme.colorScheme.background, header = {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(vertical = rDP(16.dp))
@@ -244,8 +252,7 @@ private fun EnhancedNavigationRail(
                     fontWeight = FontWeight.Bold
                 )
             }
-        }
-    ) {
+        }) {
         Column(
             modifier = Modifier.fillMaxHeight(),
             verticalArrangement = Arrangement.Top,
@@ -255,8 +262,7 @@ private fun EnhancedNavigationRail(
             ModelCategory.entries.forEachIndexed { index, category ->
                 val selected = selectedCategory == index
                 val scale by animateFloatAsState(
-                    targetValue = if (selected) 1.05f else 1f,
-                    animationSpec = spring(
+                    targetValue = if (selected) 1.05f else 1f, animationSpec = spring(
                         dampingRatio = Spring.DampingRatioMediumBouncy,
                         stiffness = Spring.StiffnessMedium
                     )
@@ -267,11 +273,11 @@ private fun EnhancedNavigationRail(
                     onClick = { onCategorySelected(index) },
                     icon = {
                         Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
+                            contentAlignment = Alignment.Center, modifier = Modifier
                                 .background(
-                                    color = if (selected)
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                    color = if (selected) MaterialTheme.colorScheme.primary.copy(
+                                        alpha = 0.15f
+                                    )
                                     else Color.Transparent,
                                     shape = MaterialShapes.Cookie7Sided.toShape()
                                 )
@@ -283,17 +289,14 @@ private fun EnhancedNavigationRail(
                                 modifier = Modifier
                                     .size(rDP(24.dp))
                                     .scale(scale),
-                                tint = if (selected)
-                                    MaterialTheme.colorScheme.primary
-                                else
-                                    MaterialTheme.colorScheme.onBackground
+                                tint = if (selected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onBackground
                             )
                         }
                     },
                     label = {
                         Text(
-                            category.shortLabel,
-                            style = MaterialTheme.typography.labelSmall.copy(
+                            category.shortLabel, style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                             )
                         )
@@ -373,6 +376,7 @@ private fun MarketplaceList(viewModel: ModelScreenViewModel, filterType: String)
     }
 }
 
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun EnhancedModelCard(
     modelData: ModelData,
@@ -382,29 +386,33 @@ fun EnhancedModelCard(
     viewModel: ModelScreenViewModel,
     onDownload: () -> Unit = {}
 ) {
-    var isInstalled by remember { mutableStateOf(false) }
-    var isExpanded by remember { mutableStateOf(false) }
+    var isInstalled by remember { mutableStateOf(false) } // Track installation status
+    var isExpanded by remember { mutableStateOf(false) } // Track details visibility
 
+    // Check installation when model changes
     LaunchedEffect(modelData.modelName) {
-        viewModel.checkIfInstalled(modelData.modelName) { isInstalled = it }
+        viewModel.checkIfInstalled(modelData.modelName) {
+            isInstalled = it
+        }
     }
-
-    LaunchedEffect(onDownloadComplete) {
-        if (onDownloadComplete) isInstalled = true
-    }
+    // Update flag when download finishes
+    LaunchedEffect(onDownloadComplete) { if (onDownloadComplete) isInstalled = true }
 
     val cardElevation by animateDpAsState(
         targetValue = if (isExpanded) rDP(8.dp) else rDP(2.dp),
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
     )
 
+    // --------------------------------------------------------------
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(rDP(20.dp)))
-            .clickable { isExpanded = !isExpanded }, colors = CardDefaults.cardColors(
+            .clip(RoundedCornerShape(rDP(20.dp))),
+        colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-        ), elevation = CardDefaults.cardElevation(defaultElevation = cardElevation)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = cardElevation)
     ) {
         Column(
             modifier = Modifier
@@ -412,27 +420,23 @@ fun EnhancedModelCard(
                 .padding(rDP(20.dp)),
             verticalArrangement = Arrangement.spacedBy(rDP(16.dp))
         ) {
-            // Header Row
+            // Header ------------------------------------------------
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = modelData.modelName,
-                        style = MaterialTheme.typography.titleLarge.copy(
+                        modelData.modelName, style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold, fontSize = rSp(20.sp)
-                        ),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        ), maxLines = 2, overflow = TextOverflow.Ellipsis
                     )
-
                     AnimatedVisibility(visible = isExpanded) {
                         Text(
-                            text = "Tap to collapse details",
+                            "Tap to collapse details",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
                             modifier = Modifier.padding(top = rDP(4.dp))
                         )
                     }
@@ -446,55 +450,61 @@ fun EnhancedModelCard(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                Icons.TwoTone.CheckCircle,
+                                Icons.TwoTone.QuestionMark,
                                 contentDescription = "Installed",
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(rDP(24.dp))
-                            )
+                                modifier = Modifier
+                                    .size(rDP(24.dp))
+                                    .clickable {
+                                        isExpanded = !isExpanded
+                                    })
                         }
                     }
                 }
             }
 
-            // Specs Pills
-            Row(
+            // Specs pills -------------------------------------------
+
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(rDP(8.dp)),
-                modifier = Modifier.fillMaxWidth()
+                verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
             ) {
-                AnimatedPill(text = "Context: ${modelData.ctxSize}")
+                AnimatedPill("Context: ${modelData.ctxSize}")
                 AnimatedPill(
-                    text = if (modelData.isToolCalling) "Tools ✓" else "No Tools",
+                    if (modelData.isToolCalling) "Tools ✓" else "No Tools",
                     isHighlighted = modelData.isToolCalling
                 )
             }
 
-            // Expandable Details
+            // Detail section -----------------------------------------
+
             AnimatedVisibility(
                 visible = isExpanded,
-                enter = fadeIn(spring()) + scaleIn(spring()),
-                exit = fadeOut(spring()) + scaleOut(spring())
+                enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
-                    HorizontalDivider(modifier = Modifier.alpha(0.3f))
-
+                    HorizontalDivider(modifier = Modifier.alpha(.3f))
                     DetailRow("Temperature", modelData.temp.toString())
-                    DetailRow("Top-P", modelData.topP.toString())
+                    DetailRow("Top‑P", modelData.topP.toString())
                     DetailRow("Max Tokens", modelData.maxTokens.toString())
                 }
             }
 
-            // Progress Indicator
+            // Progress bar -------------------------------------------
+
             AnimatedVisibility(
-                visible = isDownloading, enter = fadeIn() + scaleIn(), exit = fadeOut() + scaleOut()
+                visible = isDownloading,
+                enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(
-                            "Downloading...", style = MaterialTheme.typography.labelMedium
-                        )
+                        Text("Downloading…", style = MaterialTheme.typography.labelMedium)
                         Text(
                             "${(progress * 100).toInt()}%",
                             style = MaterialTheme.typography.labelMedium,
@@ -509,12 +519,13 @@ fun EnhancedModelCard(
                             .clip(RoundedCornerShape(rDP(8.dp))),
                         color = MaterialTheme.colorScheme.primary,
                         trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                        strokeCap = ProgressIndicatorDefaults.LinearStrokeCap,
+                        strokeCap = ProgressIndicatorDefaults.LinearStrokeCap
                     )
                 }
             }
 
-            // Action Buttons
+            // Action buttons -----------------------------------------
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))
@@ -522,11 +533,9 @@ fun EnhancedModelCard(
                 Button(
                     onClick = {
                         when {
-                            !isInstalled && isDownloading -> {
-                                viewModel.cancelDownload(
-                                    modelData.modelName, modelData.modelUrl.toString()
-                                )
-                            }
+                            !isInstalled && isDownloading -> viewModel.cancelDownload(
+                                modelData.modelName, modelData.modelUrl.toString()
+                            )
 
                             !isInstalled && !isDownloading -> onDownload()
                         }
@@ -537,10 +546,7 @@ fun EnhancedModelCard(
                         containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                         contentColor = MaterialTheme.colorScheme.onTertiaryContainer
                     ),
-                    shape = RoundedCornerShape(rDP(16.dp)),
-                    elevation = ButtonDefaults.buttonElevation(
-                        defaultElevation = rDP(2.dp), pressedElevation = rDP(6.dp)
-                    )
+                    shape = RoundedCornerShape(rDP(16.dp))
                 ) {
                     AnimatedContent(
                         targetState = when {
@@ -549,23 +555,17 @@ fun EnhancedModelCard(
                             else -> "Download"
                         }
                     ) { label ->
-                        Row(
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                label, style = MaterialTheme.typography.labelLarge.copy(
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                        }
+                        Text(
+                            label,
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                        )
                     }
                 }
 
                 AnimatedVisibility(
                     visible = isInstalled,
-                    enter = scaleIn(spring(Spring.DampingRatioMediumBouncy)) + fadeIn(),
-                    exit = scaleOut(spring(Spring.DampingRatioMediumBouncy)) + fadeOut()
+                    enter = scaleIn() + fadeIn(),
+                    exit = scaleOut() + fadeOut()
                 ) {
                     OutlinedIconButton(
                         onClick = {
@@ -574,7 +574,7 @@ fun EnhancedModelCard(
                         },
                         border = BorderStroke(2.dp, MaterialTheme.colorScheme.error),
                         colors = IconButtonDefaults.outlinedIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            containerColor = MaterialTheme.colorScheme.errorContainer
                         )
                     ) {
                         Icon(
@@ -594,14 +594,18 @@ fun EnhancedModelCard(
 private fun AnimatedPill(
     text: String, isHighlighted: Boolean = false
 ) {
+    // Background – highlighted pill uses the primary colour with a light alpha,
+    // normal pill uses the surface variant colour.
     val backgroundColor by animateColorAsState(
-        targetValue = if (isHighlighted) Mint.copy(alpha = 0.2f)
+        targetValue = if (isHighlighted) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
         else MaterialTheme.colorScheme.surfaceVariant, animationSpec = tween(300)
     )
 
+    // Text – highlighted pill uses the primary colour,
+    // normal pill uses the on‑surface‑variant colour.
     val textColor by animateColorAsState(
-        targetValue = if (isHighlighted) Mint else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = tween(300)
+        targetValue = if (isHighlighted) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.onSurfaceVariant, animationSpec = tween(300)
     )
 
     Surface(
@@ -696,7 +700,7 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
                         Spacer(Modifier.width(rDP(12.dp)))
                         Text(
                             "API Settings",
-                            style = MaterialTheme.typography.titleLarge,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -806,8 +810,10 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
                             Spacer(Modifier.width(rDP(12.dp)))
                             Text(
                                 "Selected Models",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                overflow = TextOverflow.Clip,
+                                maxLines = 1
                             )
                         }
 
@@ -1162,12 +1168,16 @@ private fun EmptyStateCard(
         Text(
             title,
             style = MaterialTheme.typography.titleLarge,
+            overflow = TextOverflow.Clip,
+            textAlign = TextAlign.Justify,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
         Text(
             subtitle,
             style = MaterialTheme.typography.bodyMedium,
+            overflow = TextOverflow.Clip,
+            textAlign = TextAlign.Justify,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
         )
     }
@@ -1220,8 +1230,8 @@ private fun InstalledList(viewModel: ModelScreenViewModel) {
 
     AnimatedVisibility(
         visible = showModelDialog,
-        enter = fadeIn(spring()) + scaleIn(spring()),
-        exit = fadeOut(spring()) + scaleOut(spring())
+        enter = fadeIn(spring(Spring.DampingRatioHighBouncy)) + scaleIn(spring(Spring.DampingRatioHighBouncy)),
+        exit = fadeOut(spring(Spring.DampingRatioHighBouncy)) + scaleOut(spring(Spring.DampingRatioHighBouncy))
     ) {
         FileDetailDialog(
             model = selectedModel ?: ModelData(),
@@ -1264,22 +1274,15 @@ private fun InstalledModelCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(
+                Text(
+                    text = model.modelName,
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
-                ) {
-                    Text(
-                        text = model.modelName, style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold, fontSize = rSp(20.sp)
-                        ), maxLines = 2, overflow = TextOverflow.Ellipsis
-                    )
-
-                    AnimatedPill(
-                        text = if (model.providerName == ModelProvider.LocalGGUF.toString()) "Local Model"
-                        else "OpenRouter",
-                        isHighlighted = model.providerName == ModelProvider.LocalGGUF.toString()
-                    )
-                }
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold, fontSize = rSp(20.sp)
+                    ),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
 
                 Row(horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
                     OutlinedIconButton(
@@ -1312,6 +1315,14 @@ private fun InstalledModelCard(
                     }
                 }
             }
+
+
+            AnimatedPill(
+                text = if (model.providerName == ModelProvider.LocalGGUF.toString()) "Local Model"
+                else "OpenRouter",
+                isHighlighted = model.providerName == ModelProvider.LocalGGUF.toString()
+            )
+
 
             // Expandable Details
             AnimatedVisibility(
