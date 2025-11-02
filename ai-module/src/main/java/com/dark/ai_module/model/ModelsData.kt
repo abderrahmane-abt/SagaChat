@@ -15,6 +15,7 @@ data class ModelData(
     var providerName: String = "",
     var modelType: ModelType = ModelType.TEXT,
     var modelPath: String = "",
+    var architecture: String = "",
 
     // Performance settings
     var threads: Int = (Runtime.getRuntime().availableProcessors().coerceAtLeast(2)) / 2,
