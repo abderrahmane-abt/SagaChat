@@ -66,6 +66,7 @@ import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.R
+import com.dark.neuroverse.activity.LoggerActivity
 import com.dark.neuroverse.activity.UserDataActivity
 import com.dark.neuroverse.data.UserPrefs
 import com.dark.neuroverse.model.ChatList
@@ -303,6 +304,7 @@ private fun ModelInfoRow(label: String, value: String) {
 private fun UserDataSection(
     chatCount: Int, isClearingData: Boolean, onClearData: () -> Unit, onOpenDataHub: () -> Unit
 ) {
+    val context = LocalContext.current
     SectionHeader("User Data")
 
     SettingCard(
@@ -338,6 +340,27 @@ private fun UserDataSection(
                     }
                 }
             }
+        }
+    }
+
+    Spacer(Modifier.height(rDP(8.dp)))
+
+    // NEW LOGGER SECTION
+    SettingCard(
+        title = "Logs & Debugging",
+        actionLabel = "Open",
+        onAction = {
+            context.startActivity(Intent(context, LoggerActivity::class.java))
+        }
+    ) {
+        Column(
+            modifier = Modifier.padding(rDP(16.dp))
+        ) {
+            Text(
+                text = "View app logs, debug reports, and system events.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 

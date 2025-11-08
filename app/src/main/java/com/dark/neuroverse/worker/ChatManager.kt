@@ -12,7 +12,6 @@ import com.dark.neuroverse.model.RunningTool
 import com.dark.neuroverse.model.ToolOutput
 import com.dark.neuroverse.userdata.addNewChat
 import com.dark.neuroverse.userdata.getDefaultChatHistory
-import com.dark.neuroverse.userdata.helpers.ModelStateHelper
 import com.dark.neuroverse.userdata.ntds.neuron_tree.NeuronNode
 import com.dark.neuroverse.userdata.ntds.neuron_tree.NeuronTree
 import com.dark.neuroverse.userdata.saveTree
@@ -159,9 +158,6 @@ object ChatManager {
             Log.d(TAG, "Deleting chat $id")
             val rootNode = UserDataManager.getRootNode()
             val neuronTree = NeuronTree(rootNode)
-
-            // Delete associated model state
-            ModelStateHelper.deleteModelState(rootNode, id)
 
             // Delete chat node
             neuronTree.deleteNodeById(id)

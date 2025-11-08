@@ -1362,31 +1362,62 @@ fun JsonChildPreview(
     }
 }
 
-// Helper functions
+
 fun getNodeDisplayName(node: NeuronNode): String {
     return when {
+        // Root
         node.id == "root" -> "Brain Root"
+
+        // System nodes
         node.id == "chatHistory" -> "Chat History"
-        node.id == "memoryHistory" -> "Memory"
+        node.id == "memoryHistory" -> "Memory Storage"
+        node.id == "modelSate" -> "Model State"
+        node.id == "systemLogs" -> "System Logs"
+
+        // Memory categories
         node.id == MemoryDataTags.Family.toString().lowercase() -> "Family"
         node.id == MemoryDataTags.Friends.toString().lowercase() -> "Friends"
         node.id == MemoryDataTags.Work.toString().lowercase() -> "Work"
-
         node.id == MemoryDataTags.Health.toString().lowercase() -> "Health"
         node.id == MemoryDataTags.Entertainment.toString().lowercase() -> "Entertainment"
         node.id == MemoryDataTags.Education.toString().lowercase() -> "Education"
-
         node.id == MemoryDataTags.Other.toString().lowercase() -> "Other"
 
-        node.data.content.isNotBlank() -> {
-            val data = JSONObject(node.data.content).optString("title", "Unknown")
-            "Title: $data"
+        // JSON content with title
+        node.data.content.isNotBlank() && node.data.content.trim().startsWith("{") -> {
+            try {
+                val json = JSONObject(node.data.content)
+
+                // Log session
+                if (json.has("sessionName")) {
+                    val name = json.getString("sessionName")
+                    val logsCount = json.optJSONArray("logs")?.length() ?: 0
+                    "$name ($logsCount logs)"
+                }
+                // Chat/memory with title
+                else if (json.has("title")) {
+                    json.getString("title")
+                }
+                // Other JSON
+                else {
+                    val preview = json.toString().take(30)
+                    "$preview..."
+                }
+            } catch (_: Exception) {
+                // Plain text
+                node.data.content.take(30) + "..."
+            }
         }
 
+        // Plain text content
+        node.data.content.isNotBlank() -> {
+            node.data.content.take(30) + if (node.data.content.length > 30) "..." else ""
+        }
+
+        // Fallback
         else -> "Node ${node.id.take(8)}"
     }
 }
-
 fun getNodeTypeIcon(type: NodeType): ImageVector {
     return when (type) {
         NodeType.ROOT -> Icons.Outlined.AccountTree
