@@ -77,8 +77,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        ModelManager.init(applicationContext)
-
         setContent {
             val navController = rememberNavController()
             val intent = intent
@@ -160,6 +158,7 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable(Screen.Home.route) {
+                            ModelManager.init(applicationContext)
                             HomeScreen(onRequestSettingsChange = {
                                 navController.navigate(Screen.Settings.route)
                             }, onDataHubClick = {

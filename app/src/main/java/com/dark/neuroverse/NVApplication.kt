@@ -35,9 +35,6 @@ class NVApplication : Application() {
             logAppInfo(root)
             initializeManagers(root)
 
-            // End session
-            AppLogger.endSession(root)
-
             // Save logs to brain file
             UserDataManager.performTreeSave(applicationContext)
         }
@@ -67,9 +64,6 @@ class NVApplication : Application() {
     }
 
     private suspend fun initializeManagers(root: NeuronNode) {
-        // UserDataManager (already initialized)
-        AppLogger.info(root, "UserDataManager initialized")
-
         // ChatManager
         measureAndLog(root, "ChatManager") {
             ChatManager.refreshChats()
@@ -103,7 +97,7 @@ class NVApplication : Application() {
         AppLogger.info(root, "All managers initialized successfully")
     }
 
-    private suspend inline fun measureAndLog(
+    private inline fun measureAndLog(
         root: NeuronNode,
         name: String,
         block: () -> Unit
@@ -148,5 +142,11 @@ class NVApplication : Application() {
 
             UserDataManager.performTreeSave(applicationContext)
         }
+    }
+
+    override fun onTerminate() {
+        super.onTerminate()
+        val root = UserDataManager.getRootNode()
+        AppLogger.endSession(root)
     }
 }
