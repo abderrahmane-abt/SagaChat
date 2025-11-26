@@ -6,6 +6,7 @@ data class GGUFModels(
     var architecture: String = "",          //gemma, llama, qwen
     var modelType: String = "TXT",          //TXT, VLM, EMBED
     var modelFileLink: String = "",
+    var modelFileSize: String = "",
 
     // Performance settings
     var gpuLayers: Int = 0,

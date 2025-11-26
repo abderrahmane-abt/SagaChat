@@ -43,6 +43,7 @@ import com.dark.tool_neuron.viewModel.ModelScreenViewModel
 import kotlinx.coroutines.delay
 import java.io.File
 import com.dark.tool_neuron.R
+import com.dark.tool_neuron.ui.screens.modelScreen.GGUFModelScreen
 
 // ============================================================================
 // PROVIDER CONFIGURATION - Easy to extend!
@@ -147,7 +148,7 @@ fun ModelsScreen(onBack: () -> Unit = {}) {
                 label = "provider_content"
             ) { provider ->
                 when (provider) {
-                    ModelProviderTab.LocalGGUF -> LocalModelsTab(viewModel)
+                    ModelProviderTab.LocalGGUF -> GGUFModelScreen()
                     ModelProviderTab.OpenRouter -> OpenRouterTab(viewModel)
                     ModelProviderTab.SherpaONNX -> SherpaONNXTab(viewModel)
                     ModelProviderTab.Installed -> InstalledModelsTab(viewModel)

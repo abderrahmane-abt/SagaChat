@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import com.dark.tool_neuron.ui.screens.ModelsScreen
+import com.dark.tool_neuron.ui.screens.modelScreen.GGUFModelScreen
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 
 class ModelActivity : ComponentActivity() {
@@ -17,7 +18,7 @@ class ModelActivity : ComponentActivity() {
 
         setContent {
             NeuroVerseTheme {
-                ModelsScreen()
+                ModelsScreen {  }
             }
         }
     }
