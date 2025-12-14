@@ -11,31 +11,18 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.model.ModelType
-import com.dark.ai_module.workers.ModelManager
+import com.dark.ai_module.workers.ModelInstallationManager
 import com.dark.tool_neuron.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.io.File
-import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
 
 /**
- * Background service for downloading AI models with notification support.
- *
- * Features:
- * - Foreground service with persistent notification
- * - Real-time progress tracking via StateFlow
- * - Automatic model persistence after successful download
- * - Network error handling and retry logic
- * - Supports multiple concurrent downloads
+ * Foreground service wrapper for ModelInstallationManager
+ * Provides notification support for background downloads
  */
 class ModelDownloadService : Service() {
 
@@ -45,12 +32,11 @@ class ModelDownloadService : Service() {
 
     private lateinit var notificationManager: NotificationManager
 
-    /* ========================================================================= *//* SERVICE LIFECYCLE                                                         *//* ========================================================================= */
-
     override fun onCreate() {
         super.onCreate()
         notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannel()
+        ModelInstallationManager.init(applicationContext)
         Log.i(TAG, "ModelDownloadService created")
     }
 
@@ -71,33 +57,9 @@ class ModelDownloadService : Service() {
     private fun handleIntent(intent: Intent) {
         when (intent.action) {
             ACTION_START_DOWNLOAD -> {
-                // Extract individual fields from intent
-                val modelName = intent.getStringExtra(EXTRA_MODEL_NAME) ?: return
-                val modelUrl = intent.getStringExtra(EXTRA_MODEL_URL) ?: return
-                val modelId = intent.getStringExtra(EXTRA_MODEL_ID) ?: return
-                val providerName = intent.getStringExtra(EXTRA_PROVIDER_NAME) ?: return
-                val modelType = intent.getStringExtra(EXTRA_MODEL_TYPE) ?: ModelType.TEXT.name
-                val ctxSize = intent.getIntExtra(EXTRA_CTX_SIZE, 4048)
-                val temp = intent.getFloatExtra(EXTRA_TEMP, 0.7f)
-                val topP = intent.getFloatExtra(EXTRA_TOP_P, 0.5f)
-                val isToolCalling = intent.getBooleanExtra(EXTRA_IS_TOOL_CALLING, false)
-
-                // Reconstruct ModelData
-                val modelData = ModelData(
-                    id = modelId,
-                    modelName = modelName,
-                    modelUrl = modelUrl,
-                    providerName = providerName,
-                    modelType = ModelType.valueOf(modelType),
-                    ctxSize = ctxSize,
-                    temp = temp,
-                    topP = topP,
-                    isToolCalling = isToolCalling
-                )
-
+                val modelData = extractModelData(intent) ?: return
                 startModelDownload(modelData)
             }
-
             ACTION_CANCEL_DOWNLOAD -> {
                 val url = intent.getStringExtra(EXTRA_DOWNLOAD_URL)
                 url?.let { cancelModelDownload(it) }
@@ -105,11 +67,32 @@ class ModelDownloadService : Service() {
         }
     }
 
-    /* ========================================================================= *//* DOWNLOAD MANAGEMENT                                                       *//* ========================================================================= */
+    private fun extractModelData(intent: Intent): ModelData? {
+        return try {
+            ModelData(
+                id = intent.getStringExtra(EXTRA_MODEL_ID) ?: return null,
+                modelName = intent.getStringExtra(EXTRA_MODEL_NAME) ?: return null,
+                modelPath = intent.getStringExtra(EXTRA_MODEL_PATH) ?: return null,
+                modelUrl = intent.getStringExtra(EXTRA_MODEL_URL) ?: return null,
+                providerName = intent.getStringExtra(EXTRA_PROVIDER_NAME) ?: return null,
+                modelType = ModelType.valueOf(
+                    intent.getStringExtra(EXTRA_MODEL_TYPE) ?: ModelType.TEXT.name
+                ),
+                ctxSize = intent.getIntExtra(EXTRA_CTX_SIZE, 4048),
+                temp = intent.getFloatExtra(EXTRA_TEMP, 0.7f),
+                topP = intent.getFloatExtra(EXTRA_TOP_P, 0.5f),
+                isToolCalling = intent.getBooleanExtra(EXTRA_IS_TOOL_CALLING, false)
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to extract ModelData", e)
+            null
+        }
+    }
 
-    /**
-     * Initiates a model download in the background.
-     */
+    /* ========================================================================= */
+    /* DOWNLOAD MANAGEMENT                                                       */
+    /* ========================================================================= */
+
     private fun startModelDownload(modelData: ModelData) {
         val url = modelData.modelUrl
         if (url.isNullOrBlank()) {
@@ -117,31 +100,48 @@ class ModelDownloadService : Service() {
             return
         }
 
-        // Prevent duplicate downloads
         if (activeDownloads.containsKey(url)) {
             Log.w(TAG, "Download already in progress for: ${modelData.modelName}")
             return
         }
 
-        // Create output directory
-        val outputDir = File(filesDir, "models").apply { mkdirs() }
-        val outputFile = File(outputDir, modelData.modelName)
+        val currentNotificationId = notificationId++
 
-        // Initialize progress
-        updateProgress(url, DownloadProgress(isDownloading = true))
-
-        // Start download job
         val job = serviceScope.launch {
             try {
-                downloadModel(
-                    url = url,
-                    outputFile = outputFile,
-                    modelData = modelData,
-                    notificationId = notificationId++
-                )
+                // Show initial notification
+                showDownloadNotification(currentNotificationId, modelData.modelName, 0f, 0L)
+
+                // Use ModelInstallationManager for download and install
+                val result = ModelInstallationManager.downloadAndInstallModel(modelData) { progress ->
+                    // Update notification with progress
+                    showDownloadNotification(
+                        currentNotificationId,
+                        modelData.modelName,
+                        progress,
+                        0L // File size not directly available, but notification shows percentage
+                    )
+                }
+
+                result.onSuccess {
+                    showDownloadCompleteNotification(currentNotificationId, modelData.modelName)
+                    Log.i(TAG, "Successfully downloaded and installed: ${modelData.modelName}")
+                }.onFailure { error ->
+                    showDownloadErrorNotification(
+                        currentNotificationId,
+                        modelData.modelName,
+                        error.message ?: "Download failed"
+                    )
+                    Log.e(TAG, "Download failed for ${modelData.modelName}", error)
+                }
+
             } catch (e: Exception) {
-                Log.e(TAG, "Download failed for ${modelData.modelName}: ${e.message}", e)
-                handleDownloadError(url, modelData.modelName, e)
+                Log.e(TAG, "Unexpected error during download: ${e.message}", e)
+                showDownloadErrorNotification(
+                    currentNotificationId,
+                    modelData.modelName,
+                    e.message ?: "Unknown error"
+                )
             } finally {
                 activeDownloads.remove(url)
 
@@ -156,179 +156,83 @@ class ModelDownloadService : Service() {
         activeDownloads[url] = job
     }
 
-    /**
-     * Downloads a model file with progress tracking and notification updates.
-     */
-    private suspend fun downloadModel(
-        url: String, outputFile: File, modelData: ModelData, notificationId: Int
-    ) {
-        val connection = URL(url).openConnection() as HttpURLConnection
-
-        try {
-            connection.apply {
-                requestMethod = "GET"
-                connectTimeout = 30000
-                readTimeout = 30000
-                setRequestProperty("User-Agent", "ToolNeuron/1.0")
-            }
-
-            connection.connect()
-
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                throw Exception("HTTP ${connection.responseCode}: ${connection.responseMessage}")
-            }
-
-            val fileSize = connection.contentLengthLong
-            val inputStream = connection.inputStream
-            val outputStream = FileOutputStream(outputFile)
-
-            var downloadedBytes = 0L
-            val buffer = ByteArray(BUFFER_SIZE)
-            var lastProgressUpdate = System.currentTimeMillis()
-
-            // Show initial notification
-            showDownloadNotification(
-                notificationId, modelData.modelName, 0f, fileSize
-            )
-
-            // Download loop
-            while (true) {
-                val bytesRead = inputStream.read(buffer)
-                if (bytesRead == -1) break
-
-                outputStream.write(buffer, 0, bytesRead)
-                downloadedBytes += bytesRead
-
-                val progress = if (fileSize > 0) {
-                    (downloadedBytes.toFloat() / fileSize) * 100
-                } else 0f
-
-                // Update progress (throttled to avoid excessive updates)
-                val now = System.currentTimeMillis()
-                if (now - lastProgressUpdate > PROGRESS_UPDATE_INTERVAL) {
-                    updateProgress(
-                        url, DownloadProgress(
-                            isDownloading = true, progress = progress
-                        )
-                    )
-
-                    showDownloadNotification(
-                        notificationId, modelData.modelName, progress, fileSize
-                    )
-
-                    lastProgressUpdate = now
-                }
-            }
-
-            outputStream.flush()
-            outputStream.close()
-            inputStream.close()
-
-            // Download complete - persist to database
-            val savedModel = modelData.copy(
-                modelPath = outputFile.absolutePath, isImported = false
-            )
-
-            ModelManager.addModel(savedModel)
-
-            // Update state
-            updateProgress(
-                url, DownloadProgress(
-                    isDownloading = false, progress = 100f, isComplete = true
-                )
-            )
-
-            // Show completion notification
-            showDownloadCompleteNotification(notificationId, modelData.modelName)
-
-            Log.i(TAG, "Successfully downloaded: ${modelData.modelName}")
-
-        } catch (e: Exception) {
-            // Clean up partial file
-            if (outputFile.exists()) {
-                outputFile.delete()
-            }
-            throw e
-        } finally {
-            connection.disconnect()
-        }
-    }
-
-    /**
-     * Cancels an active download.
-     */
     private fun cancelModelDownload(url: String) {
         activeDownloads[url]?.let { job ->
             job.cancel()
             activeDownloads.remove(url)
-
-            updateProgress(url, DownloadProgress(isDownloading = false))
-
             Log.i(TAG, "Cancelled download: $url")
+
+            if (activeDownloads.isEmpty()) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
         }
     }
 
-    /**
-     * Handles download errors by updating state and showing error notification.
-     */
-    private fun handleDownloadError(url: String, modelName: String, error: Exception) {
-        updateProgress(
-            url, DownloadProgress(
-                isDownloading = false, errorMessage = error.message ?: "Unknown error"
-            )
-        )
-
-        showDownloadErrorNotification(
-            notificationId++, modelName, error.message ?: "Download failed"
-        )
-    }
-
-    /* ========================================================================= *//* NOTIFICATIONS                                                             *//* ========================================================================= */
+    /* ========================================================================= */
+    /* NOTIFICATIONS                                                             */
+    /* ========================================================================= */
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID, "Model Downloads", NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Notifications for AI model downloads"
-                setShowBadge(false)
-            }
-            notificationManager.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "Model Downloads",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Notifications for AI model downloads"
+            setShowBadge(false)
         }
+        notificationManager.createNotificationChannel(channel)
     }
 
     private fun showDownloadNotification(
-        id: Int, modelName: String, progress: Float, totalBytes: Long
+        id: Int,
+        modelName: String,
+        progress: Float,
+        totalBytes: Long
     ) {
-        val notification =
-            NotificationCompat.Builder(this, CHANNEL_ID).setContentTitle("Downloading: $modelName")
-                .setContentText("${progress.toInt()}% • ${formatBytes(totalBytes)}")
-                .setSmallIcon(R.drawable.installed_models).setProgress(100, progress.toInt(), false)
-                .setOngoing(true).setPriority(NotificationCompat.PRIORITY_LOW)
-                .setCategory(NotificationCompat.CATEGORY_PROGRESS).build()
+        val progressText = if (totalBytes > 0) {
+            "${progress.toInt()}% • ${formatBytes(totalBytes)}"
+        } else {
+            "${progress.toInt()}%"
+        }
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Downloading: $modelName")
+            .setContentText(progressText)
+            .setSmallIcon(R.drawable.installed_models)
+            .setProgress(100, progress.toInt(), false)
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .build()
 
         startForeground(id, notification)
     }
 
     private fun showDownloadCompleteNotification(id: Int, modelName: String) {
-        val notification =
-            NotificationCompat.Builder(this, CHANNEL_ID).setContentTitle("Download Complete")
-                .setContentText(modelName).setSmallIcon(R.drawable.installed_models)
-                .setPriority(NotificationCompat.PRIORITY_LOW).setAutoCancel(true).build()
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Download Complete")
+            .setContentText(modelName)
+            .setSmallIcon(R.drawable.installed_models)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setAutoCancel(true)
+            .build()
 
         notificationManager.notify(id, notification)
     }
 
     private fun showDownloadErrorNotification(id: Int, modelName: String, error: String) {
-        val notification =
-            NotificationCompat.Builder(this, CHANNEL_ID).setContentTitle("Download Failed")
-                .setContentText("$modelName: $error").setSmallIcon(R.drawable.installed_models)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT).setAutoCancel(true).build()
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Download Failed")
+            .setContentText("$modelName: $error")
+            .setSmallIcon(R.drawable.installed_models)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
 
         notificationManager.notify(id, notification)
     }
-
-    /* ========================================================================= *//* HELPER FUNCTIONS                                                          *//* ========================================================================= */
 
     private fun formatBytes(bytes: Long): String {
         return when {
@@ -337,10 +241,6 @@ class ModelDownloadService : Service() {
             bytes < 1024 * 1024 * 1024 -> "%.2f MB".format(bytes / (1024.0 * 1024))
             else -> "%.2f GB".format(bytes / (1024.0 * 1024 * 1024))
         }
-    }
-
-    private fun updateProgress(url: String, progress: DownloadProgress) {
-        _downloadProgress.value += (url to progress)
     }
 
     companion object {
@@ -352,6 +252,7 @@ class ModelDownloadService : Service() {
 
         // Intent extras
         private const val EXTRA_MODEL_NAME = "extra_model_name"
+        private const val EXTRA_MODEL_PATH = "extra_model_path"
         private const val EXTRA_MODEL_URL = "extra_model_url"
         private const val EXTRA_MODEL_ID = "extra_model_id"
         private const val EXTRA_PROVIDER_NAME = "extra_provider_name"
@@ -366,22 +267,14 @@ class ModelDownloadService : Service() {
         private const val CHANNEL_ID = "model_download_channel"
         private const val NOTIFICATION_ID_START = 1000
 
-        // Download configuration
-        private const val BUFFER_SIZE = 8192
-        private const val PROGRESS_UPDATE_INTERVAL = 500L // ms
-
-        // Shared download progress state
-        private val _downloadProgress = MutableStateFlow<Map<String, DownloadProgress>>(emptyMap())
-        val downloadProgress: StateFlow<Map<String, DownloadProgress>> =
-            _downloadProgress.asStateFlow()
-
         /**
-         * Starts a model download via the service.
+         * Starts a model download via the service
          */
         fun startDownload(context: Context, modelData: ModelData) {
             val intent = Intent(context, ModelDownloadService::class.java).apply {
                 action = ACTION_START_DOWNLOAD
                 putExtra(EXTRA_MODEL_NAME, modelData.modelName)
+                putExtra(EXTRA_MODEL_PATH, modelData.modelPath)
                 putExtra(EXTRA_MODEL_URL, modelData.modelUrl)
                 putExtra(EXTRA_MODEL_ID, modelData.id)
                 putExtra(EXTRA_PROVIDER_NAME, modelData.providerName)
@@ -396,22 +289,15 @@ class ModelDownloadService : Service() {
         }
 
         /**
-         * Cancels an active download.
+         * Cancels an active download
          */
-        fun cancelDownload(url: String) {
-            _downloadProgress.value = _downloadProgress.value.toMutableMap().apply {
-                remove(url)
+        fun cancelDownload(context: Context, url: String) {
+            val intent = Intent(context, ModelDownloadService::class.java).apply {
+                action = ACTION_CANCEL_DOWNLOAD
+                putExtra(EXTRA_DOWNLOAD_URL, url)
             }
+
+            context.startService(intent)
         }
     }
 }
-
-/**
- * Data class representing download progress for a model.
- */
-data class DownloadProgress(
-    val isDownloading: Boolean = false,
-    val progress: Float = 0f,
-    val isComplete: Boolean = false,
-    val errorMessage: String? = null
-)

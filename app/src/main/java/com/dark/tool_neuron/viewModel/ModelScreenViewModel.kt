@@ -8,9 +8,10 @@ import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.model.ModelProvider
 import com.dark.ai_module.model.OpenRouterModel
 import com.dark.ai_module.model.toModelData
+import com.dark.ai_module.workers.DownloadState
+import com.dark.ai_module.workers.ModelInstallationManager
 import com.dark.ai_module.workers.ModelManager
 import com.dark.tool_neuron.data.UserPrefs
-import com.dark.tool_neuron.model.DownloadState
 import com.dark.tool_neuron.service.ModelDownloadService
 import com.dark.tool_neuron.util.initOpenRouterFromPrefs
 import kotlinx.coroutines.Dispatchers
@@ -21,12 +22,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -36,7 +37,7 @@ import java.net.URL
  * Features:
  * - Observes installed models from database
  * - Manages OpenRouter API configuration and model fetching
- * - Handles model downloads via background service
+ * - Handles model downloads via ModelInstallationManager
  * - Provides real-time download progress tracking
  */
 class ModelScreenViewModel : ViewModel() {
@@ -48,10 +49,6 @@ class ModelScreenViewModel : ViewModel() {
     // All installed models (GGUF + OpenRouter + Sherpa)
     private val _models = MutableStateFlow<List<ModelData>>(emptyList())
     val models: StateFlow<List<ModelData>> = _models.asStateFlow()
-
-    // Download states for active downloads
-    private val _downloadStates = MutableStateFlow<Map<String, DownloadState>>(emptyMap())
-    val downloadStates: StateFlow<Map<String, DownloadState>> = _downloadStates.asStateFlow()
 
     // OpenRouter API configuration
     private val _openRouterApiKey = MutableStateFlow("")
@@ -86,7 +83,7 @@ class ModelScreenViewModel : ViewModel() {
 
     // Count of models by provider
     val modelCounts: StateFlow<Map<ModelProvider, Int>> = _models
-        .combine(_downloadStates) { models, downloads ->
+        .combine(ModelInstallationManager.downloadProgress) { models, downloads ->
             mapOf(
                 ModelProvider.LocalGGUF to models.count {
                     it.providerName == ModelProvider.LocalGGUF.toString()
@@ -102,11 +99,17 @@ class ModelScreenViewModel : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     // Active downloads count
-    val activeDownloadsCount: StateFlow<Int> = _downloadStates
+    val activeDownloadsCount: StateFlow<Int> = ModelInstallationManager.downloadProgress
         .combine(_models) { states, _ ->
-            states.count { it.value.isDownloading }
+            states.count { (_, state) ->
+                state is com.dark.ai_module.workers.DownloadState.Downloading
+            }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    // Download progress for UI
+    val downloadProgress: StateFlow<Map<String, DownloadState>> =
+        ModelInstallationManager.downloadProgress
 
     /* ========================================================================= */
     /* INITIALIZATION                                                            */
@@ -114,7 +117,6 @@ class ModelScreenViewModel : ViewModel() {
 
     init {
         observeModels()
-        observeDownloadProgress()
     }
 
     /* ========================================================================= */
@@ -138,26 +140,6 @@ class ModelScreenViewModel : ViewModel() {
                     .filter { it.providerName == ModelProvider.OpenRouter.toString() }
                     .map { it.toOpenRouterModel() }
             }
-    }
-
-    /**
-     * Observes download progress from the ModelDownloadService.
-     */
-    private fun observeDownloadProgress() = viewModelScope.launch {
-        ModelDownloadService.downloadProgress.collectLatest { progressMap ->
-            _downloadStates.update { currentStates ->
-                val updated = currentStates.toMutableMap()
-                progressMap.forEach { (url, progress) ->
-                    updated[url] = DownloadState(
-                        isDownloading = progress.isDownloading,
-                        progress = progress.progress,
-                        isComplete = progress.isComplete,
-                        errorMessage = progress.errorMessage
-                    )
-                }
-                updated
-            }
-        }
     }
 
     /* ========================================================================= */
@@ -241,8 +223,15 @@ class ModelScreenViewModel : ViewModel() {
 
         viewModelScope.launch {
             try {
-                ModelManager.addModel(model.toModelData())
-                Log.i(TAG, "Successfully added OpenRouter model: ${model.name}")
+                val modelData = model.toModelData()
+                val result = ModelInstallationManager.installModel(modelData)
+
+                result.onSuccess {
+                    Log.i(TAG, "Successfully added OpenRouter model: ${model.name}")
+                }.onFailure { error ->
+                    Log.e(TAG, "Failed to persist OpenRouter model: ${error.message}", error)
+                    _fetchError.value = "Failed to add model: ${error.message}"
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to persist OpenRouter model: ${e.message}", e)
                 _fetchError.value = "Failed to add model: ${e.message}"
@@ -353,53 +342,56 @@ class ModelScreenViewModel : ViewModel() {
     /* ========================================================================= */
 
     /**
-     * Starts downloading a model using the background ModelDownloadService.
+     * Starts downloading a model using ModelInstallationManager.
+     * Can optionally use background service for notifications.
      */
-    fun startDownload(modelData: ModelData, context: Context) {
+    fun startDownload(modelData: ModelData, context: Context, useService: Boolean = true) {
         val url = modelData.modelUrl
         if (url.isNullOrBlank()) {
             Log.e(TAG, "Cannot start download: Model URL is null or blank")
             return
         }
 
-        // Check if already downloading
-        if (_downloadStates.value[url]?.isDownloading == true) {
-            Log.w(TAG, "Download already in progress for: ${modelData.modelName}")
-            return
-        }
-
-        // Initialize download state
-        _downloadStates.update {
-            it + (url to DownloadState(isDownloading = true))
-        }
-
-        // Start download service
-        ModelDownloadService.startDownload(context, modelData)
-
-        Log.i(TAG, "Started download for: ${modelData.modelName}")
-    }
-
-    /**
-     * Cancels an active download and cleans up resources.
-     */
-    fun cancelDownload(modelName: String, url: String) {
         viewModelScope.launch {
             try {
-                ModelDownloadService.cancelDownload(url)
+                // Check if already downloading
+                val currentState = ModelInstallationManager.downloadProgress.first()[url]
+                if (currentState is DownloadState.Downloading) {
+                    Log.w(TAG, "Download already in progress for: ${modelData.modelName}")
+                    return@launch
+                }
 
-                // Clean up partial file
-                withContext(Dispatchers.IO) {
-                    val file = File(url)
-                    if (file.exists()) {
-                        file.delete()
-                        Log.i(TAG, "Deleted partial download file: $url")
+                if (useService) {
+                    // Use foreground service with notifications
+                    ModelDownloadService.startDownload(context, modelData)
+                } else {
+                    // Direct download without service
+                    val result = ModelInstallationManager.downloadAndInstallModel(modelData) { progress ->
+                        Log.d(TAG, "Download progress for ${modelData.modelName}: $progress%")
+                    }
+
+                    result.onSuccess { installedModel ->
+                        Log.i(TAG, "Successfully downloaded and installed: ${installedModel.modelName}")
+                    }.onFailure { error ->
+                        Log.e(TAG, "Download failed for ${modelData.modelName}: ${error.message}", error)
                     }
                 }
 
-                // Update state
-                _downloadStates.update {
-                    it + (url to DownloadState(isDownloading = false))
-                }
+                Log.i(TAG, "Started download for: ${modelData.modelName}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error starting download: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
+     * Cancels an active download.
+     */
+    fun cancelDownload(modelName: String, url: String, context: Context) {
+        viewModelScope.launch {
+            try {
+                // Cancel via service
+                ModelDownloadService.cancelDownload(context, url)
 
                 Log.i(TAG, "Cancelled download for: $modelName")
             } catch (e: Exception) {
@@ -418,8 +410,13 @@ class ModelScreenViewModel : ViewModel() {
     fun addModel(model: ModelData) {
         viewModelScope.launch {
             try {
-                ModelManager.addModel(model)
-                Log.i(TAG, "Successfully added model: ${model.modelName}")
+                val result = ModelInstallationManager.installModel(model)
+
+                result.onSuccess {
+                    Log.i(TAG, "Successfully added model: ${model.modelName}")
+                }.onFailure { error ->
+                    Log.e(TAG, "Failed to add model: ${error.message}", error)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to add model: ${e.message}", e)
             }
@@ -440,48 +437,35 @@ class ModelScreenViewModel : ViewModel() {
                     return@launch
                 }
 
-                // Delete file only for non-imported local GGUF models
+                // Determine if file should be deleted
                 val shouldDeleteFile = model.providerName == ModelProvider.LocalGGUF.toString()
                         && !model.isImported
 
                 if (shouldDeleteFile) {
-                    deleteModelFile(model)
+                    // Delete model with file cleanup
+                    val result = ModelInstallationManager.deleteModel(model.id, deleteFile = true)
+
+                    result.onSuccess {
+                        Log.i(TAG, "Successfully removed model and file: $name")
+                    }.onFailure { error ->
+                        Log.e(TAG, "Failed to remove model: ${error.message}", error)
+                    }
                 } else {
+                    // Delete model but keep file
                     Log.i(TAG, "Skipping file deletion for: ${model.modelName} " +
                             "(imported=${model.isImported}, provider=${model.providerName})")
+
+                    val result = ModelInstallationManager.deleteModel(model.id, deleteFile = false)
+
+                    result.onSuccess {
+                        Log.i(TAG, "Successfully removed model from database: $name")
+                    }.onFailure { error ->
+                        Log.e(TAG, "Failed to remove model: ${error.message}", error)
+                    }
                 }
-
-                // Remove from database
-                ModelManager.removeModel(name)
-                Log.i(TAG, "Successfully removed model from database: $name")
-
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to remove model: ${e.message}", e)
             }
-        }
-    }
-
-    /**
-     * Deletes the physical model file from storage.
-     */
-    private suspend fun deleteModelFile(model: ModelData) {
-        withContext(Dispatchers.IO) {
-            model.modelUrl?.let { path ->
-                try {
-                    val file = File(path)
-                    if (file.exists()) {
-                        if (file.delete()) {
-                            Log.i(TAG, "Deleted model file: $path")
-                        } else {
-                            Log.w(TAG, "Failed to delete model file: $path")
-                        }
-                    } else {
-                        Log.w(TAG, "Model file not found: $path")
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error deleting model file: ${e.message}", e)
-                }
-            } ?: Log.w(TAG, "Model URL is null for: ${model.modelName}")
         }
     }
 
@@ -491,7 +475,7 @@ class ModelScreenViewModel : ViewModel() {
     fun checkIfInstalled(modelName: String, onResult: (Boolean) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val exists = ModelManager.checkIfInstalled(modelName)
+                val exists = ModelInstallationManager.isModelInstalled(modelName)
                 withContext(Dispatchers.Main) {
                     onResult(exists)
                 }

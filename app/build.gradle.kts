@@ -8,9 +8,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.ksp)
-    alias(libs.plugins.gms.services)
     alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.crashlytics)
 }
 val localPropertiesFile = rootProject.file("local.properties")
 
@@ -64,11 +62,6 @@ android {
     }
 
     dependencies {
-        //FIREBASE
-        implementation(platform(libs.firebase.bom))
-        implementation(libs.firebase.firestore.ktx)
-        implementation(libs.firebase.crashlytics)
-        implementation(libs.firebase.database)
 
         //NET
         implementation(libs.jsoup)

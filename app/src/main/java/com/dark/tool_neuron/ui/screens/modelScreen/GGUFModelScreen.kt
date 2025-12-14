@@ -79,7 +79,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.model.ModelProvider
 import com.dark.ai_module.model.ModelType
-import com.dark.tool_neuron.model.DownloadState
+import com.dark.ai_module.workers.DownloadState
 import com.dark.tool_neuron.model.GGUFModels
 import com.dark.tool_neuron.ui.theme.rDP
 import com.dark.tool_neuron.ui.theme.rSp
@@ -95,7 +95,7 @@ fun GGUFModelScreen(
     modelScreenViewModel: ModelScreenViewModel = viewModel()
 ) {
     val models = viewModel.ggufModels.collectAsStateWithLifecycle()
-    val downloadStates = modelScreenViewModel.downloadStates.collectAsStateWithLifecycle()
+    val downloadStates = modelScreenViewModel.downloadProgress.collectAsStateWithLifecycle()
     val installedModels = modelScreenViewModel.models.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -131,7 +131,7 @@ fun GGUFModelScreen(
                             },
                             onCancelDownload = {
                                 modelScreenViewModel.cancelDownload(
-                                    model.modelName, model.modelFileLink
+                                    model.modelName, model.modelFileLink, context
                                 )
                             },
                             onDelete = {
@@ -273,8 +273,8 @@ fun parseModelSize(sizeStr: String): Double {
 }
 
 @Composable
-fun DownloadProgressSection(
-    progress: Float,
+private fun DownloadProgressSection(
+    progress: Float,  // This is 0-100
     onCancel: () -> Unit
 ) {
     Column(
@@ -292,7 +292,7 @@ fun DownloadProgressSection(
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
-                text = "${(progress * 100).toInt()}%",
+                text = "${progress.toInt()}%",  // Already 0-100
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -309,7 +309,7 @@ fun DownloadProgressSection(
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             PixelProgressBar(
-                progress = progress,
+                progress = progress / 100f,  // Convert to 0-1 for the progress bar
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -336,7 +336,7 @@ fun DownloadProgressSection(
 }
 
 @Composable
-fun PixelProgressBar(
+private fun PixelProgressBar(
     progress: Float,
     modifier: Modifier = Modifier
 ) {
@@ -386,7 +386,7 @@ fun PixelProgressBar(
 }
 
 @Composable
-fun InstalledSection(onDelete: () -> Unit) {
+private fun InstalledSection(onDelete: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))
@@ -434,7 +434,7 @@ fun InstalledSection(onDelete: () -> Unit) {
 }
 
 @Composable
-fun ErrorSection(
+private fun ErrorSection(
     errorMessage: String, onRetry: () -> Unit
 ) {
     Column(
@@ -548,7 +548,7 @@ fun EmptyState() {
 // Extension function to convert GGUFModels to ModelData
 fun GGUFModels.toModelData(context: Context): ModelData {
     val modelsDir = File(context.filesDir, "models")
-    val modelFile = File(modelsDir, modelName)
+    val modelFile = File(modelsDir, "${modelName}.gguf")
 
     return ModelData(
         modelName = modelName,
@@ -776,48 +776,60 @@ fun ModelCard(
             Spacer(modifier = Modifier.height(rDP(16.dp)))
 
             // Action Button Section
-            when {
-                downloadState?.isDownloading == true -> {
+            when (downloadState) {
+                is DownloadState.Downloading -> {
                     DownloadProgressSection(
-                        progress = downloadState.progress, onCancel = onCancelDownload
+                        progress = downloadState.progress,
+                        onCancel = onCancelDownload
                     )
                 }
 
-                downloadState?.isComplete == true || isInstalled -> {
+                is DownloadState.Complete -> {
                     InstalledSection(onDelete = onDelete)
                 }
 
-                downloadState?.errorMessage != null -> {
-                    ErrorSection(
-                        errorMessage = downloadState.errorMessage!!, onRetry = onDownload
-                    )
+                // If already installed (from database, not from download state)
+                null -> {
+                    if (isInstalled) {
+                        InstalledSection(onDelete = onDelete)
+                    } else {
+                        // Show download button
+                        Button(
+                            onClick = onDownload,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(rDP(52.dp)),
+                            shape = RoundedCornerShape(rDP(12.dp)),
+                            enabled = compatibility.rating != CompatibilityRating.INCOMPATIBLE,
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = rDP(0.dp),
+                                pressedElevation = rDP(0.dp)
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = null,
+                                modifier = Modifier.size(rDP(20.dp))
+                            )
+                            Spacer(modifier = Modifier.width(rDP(10.dp)))
+                            Text(
+                                text = if (compatibility.rating == CompatibilityRating.INCOMPATIBLE)
+                                    "Incompatible with Device"
+                                else "Download Model",
+                                style = MaterialTheme.typography.labelLarge.copy(
+                                    fontSize = rSp(MaterialTheme.typography.labelLarge.fontSize)
+                                ),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
 
-                else -> {
-                    Button(
-                        onClick = onDownload,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(rDP(52.dp)),
-                        shape = RoundedCornerShape(rDP(12.dp)),
-                        enabled = compatibility.rating != CompatibilityRating.INCOMPATIBLE,
-                        elevation = ButtonDefaults.buttonElevation(
-                            defaultElevation = rDP(0.dp), pressedElevation = rDP(0.dp)
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = null,
-                            modifier = Modifier.size(rDP(20.dp))
-                        )
-                        Spacer(modifier = Modifier.width(rDP(10.dp)))
-                        Text(
-                            text = if (compatibility.rating == CompatibilityRating.INCOMPATIBLE) "Incompatible with Device"
-                            else "Download Model",
-                            style = MaterialTheme.typography.labelLarge.copy(fontSize = rSp(MaterialTheme.typography.labelLarge.fontSize)),
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                is DownloadState.Failed -> {
+                    ErrorSection(
+                        errorMessage = downloadState.error,
+                        onRetry = onDownload
+                    )
                 }
             }
         }
