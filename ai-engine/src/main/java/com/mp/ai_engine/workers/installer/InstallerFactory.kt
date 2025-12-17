@@ -1,6 +1,7 @@
 package com.mp.ai_engine.workers.installer
 
 import com.mp.ai_engine.models.llm_models.CloudModel
+import com.mp.ai_engine.workers.installer.internal_workers.DiffusionModelInstaller
 import com.mp.ai_engine.workers.installer.internal_workers.GGUFModelInstaller
 import com.mp.ai_engine.workers.installer.internal_workers.OpenRouterModelInstaller
 import com.mp.ai_engine.workers.installer.internal_workers.SherpaSTTModelInstaller
@@ -16,7 +17,8 @@ object InstallerFactory {
             GGUFModelInstaller(),
             SherpaTTSModelInstaller(),
             SherpaSTTModelInstaller(),
-            OpenRouterModelInstaller()
+            OpenRouterModelInstaller(),
+            DiffusionModelInstaller()
         )
     }
 

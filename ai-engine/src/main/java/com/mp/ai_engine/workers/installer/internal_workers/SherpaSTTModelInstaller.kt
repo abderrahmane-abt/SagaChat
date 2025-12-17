@@ -6,6 +6,7 @@ import com.mp.ai_engine.models.llm_models.CloudModel
 import com.mp.ai_engine.models.llm_models.ModelType
 import com.mp.ai_engine.models.llm_models.toSherpaSTTModel
 import com.mp.ai_engine.util.downloadFile
+import com.mp.ai_engine.util.unzipFile
 import com.mp.ai_engine.workers.installer.DownloadEvents
 import com.mp.ai_engine.workers.installer.SuperInstaller
 import java.io.File
@@ -87,57 +88,6 @@ class SherpaSTTModelInstaller : SuperInstaller() {
             file.deleteRecursively()
         }
         return SherpaSTTModelManager.removeModel(modelId)
-    }
-
-    fun unzipFile(zipFile: File, outputDir: File) {
-        Log.d(TAG, "Unzipping ${zipFile.name} to ${outputDir.absolutePath}")
-
-        if (!zipFile.exists()) {
-            throw IllegalArgumentException("Zip file does not exist: ${zipFile.absolutePath}")
-        }
-
-        // Ensure output directory exists
-        if (!outputDir.exists()) {
-            outputDir.mkdirs()
-        }
-
-        zipFile.inputStream().use { fileInputStream ->
-            ZipInputStream(fileInputStream).use { zipInputStream ->
-                var entry = zipInputStream.nextEntry
-
-                while (entry != null) {
-                    val entryFile = File(outputDir, entry.name)
-
-                    // Security check: prevent zip slip attack
-                    val canonicalDestPath = outputDir.canonicalPath
-                    val canonicalEntryPath = entryFile.canonicalPath
-
-                    if (!canonicalEntryPath.startsWith(canonicalDestPath + File.separator)) {
-                        throw SecurityException("Entry is outside of the target directory: ${entry.name}")
-                    }
-
-                    if (entry.isDirectory) {
-                        // Create directory
-                        entryFile.mkdirs()
-                        Log.v(TAG, "Created directory: ${entryFile.name}")
-                    } else {
-                        // Ensure parent directory exists
-                        entryFile.parentFile?.mkdirs()
-
-                        // Extract file
-                        entryFile.outputStream().use { outputStream ->
-                            zipInputStream.copyTo(outputStream)
-                        }
-                        Log.v(TAG, "Extracted file: ${entryFile.name} (${entryFile.length()} bytes)")
-                    }
-
-                    zipInputStream.closeEntry()
-                    entry = zipInputStream.nextEntry
-                }
-            }
-        }
-
-        Log.i(TAG, "Successfully unzipped ${zipFile.name}")
     }
 
     companion object {

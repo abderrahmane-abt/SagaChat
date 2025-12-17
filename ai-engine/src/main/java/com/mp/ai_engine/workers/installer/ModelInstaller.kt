@@ -2,6 +2,7 @@ package com.mp.ai_engine.workers.installer
 
 import android.content.Context
 import android.util.Log
+import com.mp.ai_engine.managers.DiffusionModelManager
 import com.mp.ai_engine.managers.GGUFModelManager
 import com.mp.ai_engine.managers.OpenRouterModelManager
 import com.mp.ai_engine.managers.SherpaSTTModelManager
@@ -25,6 +26,7 @@ object ModelInstaller {
     private const val DEFAULT_MODELS_DIR = "ai_models"
     private const val GGUF_DIR = "gguf"
     private const val SHERPA_TTS_DIR = "sherpa_tts"
+    private const val DIFFUSION_DIR = "diffusion"
     private const val SHERPA_STT_DIR = "sherpa_stt"
     private const val OPENROUTER_DIR = "openrouter"
 
@@ -43,6 +45,7 @@ object ModelInstaller {
         OpenRouterModelManager.init(context)
         SherpaTTSModelManager.init(context)
         SherpaSTTModelManager.init(context)
+        DiffusionModelManager.init(context)
         Log.i(TAG, "ModelInstaller initialized with base dir: ${baseModelsDir.absolutePath}")
     }
 
@@ -89,6 +92,37 @@ object ModelInstaller {
         }
     }
 
+    suspend fun installLocalModels(
+        cloudModel: CloudModel,
+        localPath: String,
+        onSuccess: (() -> Unit)? = null,
+        onError: ((String) -> Unit)? = null
+    ) {
+        checkInitialized()
+
+        try {
+            val installer = InstallerFactory.getInstaller(cloudModel)
+            if (installer == null) {
+                onError?.invoke("No Installer Found For this Model")
+                return
+            }
+            val result = installer.installModel(
+                cloudModel, File(localPath), baseModelsDir
+            )
+
+            if (result.isSuccess) {
+                onSuccess?.invoke()
+            } else {
+                onError?.invoke(result.exceptionOrNull()?.message ?: "Unknown Error")
+            }
+
+        } catch (e: Exception) {
+            val error = "Failed to start installation: ${e.message}"
+            Log.e(TAG, error, e)
+            onError?.invoke(error)
+        }
+    }
+
     /**
      * Cancel an ongoing model download
      */
@@ -102,16 +136,14 @@ object ModelInstaller {
      * Delete a model from storage
      */
     suspend fun deleteModel(
-        modelName: String,
-        onSuccess: (() -> Unit)? = null,
-        onError: ((String) -> Unit)? = null
+        modelId: String, onSuccess: (() -> Unit)? = null, onError: ((String) -> Unit)? = null
     ) = withContext(Dispatchers.IO) {
         checkInitialized()
 
         try {
-            val searchResult = findModel(modelName)
+            val searchResult = findModel(modelId)
             if (searchResult == null) {
-                val error = "Model not found: $modelName"
+                val error = "Model not found: $modelId"
                 Log.e(TAG, error)
             }
 
@@ -139,7 +171,7 @@ object ModelInstaller {
                 }
 
                 if (deleted) {
-                    installer.deleteModel(searchResult?.modelId?:return@withContext)
+                    installer.deleteModel(searchResult?.modelId ?: return@withContext)
                     Log.i(TAG, "Successfully deleted: ${searchResult.modelName}")
                     onSuccess?.invoke()
                 } else {
@@ -170,8 +202,9 @@ object ModelInstaller {
             val targetDir = getModelTypeDirectory(cloudModel)
             val modelLocation = installer.determineOutputLocation(cloudModel, targetDir)
 
-            val exists = modelLocation.exists() &&
-                    (modelLocation.isFile || (modelLocation.isDirectory && modelLocation.listFiles()?.isNotEmpty() == true))
+            val exists =
+                modelLocation.exists() && (modelLocation.isFile || (modelLocation.isDirectory && modelLocation.listFiles()
+                    ?.isNotEmpty() == true))
 
             Log.d(TAG, "Model ${cloudModel.modelName} installed: $exists")
             exists
@@ -198,93 +231,6 @@ object ModelInstaller {
         } catch (e: Exception) {
             Log.e(TAG, "Error calculating model size: ${e.message}", e)
             0L
-        }
-    }
-
-    /**
-     * Get all installed models directory info
-     */
-    fun getInstalledModelsInfo(): Map<String, Long> {
-        checkInitialized()
-
-        return try {
-            mapOf(
-                "gguf" to calculateSize(File(baseModelsDir, GGUF_DIR)),
-                "sherpa_tts" to calculateSize(File(baseModelsDir, SHERPA_TTS_DIR)),
-                "sherpa_stt" to calculateSize(File(baseModelsDir, SHERPA_STT_DIR)),
-                "openrouter" to calculateSize(File(baseModelsDir, OPENROUTER_DIR)),
-                "total" to calculateSize(baseModelsDir)
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Error getting installed models info: ${e.message}", e)
-            emptyMap()
-        }
-    }
-
-    /**
-     * Clear all downloaded models (DANGEROUS!)
-     */
-    suspend fun clearAllModels(
-        onSuccess: (() -> Unit)? = null,
-        onError: ((String) -> Unit)? = null
-    ) = withContext(Dispatchers.IO) {
-        checkInitialized()
-
-        try {
-            if (baseModelsDir.exists()) {
-                val deleted = baseModelsDir.deleteRecursively()
-                if (deleted) {
-                    ensureDirectoriesExist()
-                    Log.i(TAG, "All models cleared successfully")
-                    onSuccess?.invoke()
-                } else {
-                    val error = "Failed to clear models directory"
-                    Log.e(TAG, error)
-                    onError?.invoke(error)
-                }
-            } else {
-                Log.w(TAG, "Models directory doesn't exist")
-                onSuccess?.invoke()
-            }
-        } catch (e: Exception) {
-            val error = "Error clearing models: ${e.message}"
-            Log.e(TAG, error, e)
-            onError?.invoke(error)
-        }
-    }
-
-    /**
-     * Verify model integrity
-     */
-    suspend fun verifyModel(cloudModel: CloudModel): Boolean = withContext(Dispatchers.IO) {
-        checkInitialized()
-
-        try {
-            val installer = InstallerFactory.getInstaller(cloudModel) ?: return@withContext false
-            val targetDir = getModelTypeDirectory(cloudModel)
-            val modelLocation = installer.determineOutputLocation(cloudModel, targetDir)
-
-            when {
-                !modelLocation.exists() -> {
-                    Log.w(TAG, "Model file not found: ${modelLocation.absolutePath}")
-                    false
-                }
-                modelLocation.isFile -> {
-                    val valid = modelLocation.length() > 0
-                    Log.d(TAG, "Model file valid: $valid (size: ${modelLocation.length()})")
-                    valid
-                }
-                modelLocation.isDirectory -> {
-                    val files = modelLocation.listFiles()
-                    val valid = files != null && files.isNotEmpty()
-                    Log.d(TAG, "Model directory valid: $valid (files: ${files?.size ?: 0})")
-                    valid
-                }
-                else -> false
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error verifying model: ${e.message}", e)
-            false
         }
     }
 
@@ -318,6 +264,7 @@ object ModelInstaller {
         File(baseModelsDir, SHERPA_TTS_DIR).mkdirs()
         File(baseModelsDir, SHERPA_STT_DIR).mkdirs()
         File(baseModelsDir, OPENROUTER_DIR).mkdirs()
+        File(baseModelsDir, DIFFUSION_DIR).mkdirs()
     }
 
     private fun calculateSize(file: File): Long {
@@ -342,22 +289,46 @@ object ModelInstaller {
     private fun getModelTypeDirectory(cloudModel: CloudModel): File {
         checkInitialized()
         return when {
-            cloudModel.providerName.contains("GGUF", ignoreCase = true) ->
-                File(baseModelsDir, GGUF_DIR)
-            cloudModel.providerName.contains("SHERPA", ignoreCase = true) &&
-                    cloudModel.providerName.contains("TTS", ignoreCase = true) ->
-                File(baseModelsDir, SHERPA_TTS_DIR)
-            cloudModel.providerName.contains("SHERPA", ignoreCase = true) &&
-                    cloudModel.providerName.contains("STT", ignoreCase = true) ->
-                File(baseModelsDir, SHERPA_STT_DIR)
-            cloudModel.providerName.contains("OPENROUTER", ignoreCase = true) ->
-                File(baseModelsDir, OPENROUTER_DIR)
+            cloudModel.providerName.contains("GGUF", ignoreCase = true) -> File(
+                baseModelsDir,
+                GGUF_DIR
+            )
+
+            cloudModel.providerName.contains(
+                "SHERPA",
+                ignoreCase = true
+            ) && cloudModel.providerName.contains("TTS", ignoreCase = true) -> File(
+                baseModelsDir,
+                SHERPA_TTS_DIR
+            )
+
+            cloudModel.providerName.contains(
+                "SHERPA",
+                ignoreCase = true
+            ) && cloudModel.providerName.contains("STT", ignoreCase = true) -> File(
+                baseModelsDir,
+                SHERPA_STT_DIR
+            )
+
+            cloudModel.providerName.contains(
+                "DIFFUSION",
+                ignoreCase = true
+            ) -> File(
+                baseModelsDir,
+                DIFFUSION_DIR
+            )
+
+            cloudModel.providerName.contains("OPENROUTER", ignoreCase = true) -> File(
+                baseModelsDir,
+                OPENROUTER_DIR
+            )
+
             else -> baseModelsDir
         }
     }
 
-    suspend fun findModel(modelName: String): ModelSearchResult? {
-        GGUFModelManager.getModelByName(modelName)?.let {
+    suspend fun findModel(modelID: String): ModelSearchResult? {
+        GGUFModelManager.getModel(modelID)?.let {
             return ModelSearchResult(
                 modelId = it.id,
                 modelName = it.modelName,
@@ -367,7 +338,7 @@ object ModelInstaller {
             )
         }
 
-        OpenRouterModelManager.getModelByName(modelName)?.let {
+        OpenRouterModelManager.getModel(modelID)?.let {
             return ModelSearchResult(
                 modelId = it.id,
                 modelName = it.modelName,
@@ -377,7 +348,7 @@ object ModelInstaller {
             )
         }
 
-        SherpaTTSModelManager.getModelByName(modelName)?.let {
+        SherpaTTSModelManager.getModel(modelID)?.let {
             return ModelSearchResult(
                 modelId = it.id,
                 modelName = it.modelName,
@@ -387,13 +358,23 @@ object ModelInstaller {
             )
         }
 
-        SherpaSTTModelManager.getModelByName(modelName)?.let {
+        SherpaSTTModelManager.getModel(modelID)?.let {
             return ModelSearchResult(
                 modelId = it.id,
                 modelName = it.modelName,
                 modelType = ModelType.STT,
                 provider = ModelProvider.SHERPA,
                 sherpaSTTModel = it
+            )
+        }
+
+        DiffusionModelManager.getModel(modelID)?.let {
+            return ModelSearchResult(
+                modelId = it.id,
+                modelName = it.name,
+                modelType = ModelType.IMAGE_GEN,
+                provider = ModelProvider.DIFFUSION,
+                diffusionModel = it
             )
         }
 

@@ -72,10 +72,6 @@ object GGUFModelManager{
         return dao.getByName(name)
     }
 
-    suspend fun getModelByID(id: String): GGUFDatabaseModel? {
-        return dao.getById(id)
-    }
-
     suspend fun getAllModels(): List<GGUFDatabaseModel> {
         return dao.getAll()
     }

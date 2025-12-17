@@ -52,12 +52,14 @@ android {
 
 dependencies {
     implementation(":ai-core-release@aar")
+
     //DATABASE
     implementation(libs.androidx.room.runtime)
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.room.ktx)
     implementation(libs.kotlinx.serialization.json)
-
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.okhttp)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     testImplementation(libs.junit)

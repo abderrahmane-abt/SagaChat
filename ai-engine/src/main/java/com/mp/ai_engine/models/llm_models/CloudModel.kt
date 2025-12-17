@@ -1,6 +1,7 @@
 package com.mp.ai_engine.models.llm_models
 
 import android.util.Log
+import com.mp.ai_engine.models.image_models.DiffusionDatabaseModel
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -119,5 +120,19 @@ fun CloudModel.toSherpaSTTModel(baseDir: File): SherpaSTTDatabaseModel {
         encoder = meta["encoder"] ?: "",
         decoder = meta["decoder"] ?: "",
         tokens = meta["tokens"] ?: meta["tokens-txt"] ?: ""
+    )
+}
+
+fun CloudModel.toDiffusionModel(baseDir: File): DiffusionDatabaseModel {
+    val meta = metaData
+    val modelDir = File(baseDir, modelName)
+    val runOnCPU = meta["run-on-cpu"].toBoolean()
+
+
+    return DiffusionDatabaseModel(
+        name = modelName,
+        description = modelDescription,
+        modelFolder = modelDir.absolutePath,
+        runOnCpu = runOnCPU,
     )
 }

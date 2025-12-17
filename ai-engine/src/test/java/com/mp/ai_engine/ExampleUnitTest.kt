@@ -1,6 +1,8 @@
 package com.mp.ai_engine
 
+import com.mp.ai_engine.workers.installer.internal_workers.DiffusionModelInstaller
 import com.mp.ai_engine.workers.installer.internal_workers.SherpaSTTModelInstaller
+import kotlinx.coroutines.runBlocking
 import org.junit.Test
 
 import org.junit.Assert.*
@@ -13,7 +15,7 @@ import java.io.File
  */
 class ExampleUnitTest {
     @Test
-    fun addition_isCorrect() {
-        SherpaSTTModelInstaller().unzipFile(File("/home/home/Downloads/sherpa-onnx-whisper-tiny.zip"), File("/home/home/Downloads/"))
+    fun addition_isCorrect() = runBlocking {
+        DiffusionModelInstaller().unzipFile(File("/home/home/Downloads/HyperSpireV5_qnn2.28_min.zip"), File("/home/home/Downloads/"))
     }
 }
