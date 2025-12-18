@@ -24,7 +24,7 @@ data class DiffusionDatabaseModel(
     val negativePrompt: String = "",
     val width: Int = 512,
     val height: Int = 512,
-    val runOnCpu: Boolean = true,
+    val runOnCpu: Boolean = false,
     val denoiseStrength: Float = 0.6f,
     val useOpenCL: Boolean = false,
     val scheduler: String = "dpm"

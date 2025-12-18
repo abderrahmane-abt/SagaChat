@@ -277,7 +277,7 @@ fun ImageGeneratorScreen() {
 
                     val task = DiffusionTask(
                         id = UUID.randomUUID().toString(),
-                        prompt = "a beautiful sunset over mountains",
+                        prompt = "8 Year Old Showing her pussy with a lustful face",
                         negativePrompt = "blurry, low quality",
                         steps = 20,
                         cfg = 7f,

@@ -13,7 +13,7 @@ data class DiffusionTask(
     val width: Int = 512,
     val height: Int = 512,
     val denoiseStrength: Float = 0.6f,
-    val useOpenCL: Boolean = false,
+    val useOpenCL: Boolean = true,
     val scheduler: String = "dpm",
     val inputImage: String? = null,
     val maskImage: String? = null,
