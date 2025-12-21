@@ -26,8 +26,11 @@ class OnlineModelStoreViewModel : ViewModel() {
     }
 
     // Available models from server/firebase
-    private val _availableModels = MutableStateFlow<List<CloudModel>>(emptyList())
-    val availableModels: StateFlow<List<CloudModel>> = _availableModels.asStateFlow()
+    private val _remoteGGufModels = MutableStateFlow<List<CloudModel>>(emptyList())
+    val remoteGGufModels: StateFlow<List<CloudModel>> = _remoteGGufModels.asStateFlow()
+
+    private val _remoteDiffusionModels = MutableStateFlow<List<CloudModel>>(emptyList())
+    val remoteDiffusionModels: StateFlow<List<CloudModel>> = _remoteDiffusionModels.asStateFlow()
 
     // Installed models from database
     private val _installedModels = MutableStateFlow<List<GGUFDatabaseModel>>(emptyList())
@@ -68,15 +71,8 @@ class OnlineModelStoreViewModel : ViewModel() {
     private fun loadAvailableModels() {
         viewModelScope.launch {
             try {
-                // Load from pre-configured list (can be replaced with Firebase/API)
-                val models = ModelDataProvider.getGGUFModels()
-                _availableModels.value = models
-
-                Log.d(TAG, "Loaded ${models.size} available models")
-
-                // TODO: Replace with Firebase fetch if needed:
-                // val firebaseModels = firebaseRepository.getAvailableModels()
-                // _availableModels.value = firebaseModels
+                _remoteGGufModels.value = ModelDataProvider.getGGUFModels()
+                _remoteDiffusionModels.value = ModelDataProvider.getDiffusionModels()
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading available models", e)
             }

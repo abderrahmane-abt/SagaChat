@@ -27,7 +27,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -50,7 +49,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -75,20 +73,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.dark.ai_module.model.ModelData
-import com.dark.ai_module.model.ModelType
 import com.dark.tool_neuron.activity.formatBytes
-import com.dark.tool_neuron.model.GGUFModels
 import com.dark.tool_neuron.ui.theme.rDP
 import com.dark.tool_neuron.ui.theme.rSp
-import com.dark.tool_neuron.viewModel.llm_model.ModelScreenViewModel
 import com.dark.tool_neuron.viewModel.modelScreen.OnlineModelStoreViewModel
 import com.mp.ai_engine.models.llm_models.CloudModel
 import com.mp.ai_engine.models.llm_models.GGUFDatabaseModel
-import com.mp.ai_engine.models.llm_models.ModelProvider
 import com.mp.ai_engine.models.llm_models.toGGUFModel
 import com.mp.ai_engine.workers.DownloadState
 import java.io.File
@@ -97,14 +89,14 @@ import java.io.File
 fun GGUFModelScreen(
     viewModel: OnlineModelStoreViewModel = viewModel()
 ) {
-    val availableModels by viewModel.availableModels.collectAsStateWithLifecycle()
+    val remoteGGufModels by viewModel.remoteGGufModels.collectAsStateWithLifecycle()
     val installedModels by viewModel.installedModels.collectAsStateWithLifecycle()
     val downloadsState by viewModel.downloadsState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     Box(modifier = Modifier.fillMaxSize()) {
         when {
-            availableModels.isEmpty() -> {
+            remoteGGufModels.isEmpty() -> {
                 EmptyState()
             }
             else -> {
@@ -114,7 +106,7 @@ fun GGUFModelScreen(
                     verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
                 ) {
                     items(
-                        items = availableModels,
+                        items = remoteGGufModels,
                         key = { it.modelFileLink } // Use download URL as unique key
                     ) { cloudModel ->
                         // Check if model is installed

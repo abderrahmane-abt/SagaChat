@@ -23,8 +23,8 @@ class ModelActivity : ComponentActivity() {
 
         setContent {
             NeuroVerseTheme {
-                //ModelsScreen {  }
-                Screen()
+                ModelsScreen {  }
+                //Screen()
             }
         }
     }

@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.tool_neuron.R
 import com.dark.tool_neuron.activity.GgufPickerActivity
+import com.dark.tool_neuron.ui.screens.modelScreen.DiffusionModelScreen
 import com.dark.tool_neuron.ui.screens.modelScreen.GGUFModelScreen
 import com.dark.tool_neuron.ui.screens.modelScreen.InstalledModelsTab
 import com.dark.tool_neuron.ui.screens.modelScreen.OpenRouterTab
@@ -190,8 +191,8 @@ fun ModelsScreen(onBack: () -> Unit = {}) {
                     when (providers[page]) {
                         ModelProviderTab.LocalGGUF -> GGUFModelScreen()
                         ModelProviderTab.OpenRouter -> OpenRouterTab(viewModel)
-                        ModelProviderTab.SherpaONNX -> SherpaONNXTab(viewModel)
-                        ModelProviderTab.Installed -> InstalledModelsTab(viewModel)
+                        ModelProviderTab.SherpaONNX -> DiffusionModelScreen()
+                        ModelProviderTab.Installed -> InstalledModelsTab()
                     }
                 }
             }

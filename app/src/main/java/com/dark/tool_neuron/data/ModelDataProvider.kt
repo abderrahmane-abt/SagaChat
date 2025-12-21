@@ -1,6 +1,7 @@
 package com.dark.tool_neuron.data
 
 import com.mp.ai_engine.models.llm_models.CloudModel
+import com.mp.ai_engine.models.llm_models.ModelProvider
 import com.mp.ai_engine.models.llm_models.ModelType
 
 /**
@@ -266,6 +267,23 @@ object ModelDataProvider {
                     "supportsStreaming" to "true",
                     "promptCostPer1M" to "30.0",
                     "completionCostPer1M" to "60.0"
+                )
+            )
+        )
+    }
+
+    fun getDiffusionModels(): List<CloudModel>{
+        return listOf(
+            CloudModel(
+                modelName = "AbsoluteReality",
+                modelDescription = "Generates Realistic Images",
+                providerName = "DIFFUSION",
+                modelType = ModelType.IMAGE_GEN,
+                modelFileSize = "980 MB",
+                modelFileLink = "https://huggingface.co/xororz/sd-qnn/resolve/main/AbsoluteReality_qnn2.28_min.zip?download=true",
+                isLocal = false,
+                metaData = mapOf(
+                    "run-on-cpu" to "false"
                 )
             )
         )

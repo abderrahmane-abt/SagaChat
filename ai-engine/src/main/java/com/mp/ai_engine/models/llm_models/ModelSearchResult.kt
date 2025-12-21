@@ -13,7 +13,3 @@ data class ModelSearchResult(
     val sherpaSTTModel: SherpaSTTDatabaseModel? = null,
     val diffusionModel: DiffusionDatabaseModel? = null
 )
-
-enum class ModelProvider {
-    GGUF, OPEN_ROUTER, SHERPA, DIFFUSION
-}

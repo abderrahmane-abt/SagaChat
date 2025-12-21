@@ -79,59 +79,15 @@ data class GGUFDatabaseModel(
     }
 }
 
-/**
- * Check if model file exists
- */
-fun GGUFDatabaseModel.fileExists(): Boolean {
-    return File(modelPath).exists()
-}
-
-/**
- * Get actual file size in human-readable format
- */
-fun GGUFDatabaseModel.getActualFileSize(): String? {
-    val file = File(modelPath)
-    if (!file.exists()) return null
-
-    val bytes = file.length()
-    return when {
-        bytes < 1024 -> "$bytes B"
-        bytes < 1024 * 1024 -> "%.2f KB".format(bytes / 1024.0)
-        bytes < 1024 * 1024 * 1024 -> "%.2f MB".format(bytes / (1024.0 * 1024))
-        else -> "%.2f GB".format(bytes / (1024.0 * 1024 * 1024))
-    }
-}
-
-/**
- * Get tags as list
- */
-fun GGUFDatabaseModel.getTagsList(): List<String> {
-    return tags.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-}
-
-/**
- * Create a copy with updated last used timestamp
- */
-fun GGUFDatabaseModel.markAsUsed(): GGUFDatabaseModel {
-    return copy(lastUsedAt = System.currentTimeMillis())
-}
-
-/**
- * Create download-ready copy with safe defaults
- */
-fun GGUFDatabaseModel.toDownloadModel(): GGUFDatabaseModel {
-    return copy(
-        threads = 4, gpuLayers = 0, useMMAP = true, useMLOCK = false
+fun GGUFDatabaseModel.toCloudModel(): CloudModel {
+    return CloudModel(
+        id = id,
+        modelName = modelName,
+        modelDescription = modelDescription,
+        providerName = ModelProvider.GGUF.toString(),
+        modelType = modelType,
+        modelFileSize = modelFileSize,
+        modelFileLink = modelPath,
+        isLocal = isImported,
     )
-}
-
-/**
- * Check if model supports specific capability
- */
-fun GGUFDatabaseModel.supportsVision(): Boolean {
-    return modelType == ModelType.VLM
-}
-
-fun GGUFDatabaseModel.supportsEmbedding(): Boolean {
-    return modelType == ModelType.EMBEDDING
 }

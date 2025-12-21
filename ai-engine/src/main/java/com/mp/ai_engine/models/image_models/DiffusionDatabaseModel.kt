@@ -2,7 +2,9 @@ package com.mp.ai_engine.models.image_models
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.mp.ai_engine.models.llm_models.CloudModel
 import com.mp.ai_engine.models.llm_models.GGUFDatabaseModel
+import com.mp.ai_engine.models.llm_models.ModelProvider
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.util.UUID
@@ -14,6 +16,8 @@ data class DiffusionDatabaseModel(
     val name: String,
     val description: String,
     val modelFolder: String,
+    val modelSize: String,
+    val isImported: Boolean,
     val generationSize: Int = 512,
     val textEmbeddingSize: Int = 768,
     val defaultPrompt: String = "",
@@ -54,4 +58,12 @@ data class DiffusionDatabaseModel(
     fun toJson(): String {
         return json.encodeToString(this)
     }
+}
+
+fun DiffusionDatabaseModel.toCloudModel(): CloudModel {
+    return CloudModel(
+        id = id,
+        modelName =  name,
+        modelDescription = description,
+    )
 }

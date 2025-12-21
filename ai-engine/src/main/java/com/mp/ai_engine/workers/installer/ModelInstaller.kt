@@ -7,6 +7,7 @@ import com.mp.ai_engine.managers.GGUFModelManager
 import com.mp.ai_engine.managers.OpenRouterModelManager
 import com.mp.ai_engine.managers.SherpaSTTModelManager
 import com.mp.ai_engine.managers.SherpaTTSModelManager
+import com.mp.ai_engine.models.image_models.DiffusionDatabaseModel
 import com.mp.ai_engine.models.llm_models.CloudModel
 import com.mp.ai_engine.models.llm_models.GGUFDatabaseModel
 import com.mp.ai_engine.models.llm_models.ModelProvider
@@ -382,6 +383,10 @@ object ModelInstaller {
      */
     suspend fun getInstalledGGUFModels(): List<GGUFDatabaseModel> {
         return GGUFModelManager.getAllModels()
+    }
+
+    suspend fun getInstalledDiffusionModels(): List<DiffusionDatabaseModel> {
+        return DiffusionModelManager.getAllModels()
     }
 
     // ==================== Private Helpers ====================

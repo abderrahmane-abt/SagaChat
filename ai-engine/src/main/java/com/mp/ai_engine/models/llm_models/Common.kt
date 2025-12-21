@@ -7,3 +7,7 @@ enum class ModelType {
 enum class Architecture {
     LLAMA, QWEN2, GEMMA2, PHI, MISTRAL, DEEPSEEK, OTHER, PHI3
 }
+
+enum class ModelProvider {
+    GGUF, DIFFUSION, OPEN_ROUTER, SHERPA,
+}

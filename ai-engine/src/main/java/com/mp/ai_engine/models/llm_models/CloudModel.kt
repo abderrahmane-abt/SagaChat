@@ -8,6 +8,7 @@ import java.io.File
 
 @Serializable
 data class CloudModel(
+    val id: String = "",
     val modelName: String = "",
     val modelDescription: String = "",
     val providerName: String = "",
@@ -136,5 +137,7 @@ fun CloudModel.toDiffusionModel(baseDir: File): DiffusionDatabaseModel {
         description = modelDescription,
         modelFolder = modelDir.absolutePath,
         runOnCpu = runOnCPU,
+        modelSize = modelFileSize,
+        isImported = isLocal,
     )
 }

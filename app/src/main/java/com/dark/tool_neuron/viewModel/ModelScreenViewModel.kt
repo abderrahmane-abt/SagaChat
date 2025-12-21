@@ -30,15 +30,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-/**
- * ViewModel for managing AI models across different providers (GGUF, OpenRouter, Sherpa ONNX).
- *
- * Features:
- * - Observes installed models from database
- * - Manages OpenRouter API configuration and model fetching
- * - Handles model downloads via ModelInstallationManager
- * - Provides real-time download progress tracking
- */
+
 class ModelScreenViewModel : ViewModel() {
 
     /* ========================================================================= */

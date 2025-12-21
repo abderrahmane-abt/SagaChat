@@ -22,8 +22,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.dark.ai_module.workers.AudioManager
-import com.dark.ai_module.workers.ModelManager
 import com.dark.tool_neuron.BuildConfig
 import com.dark.tool_neuron.model.Screen
 import com.dark.tool_neuron.ui.screens.IntroScreen
@@ -39,12 +37,12 @@ import com.dark.tool_neuron.userdata.ntds.loadEncryptedTree
 import com.dark.tool_neuron.userdata.ntds.saveEncryptedTree
 import com.dark.tool_neuron.util.makeToast
 import com.mp.ai_engine.workers.installer.ModelInstaller
+import com.mp.ai_engine.workers.model.ModelManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.coroutines.coroutineContext
 
 class MainActivity : ComponentActivity() {
 
@@ -132,10 +130,9 @@ class MainActivity : ComponentActivity() {
                                 delay(INTRO_DURATION_MS)
 
                                 val setupCompleted = isSetupCompleted(this@MainActivity)
-                                val hasModels = ModelManager.isAnyModelInstalled()
 
                                 val targetDestination = when {
-                                    !setupCompleted || !hasModels -> {
+                                    !setupCompleted -> {
                                         // Navigate to SetupActivity
                                         startActivity(
                                             Intent(this@MainActivity, SetupActivity::class.java)
@@ -163,7 +160,6 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable(Screen.Home.route) {
-                            ModelManager.init(applicationContext)
                             HomeScreen(onRequestSettingsChange = {
                                 navController.navigate(Screen.Settings.route)
                             }, onDataHubClick = {
@@ -191,7 +187,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private suspend fun determineStartDestination(
+    private fun determineStartDestination(
         isDirectNavigation: Boolean, context: Context
     ): String {
         val prefs = context.getSharedPreferences(PREF_NAME, MODE_PRIVATE)
@@ -222,10 +218,7 @@ class MainActivity : ComponentActivity() {
 
         // Skip intro for regular launches
         Log.d("MainActivity", "Regular launch -> Skip intro")
-        val setupCompleted = isSetupCompleted(context)
-        val hasModels = ModelManager.isAnyModelInstalled()
-
-        return if (setupCompleted && hasModels) {
+        return if (isSetupCompleted(context)) {
             Screen.Home.route
         } else {
             // Will be redirected to SetupActivity from Intro
@@ -276,7 +269,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         lifecycleScope.launch {
-            com.mp.ai_engine.workers.model.ModelManager.init(applicationContext)
+            ModelManager.init(applicationContext)
         }
     }
 
@@ -293,8 +286,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         Log.d("MainActivity", "App destroyed - shutting down ModelManager")
-        com.mp.ai_engine.workers.model.ModelManager.shutdown(applicationContext)
-        AudioManager.shutdown()
+        ModelManager.shutdown(applicationContext)
     }
 
     override fun onStop() {
