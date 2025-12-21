@@ -1,8 +1,12 @@
 package com.dark.tool_neuron.viewModel.home_screen
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.dark.ai_module.model.ModelData
 import com.dark.tool_neuron.model.LocalModel
+import com.dark.tool_neuron.viewModel.chatViewModel.ChatScreenViewModel
+import com.dark.tool_neuron.worker.UIStateManager
 import com.mp.ai_engine.models.llm_models.ModelType
 import com.mp.ai_engine.workers.installer.ModelInstaller
 import com.mp.ai_engine.workers.model.ModelManager
@@ -16,6 +20,10 @@ import kotlinx.coroutines.launch
     * Load & Un-Load Models ( Text | IMAGE_GEN )
     * */
 class HomeScreenViewModel : ViewModel() {
+
+    companion object {
+        private const val TAG = "HomeScreenViewModel"
+    }
 
     private val _selectedModel = MutableStateFlow(LocalModel("", "", ModelType.NONE))
     val selectedModel: StateFlow<LocalModel> = _selectedModel.asStateFlow()
@@ -46,7 +54,30 @@ class HomeScreenViewModel : ViewModel() {
 
 
     fun loadModel(modelID: String) {
+        if (UIStateManager.isGenerating()) {
+            Log.w(TAG, "Cannot change model during generation")
+            return
+        }
+
+        // Toggle off if same model selected
+        if (selectedModel.value.modelId == modelID) {
+            Log.d(TAG, "Unselecting model")
+            when(_selectedModel.value.modelType){
+                ModelType.TEXT -> ModelManager.gguf().unloadModel()
+                else -> ModelManager.diffusion().unloadModel()
+            }
+            _selectedModel.value = LocalModel()
+            return
+        }
+        UIStateManager.toggleStateModelLoading(true)
+
         viewModelScope.launch(Dispatchers.IO) {
+
+            when(_selectedModel.value.modelType){
+                ModelType.TEXT -> ModelManager.gguf().unloadModel()
+                else -> ModelManager.diffusion().unloadModel()
+            }
+
             val decodedModel = ModelInstaller.findModel(modelID) ?: return@launch
             decodedModel.ggufModel.let {
                 if (it == null) return@let
@@ -62,6 +93,7 @@ class HomeScreenViewModel : ViewModel() {
                     _selectedModel.value = LocalModel(it.id, it.name, ModelType.IMAGE_GEN)
                 }
             }
+            UIStateManager.toggleStateModelLoading(false)
         }
     }
 
