@@ -11,6 +11,7 @@ import com.dark.tool_neuron.worker.ChatManager
 import com.dark.tool_neuron.worker.UserDataManager
 import com.dark.plugins.manager.PluginManager
 import com.dark.tool_neuron.logger.AppLogger.measureLogAndTime
+import com.dark.tool_neuron.new_workers.ChatWorker
 import com.dark.tool_neuron.worker.DataHubManager
 import com.mp.ai_engine.workers.installer.ModelInstaller
 import kotlinx.coroutines.CoroutineScope
@@ -29,6 +30,7 @@ class NVApplication : Application() {
             // Get root node first
             ModelInstaller.initialize(applicationContext)
             UserDataManager.init(applicationContext)
+            ChatWorker.init(applicationContext)
             val root = UserDataManager.getRootNode()
 
             // Start logging session

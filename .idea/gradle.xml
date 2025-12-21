@@ -16,6 +16,7 @@
             <option value="$PROJECT_DIR$/data-hub-lib" />
             <option value="$PROJECT_DIR$/plugin-api" />
             <option value="$PROJECT_DIR$/plugins" />
+            <option value="$PROJECT_DIR$/user-data" />
           </set>
         </option>
       </GradleProjectSettings>

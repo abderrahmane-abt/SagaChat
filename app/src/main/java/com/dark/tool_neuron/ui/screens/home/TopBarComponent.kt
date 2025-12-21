@@ -63,7 +63,7 @@ import com.mp.ai_engine.models.llm_models.ModelType
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TopBar(
-    homeScreenViewModel: HomeScreenViewModel = viewModel(), viewModel: ChatScreenViewModel, onMenu: () -> Unit = {}, onLeftMenu: () -> Unit = {}
+    homeScreenViewModel: HomeScreenViewModel, viewModel: ChatScreenViewModel, onMenu: () -> Unit = {}, onLeftMenu: () -> Unit = {}
 ) {
     val title by viewModel.chatTitle.collectAsStateWithLifecycle()
     val messages by viewModel.messages.collectAsStateWithLifecycle()

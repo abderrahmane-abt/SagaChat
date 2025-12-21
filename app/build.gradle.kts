@@ -62,7 +62,7 @@ android {
     }
 
     dependencies {
-
+        implementation("io.coil-kt:coil-compose:2.7.0")
         //NET
         implementation(libs.jsoup)
         implementation(libs.okhttp)
@@ -85,6 +85,7 @@ android {
         implementation(project(":ai-module"))
         implementation(project(":plugins"))
         implementation(project(":data-hub-lib"))
+        implementation(project(":user-data"))
 
         //UTILS
         implementation(libs.androidx.datastore.preferences)

@@ -78,6 +78,7 @@ import com.dark.tool_neuron.ui.theme.rDP
 import com.dark.tool_neuron.viewModel.chatViewModel.ChatScreenViewModel
 import com.dark.tool_neuron.viewModel.chatViewModel.ChattingViewModelFactory
 import com.dark.tool_neuron.viewModel.chatViewModel.TTSViewModel
+import com.dark.tool_neuron.viewModel.home_screen.HomeScreenViewModel
 import com.dark.tool_neuron.worker.ChatManager
 import com.dark.tool_neuron.worker.ToolCallingManager
 import com.dark.tool_neuron.worker.UIStateManager
@@ -94,6 +95,7 @@ fun HomeScreen(
         factory = ChattingViewModelFactory(LocalContext.current)
     ),
     ttsViewModel: TTSViewModel = viewModel(),
+    homeScreenViewModel: HomeScreenViewModel = viewModel(),
     onDataHubClick: () -> Unit,
     onPluginStoreClick: () -> Unit,
     onModelsClick: () -> Unit
@@ -195,6 +197,7 @@ fun HomeScreen(
             topBar = {
                 TopBarSection(
                     chatScreenViewModel = chatScreenViewModel,
+                    homeScreenViewModel = homeScreenViewModel,
                     onMenu = { scope.launch { drawerState.open() } },
                     onLeftMenu = {
                         if (ModelManager.currentModel.value.modelName.isBlank()) {
@@ -218,7 +221,7 @@ fun HomeScreen(
                 BottomBar(viewModel = chatScreenViewModel, uiState = uiState)
             }
         ) { innerPadding ->
-            BodyContent(innerPadding, chatScreenViewModel, ttsViewModel)
+            BodyContent(innerPadding, homeScreenViewModel)
         }
     }
 }
@@ -233,10 +236,11 @@ private fun TopBarSection(
     ttsViewModel: TTSViewModel,
     uiState: ChatUiState,
     tokenRateState: TokenRateState,
-    snackbarHostState: SnackbarHostState
+    snackbarHostState: SnackbarHostState,
+    homeScreenViewModel: HomeScreenViewModel
 ) {
     Column {
-        TopBar(viewModel = chatScreenViewModel, onMenu = onMenu, onLeftMenu = onLeftMenu)
+        TopBar(viewModel = chatScreenViewModel, homeScreenViewModel = homeScreenViewModel, onMenu = onMenu, onLeftMenu = onLeftMenu)
         ModelLoadProgressBar(loadState = modelState)
         TTSPlaybackBarCompact(ttsViewModel = ttsViewModel)
 
@@ -400,10 +404,9 @@ fun TopErrorSnackbar(snackbarHostState: SnackbarHostState) {
 @Composable
 fun BodyContent(
     innerPadding: PaddingValues,
-    viewModel: ChatScreenViewModel,
-    ttsViewModel: TTSViewModel
+    viewModel: HomeScreenViewModel
 ) {
-    val messages by viewModel.messages.collectAsStateWithLifecycle()
+    val messages by viewModel.loadedMessages.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     var userScrolled by remember { mutableStateOf(false) }
 
@@ -438,7 +441,7 @@ fun BodyContent(
             .padding(innerPadding)
     ) {
         if (messages.isEmpty()) {
-            EmptyStateContent(viewModel.uiState.collectAsStateWithLifecycle().value)
+            Text("No messages yet")
         } else {
             // OPTIMIZATION: Use stable keys for LazyColumn items
             LazyColumn(
@@ -454,12 +457,11 @@ fun BodyContent(
                 items(
                     items = messages,
                     key = { it.id }, // CRITICAL: Stable keys prevent full recomposition
-                    contentType = { it.role }
+                    contentType = { it.chatMessageType }
                 ) { message ->
-                    ChatBubble(
+                    ModernChatBubble(
                         message = message,
-                        viewModel = viewModel,
-                        ttsViewModel = ttsViewModel
+                        viewModel
                     )
                     Spacer(Modifier.height(rDP(12.dp)))
                 }

@@ -29,10 +29,11 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "NeuroVerse"
+rootProject.name = "Tool-Neuron"
 include(":app")
 include(":ai-module")
 include(":plugins")
 include(":data-hub-lib")
 include(":plugin-api")
 include(":ai-engine")
+include(":user-data")
