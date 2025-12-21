@@ -78,11 +78,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.model.ModelType
-import com.dark.ai_module.workers.DownloadState
 import com.dark.tool_neuron.model.GGUFModels
 import com.dark.tool_neuron.ui.theme.rDP
 import com.dark.tool_neuron.ui.theme.rSp
-import com.dark.tool_neuron.viewModel.ModelScreenViewModel
+import com.dark.tool_neuron.viewModel.llm_model.ModelScreenViewModel
 import com.dark.tool_neuron.viewModel.modelScreen.OnlineModelStoreViewModel
 import com.mp.ai_engine.models.llm_models.ModelProvider
 import java.io.File
@@ -94,8 +93,8 @@ fun GGUFModelScreen(
     modelScreenViewModel: ModelScreenViewModel = viewModel()
 ) {
     val models = viewModel.ggufModels.collectAsStateWithLifecycle()
-    val downloadStates = modelScreenViewModel.downloadProgress.collectAsStateWithLifecycle()
-    val installedModels = modelScreenViewModel.models.collectAsStateWithLifecycle()
+    val installedModels = modelScreenViewModel.ggufModels.collectAsStateWithLifecycle()
+    val downloadStates = viewModel.downloadStates.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     Box(
@@ -126,15 +125,15 @@ fun GGUFModelScreen(
                             downloadState = downloadState,
                             onDownload = {
                                 val modelData = model.toModelData(context)
-                                modelScreenViewModel.startDownload(modelData, context)
+                                viewModel.startDownload(modelData)
                             },
                             onCancelDownload = {
-                                modelScreenViewModel.cancelDownload(
+                                viewModel.cancelDownload(
                                     model.modelName, model.modelFileLink, context
                                 )
                             },
                             onDelete = {
-                                modelScreenViewModel.removeModel(model.modelName)
+                                viewModel.removeModel(model.modelName)
                             })
                     }
                 }

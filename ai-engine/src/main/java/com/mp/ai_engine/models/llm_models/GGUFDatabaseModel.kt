@@ -2,9 +2,14 @@ package com.mp.ai_engine.models.llm_models
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
 import java.io.File
 import java.util.UUID
 
+@Serializable
 @Entity(tableName = "gguf_models")
 data class GGUFDatabaseModel(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
@@ -50,7 +55,29 @@ data class GGUFDatabaseModel(
     // Timestamps
     val createdAt: Long = System.currentTimeMillis(),
     val lastUsedAt: Long = System.currentTimeMillis()
-)
+) {
+    companion object {
+        private val json = Json {
+            prettyPrint = true
+            ignoreUnknownKeys = true
+            encodeDefaults = true
+        }
+
+        /**
+         * Create GGUFDatabaseModel from JSON string
+         */
+        fun fromJson(jsonString: String): GGUFDatabaseModel {
+            return json.decodeFromString<GGUFDatabaseModel>(jsonString)
+        }
+    }
+
+    /**
+     * Convert GGUFDatabaseModel to JSON string
+     */
+    fun toJson(): String {
+        return json.encodeToString(this)
+    }
+}
 
 /**
  * Check if model file exists

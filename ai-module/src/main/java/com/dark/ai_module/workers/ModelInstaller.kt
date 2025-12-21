@@ -390,7 +390,6 @@ sealed class DownloadState {
         override val isComplete = false
         override val errorMessage: String? = null
     }
-
     data class Complete(val filePath: String) : DownloadState() {
         override val isDownloading = false
         override val progress = 100f

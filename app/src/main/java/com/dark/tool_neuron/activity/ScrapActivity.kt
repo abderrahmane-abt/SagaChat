@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
+import com.mp.ai_engine.diffusion.IDiffusionCallback
 import com.mp.ai_engine.gguf.IGGUFCallback
 import com.mp.ai_engine.models.image_models.DiffusionDatabaseModel
 import com.mp.ai_engine.models.llm_models.CloudModel
@@ -34,6 +35,8 @@ import com.mp.ai_engine.workers.model.ModelManager
 import com.mp.ai_engine.workers.model.internal_model_worker.DiffusionModelWorker
 import com.mp.ai_engine.workers.model.internal_model_worker.GGUFModelWorker
 import kotlinx.coroutines.*
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.Json
 import java.util.UUID
 
 class ScrapActivity : ComponentActivity() {
@@ -52,7 +55,7 @@ class ScrapActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        com.mp.ai_engine.workers.model.ModelManager.shutdown(applicationContext)
+        ModelManager.shutdown(applicationContext)
     }
 }
 
@@ -162,19 +165,10 @@ fun TextGeneratorScreen() {
 
                     val ggufWorker = ModelManager.gguf()
 
+                    val config = model.toJson()
 
                     ggufWorker.loadTextModel(
-                        model.modelPath,
-                        model.threads,
-                        model.ctxSize,
-                        model.temp,
-                        model.topK,
-                        model.topP,
-                        model.minP,
-                        model.mirostat,
-                        model.mirostatTau,
-                        model.mirostatEta,
-                        model.seed.toLong()
+                        config
                     )
 
                     statusMessage = "Running inference..."
@@ -319,49 +313,33 @@ fun ImageGeneratorScreen() {
                         return@launch
                     }
 
-                    model = model.copy(
-                        runOnCpu = false,
-                        useOpenCL = false,
-                        useCpuClip = true,
-                        scheduler = "euler_a"
+                    val diffusionWorker = ModelManager.diffusion()
+
+                    val config = model.toJson()
+
+                    diffusionWorker.loadModel(
+                        config
                     )
-
-                    val worker = DiffusionModelWorker(context)
-                    val loadResult = worker.loadModel(model)
-                    if (loadResult.isFailure) {
-                        statusMessage = "✗ Failed to load model"
-                        isGenerating = false
-                        return@launch
-                    }
-
-                    statusMessage = "Generating image..."
-                    val deferred = CompletableDeferred<DiffusionResult>()
 
                     val task = DiffusionTask(
                         id = UUID.randomUUID().toString(),
                         prompt = """
-                            
+                            a Girl with black Dress
                         """.trimIndent(),
                         negativePrompt = "blurry, low quality",
                         steps = 25,
                         cfg = 7f,
                         events = object : DMStreamEvents {
                             override fun onProgress(p: Float, step: Int, totalSteps: Int) {
-                                progress = p
-                                statusMessage = "Step $step/$totalSteps"
+
                             }
 
                             override fun onPreview(previewBmp: Bitmap, step: Int, totalSteps: Int) {
-                                // Update preview bitmap on main thread
-                                scope.launch(Dispatchers.Main) {
-                                    previewBitmap = previewBmp
-                                }
+
                             }
 
                             override fun onComplete(bitmap: Bitmap, seed: Long?) {
-                                generatedBitmap = bitmap
-                                previewBitmap = null // Clear preview
-                                statusMessage = "✓ Generated (seed: $seed)"
+
                             }
 
                             override fun onError(error: String) {
@@ -369,13 +347,69 @@ fun ImageGeneratorScreen() {
                                 previewBitmap = null
                             }
                         },
-                        result = deferred
+                        result = CompletableDeferred()
                     )
 
-                    worker.runTask(task)
-                    deferred.await()
-                    isGenerating = false
-                    worker.cleanup()
+                    diffusionWorker.generateImage(
+                        task.prompt,
+                        task.negativePrompt,
+                        task.steps,
+                        task.cfg,
+                        task.width,
+                        task.height,
+                        task.denoiseStrength,
+                        task.useOpenCL,
+                        task.scheduler,
+                        task.seed ?: 0,
+                        object : IDiffusionCallback.Stub() {
+                            override fun onProgress(
+                                p: Float,
+                                step: Int,
+                                totalSteps: Int
+                            ) {
+                                statusMessage = "Generating image..."
+                                progress = p
+                                isGenerating = true
+                                statusMessage = "Step $step/$totalSteps"
+                            }
+
+                            override fun onPreview(
+                                previewImage: Bitmap?,
+                                step: Int,
+                                totalSteps: Int
+                            ) {
+                                // Update preview bitmap on main thread
+                                scope.launch(Dispatchers.Main) {
+                                    previewBitmap = previewImage
+                                }
+                            }
+
+                            override fun onComplete(
+                                finalImage: Bitmap?,
+                                seed: Long
+                            ) {
+                                generatedBitmap = finalImage
+                                previewBitmap = null // Clear preview
+                                isGenerating = false
+                                statusMessage = "✓ Generated (seed: $seed)"
+                            }
+
+                            override fun onError(error: String?) {
+                                statusMessage = "✗ Error: $error"
+                                previewBitmap = null
+                                isGenerating = false
+                            }
+                        }
+                    )
+
+//                    model = model.copy(
+//                        runOnCpu = false,
+//                        useOpenCL = false,
+//                        useCpuClip = true,
+//                        scheduler = "euler_a"
+//                    )
+
+
                 }
             },
             modifier = Modifier.fillMaxWidth(),

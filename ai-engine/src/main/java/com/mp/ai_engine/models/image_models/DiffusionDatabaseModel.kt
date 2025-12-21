@@ -2,8 +2,12 @@ package com.mp.ai_engine.models.image_models
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.mp.ai_engine.models.llm_models.GGUFDatabaseModel
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.util.UUID
 
+@Serializable
 @Entity(tableName = "diffusion_db")
 data class DiffusionDatabaseModel(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
@@ -28,4 +32,26 @@ data class DiffusionDatabaseModel(
     val denoiseStrength: Float = 0.6f,
     val useOpenCL: Boolean = false,
     val scheduler: String = "dpm"
-)
+) {
+    companion object {
+        private val json = Json {
+            prettyPrint = true
+            ignoreUnknownKeys = true
+            encodeDefaults = true
+        }
+
+        /**
+         * Create GGUFDatabaseModel from JSON string
+         */
+        fun fromJson(jsonString: String): DiffusionDatabaseModel {
+            return json.decodeFromString<DiffusionDatabaseModel>(jsonString)
+        }
+    }
+
+    /**
+     * Convert GGUFDatabaseModel to JSON string
+     */
+    fun toJson(): String {
+        return json.encodeToString(this)
+    }
+}

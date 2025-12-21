@@ -11,6 +11,8 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.mp.ai_engine.models.llm_models.CloudModel
 import com.mp.ai_engine.workers.installer.DownloadEvents
+import com.mp.ai_engine.workers.installer.DownloadProgressManager
+import com.mp.ai_engine.workers.installer.DownloadState
 import com.mp.ai_engine.workers.installer.InstallerFactory
 import com.mp.ai_engine.workers.installer.SuperInstaller
 import kotlinx.coroutines.CoroutineScope
@@ -24,8 +26,7 @@ import kotlinx.serialization.json.Json
 import java.io.File
 
 /**
- * Refactored service using dedicated installers for scalable model downloads
- * with improved notification management to prevent spam
+ * Enhanced service with integrated progress tracking
  */
 class ModelDownloadService : Service() {
 
@@ -72,6 +73,9 @@ class ModelDownloadService : Service() {
                 val url = intent.getStringExtra(EXTRA_DOWNLOAD_URL)
                 url?.let { cancelModelDownload(it) }
             }
+            ACTION_CANCEL_ALL -> {
+                cancelAllDownloads()
+            }
         }
     }
 
@@ -92,10 +96,17 @@ class ModelDownloadService : Service() {
             return
         }
 
+        // Initialize progress tracking
+        DownloadProgressManager.updateProgress(downloadUrl, 0f)
+
         // Get appropriate installer
         val installer = InstallerFactory.getInstaller(cloudModel)
         if (installer == null) {
             Log.e(TAG, "No installer found for model type: ${cloudModel.modelType}")
+            DownloadProgressManager.markFailed(
+                downloadUrl,
+                "Unsupported model type: ${cloudModel.modelType}"
+            )
             showErrorNotification(
                 cloudModel.modelName,
                 "Unsupported model type: ${cloudModel.modelType}"
@@ -146,6 +157,10 @@ class ModelDownloadService : Service() {
                 downloadEvents = object : DownloadEvents {
                     override fun onProgress(progress: Float) {
                         if (progress > 0) {
+                            // Update global progress manager
+                            DownloadProgressManager.updateProgress(downloadUrl, progress)
+
+                            // Update notification
                             notificationThrottler.updateProgress(
                                 downloadUrl,
                                 cloudModel.modelName,
@@ -202,9 +217,14 @@ class ModelDownloadService : Service() {
             val result = installer.installModel(cloudModel, outputLocation, baseDir)
 
             result.onSuccess {
+                DownloadProgressManager.markComplete(downloadUrl, outputLocation.absolutePath)
                 showCompletionNotification(cloudModel.modelName)
                 Log.i(TAG, "Successfully installed: ${cloudModel.modelName}")
             }.onFailure { error ->
+                DownloadProgressManager.markFailed(
+                    downloadUrl,
+                    error.message ?: "Installation failed"
+                )
                 showErrorNotification(
                     cloudModel.modelName,
                     error.message ?: "Installation failed"
@@ -215,6 +235,10 @@ class ModelDownloadService : Service() {
 
         } catch (e: Exception) {
             Log.e(TAG, "Error during installation: ${e.message}", e)
+            DownloadProgressManager.markFailed(
+                downloadUrl,
+                e.message ?: "Installation error"
+            )
             showErrorNotification(
                 cloudModel.modelName,
                 e.message ?: "Installation error"
@@ -235,10 +259,9 @@ class ModelDownloadService : Service() {
         downloadUrl: String,
         error: Throwable
     ) {
-        showErrorNotification(
-            cloudModel.modelName,
-            error.message ?: "Download failed"
-        )
+        val errorMessage = error.message ?: "Download failed"
+        DownloadProgressManager.markFailed(downloadUrl, errorMessage)
+        showErrorNotification(cloudModel.modelName, errorMessage)
         installer.cleanup(outputLocation)
         Log.e(TAG, "Download failed for ${cloudModel.modelName}", error)
 
@@ -254,10 +277,17 @@ class ModelDownloadService : Service() {
             task.installer.cleanup(task.outputLocation)
             activeDownloads.remove(url)
             notificationThrottler.removeDownload(url)
+            DownloadProgressManager.removeDownload(url)
             Log.i(TAG, "Cancelled download: $url")
 
             updateSummaryNotification()
             checkAndStopService()
+        }
+    }
+
+    private fun cancelAllDownloads() {
+        activeDownloads.keys.toList().forEach { url ->
+            cancelModelDownload(url)
         }
     }
 
@@ -361,18 +391,14 @@ class ModelDownloadService : Service() {
         notificationManager.createNotificationChannel(channel)
     }
 
-    /**
-     * Throttles notification updates to prevent spam
-     */
     private inner class NotificationThrottler {
         private val progressMap = mutableMapOf<String, Float>()
         private var updateJob: Job? = null
-        private val updateInterval = 500L // Update every 500ms
+        private val updateInterval = 500L
 
         fun updateProgress(downloadUrl: String, modelName: String, progress: Float) {
             progressMap[downloadUrl] = progress
 
-            // Start update job if not already running
             if (updateJob?.isActive != true) {
                 updateJob = serviceScope.launch {
                     while (progressMap.isNotEmpty()) {

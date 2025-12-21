@@ -72,25 +72,6 @@ class ModelScreenViewModel : ViewModel() {
     private val _fetchError = MutableStateFlow<String?>(null)
     val fetchError: StateFlow<String?> = _fetchError.asStateFlow()
 
-    // Dialog state
-    private val _isDialogOpened = MutableStateFlow(false)
-    val isDialogOpened: StateFlow<Boolean> = _isDialogOpened.asStateFlow()
-
-    /* ========================================================================= */
-    /* DERIVED STATES - Computed states for UI convenience                      */
-    /* ========================================================================= */
-
-    // Count of models by provider
-
-    // Active downloads count
-    val activeDownloadsCount: StateFlow<Int> = ModelInstallationManager.downloadProgress
-        .combine(_models) { states, _ ->
-            states.count { (_, state) ->
-                state is com.dark.ai_module.workers.DownloadState.Downloading
-            }
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
-
     // Download progress for UI
     val downloadProgress: StateFlow<Map<String, DownloadState>> =
         ModelInstallationManager.downloadProgress
@@ -472,25 +453,10 @@ class ModelScreenViewModel : ViewModel() {
         }
     }
 
-    /* ========================================================================= */
-    /* UI STATE MANAGEMENT                                                       */
-    /* ========================================================================= */
-
-    fun setIsDialogOpen(isOpen: Boolean) {
-        _isDialogOpened.value = isOpen
-    }
-
     fun clearFetchError() {
         _fetchError.value = null
     }
 
-    /* ========================================================================= */
-    /* HELPER FUNCTIONS                                                          */
-    /* ========================================================================= */
-
-    /**
-     * Converts ModelData to OpenRouterModel for UI display.
-     */
     private fun ModelData.toOpenRouterModel() = OpenRouterModel(
         id = id,
         name = modelName,

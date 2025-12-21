@@ -25,17 +25,7 @@ interface IGGUFOperations {
      * @return true if loaded successfully
      */
     boolean loadTextModel(
-        String modelPath,
-        int threads,
-        int ctxSize,
-        float temp,
-        int topK,
-        float topP,
-        float minP,
-        int mirostat,
-        float mirostatTau,
-        float mirostatEta,
-        long seed
+        String config
     );
 
     /**

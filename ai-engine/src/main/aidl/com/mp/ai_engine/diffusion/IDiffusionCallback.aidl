@@ -1,6 +1,6 @@
 package com.mp.ai_engine.diffusion;
 
-import android.hardware.HardwareBuffer;
+import android.graphics.Bitmap;
 
 /**
  * Callback interface for diffusion image generation
@@ -26,7 +26,7 @@ oneway interface IDiffusionCallback {
      * @param step Current step when preview was generated
      * @param totalSteps Total steps
      */
-    void onPreview(in HardwareBuffer previewImage, int step, int totalSteps);
+    void onPreview(in Bitmap previewImage, int step, int totalSteps);
 
     /**
      * Called when generation is complete with final image
@@ -34,7 +34,7 @@ oneway interface IDiffusionCallback {
      * @param finalImage HardwareBuffer containing the final high-quality image
      * @param seed The seed used for generation (useful for reproducing results)
      */
-    void onComplete(in HardwareBuffer finalImage, long seed);
+    void onComplete(in Bitmap finalImage, long seed);
 
     /**
      * Called when an error occurs during generation

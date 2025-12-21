@@ -29,40 +29,17 @@ class GGUFOperationsImpl(private val worker: GGUFModelWorker) : IGGUFOperations.
     }
 
     override fun loadTextModel(
-        modelPath: String,
-        threads: Int,
-        ctxSize: Int,
-        temp: Float,
-        topK: Int,
-        topP: Float,
-        minP: Float,
-        mirostat: Int,
-        mirostatTau: Float,
-        mirostatEta: Float,
-        seed: Long
+        config: String
     ): Boolean {
 
         val result = CompletableDeferred<Result<String>>()
 
         scope.launch {
             try {
-                val modelData = GGUFDatabaseModel(
-                    modelName = File(modelPath).name,
-                    modelPath = modelPath,
-                    modelType = ModelType.TEXT,
-                    threads = threads,
-                    ctxSize = ctxSize,
-                    temp = temp,
-                    topK = topK,
-                    topP = topP,
-                    minP = minP,
-                    mirostat = mirostat,
-                    mirostatTau = mirostatTau,
-                    mirostatEta = mirostatEta,
-                    seed = seed.toInt()
-                )
+                val modelData = GGUFDatabaseModel.fromJson(config)
                 val loadResult = worker.loadModel(modelData)
                 result.complete(loadResult)
+                currentModelPath = modelData.modelPath
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load model", e)
                 result.complete(Result.failure(Exception("Failed to load model", e)))
@@ -72,7 +49,6 @@ class GGUFOperationsImpl(private val worker: GGUFModelWorker) : IGGUFOperations.
         // This *suspends* internally, does NOT block a thread
         return runBlocking {
             if (result.await().isSuccess) {
-                currentModelPath = modelPath
                 currentModelType = ModelType.TEXT
                 Log.i(TAG, "Text model loaded successfully")
                 true

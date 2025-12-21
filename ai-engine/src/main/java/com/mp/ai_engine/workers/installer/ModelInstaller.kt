@@ -8,6 +8,7 @@ import com.mp.ai_engine.managers.OpenRouterModelManager
 import com.mp.ai_engine.managers.SherpaSTTModelManager
 import com.mp.ai_engine.managers.SherpaTTSModelManager
 import com.mp.ai_engine.models.llm_models.CloudModel
+import com.mp.ai_engine.models.llm_models.GGUFDatabaseModel
 import com.mp.ai_engine.models.llm_models.ModelProvider
 import com.mp.ai_engine.models.llm_models.ModelSearchResult
 import com.mp.ai_engine.models.llm_models.ModelType
@@ -379,5 +380,34 @@ object ModelInstaller {
         }
 
         return null
+    }
+
+    suspend fun getInstalledGGUFModels(): List<GGUFDatabaseModel>{
+        return GGUFModelManager.getAllModels()
+    }
+}
+sealed class DownloadState {
+    abstract val isDownloading: Boolean
+    abstract val progress: Float
+    abstract val isComplete: Boolean
+    abstract val errorMessage: String?
+
+    data class Downloading(override val progress: Float) : DownloadState() {
+        override val isDownloading = true
+        override val isComplete = false
+        override val errorMessage: String? = null
+    }
+    data class Complete(val filePath: String) : DownloadState() {
+        override val isDownloading = false
+        override val progress = 100f
+        override val isComplete = true
+        override val errorMessage: String? = null
+    }
+
+    data class Failed(val error: String) : DownloadState() {
+        override val isDownloading = false
+        override val progress = 0f
+        override val isComplete = false
+        override val errorMessage: String = error
     }
 }

@@ -1,7 +1,6 @@
 package com.mp.ai_engine.diffusion;
 
 import com.mp.ai_engine.diffusion.IDiffusionCallback;
-import android.hardware.HardwareBuffer;
 
 /**
  * Diffusion model operations for image generation
@@ -22,13 +21,7 @@ interface IDiffusionOperations {
      * @return true if loaded successfully
      */
     boolean loadModel(
-        String modelFolder,
-        String modelId,
-        boolean runOnCpu,
-        boolean useCpuClip,
-        int width,
-        int height,
-        int textEmbeddingSize
+        String config
     );
 
     /**

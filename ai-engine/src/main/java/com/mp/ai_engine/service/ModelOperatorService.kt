@@ -14,7 +14,9 @@ import com.mp.ai_engine.diffusion.IDiffusionOperations
 import com.mp.ai_engine.gguf.IGGUFOperations
 import com.mp.ai_engine.installer.IModelInstaller
 import com.mp.ai_engine.openrouter.IOpenRouterOperations
+import com.mp.ai_engine.workers.aidl.DiffusionOperationsImpl
 import com.mp.ai_engine.workers.aidl.GGUFOperationsImpl
+import com.mp.ai_engine.workers.model.internal_model_worker.DiffusionModelWorker
 import com.mp.ai_engine.workers.model.internal_model_worker.GGUFModelWorker
 import org.json.JSONObject
 
@@ -49,7 +51,7 @@ class ModelOperatorService : Service() {
     private val ggufWorker = GGUFModelWorker()
     // TODO: Initialize other workers when implementing
     // private val openRouterWorker = OpenRouterWorker()
-    // private val diffusionWorker = DiffusionModelWorker(this)
+     private val diffusionWorker = DiffusionModelWorker(this)
     // private val modelInstaller = ModelInstaller(this)
 
     // AIDL Binder
@@ -79,7 +81,7 @@ class ModelOperatorService : Service() {
             ggufWorker.unloadModel()
             // TODO: Cleanup other workers
             // openRouterWorker.unloadModel()
-            // diffusionWorker.unloadModel()
+             diffusionWorker.unloadModel()
             Log.i(TAG, "All models unloaded successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Error during cleanup", e)
@@ -107,8 +109,7 @@ class ModelOperatorService : Service() {
         override fun getDiffusionOperations(): IDiffusionOperations {
             Log.d(TAG, "Client requested Diffusion operations interface")
             // TODO: Implement when Diffusion worker is ready
-            throw UnsupportedOperationException("Diffusion operations not yet implemented")
-            // return DiffusionOperationsImpl(diffusionWorker)
+            return DiffusionOperationsImpl(diffusionWorker)
         }
 
         override fun getInstaller(): IModelInstaller {
