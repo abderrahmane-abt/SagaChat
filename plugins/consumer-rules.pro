@@ -1,2 +1,0 @@
--keep class com.dark.plugins.api.** { *; }
--keep class com.dark.plugins.model.** { *; }
