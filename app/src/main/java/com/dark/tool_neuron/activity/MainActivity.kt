@@ -12,6 +12,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.dark.tool_neuron.ui.screen.AIAppScreen
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 
 class MainActivity : ComponentActivity() {
@@ -21,15 +22,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             NeuroVerseTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text("Hello World")
-                    }
+                    AIAppScreen(innerPadding)
                 }
             }
         }
