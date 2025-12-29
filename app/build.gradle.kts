@@ -59,7 +59,7 @@ android {
 
 dependencies {
     //Projects
-    implementation(project(":ai_gguf"))
+    implementation(":ai_gguf-release@aar")
 
     // Core Android
     implementation(libs.androidx.core.ktx)
