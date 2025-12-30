@@ -184,7 +184,7 @@ fun IntroScreen() {
                             modifier = Modifier
                                 .size(rDp(8.dp))
                                 .background(
-                                    MaterialTheme.colorScheme.secondary,
+                                    MaterialTheme.colorScheme.primary,
                                     CircleShape
                                 )
                                 .alpha(shimmerAlpha.value)

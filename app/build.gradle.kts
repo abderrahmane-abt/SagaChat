@@ -80,6 +80,7 @@ dependencies {
 
     // Material 3 (for Compose)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.compose.ui.text)
 
     // Debug
     debugImplementation(libs.androidx.ui.tooling)
