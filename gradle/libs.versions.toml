@@ -32,9 +32,9 @@ ui-text = "1.10.0"
 
 [libraries]
 # Database
-androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
-androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
-androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 
 #Data-Model
 converter-gson = { module = "com.squareup.retrofit2:converter-gson", version.ref = "converter-gson" }

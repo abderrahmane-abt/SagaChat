@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kotlin.ksp)
 }
 
 val localPropertiesFile = rootProject.file("local.properties")
@@ -60,11 +61,13 @@ android {
 
 dependencies {
     //Data-Ops
-    implementation("io.coil-kt:coil-compose:2.7.0")
-// Retrofit for API calls
+    implementation(libs.room.ktx)
+    implementation(libs.room.runtime)
+    ksp(libs.room.compiler)
+    // Retrofit for API calls
     implementation(libs.retrofit)
     implementation(libs.converter.gson)
-// OkHttp for logging
+    // OkHttp for logging
     implementation(libs.logging.interceptor)
     implementation(libs.kotlinx.serialization.json)
 

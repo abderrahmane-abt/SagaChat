@@ -12,6 +12,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
@@ -88,19 +91,43 @@ fun rSp(
 }
 
 
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun NeuroVerseTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
 
-    val colorScheme =
-        if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    val colorScheme = if (darkTheme) {
+        dynamicDarkColorScheme(context)
+    } else {
+        dynamicLightColorScheme(context)
+    }
+
+    // Define typography with Manrope as the base/default family
+    val typography = Typography().copy(
+        displayLarge = Typography().displayLarge.copy(fontFamily = ManropeFontFamily),
+        displayMedium = Typography().displayMedium.copy(fontFamily = ManropeFontFamily),
+        displaySmall = Typography().displaySmall.copy(fontFamily = ManropeFontFamily),
+        headlineLarge = Typography().headlineLarge.copy(fontFamily = ManropeFontFamily),
+        headlineMedium = Typography().headlineMedium.copy(fontFamily = ManropeFontFamily),
+        headlineSmall = Typography().headlineSmall.copy(fontFamily = ManropeFontFamily),
+        titleLarge = Typography().titleLarge.copy(fontFamily = ManropeFontFamily),
+        titleMedium = Typography().titleMedium.copy(fontFamily = ManropeFontFamily),
+        titleSmall = Typography().titleSmall.copy(fontFamily = ManropeFontFamily),
+        bodyLarge = Typography().bodyLarge.copy(fontFamily = ManropeFontFamily),
+        bodyMedium = Typography().bodyMedium.copy(fontFamily = ManropeFontFamily),
+        bodySmall = Typography().bodySmall.copy(fontFamily = ManropeFontFamily),
+        labelLarge = Typography().labelLarge.copy(fontFamily = ManropeFontFamily),
+        labelMedium = Typography().labelMedium.copy(fontFamily = ManropeFontFamily),
+        labelSmall = Typography().labelSmall.copy(fontFamily = ManropeFontFamily),
+    )
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography(),
+        typography = typography,
         motionScheme = MotionScheme.expressive(),
         content = content
     )
