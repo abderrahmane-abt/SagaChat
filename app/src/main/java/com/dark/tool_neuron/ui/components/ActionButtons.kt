@@ -12,10 +12,13 @@ import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonColors
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.IconToggleButton
+import androidx.compose.material3.IconToggleButtonColors
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -110,5 +113,36 @@ fun ActionTextButton(
         Icon(icon, contentDescription)
         Spacer(Modifier.width(rDp(6.dp)))
         Text(text)
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@SuppressLint("ModifierParameter")
+@Composable
+fun ActionToggleButton(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    icon: Int,
+    contentDescription: String = "Description",
+    modifier: Modifier = Modifier,
+    shape: Shape = MaterialShapes.Square.toShape(),
+    colors: IconToggleButtonColors = IconButtonDefaults.filledIconToggleButtonColors(
+        containerColor = MaterialTheme.colorScheme.primary.copy(0.06f),
+        contentColor = MaterialTheme.colorScheme.primary,
+        checkedContentColor = MaterialTheme.colorScheme.onPrimary
+    )
+) {
+    FilledIconToggleButton(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        colors = colors,
+        shape = shape,
+        modifier = modifier.size(rDp(Standards.ActionIconSize))
+    ) {
+        Icon(
+            painter = painterResource(icon),
+            contentDescription = contentDescription,
+            modifier = Modifier.padding(rDp(Standards.ActionIconPadding))
+        )
     }
 }

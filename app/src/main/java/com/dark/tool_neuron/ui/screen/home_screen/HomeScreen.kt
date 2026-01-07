@@ -1,6 +1,7 @@
 package com.dark.tool_neuron.ui.screen.home_screen
 
 import android.content.Intent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,6 +45,7 @@ import com.dark.tool_neuron.R
 import com.dark.tool_neuron.activity.ModelLoadingActivity
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.ui.components.ActionButton
+import com.dark.tool_neuron.ui.components.ActionToggleButton
 import com.dark.tool_neuron.ui.components.AnimatedTitle
 import com.dark.tool_neuron.ui.components.ModelListItem
 import com.dark.tool_neuron.ui.theme.rDp
@@ -109,25 +111,30 @@ fun BottomBar(
     var value by remember { mutableStateOf("") }
     val installedModels by viewModel.installedModels.collectAsStateWithLifecycle(emptyList())
     val currentModelID by viewModel.currentModelID.collectAsStateWithLifecycle()
+    var showModelList by remember { mutableStateOf(false) }
+
 
     Column {
-        LazyColumn(
-            Modifier
-                .fillMaxWidth()
-                .padding(rDp(8.dp))
-                .background(
-                    MaterialTheme.colorScheme.primary.copy(0.04f)
-                        .compositeOver(MaterialTheme.colorScheme.background),
-                    shape = RoundedCornerShape(rDp(8.dp))
-                )
-        ) {
-            items(installedModels) { modelConfig ->
-                ModelListItem(
-                    Modifier.padding(top = rDp(8.dp)),
-                    isLoaded = currentModelID == modelConfig.id,
-                    model = modelConfig
-                ) { selectedModel ->
-                    viewModel.loadModel(model = selectedModel)
+        AnimatedVisibility(showModelList) {
+            LazyColumn(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(rDp(8.dp))
+                    .background(
+                        MaterialTheme.colorScheme.primary.copy(0.04f)
+                            .compositeOver(MaterialTheme.colorScheme.background),
+                        shape = RoundedCornerShape(rDp(8.dp))
+                    ),
+                contentPadding = PaddingValues(bottom = rDp(8.dp))
+            ) {
+                items(installedModels) { modelConfig ->
+                    ModelListItem(
+                        Modifier.padding(top = rDp(8.dp)).padding(horizontal = rDp(8.dp)),
+                        isLoaded = currentModelID == modelConfig.id,
+                        model = modelConfig
+                    ) { selectedModel ->
+                        viewModel.loadModel(model = selectedModel)
+                    }
                 }
             }
         }
@@ -175,9 +182,14 @@ fun BottomBar(
 
                     }, R.drawable.tool, modifier = Modifier.padding(start = 12.dp))
 
-                    ActionButton(onClickListener = {
-
-                    }, R.drawable.smart_temp_message, modifier = Modifier.padding(start = 12.dp))
+                    ActionToggleButton(
+                        onCheckedChange = {
+                            showModelList = !showModelList
+                        },
+                        checked = showModelList,
+                        icon = R.drawable.smart_temp_message,
+                        modifier = Modifier.padding(start = 12.dp)
+                    )
 
                     Spacer(Modifier.weight(1f))
 
