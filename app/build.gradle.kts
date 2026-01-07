@@ -50,7 +50,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
-
+        aidl = true
     }
 
     packaging {
@@ -64,6 +64,7 @@ dependencies {
     //Data-Ops
     implementation(libs.room.ktx)
     implementation(libs.room.runtime)
+    implementation(libs.androidx.compose.runtime)
     ksp(libs.room.compiler)
     // Retrofit for API calls
     implementation(libs.retrofit)

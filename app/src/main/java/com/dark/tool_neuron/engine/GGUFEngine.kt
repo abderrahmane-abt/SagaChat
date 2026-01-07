@@ -4,11 +4,15 @@ import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.models.table_schema.ModelConfig
 import com.dark.tool_neuron.models.engine_schema.GgufEngineSchema
 import com.mp.ai_gguf.GGUFNativeLib
+import com.mp.ai_gguf.models.DecodingMetrics
 import com.mp.ai_gguf.models.StreamCallback
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 
 class GGUFEngine {
@@ -56,42 +60,64 @@ class GGUFEngine {
         success
     }
 
-    fun generateFlow(prompt: String, maxTokens: Int): Flow<GenerationEvent> = flow {
+    /**
+     * Generate tokens as a Flow using callbackFlow
+     *
+     * This properly handles the callback-to-flow conversion without
+     * violating Flow invariants. The native callback runs on whatever
+     * thread llama.cpp uses, and we safely send events to the channel.
+     *
+     * The flow is consumed on IO dispatcher and buffered for smooth streaming.
+     */
+    fun generateFlow(prompt: String, maxTokens: Int): Flow<GenerationEvent> = callbackFlow {
         if (!isLoaded) {
-            emit(GenerationEvent.Error("Model not loaded"))
-            return@flow
+            trySend(GenerationEvent.Error("Model not loaded"))
+            close()
+            return@callbackFlow
         }
-
-        val channel = Channel<GenerationEvent>(Channel.UNLIMITED)
 
         val callback = object : StreamCallback {
             override fun onToken(token: String) {
-                channel.trySend(GenerationEvent.Token(token))
+                // trySend is thread-safe and non-blocking
+                trySend(GenerationEvent.Token(token))
             }
 
             override fun onToolCall(name: String, argsJson: String) {
-                channel.trySend(GenerationEvent.ToolCall(name, argsJson))
+                trySend(GenerationEvent.ToolCall(name, argsJson))
             }
 
             override fun onDone() {
-                channel.trySend(GenerationEvent.Done)
-                channel.close()
+                trySend(GenerationEvent.Done)
+                close() // Close the channel when done
             }
 
             override fun onError(message: String) {
-                channel.trySend(GenerationEvent.Error(message))
-                channel.close()
+                trySend(GenerationEvent.Error(message))
+                close()
+            }
+
+            override fun onMetrics(metrics: DecodingMetrics) {
+                trySend(GenerationEvent.Metrics(metrics))
             }
         }
 
-        withContext(Dispatchers.Default) {
+        // Run the native generation on IO thread
+        // This call blocks until generation completes
+        try {
             nativeLib.nativeGenerateStream(prompt, maxTokens, callback)
+        } catch (e: Exception) {
+            trySend(GenerationEvent.Error(e.message ?: "Generation failed"))
+            close()
         }
 
-        for (event in channel) {
-            emit(event)
+        // Keep the flow alive until the channel is closed
+        awaitClose {
+            // Cleanup if the collector cancels
+            // This will be called if the flow is cancelled
         }
     }
+        .buffer(Channel.UNLIMITED) // Buffer to prevent backpressure blocking native code
+        .flowOn(Dispatchers.IO)    // Ensure collection happens on IO dispatcher
 
     fun stopGeneration() {
         nativeLib.nativeStopGeneration()
@@ -117,4 +143,5 @@ sealed class GenerationEvent {
     data class ToolCall(val name: String, val args: String) : GenerationEvent()
     data object Done : GenerationEvent()
     data class Error(val message: String) : GenerationEvent()
+    data class Metrics(val metrics: DecodingMetrics) : GenerationEvent()
 }
