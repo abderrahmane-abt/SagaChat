@@ -50,6 +50,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+
     }
 
     packaging {
@@ -72,6 +73,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
 
     //Projects
+    implementation(":ai_gguf-release@aar")
 
     // Core Android
     implementation(libs.androidx.core.ktx)

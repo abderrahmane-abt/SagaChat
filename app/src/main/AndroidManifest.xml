@@ -31,6 +31,24 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".activity.ModelLoadingActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.NeuroVerse"
+            android:windowSoftInputMode="adjustResize"
+            tools:targetApi="33" >
+        </activity>
+
+        <activity
+            android:name=".activity.ModelPickerActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.NeuroVerse"
+            android:windowSoftInputMode="adjustResize"
+            tools:targetApi="33" >
+        </activity>
     </application>
 
 </manifest>
