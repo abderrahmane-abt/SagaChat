@@ -54,42 +54,69 @@ class ModelDataParser {
             ModelLoadResult.Error("GGUF loading error: ${e.message}")
         }
     }
-    
+
     private fun parseGGUFInfo(jsonString: String): ModelInfo {
         return try {
             val json = JSONObject(jsonString)
-            
+
+            // Build parameters map - only existing fields
+            val parameters = buildMap {
+                if (json.has("n_vocab")) {
+                    put("Vocabulary Size", formatNumber(json.getInt("n_vocab")))
+                }
+                if (json.has("n_ctx_train")) {
+                    put("Context Length", formatNumber(json.getInt("n_ctx_train")))
+                }
+                if (json.has("n_embd")) {
+                    put("Embedding Dim", formatNumber(json.getInt("n_embd")))
+                }
+                if (json.has("n_layer")) {
+                    put("Layers", json.getInt("n_layer").toString())
+                }
+                if (json.has("n_head")) {
+                    put("Attention Heads", json.getInt("n_head").toString())
+                }
+                if (json.has("n_head_kv")) {
+                    put("KV Heads", json.getInt("n_head_kv").toString())
+                }
+            }
+
+            // Build vocabulary info - only existing fields
+            val vocabularyInfo = buildMap<String, String> {
+                if (json.has("vocab_type")) {
+                    put("Type", json.getString("vocab_type").uppercase())
+                }
+                if (json.has("bos")) {
+                    put("BOS Token", json.getInt("bos").toString())
+                }
+                if (json.has("eos")) {
+                    put("EOS Token", json.getInt("eos").toString())
+                }
+                if (json.has("eot")) {
+                    put("EOT Token", json.getInt("eot").toString())
+                }
+                if (json.has("nl")) {
+                    put("Newline Token", json.getInt("nl").toString())
+                }
+            }.takeIf { it.isNotEmpty() }
+
             GGUFModelInfo(
                 providerType = ProviderType.GGUF,
-                architecture = json.optString("architecture", "Unknown"),
-                name = json.optString("name", "Unnamed Model"),
-                description = json.optString("description", ""),
-                parameters = mapOf(
-                    "Vocabulary Size" to formatNumber(json.optInt("n_vocab", 0)),
-                    "Context Length" to formatNumber(json.optInt("n_ctx_train", 0)),
-                    "Embedding Dim" to formatNumber(json.optInt("n_embd", 0)),
-                    "Layers" to json.optInt("n_layer", 0).toString(),
-                    "Attention Heads" to json.optInt("n_head", 0).toString(),
-                    "KV Heads" to json.optInt("n_head_kv", 0).toString()
-                ),
-                vocabularyInfo = if (json.has("vocab_type")) {
-                    mapOf(
-                        "Type" to json.optString("vocab_type", "").uppercase(),
-                        "BOS Token" to json.optInt("bos", 0).toString(),
-                        "EOS Token" to json.optInt("eos", 0).toString(),
-                        "EOT Token" to json.optInt("eot", 0).toString(),
-                        "Newline Token" to json.optInt("nl", 0).toString()
-                    )
-                } else null,
-                systemInfo = json.optString("system", ""),
-                chatTemplate = json.optString("chat_template", "")
+                architecture = json.optString("architecture"),
+                name = json.optString("name"),
+                description = json.optString("description"),
+                parameters = parameters,
+                vocabularyInfo = vocabularyInfo,
+                systemInfo = json.optString("system"),
+                chatTemplate = json.optString("chat_template"),
+                templateType = json.optString("template_type")
             )
         } catch (e: Exception) {
             GGUFModelInfo(
                 providerType = ProviderType.GGUF,
-                architecture = "Error",
-                name = "Failed to parse",
-                description = e.message ?: "Unknown error"
+                architecture = "",
+                name = "",
+                description = "Error: ${e.message}"
             )
         }
     }
@@ -167,8 +194,9 @@ data class GGUFModelInfo(
     override val parameters: Map<String, String> = emptyMap(),
     val vocabularyInfo: Map<String, String>? = null,
     val systemInfo: String = "",
-    val chatTemplate: String = ""
-) : ModelInfo {
+    val chatTemplate: String = "",
+    val templateType: String = ""
+) : ModelInfo{
     override val additionalInfo: Map<String, String>?
         get() = vocabularyInfo
 }
