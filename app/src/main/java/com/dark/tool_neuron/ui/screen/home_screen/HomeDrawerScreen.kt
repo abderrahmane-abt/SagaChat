@@ -46,13 +46,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dark.tool_neuron.R
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.models.vault.ChatInfo
 import com.dark.tool_neuron.ui.components.ActionButton
+import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ChatListViewModel
 import java.text.SimpleDateFormat
@@ -289,7 +293,7 @@ private fun EmptyState(onCreateChat: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
         ) {
             Icon(
-                Icons.AutoMirrored.Filled.Chat,
+                painterResource(R.drawable.chats),
                 contentDescription = null,
                 modifier = Modifier.size(rDp(80.dp)),
                 tint = MaterialTheme.colorScheme.primary.copy(0.4f)
@@ -297,7 +301,7 @@ private fun EmptyState(onCreateChat: () -> Unit) {
 
             Text(
                 "No chats yet",
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurface
             )
 
@@ -309,16 +313,8 @@ private fun EmptyState(onCreateChat: () -> Unit) {
 
             Spacer(modifier = Modifier.height(rDp(8.dp)))
 
-            Button(
-                onClick = onCreateChat, colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = null)
-                Spacer(Modifier.width(rDp(8.dp)))
-                Text("New Chat")
-            }
+            ActionTextButton(onClickListener = onCreateChat,
+                Icons.Default.Add, "New Chat")
         }
     }
 }
