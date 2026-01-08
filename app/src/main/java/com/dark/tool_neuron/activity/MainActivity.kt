@@ -17,6 +17,7 @@ import androidx.navigation.compose.rememberNavController
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.ui.screen.home_screen.HomeDrawerScreen
 import com.dark.tool_neuron.ui.screen.home_screen.HomeScreen
+import com.dark.tool_neuron.ui.screen.memory.VaultDashboard
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.worker.LlmModelWorker
@@ -91,12 +92,12 @@ fun AppNavigation() {
                 animationSpec = tween(300)
             ) + fadeOut(animationSpec = tween(300))
         }) {
-        composable(Screen.ChatList.route) {
-            HomeDrawerScreen(
-                onChatSelected = { chatId ->
-                    navController.navigate(Screen.Chat.createRoute(chatId))
-                })
-        }
+//        composable(Screen.ChatList.route) {
+//            HomeDrawerScreen(
+//                onChatSelected = { chatId ->
+//                    navController.navigate(Screen.Chat.createRoute(chatId))
+//                })
+//        }
 
         composable(Screen.Chat.route) { backStackEntry ->
             val chatId = backStackEntry.arguments?.getString("chatId") ?: return@composable
@@ -109,6 +110,10 @@ fun AppNavigation() {
                 chatViewModel = chatViewModel, chatId = chatId, onMenuClick = {
                     navController.popBackStack()
                 })
+        }
+
+        composable(Screen.ChatList.route) {
+            VaultDashboard()
         }
     }
 }

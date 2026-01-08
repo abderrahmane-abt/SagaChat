@@ -146,3 +146,33 @@ fun ActionToggleButton(
         )
     }
 }
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun ActionToggleButton(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    icon: ImageVector,  // Add this overload
+    contentDescription: String = "Description",
+    modifier: Modifier = Modifier,
+    shape: Shape = MaterialShapes.Square.toShape(),
+    colors: IconToggleButtonColors = IconButtonDefaults.filledIconToggleButtonColors(
+        containerColor = MaterialTheme.colorScheme.primary.copy(0.06f),
+        contentColor = MaterialTheme.colorScheme.primary,
+        checkedContentColor = MaterialTheme.colorScheme.onPrimary
+    )
+) {
+    FilledIconToggleButton(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        colors = colors,
+        shape = shape,
+        modifier = modifier.size(rDp(Standards.ActionIconSize))
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            modifier = Modifier.padding(rDp(Standards.ActionIconPadding))
+        )
+    }
+}

@@ -26,6 +26,10 @@ object VaultHelper {
         encodeDefaults = true
     }
 
+    fun getVault(): MemoryVault{
+        return vault
+    }
+
     suspend fun initialize(context: Context) {
         mutex.withLock {
             if (!initialized) {
