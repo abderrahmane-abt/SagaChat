@@ -15,7 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.Icon
@@ -24,12 +27,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dark.tool_neuron.models.messages.ContentType
+import com.dark.tool_neuron.models.messages.MessageContent
 import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.models.messages.Role
 import com.dark.tool_neuron.ui.theme.rDp
@@ -38,15 +46,20 @@ import com.mp.ai_gguf.models.DecodingMetrics
 
 @Composable
 fun BodyContent(
-    paddingValues: PaddingValues, chatViewModel: ChatViewModel = viewModel()
+    paddingValues: PaddingValues,
+    chatViewModel: ChatViewModel = hiltViewModel()
 ) {
-    val messages = chatViewModel.messages // Direct access to SnapshotStateList
+    val messages = chatViewModel.messages
+    val isGenerating by chatViewModel.isGenerating.collectAsState()
+    val streamingUserMessage by chatViewModel.streamingUserMessage.collectAsState()
+    val streamingAssistantMessage by chatViewModel.streamingAssistantMessage.collectAsState()
+
     val listState = rememberLazyListState()
 
+    // Auto-scroll for normal messages (not during streaming)
     LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            // Use scrollToItem for instant scroll during streaming
-            listState.scrollToItem(messages.size - 1)
+        if (messages.isNotEmpty() && !isGenerating) {
+            listState.animateScrollToItem(messages.size - 1)
         }
     }
 
@@ -56,27 +69,107 @@ fun BodyContent(
             .background(MaterialTheme.colorScheme.background)
             .padding(paddingValues)
     ) {
-        if (messages.isEmpty()) {
+        if (messages.isEmpty() && !isGenerating) {
             EmptyMessagesState()
         } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(vertical = rDp(8.dp)),
-                verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
-            ) {
-                items(
-                    count = messages.size,
-                    key = { index -> messages[index].msgId },
-                    contentType = { index -> messages[index].role } // Critical optimization
-                ) { index ->
-                    MessageBubble(message = messages[index])
-                }
+            // Show streaming view OR regular list
+            if (isGenerating && streamingUserMessage != null) {
+                StreamingView(
+                    userMessage = streamingUserMessage!!,
+                    assistantMessage = streamingAssistantMessage
+                )
+            } else {
+                // Regular message list
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(vertical = rDp(8.dp)),
+                    verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                ) {
+                    items(
+                        count = messages.size,
+                        key = { index -> messages[index].msgId },
+                        contentType = { index -> messages[index].role }
+                    ) { index ->
+                        MessageBubble(message = messages[index])
+                    }
 
-                item {
-                    Spacer(modifier = Modifier.height(rDp(16.dp)))
+                    item {
+                        Spacer(modifier = Modifier.height(rDp(16.dp)))
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun StreamingView(
+    userMessage: String,
+    assistantMessage: String
+) {
+    // Scrollable column for overflow
+    val scrollState = rememberScrollState()
+
+    // Auto-scroll to bottom when assistant message updates
+    LaunchedEffect(assistantMessage) {
+        scrollState.animateScrollTo(scrollState.maxValue)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(rDp(8.dp)),
+        verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+    ) {
+        // User message bubble (static)
+        UserMessageBubble(
+            message = Messages(
+                role = Role.User,
+                content = MessageContent(
+                    contentType = ContentType.Text,
+                    content = userMessage
+                )
+            )
+        )
+
+        // Assistant message bubble (streaming)
+        AssistantStreamingBubble(text = assistantMessage)
+
+        // Add some bottom padding
+        Spacer(modifier = Modifier.height(rDp(16.dp)))
+    }
+}
+
+@Composable
+private fun AssistantStreamingBubble(text: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(rDp(8.dp)),
+        verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+            verticalAlignment = Alignment.Top
+        ) {
+            // Optional: Add a pulsing indicator
+            Box(
+                modifier = Modifier
+                    .size(rDp(8.dp))
+                    .background(
+                        MaterialTheme.colorScheme.primary,
+                        shape = CircleShape
+                    )
+            )
+
+            Text(
+                text = text.ifEmpty { "..." },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }

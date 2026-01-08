@@ -1,5 +1,6 @@
 package com.dark.tool_neuron.worker
 
+import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 
+@SuppressLint("StaticFieldLeak")
 object LlmModelWorker {
 
     private var service: ILLMService? = null

@@ -4,11 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.models.vault.ChatInfo
 import com.dark.tool_neuron.worker.ChatManager
+import dagger.hilt.android.lifecycle.HiltViewModel
+import jakarta.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-
-class ChatListViewModel(
+@HiltViewModel
+class ChatListViewModel @Inject constructor(
     private val chatManager: ChatManager
 ) : ViewModel() {
 

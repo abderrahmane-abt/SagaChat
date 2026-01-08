@@ -1,6 +1,7 @@
 package com.dark.tool_neuron.ui.screen.home_screen
 
 import android.content.Intent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -31,18 +33,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.tool_neuron.R
 import com.dark.tool_neuron.activity.ModelLoadingActivity
-import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.ui.components.ActionButton
+import com.dark.tool_neuron.ui.components.ActionProgressButton
 import com.dark.tool_neuron.ui.components.ActionToggleButton
 import com.dark.tool_neuron.ui.components.AnimatedTitle
 import com.dark.tool_neuron.ui.components.ModelListItem
@@ -52,7 +55,10 @@ import com.dark.tool_neuron.viewmodel.LLMModelViewModel
 
 @Composable
 fun HomeScreen(
-    chatViewModel: ChatViewModel, chatId: String, onMenuClick: () -> Unit
+    chatViewModel: ChatViewModel,
+    llmModelViewModel: LLMModelViewModel,
+    chatId: String,
+    onMenuClick: () -> Unit
 ) {
     LaunchedEffect(chatId) {
         chatViewModel.loadChat(chatId)
@@ -66,9 +72,11 @@ fun HomeScreen(
         },
         bottomBar = {
             BottomBar(
-                chatViewModel = chatViewModel
+                chatViewModel = chatViewModel,
+                llmModelViewModel = llmModelViewModel
             )
-        }) { paddingValues ->
+        }
+    ) { paddingValues ->
         BodyContent(paddingValues, chatViewModel)
     }
 }
@@ -102,22 +110,21 @@ fun TopBar(onMenuClick: () -> Unit) {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun BottomBar(
-    chatViewModel: ChatViewModel,
-    viewModel: LLMModelViewModel = viewModel(
-        factory = AppContainer.getLLMModelViewModelFactory()
-    )
+    chatViewModel: ChatViewModel = hiltViewModel(), llmModelViewModel: LLMModelViewModel  = hiltViewModel()
 ) {
-    var value by androidx.compose.runtime.remember { mutableStateOf("") }
-    val installedModels by viewModel.installedModels.collectAsStateWithLifecycle(emptyList())
-    val currentModelID by viewModel.currentModelID.collectAsStateWithLifecycle()
-    var showModelList by androidx.compose.runtime.remember {
+    var value by remember { mutableStateOf("") }
+    val installedModels by llmModelViewModel.installedModels.collectAsStateWithLifecycle(emptyList())
+    val currentModelID by llmModelViewModel.currentModelID.collectAsStateWithLifecycle()
+    var showModelList by remember {
         mutableStateOf(
             false
         )
     }
 
+    val isGenerating by chatViewModel.isGenerating.collectAsStateWithLifecycle()
+
     Column {
-        androidx.compose.animation.AnimatedVisibility(showModelList) {
+        AnimatedVisibility(showModelList) {
             LazyColumn(
                 Modifier
                     .fillMaxWidth()
@@ -125,7 +132,7 @@ fun BottomBar(
                     .background(
                         MaterialTheme.colorScheme.primary.copy(0.04f)
                             .compositeOver(MaterialTheme.colorScheme.background),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(rDp(8.dp))
+                        shape = RoundedCornerShape(rDp(8.dp))
                     ), contentPadding = PaddingValues(bottom = rDp(8.dp))
             ) {
                 items(installedModels) { modelConfig ->
@@ -136,7 +143,7 @@ fun BottomBar(
                         isLoaded = currentModelID == modelConfig.id,
                         model = modelConfig
                     ) { selectedModel ->
-                        viewModel.loadModel(model = selectedModel)
+                        llmModelViewModel.loadModel(model = selectedModel)
                     }
                 }
             }
@@ -195,21 +202,38 @@ fun BottomBar(
 
                     Spacer(Modifier.weight(1f))
 
-                    ActionButton(
-                        onClickListener = {
-                            if (value.isNotBlank()) {
-                                chatViewModel.sendMessage(value)
-                                value = ""
-                            }
-                        },
-                        icon = R.drawable.send_chat,
-                        shape = MaterialShapes.Ghostish.toShape(),
-                        modifier = Modifier.padding(end = 12.dp),
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primary.copy(0.3f),
-                            contentColor = MaterialTheme.colorScheme.primary
-                        )
-                    )
+                    when (isGenerating) {
+                        true -> {
+                            ActionProgressButton(
+                                onClickListener = {
+                                    chatViewModel.stop()
+                                },
+                                modifier = Modifier.padding(end = 12.dp),
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary.copy(0.3f),
+                                    contentColor = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
+
+                        false -> {
+                            ActionButton(
+                                onClickListener = {
+                                    if (value.isNotBlank()) {
+                                        chatViewModel.sendMessage(value)
+                                        value = ""
+                                    }
+                                },
+                                icon = R.drawable.send_chat,
+                                shape = MaterialShapes.Ghostish.toShape(),
+                                modifier = Modifier.padding(end = 12.dp),
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary.copy(0.3f),
+                                    contentColor = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
+                    }
                 }
             }
         }

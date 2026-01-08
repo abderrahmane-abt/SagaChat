@@ -1,6 +1,7 @@
 package com.dark.tool_neuron.ui.components
 
 import android.annotation.SuppressLint
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -8,8 +9,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledIconToggleButton
@@ -24,10 +28,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.ui.theme.rDp
@@ -59,6 +65,38 @@ fun ActionButton(
         )
     }
 }
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@SuppressLint("ModifierParameter")
+@Composable
+fun ActionProgressButton(
+    onClickListener: () -> Unit,
+    icon: ImageVector = Icons.Default.Stop,
+    contentDescription: String = "Description",
+    modifier: Modifier = Modifier,
+    shape: Shape = MaterialShapes.Circle.toShape(),
+    colors: IconButtonColors = IconButtonDefaults.filledIconButtonColors(
+        containerColor = MaterialTheme.colorScheme.primary.copy(0.06f),
+        contentColor = MaterialTheme.colorScheme.primary
+    )
+) {
+    Box(contentAlignment = Alignment.Center){
+        FilledIconButton(
+            onClick = { onClickListener() },
+            colors = colors,
+            shape = shape,
+            modifier = modifier.size(rDp(Standards.ActionIconSize))
+        ) {
+            Icon(
+                icon,
+                contentDescription = contentDescription,
+                Modifier.padding(rDp(Standards.ActionIconPadding))
+            )
+        }
+        CircularProgressIndicator()
+    }
+}
+
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @SuppressLint("ModifierParameter")

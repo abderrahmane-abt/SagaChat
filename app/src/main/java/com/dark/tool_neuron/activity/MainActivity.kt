@@ -10,19 +10,21 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.ui.screen.home_screen.HomeDrawerScreen
 import com.dark.tool_neuron.ui.screen.home_screen.HomeScreen
-import com.dark.tool_neuron.ui.screen.memory.VaultDashboard
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 import com.dark.tool_neuron.viewmodel.ChatViewModel
+import com.dark.tool_neuron.viewmodel.LLMModelViewModel
 import com.dark.tool_neuron.worker.LlmModelWorker
 import com.dark.tool_neuron.worker.NotificationPermissionHelper
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,7 +44,13 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             NeuroVerseTheme {
-                AppNavigation()
+                // Create ViewModels at activity level
+                val chatViewModel: ChatViewModel = hiltViewModel()
+                val llmModelViewModel: LLMModelViewModel = hiltViewModel()
+
+                AppNavigation(
+                    chatViewModel = chatViewModel, llmModelViewModel = llmModelViewModel
+                )
             }
         }
     }
@@ -62,7 +70,9 @@ sealed class Screen(val route: String) {
 }
 
 @Composable
-fun AppNavigation() {
+fun AppNavigation(
+    chatViewModel: ChatViewModel, llmModelViewModel: LLMModelViewModel
+) {
     val navController = rememberNavController()
 
     NavHost(
@@ -92,28 +102,19 @@ fun AppNavigation() {
                 animationSpec = tween(300)
             ) + fadeOut(animationSpec = tween(300))
         }) {
-//        composable(Screen.ChatList.route) {
-//            HomeDrawerScreen(
-//                onChatSelected = { chatId ->
-//                    navController.navigate(Screen.Chat.createRoute(chatId))
-//                })
-//        }
-
-        composable(Screen.Chat.route) { backStackEntry ->
-            val chatId = backStackEntry.arguments?.getString("chatId") ?: return@composable
-
-            val chatViewModel: ChatViewModel = viewModel(
-                factory = AppContainer.getChatViewModelFactory()
-            )
-
-            HomeScreen(
-                chatViewModel = chatViewModel, chatId = chatId, onMenuClick = {
-                    navController.popBackStack()
+        composable(Screen.ChatList.route) {
+            HomeDrawerScreen(
+                onChatSelected = { chatId ->
+                    navController.navigate(Screen.Chat.createRoute(chatId))
                 })
         }
 
-        composable(Screen.ChatList.route) {
-            VaultDashboard()
+        composable(Screen.Chat.route) { backStackEntry ->
+            val chatId = backStackEntry.arguments?.getString("chatId") ?: return@composable
+            HomeScreen(
+                chatViewModel = chatViewModel, // ✅ Passed from activity
+                llmModelViewModel = llmModelViewModel, // ✅ Also pass this
+                chatId = chatId, onMenuClick = { navController.popBackStack() })
         }
     }
 }

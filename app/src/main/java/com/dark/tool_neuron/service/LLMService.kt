@@ -24,7 +24,7 @@ import kotlinx.coroutines.runBlocking
 
 class LLMService : Service() {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val engine = GGUFEngine()
 
     private val binder = object : ILLMService.Stub() {
@@ -56,7 +56,7 @@ class LLMService : Service() {
             prompt: String, maxTokens: Int, callback: IGgufGenerationCallback
         ) {
             // Launch generation in a coroutine
-            scope.launch(Dispatchers.Default) {
+            scope.launch(Dispatchers.IO) {
                 try {
                     // Collect the flow - this handles all threading properly
                     engine.generateFlow(prompt, maxTokens).collect { event ->

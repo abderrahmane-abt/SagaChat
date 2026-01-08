@@ -9,6 +9,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.kotlin.ksp)
+    alias(libs.plugins.google.dagger.hilt)
 }
 
 val localPropertiesFile = rootProject.file("local.properties")
@@ -62,7 +63,14 @@ android {
     }
 }
 
+
 dependencies {
+    implementation("com.google.dagger:hilt-android:2.57.2")
+    ksp("com.google.dagger:hilt-android-compiler:2.57.2")
+
+    // Hilt Navigation Compose
+    implementation("androidx.hilt:hilt-navigation-compose:1.3.0")
+
     //Data-Ops
     implementation(libs.room.ktx)
     implementation(libs.room.runtime)

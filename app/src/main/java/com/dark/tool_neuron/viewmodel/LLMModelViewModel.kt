@@ -7,11 +7,13 @@ import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.models.table_schema.ModelConfig
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.worker.LlmModelWorker
+import dagger.hilt.android.lifecycle.HiltViewModel
+import jakarta.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-
-class LLMModelViewModel(
+@HiltViewModel
+class LLMModelViewModel @Inject constructor(
     private val repository: ModelRepository
 ) : ViewModel() {
 
