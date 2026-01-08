@@ -11,6 +11,7 @@ import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.models.table_schema.ModelConfig
 import com.dark.tool_neuron.service.IGgufGenerationCallback
 import com.dark.tool_neuron.service.ILLMService
+import com.dark.tool_neuron.service.IModelLoadCallback
 import com.dark.tool_neuron.service.LLMService
 import com.mp.ai_gguf.models.DecodingMetrics
 import kotlinx.coroutines.CompletableDeferred
@@ -22,6 +23,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 @SuppressLint("StaticFieldLeak")
 object LlmModelWorker {
@@ -52,16 +56,32 @@ object LlmModelWorker {
     suspend fun loadGgufModel(model: Model, modelConfig: ModelConfig): Boolean {
         serviceBound.await()
         val svc = service ?: return false
-        val result = svc.loadGgufModel(
-            model.modelPath,
-            model.modelName,
-            modelConfig.modelLoadingParams ?: "",
-            modelConfig.modelInferenceParams ?: ""
-        )
 
-        isModelLoaded.value = result
+        return suspendCancellableCoroutine { continuation ->
+            val callback = object : IModelLoadCallback.Stub() {
+                override fun onSuccess() {
+                    isModelLoaded.value = true
+                    continuation.resume(true)
+                }
 
-        return result
+                override fun onError(message: String) {
+                    isModelLoaded.value = false
+                    continuation.resume(false)
+                }
+            }
+
+            try {
+                svc.loadGgufModel(
+                    model.modelPath,
+                    model.modelName,
+                    modelConfig.modelLoadingParams ?: "",
+                    modelConfig.modelInferenceParams ?: "",
+                    callback
+                )
+            } catch (e: Exception) {
+                continuation.resumeWithException(e)
+            }
+        }
     }
 
     /**
@@ -137,8 +157,7 @@ object LlmModelWorker {
             // Optional: stop generation if flow is cancelled
             // service?.stopGenerationGguf()
         }
-    }
-        .buffer(Channel.UNLIMITED) // Prevent backpressure from blocking Binder callbacks
+    }.buffer(Channel.UNLIMITED) // Prevent backpressure from blocking Binder callbacks
         .flowOn(Dispatchers.IO)    // Collect on IO dispatcher
 
     fun ggufStopGeneration() {

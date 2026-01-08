@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -46,6 +48,7 @@ import com.dark.tool_neuron.R
 import com.dark.tool_neuron.activity.ModelLoadingActivity
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionProgressButton
+import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.components.ActionToggleButton
 import com.dark.tool_neuron.ui.components.AnimatedTitle
 import com.dark.tool_neuron.ui.components.ModelListItem
@@ -72,11 +75,9 @@ fun HomeScreen(
         },
         bottomBar = {
             BottomBar(
-                chatViewModel = chatViewModel,
-                llmModelViewModel = llmModelViewModel
+                chatViewModel = chatViewModel, llmModelViewModel = llmModelViewModel
             )
-        }
-    ) { paddingValues ->
+        }) { paddingValues ->
         BodyContent(paddingValues, chatViewModel)
     }
 }
@@ -89,9 +90,10 @@ fun TopBar(onMenuClick: () -> Unit) {
     CenterAlignedTopAppBar(title = {
         AnimatedTitle()
     }, navigationIcon = {
-        ActionButton(
+        ActionTextButton(
             onClickListener = onMenuClick,
-            icon = R.drawable.menu,
+            icon = Icons.Default.ChevronLeft,
+            text = "Back",
             modifier = Modifier.padding(start = rDp(6.dp))
         )
     }, actions = {
@@ -110,7 +112,8 @@ fun TopBar(onMenuClick: () -> Unit) {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun BottomBar(
-    chatViewModel: ChatViewModel = hiltViewModel(), llmModelViewModel: LLMModelViewModel  = hiltViewModel()
+    chatViewModel: ChatViewModel = hiltViewModel(),
+    llmModelViewModel: LLMModelViewModel = hiltViewModel()
 ) {
     var value by remember { mutableStateOf("") }
     val installedModels by llmModelViewModel.installedModels.collectAsStateWithLifecycle(emptyList())

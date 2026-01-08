@@ -80,20 +80,31 @@ fun ActionProgressButton(
         contentColor = MaterialTheme.colorScheme.primary
     )
 ) {
-    Box(contentAlignment = Alignment.Center){
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+    ) {
+        // Background circular progress indicator
+        CircularProgressIndicator(
+            modifier = Modifier.size(rDp(Standards.ActionIconSize)),
+            color = MaterialTheme.colorScheme.primary,
+            strokeWidth = rDp(2.dp),
+            trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+        )
+
+        // Icon button in center
         FilledIconButton(
             onClick = { onClickListener() },
             colors = colors,
             shape = shape,
-            modifier = modifier.size(rDp(Standards.ActionIconSize))
+            modifier = Modifier.size(rDp(Standards.ActionIconSize - 8.dp))
         ) {
             Icon(
                 icon,
                 contentDescription = contentDescription,
-                Modifier.padding(rDp(Standards.ActionIconPadding))
+                modifier = Modifier.padding(rDp(Standards.ActionIconPadding))
             )
         }
-        CircularProgressIndicator()
     }
 }
 
@@ -146,7 +157,7 @@ fun ActionTextButton(
         shape = shape,
         colors = colors,
         modifier = modifier.height(rDp(Standards.ActionIconSize)),
-        contentPadding = PaddingValues(horizontal = rDp(12.dp))
+        contentPadding = PaddingValues(end = rDp(12.dp))
     ) {
         Icon(icon, contentDescription)
         Spacer(Modifier.width(rDp(6.dp)))

@@ -14,13 +14,13 @@ import com.dark.tool_neuron.models.enums.PathType
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.models.table_schema.ModelConfig
+import com.dark.tool_neuron.state.AppStateManager
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 
 class LLMService : Service() {
 
@@ -30,51 +30,69 @@ class LLMService : Service() {
     private val binder = object : ILLMService.Stub() {
 
         override fun loadGgufModel(
-            modelPath: String, modelName: String, loadingParams: String, inferenceParams: String
-        ): Boolean = runBlocking(Dispatchers.IO) {
-            try {
-                val model = Model(
-                    id = modelName,
-                    modelPath = modelPath,
-                    modelName = modelName,
-                    pathType = PathType.FILE,
-                    providerType = ProviderType.GGUF,
-                    fileSize = null
-                )
-                val config = ModelConfig(
-                    modelId = modelName,
-                    modelLoadingParams = loadingParams,
-                    modelInferenceParams = inferenceParams
-                )
-                engine.load(model, config)
-            } catch (_: Exception) {
-                false
+            modelPath: String,
+            modelName: String,
+            loadingParams: String,
+            inferenceParams: String,
+            callback: IModelLoadCallback
+        ) {
+            // Launch in coroutine - non-blocking
+            scope.launch(Dispatchers.IO) {
+                try {
+                    // Update state: Loading
+                    AppStateManager.setLoadingModel(modelName)
+
+                    val model = Model(
+                        id = modelName,
+                        modelPath = modelPath,
+                        modelName = modelName,
+                        pathType = PathType.FILE,
+                        providerType = ProviderType.GGUF,
+                        fileSize = null
+                    )
+                    val config = ModelConfig(
+                        modelId = modelName,
+                        modelLoadingParams = loadingParams,
+                        modelInferenceParams = inferenceParams
+                    )
+
+                    val success = engine.load(model, config)
+
+                    if (success) {
+                        // Update state: Loaded
+                        AppStateManager.setModelLoaded(modelName)
+                        callback.onSuccess()
+                    } else {
+                        // Update state: Error
+                        AppStateManager.setError("Failed to load model: $modelName")
+                        callback.onError("Failed to load model")
+                    }
+                } catch (e: Exception) {
+                    // Update state: Error
+                    AppStateManager.setError(e.message ?: "Unknown error loading model")
+                    callback.onError(e.message ?: "Unknown error")
+                }
             }
         }
 
         override fun generateGguf(
-            prompt: String, maxTokens: Int, callback: IGgufGenerationCallback
+            prompt: String,
+            maxTokens: Int,
+            callback: IGgufGenerationCallback
         ) {
-            // Launch generation in a coroutine
             scope.launch(Dispatchers.IO) {
                 try {
-                    // Collect the flow - this handles all threading properly
                     engine.generateFlow(prompt, maxTokens).collect { event ->
-                        // These callbacks go back to the client via Binder
-                        // The Binder will handle thread switching on the client side
                         when (event) {
                             is GenerationEvent.Token -> {
                                 callback.onToken(event.text)
                             }
-
                             is GenerationEvent.Done -> {
                                 callback.onDone()
                             }
-
                             is GenerationEvent.Error -> {
                                 callback.onError(event.message)
                             }
-
                             is GenerationEvent.Metrics -> {
                                 callback.onMetrics(
                                     event.metrics.totalTokens,
@@ -85,7 +103,6 @@ class LLMService : Service() {
                                     event.metrics.totalTimeMs
                                 )
                             }
-
                             is GenerationEvent.ToolCall -> {
                                 callback.onToolCall(event.name, event.args)
                             }
@@ -108,6 +125,7 @@ class LLMService : Service() {
         override fun unloadModelGguf() {
             scope.launch(Dispatchers.IO) {
                 engine.unload()
+                AppStateManager.setModelUnloaded()
             }
         }
 
@@ -123,8 +141,7 @@ class LLMService : Service() {
     }
 
     override fun onDestroy() {
-        // Use runBlocking here since we're in onDestroy and need to wait
-        runBlocking {
+        scope.launch {
             engine.unload()
         }
         scope.cancel()
@@ -135,7 +152,9 @@ class LLMService : Service() {
         val channelId = "llm_service"
         val manager = getSystemService(NotificationManager::class.java)
         val channel = NotificationChannel(
-            channelId, "LLM Service", NotificationManager.IMPORTANCE_LOW
+            channelId,
+            "LLM Service",
+            NotificationManager.IMPORTANCE_LOW
         )
         manager.createNotificationChannel(channel)
 
