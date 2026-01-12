@@ -162,7 +162,8 @@ class LLMService : Service() {
                         runOnCpu = runOnCpu,
                         useCpuClip = useCpuClip,
                         isPony = isPony,
-                        httpPort = httpPort
+                        httpPort = httpPort,
+                        safetyMode = safetyMode
                     )
 
                     result.fold(onSuccess = { message ->
@@ -310,7 +311,7 @@ class LLMService : Service() {
         Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
 
         try {
-            diffusionEngine.init(applicationContext, safetyCheckerEnabled = false)
+            diffusionEngine.init(applicationContext, safetyCheckerEnabled = true)
             Log.i(TAG, "LLMService created successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize diffusion engine", e)

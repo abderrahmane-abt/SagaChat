@@ -20,7 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -55,7 +55,6 @@ import com.dark.tool_neuron.R
 import com.dark.tool_neuron.activity.ModelLoadingActivity
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionProgressButton
-import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.components.ActionToggleButton
 import com.dark.tool_neuron.ui.components.AnimatedTitle
 import com.dark.tool_neuron.ui.components.ModeToggleSwitch
@@ -65,13 +64,13 @@ import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
 import com.dark.tool_neuron.worker.GenerationManager
 import kotlinx.coroutines.launch
-import kotlin.math.max
 
 // Update HomeScreen to wrap with SharedTransitionLayout
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun HomeScreen(
     onStoreButtonClicked: () -> Unit,
+    onModelEditor: () -> Unit,
     chatViewModel: ChatViewModel, llmModelViewModel: LLMModelViewModel
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -109,10 +108,13 @@ fun HomeScreen(
             },
             bottomBar = {
                 BottomBar(
+                    onModelEditor = {
+                        onModelEditor()
+                    },
                     chatViewModel = chatViewModel, llmModelViewModel = llmModelViewModel
                 )
             }) { paddingValues ->
-            BodyContent(paddingValues, chatViewModel)
+            BodyContent(paddingValues, chatViewModel, llmModelViewModel = llmModelViewModel)
         }
     }
 }
@@ -134,10 +136,9 @@ fun TopBar(
             showDynamicWindow()
         }
     }, navigationIcon = {
-        ActionTextButton(
+        ActionButton(
             onClickListener = onMenuClick,
-            icon = Icons.Default.ChevronLeft,
-            text = "Back",
+            icon = Icons.Default.Menu,
             modifier = Modifier.padding(start = rDp(6.dp))
         )
     }, actions = {
@@ -152,7 +153,7 @@ fun TopBar(
                     context.startActivity(
                         Intent(context, ModelLoadingActivity::class.java)
                     )
-                }, icon = R.drawable.settings, modifier = Modifier.padding(end = rDp(6.dp))
+                }, icon = R.drawable.load_model, modifier = Modifier.padding(end = rDp(6.dp))
             )
         }
     })
@@ -161,6 +162,7 @@ fun TopBar(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun BottomBar(
+    onModelEditor: () -> Unit,
     chatViewModel: ChatViewModel = hiltViewModel(),
     llmModelViewModel: LLMModelViewModel = hiltViewModel()
 ) {
@@ -266,8 +268,10 @@ fun BottomBar(
                     )
 
                     ActionButton(
-                        onClickListener = { },
-                        icon = R.drawable.tool,
+                        onClickListener = {
+                            onModelEditor()
+                        },
+                        icon = R.drawable.settings,
                         modifier = Modifier.padding(start = rDp(6.dp))
                     )
 

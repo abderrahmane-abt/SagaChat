@@ -132,7 +132,7 @@ fun CuteSwitch(
  */
 @SuppressLint("ModifierParameter")
 @Composable
-fun CuteSwitch(
+fun CuteSwitchResIcon(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,

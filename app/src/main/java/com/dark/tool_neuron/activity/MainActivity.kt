@@ -15,6 +15,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.dark.tool_neuron.di.AppContainer
+import com.dark.tool_neuron.ui.screen.ModelConfigEditorScreen
 import com.dark.tool_neuron.ui.screen.ModelStoreScreen
 import com.dark.tool_neuron.ui.screen.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
@@ -65,6 +66,7 @@ class MainActivity : ComponentActivity() {
 sealed class Screen(val route: String) {
     object Chat : Screen("chat")
     object Store : Screen("store")
+    object Editor : Screen("editor")
 }
 
 @Composable
@@ -93,8 +95,17 @@ fun AppNavigation(
         ) + fadeOut(animationSpec = tween(300))
     }) {
 
+        composable(Screen.Editor.route) {
+            ModelConfigEditorScreen(onBackClick = {
+                navController.popBackStack()
+            })
+        }
+
         composable(Screen.Chat.route) { _ ->
             HomeScreen(
+                onModelEditor = {
+                    navController.navigate(Screen.Editor.route)
+                },
                 onStoreButtonClicked = {
                     navController.navigate(Screen.Store.route)
                 }, chatViewModel = chatViewModel, llmModelViewModel = llmModelViewModel

@@ -41,6 +41,7 @@ import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.models.messages.Role
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ChatViewModel
+import com.dark.tool_neuron.viewmodel.LLMModelViewModel
 import com.dark.tool_neuron.worker.GenerationManager
 import com.mp.ai_gguf.models.DecodingMetrics
 import java.util.Base64
@@ -49,7 +50,8 @@ import java.util.Base64
 @Composable
 fun BodyContent(
     paddingValues: PaddingValues,
-    chatViewModel: ChatViewModel
+    chatViewModel: ChatViewModel,
+    llmModelViewModel: LLMModelViewModel
 ) {
     val messages = chatViewModel.messages
     val isGenerating by chatViewModel.isGenerating.collectAsState()
@@ -96,7 +98,10 @@ fun BodyContent(
                 ) {
                     items(
                         count = messages.size,
-                        key = { index -> messages[index].msgId },
+                        key = { index ->
+                            val msg = messages[index]
+                            "${msg.msgId}-${index}"
+                        },
                         contentType = { index -> messages[index].role }
                     ) { index ->
                         MessageBubble(message = messages[index])
@@ -147,7 +152,7 @@ fun BodyContent(
                     .padding(horizontal = rDp(16.dp), vertical = rDp(16.dp)),
                 contentAlignment = Alignment.TopCenter
             ) {
-                DynamicActionWindow(chatViewModel)
+                DynamicActionWindow(chatViewModel, llmModelViewModel)
             }
         }
     }

@@ -1,8 +1,7 @@
 package com.dark.tool_neuron.ui.components
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -20,8 +19,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.ui.theme.rDp
 
 @Composable
@@ -32,23 +33,34 @@ fun ModeToggleSwitch(
     imageModelLoaded: Boolean,
     modifier: Modifier = Modifier
 ) {
+    // Calculate total width: 2 icons + spacing between + padding on sides
+    val totalWidth = (Standards.ActionIconSize * 2) + Standards.ActionIconSpace + rDp(4.dp)
+    val totalHeight = Standards.ActionIconSize + rDp(4.dp)
+
     val backgroundColor by animateColorAsState(
         targetValue = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-        animationSpec = tween(300),
+        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
         label = "background"
     )
 
     val thumbOffset by animateDpAsState(
-        targetValue = if (isImageMode) rDp(32.dp) else rDp(0.dp),
-        animationSpec = tween(300),
+        targetValue = if (isImageMode) {
+            Standards.ActionIconSize + Standards.ActionIconSpace
+        } else {
+            rDp(0.dp)
+        },
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
         label = "thumbOffset"
     )
 
     Surface(
         modifier = modifier
-            .width(rDp(68.dp))
-            .height(rDp(36.dp)),
-        shape = RoundedCornerShape(rDp(6.dp)),
+            .width(totalWidth)
+            .height(totalHeight),
+        shape = RoundedCornerShape(Standards.ActionIconRoundedSize),
         color = backgroundColor
     ) {
         Box(
@@ -59,9 +71,9 @@ fun ModeToggleSwitch(
                 modifier = Modifier
                     .offset(x = thumbOffset + rDp(2.dp))
                     .align(Alignment.CenterStart)
-                    .size(rDp(32.dp), rDp(32.dp))
+                    .size(Standards.ActionIconSize)
                     .padding(rDp(2.dp))
-                    .clip(RoundedCornerShape(rDp(4.dp)))
+                    .clip(RoundedCornerShape(Standards.ActionIconRoundedSize - rDp(2.dp)))
                     .background(MaterialTheme.colorScheme.primary)
             )
 
@@ -69,68 +81,85 @@ fun ModeToggleSwitch(
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = rDp(4.dp)),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                    .padding(rDp(2.dp)),
+                horizontalArrangement = Arrangement.spacedBy(Standards.ActionIconSpace),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Text icon
-                Box(
-                    modifier = Modifier
-                        .size(rDp(32.dp))
-                        .clip(RoundedCornerShape(rDp(4.dp)))
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() },
-                            enabled = textModelLoaded
-                        ) {
-                            if (!isImageMode) return@clickable
-                            onModeChange(false)
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.TextFields,
-                        contentDescription = "Text mode",
-                        tint = if (!isImageMode) {
-                            MaterialTheme.colorScheme.onPrimary
-                        } else {
-                            MaterialTheme.colorScheme.onSurface.copy(
-                                alpha = if (textModelLoaded) 0.6f else 0.3f
-                            )
-                        },
-                        modifier = Modifier.size(rDp(18.dp))
-                    )
-                }
+                IconButton(
+                    isSelected = !isImageMode,
+                    isEnabled = textModelLoaded,
+                    icon = Icons.Default.TextFields,
+                    contentDescription = "Text mode",
+                    onClick = {
+                        if (!isImageMode) return@IconButton
+                        onModeChange(false)
+                    }
+                )
 
                 // Image icon
-                Box(
-                    modifier = Modifier
-                        .size(rDp(32.dp))
-                        .clip(RoundedCornerShape(rDp(4.dp)))
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() },
-                            enabled = imageModelLoaded
-                        ) {
-                            if (isImageMode) return@clickable
-                            onModeChange(true)
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Image,
-                        contentDescription = "Image mode",
-                        tint = if (isImageMode) {
-                            MaterialTheme.colorScheme.onPrimary
-                        } else {
-                            MaterialTheme.colorScheme.onSurface.copy(
-                                alpha = if (imageModelLoaded) 0.6f else 0.3f
-                            )
-                        },
-                        modifier = Modifier.size(rDp(18.dp))
-                    )
-                }
+                IconButton(
+                    isSelected = isImageMode,
+                    isEnabled = imageModelLoaded,
+                    icon = Icons.Default.Image,
+                    contentDescription = "Image mode",
+                    onClick = {
+                        if (isImageMode) return@IconButton
+                        onModeChange(true)
+                    }
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun IconButton(
+    isSelected: Boolean,
+    isEnabled: Boolean,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    val iconTint by animateColorAsState(
+        targetValue = when {
+            isSelected -> MaterialTheme.colorScheme.onPrimary
+            isEnabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+        },
+        animationSpec = tween(durationMillis = 200),
+        label = "iconTint"
+    )
+
+    val scale by animateFloatAsState(
+        targetValue = if (isSelected) 1f else 0.85f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "iconScale"
+    )
+
+    Box(
+        modifier = Modifier
+            .size(Standards.ActionIconSize)
+            .clip(RoundedCornerShape(Standards.ActionIconRoundedSize - rDp(2.dp)))
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                enabled = isEnabled
+            ) {
+                onClick()
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = iconTint,
+            modifier = Modifier
+                .padding(rDp(2.dp))
+                .scale(scale)
+        )
     }
 }

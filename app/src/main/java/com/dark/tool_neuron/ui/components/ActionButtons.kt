@@ -142,6 +142,34 @@ fun ActionButton(
 @Composable
 fun ActionTextButton(
     onClickListener: () -> Unit,
+    icon: Int,
+    text: String,
+    contentDescription: String = "Description",
+    modifier: Modifier = Modifier,
+    colors: ButtonColors = ButtonDefaults.buttonColors(
+        containerColor = MaterialTheme.colorScheme.primary.copy(0.06f),
+        contentColor = MaterialTheme.colorScheme.primary
+    ),
+    shape: Shape = RoundedCornerShape(rDp(6.dp))
+) {
+    FilledTonalButton(
+        onClick = onClickListener,
+        shape = shape,
+        colors = colors,
+        modifier = modifier.height(rDp(Standards.ActionIconSize)),
+        contentPadding = PaddingValues(horizontal = rDp(12.dp))
+    ) {
+        Icon(painterResource(icon), contentDescription)
+        Spacer(Modifier.width(rDp(6.dp)))
+        Text(text)
+    }
+}
+
+@SuppressLint("ModifierParameter")
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun ActionTextButton(
+    onClickListener: () -> Unit,
     icon: ImageVector,
     text: String,
     contentDescription: String = "Description",

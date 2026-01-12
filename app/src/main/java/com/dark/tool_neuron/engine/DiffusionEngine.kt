@@ -42,7 +42,7 @@ class DiffusionEngine {
     val isGenerating: StateFlow<Boolean>
         get() = sdManager.isGenerating
 
-    fun init(context: Context, safetyCheckerEnabled: Boolean = false) {
+    fun init(context: Context, safetyCheckerEnabled: Boolean = true) {
         try {
             sdManager = StableDiffusionManager.getInstance(context)
             sdManager.initialize(
@@ -69,7 +69,8 @@ class DiffusionEngine {
         isPony: Boolean = false,
         httpPort: Int = 8081,
         width: Int = 512,
-        height: Int = 512
+        height: Int = 512,
+        safetyMode: Boolean = false
     ): Result<String> {
         return try {
             val model = modelConfig {
@@ -80,7 +81,7 @@ class DiffusionEngine {
                 useCpuClip(useCpuClip)
                 isPony(isPony)
                 httpPort(httpPort)
-                setSafetyMode(false)
+                setSafetyMode(safetyMode)
             }
 
             val success = sdManager.loadModel(model, width = width, height = height)

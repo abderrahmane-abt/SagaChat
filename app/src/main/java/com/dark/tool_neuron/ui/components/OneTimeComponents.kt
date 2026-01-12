@@ -66,7 +66,7 @@ fun ModelListItem(
         Row(
             modifier = Modifier.padding(rDp(8.dp)), verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(model.modelName, overflow = TextOverflow.Clip, modifier = Modifier.weight(1f).padding(end = rDp(12.dp)))
+            Text(model.modelName, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(end = rDp(12.dp)))
             Crossfade(isLoaded) {
                 when (it) {
                     true -> {
