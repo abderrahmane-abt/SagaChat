@@ -1,7 +1,6 @@
 package com.dark.tool_neuron.worker
 
 import android.annotation.SuppressLint
-import com.dark.tool_neuron.engine.DiffusionEngine
 import com.dark.tool_neuron.engine.GGUFEngine
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.models.table_schema.Model
@@ -18,8 +17,7 @@ import java.security.MessageDigest
 class ModelDataParser {
 
     suspend fun loadModel(
-        model: Model,
-        config: ModelConfig?
+        model: Model, config: ModelConfig?
     ): ModelLoadResult = withContext(Dispatchers.IO) {
         return@withContext when (model.providerType) {
             ProviderType.GGUF -> loadGGUFModel(model, config)
@@ -29,8 +27,7 @@ class ModelDataParser {
     }
 
     private suspend fun loadGGUFModel(
-        model: Model,
-        config: ModelConfig?
+        model: Model, config: ModelConfig?
     ): ModelLoadResult = withContext(Dispatchers.IO) {
         try {
             val engine = GGUFEngine()
@@ -41,8 +38,7 @@ class ModelDataParser {
                 if (infoJson != null) {
                     val modelInfo = parseGGUFInfo(infoJson)
                     ModelLoadResult.Success(
-                        info = modelInfo,
-                        engine = engine
+                        info = modelInfo, engine = engine
                     )
                 } else {
                     ModelLoadResult.Error("Failed to retrieve model information")
@@ -56,12 +52,12 @@ class ModelDataParser {
     }
 
     private suspend fun loadDiffusionModel(
-        model: Model,
-        config: ModelConfig?
+        model: Model, config: ModelConfig?
     ): ModelLoadResult = withContext(Dispatchers.IO) {
         try {
             // Parse diffusion config from ModelConfig
-            val diffusionConfig = parseDiffusionConfig(config)
+            val diffusionConfig = parseDiffusionConfig(config?.modelLoadingParams)
+            val inferenceParams = parseDiffusionInferenceParams(config?.modelInferenceParams)
 
             // Validate model directory exists
             val modelDir = File(model.modelPath)
@@ -100,7 +96,8 @@ class ModelDataParser {
                     name = model.modelName,
                     description = "Stable Diffusion model for image generation",
                     parameters = buildDiffusionParametersMap(diffusionConfig, modelDir),
-                    modelConfig = diffusionConfig
+                    modelConfig = diffusionConfig,
+                    inferenceParams = inferenceParams
                 )
 
                 ModelLoadResult.Success(
@@ -115,13 +112,13 @@ class ModelDataParser {
         }
     }
 
-    private fun parseDiffusionConfig(config: ModelConfig?): DiffusionConfig {
-        if (config?.modelLoadingParams == null) {
+    private fun parseDiffusionConfig(jsonString: String?): DiffusionConfig {
+        if (jsonString == null) {
             return DiffusionConfig() // Return defaults
         }
 
         return try {
-            val json = JSONObject(config.modelLoadingParams)
+            val json = JSONObject(jsonString)
             DiffusionConfig(
                 textEmbeddingSize = json.optInt("text_embedding_size", 768),
                 runOnCpu = json.optBoolean("run_on_cpu", false),
@@ -137,9 +134,12 @@ class ModelDataParser {
         }
     }
 
+    private fun parseDiffusionInferenceParams(jsonString: String?): DiffusionInferenceParams {
+        return DiffusionInferenceParams.fromJson(jsonString)
+    }
+
     private fun buildDiffusionParametersMap(
-        config: DiffusionConfig,
-        modelDir: File
+        config: DiffusionConfig, modelDir: File
     ): Map<String, String> {
         return buildMap {
             put("Type", if (config.runOnCpu) "CPU" else "NPU/GPU")
@@ -161,10 +161,18 @@ class ModelDataParser {
             if (File(modelDir, "unet.bin").exists() || File(modelDir, "unet.mnn").exists()) {
                 components.add("UNet")
             }
-            if (File(modelDir, "vae_decoder.bin").exists() || File(modelDir, "vae_decoder.mnn").exists()) {
+            if (File(modelDir, "vae_decoder.bin").exists() || File(
+                    modelDir,
+                    "vae_decoder.mnn"
+                ).exists()
+            ) {
                 components.add("VAE Decoder")
             }
-            if (File(modelDir, "vae_encoder.bin").exists() || File(modelDir, "vae_encoder.mnn").exists()) {
+            if (File(modelDir, "vae_encoder.bin").exists() || File(
+                    modelDir,
+                    "vae_encoder.mnn"
+                ).exists()
+            ) {
                 components.add("VAE Encoder")
             }
             if (File(modelDir, "clip_v2.mnn").exists() || File(modelDir, "clip.mnn").exists()) {
@@ -299,9 +307,7 @@ class ModelDataParser {
 
         // Hash key files
         val keyFiles = listOf(
-            "unet.bin", "unet.mnn",
-            "vae_decoder.bin", "vae_decoder.mnn",
-            "tokenizer.json"
+            "unet.bin", "unet.mnn", "vae_decoder.bin", "vae_decoder.mnn", "tokenizer.json"
         )
 
         keyFiles.forEach { fileName ->
@@ -348,8 +354,7 @@ data class DiffusionConfig(
  */
 sealed class ModelLoadResult {
     data class Success(
-        val info: ModelInfo,
-        val engine: Any // Can be GGUFEngine, "DiffusionEngine", etc.
+        val info: ModelInfo, val engine: Any // Can be GGUFEngine, "DiffusionEngine", etc.
     ) : ModelLoadResult()
 
     data class Error(val message: String) : ModelLoadResult()
@@ -394,15 +399,79 @@ data class DiffusionModelInfo(
     override val name: String,
     override val description: String,
     override val parameters: Map<String, String> = emptyMap(),
-    val modelConfig: DiffusionConfig
+    val modelConfig: DiffusionConfig,
+    val inferenceParams: DiffusionInferenceParams = DiffusionInferenceParams()
 ) : ModelInfo {
-    override val additionalInfo: Map<String, String>? = buildMap {
+    override val additionalInfo: Map<String, String> = buildMap {
         put("Backend", if (modelConfig.runOnCpu) "CPU" else "NPU/GPU")
         put("CLIP", if (modelConfig.useCpuClip) "CPU (MNN)" else "NPU")
         put("Default Size", "${modelConfig.width}×${modelConfig.height}")
 
         if (modelConfig.safetyMode) {
             put("Safety Filter", "Enabled")
+        }
+    }
+}
+
+
+/**
+ * Inference parameters for Diffusion models
+ */
+data class DiffusionInferenceParams(
+    val negativePrompt: String = "",
+    val steps: Int = 28,
+    val cfgScale: Float = 7f,
+    val scheduler: String = "dpm",
+    val useOpenCL: Boolean = false,
+    val denoiseStrength: Float = 0.6f,
+    val showDiffusionProcess: Boolean = false,
+    val showDiffusionStride: Int = 1
+) {
+    fun toJson(): String {
+        return JSONObject().apply {
+            put("negative_prompt", negativePrompt)
+            put("steps", steps)
+            put("cfg_scale", cfgScale)
+            put("scheduler", scheduler)
+            put("use_opencl", useOpenCL)
+            put("denoise_strength", denoiseStrength)
+            put("show_diffusion_process", showDiffusionProcess)
+            put("show_diffusion_stride", showDiffusionStride)
+        }.toString()
+    }
+
+    companion object {
+        fun fromJson(jsonString: String?): DiffusionInferenceParams {
+            if (jsonString == null) return DiffusionInferenceParams()
+
+            return try {
+                val json = JSONObject(jsonString)
+                DiffusionInferenceParams(
+                    negativePrompt = json.optString("negative_prompt", ""),
+                    steps = json.optInt("steps", 28),
+                    cfgScale = json.optDouble("cfg_scale", 7.0).toFloat(),
+                    scheduler = json.optString("scheduler", "dpm"),
+                    useOpenCL = json.optBoolean("use_opencl", false),
+                    denoiseStrength = json.optDouble("denoise_strength", 0.6).toFloat(),
+                    showDiffusionProcess = json.optBoolean("show_diffusion_process", false),
+                    showDiffusionStride = json.optInt("show_diffusion_stride", 1)
+                )
+            } catch (e: Exception) {
+                DiffusionInferenceParams()
+            }
+        }
+    }
+
+    /**
+     * Available schedulers for Stable Diffusion
+     */
+    enum class Scheduler(val value: String) {
+        DPM("dpm"), EULER("euler"), EULER_A("euler_a"), DDIM("ddim"), PNDM("pndm");
+
+        companion object {
+            fun fromString(value: String): Scheduler {
+                return entries.find { it.value == value } ?: DPM
+            }
         }
     }
 }

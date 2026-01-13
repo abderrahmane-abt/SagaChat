@@ -8,12 +8,15 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,13 +34,19 @@ import com.dark.tool_neuron.models.state.AppState
 import com.dark.tool_neuron.models.state.getBackgroundColor
 import com.dark.tool_neuron.models.state.getColor
 import com.dark.tool_neuron.models.state.getContentColor
+import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.state.AppStateManager
 import com.dark.tool_neuron.ui.components.ActionButton
-import com.dark.tool_neuron.ui.components.CuteSwitch
+import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
-import java.io.RandomAccessFile
+
+enum class DynamicWindowTab {
+    STATUS,
+    MODELS,
+    SYSTEM
+}
 
 @Composable
 fun DynamicActionWindow(
@@ -45,8 +54,9 @@ fun DynamicActionWindow(
     modelViewModel: LLMModelViewModel
 ) {
     val appState by AppStateManager.appState.collectAsState()
-    var showSystemInfo by remember { mutableStateOf(false) }
-    var isExpanded by remember { mutableStateOf(true) }
+    var selectedTab by remember { mutableStateOf(DynamicWindowTab.STATUS) }
+    val installedModels by modelViewModel.installedModels.collectAsState(initial = emptyList())
+    val currentModelID by modelViewModel.currentModelID.collectAsState()
 
     Card(
         modifier = Modifier
@@ -64,84 +74,74 @@ fun DynamicActionWindow(
         shape = RoundedCornerShape(rDp(16.dp))
     ) {
         Column {
-            // Header
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(rDp(16.dp)),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Status",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = appState.getContentColor()
-                )
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // System info toggle
-                    CuteSwitch(
-                        checked = showSystemInfo,
-                        onCheckedChange = { showSystemInfo = it },
-                        width = rDp(44.dp),
-                        height = rDp(24.dp),
-                        thumbSize = rDp(18.dp)
-                    )
-
-                    Text(
-                        text = "System",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = appState.getContentColor()
-                    )
-
-                    ActionButton(
-                        onClickListener = { isExpanded = !isExpanded },
-                        icon = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = if (isExpanded) "Collapse" else "Expand"
-                    )
+            // Tab Row
+            TabRow(
+                selectedTabIndex = selectedTab.ordinal,
+                containerColor = appState.getBackgroundColor(),
+                contentColor = appState.getContentColor(),
+                indicator = { tabPositions ->
+                    if (selectedTab.ordinal < tabPositions.size) {
+                        TabRowDefaults.SecondaryIndicator(
+                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab.ordinal]),
+                            height = rDp(3.dp),
+                            color = appState.getColor()
+                        )
+                    }
                 }
+            ) {
+                Tab(
+                    selected = selectedTab == DynamicWindowTab.STATUS,
+                    onClick = { selectedTab = DynamicWindowTab.STATUS },
+                    text = {
+                        Text(
+                            "Status",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (selectedTab == DynamicWindowTab.STATUS) FontWeight.SemiBold else FontWeight.Normal
+                        )
+                    }
+                )
+                Tab(
+                    selected = selectedTab == DynamicWindowTab.MODELS,
+                    onClick = { selectedTab = DynamicWindowTab.MODELS },
+                    text = {
+                        Text(
+                            "Models",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (selectedTab == DynamicWindowTab.MODELS) FontWeight.SemiBold else FontWeight.Normal
+                        )
+                    }
+                )
+                Tab(
+                    selected = selectedTab == DynamicWindowTab.SYSTEM,
+                    onClick = { selectedTab = DynamicWindowTab.SYSTEM },
+                    text = {
+                        Text(
+                            "System",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (selectedTab == DynamicWindowTab.SYSTEM) FontWeight.SemiBold else FontWeight.Normal
+                        )
+                    }
+                )
             }
 
             // Content
-            AnimatedVisibility(
-                visible = isExpanded,
-                enter = expandVertically(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
+            AnimatedContent(
+                targetState = selectedTab,
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(300)) togetherWith
+                            fadeOut(animationSpec = tween(300))
+                },
+                label = "tab_content"
+            ) { tab ->
+                when (tab) {
+                    DynamicWindowTab.STATUS -> StatusTabContent(appState, chatViewModel)
+                    DynamicWindowTab.MODELS -> ModelsTabContent(
+                        installedModels,
+                        currentModelID,
+                        modelViewModel,
+                        chatViewModel
                     )
-                ) + fadeIn(),
-                exit = shrinkVertically(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + fadeOut()
-            ) {
-                Column {
-                    HorizontalDivider(color = appState.getContentColor().copy(alpha = 0.1f))
-
-                    AnimatedContent(
-                        targetState = showSystemInfo,
-                        transitionSpec = {
-                            fadeIn(
-                                animationSpec = tween(200)
-                            ) togetherWith fadeOut(
-                                animationSpec = tween(200)
-                            )
-                        },
-                        label = "content_transition"
-                    ) { showSystem ->
-                        if (showSystem) {
-                            SystemInfoContent(appState, modelViewModel)
-                        } else {
-                            StateContent(appState, chatViewModel)
-                        }
-                    }
+                    DynamicWindowTab.SYSTEM -> SystemTabContent(appState, modelViewModel)
                 }
             }
         }
@@ -149,10 +149,11 @@ fun DynamicActionWindow(
 }
 
 @Composable
-private fun StateContent(appState: AppState, chatViewModel: ChatViewModel) {
+private fun StatusTabContent(appState: AppState, chatViewModel: ChatViewModel) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = rDp(120.dp), max = rDp(300.dp))
             .padding(rDp(16.dp))
     ) {
         when (appState) {
@@ -169,125 +170,233 @@ private fun StateContent(appState: AppState, chatViewModel: ChatViewModel) {
 }
 
 @Composable
-private fun SystemInfoContent(appState: AppState, modelViewModel: LLMModelViewModel) {
+private fun ModelsTabContent(
+    installedModels: List<Model>,
+    currentModelID: String,
+    modelViewModel: LLMModelViewModel,
+    chatViewModel: ChatViewModel
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = rDp(120.dp), max = rDp(300.dp))
+    ) {
+        if (installedModels.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(rDp(32.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.vl_models),
+                        contentDescription = null,
+                        modifier = Modifier.size(rDp(32.dp)),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                    Text(
+                        "No models installed",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(rDp(12.dp)),
+                verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            ) {
+                items(installedModels, key = { it.id }) { model ->
+                    ModelListItem(
+                        modifier = Modifier.fillMaxWidth(),
+                        model = model,
+                        isLoaded = currentModelID == model.id,
+                        onClickListener = { selectedModel ->
+                            if (currentModelID == model.id) {
+                                modelViewModel.unloadModel()
+                            } else {
+                                modelViewModel.loadModel(selectedModel)
+                            }
+                            chatViewModel.hideDynamicWindow()
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SystemTabContent(appState: AppState, modelViewModel: LLMModelViewModel) {
     val context = LocalContext.current
-    val installedModels by modelViewModel.installedModels.collectAsState(initial = emptyList())
     val isTextModelLoaded by modelViewModel.isGgufModelLoaded.collectAsState()
     val isImageModelLoaded by modelViewModel.isDiffusionModelLoaded.collectAsState()
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = rDp(120.dp), max = rDp(300.dp))
             .padding(rDp(16.dp))
-            .heightIn(max = rDp(300.dp))
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+        verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
     ) {
-        // Loaded Models Section
-        Text(
-            text = "Loaded Models",
-            style = MaterialTheme.typography.labelMedium,
-            color = appState.getColor(),
-            fontWeight = FontWeight.SemiBold
-        )
-
+        // Loaded Models
         if (isTextModelLoaded || isImageModelLoaded) {
             Column(verticalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
+                Text(
+                    text = "Active Models",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = appState.getColor(),
+                    fontWeight = FontWeight.SemiBold
+                )
+
                 if (isTextModelLoaded) {
-                    ModelStatusRow(
-                        label = "Text Model",
-                        status = "Active",
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    ModelStatusChip(label = "Text", color = MaterialTheme.colorScheme.primary)
                 }
                 if (isImageModelLoaded) {
-                    ModelStatusRow(
-                        label = "Image Model",
-                        status = "Active",
-                        color = MaterialTheme.colorScheme.tertiary
-                    )
+                    ModelStatusChip(label = "Image", color = MaterialTheme.colorScheme.tertiary)
                 }
             }
-        } else {
-            Text(
-                text = "No models loaded",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
 
-        Spacer(modifier = Modifier.height(rDp(4.dp)))
-
         // System Resources
-        Text(
-            text = "System Resources",
-            style = MaterialTheme.typography.labelMedium,
-            color = appState.getColor(),
-            fontWeight = FontWeight.SemiBold
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
+            Text(
+                text = "Resources",
+                style = MaterialTheme.typography.labelMedium,
+                color = appState.getColor(),
+                fontWeight = FontWeight.SemiBold
+            )
 
-        SystemMetricRow(
-            icon = Icons.Default.Memory,
-            label = "RAM",
-            value = getMemoryUsage(context)
-        )
-
-        SystemMetricRow(
-            icon = Icons.Default.Storage,
-            label = "CPU Cores",
-            value = getCpuCores()
-        )
-
-        SystemMetricRow(
-            icon = Icons.Default.Speed,
-            label = "Threads",
-            value = getActiveThreads()
-        )
-
-        Spacer(modifier = Modifier.height(rDp(4.dp)))
+            SystemMetricRow(icon = Icons.Default.Memory, label = "RAM", value = getMemoryUsage(context))
+            SystemMetricRow(icon = Icons.Default.Storage, label = "CPU Cores", value = getCpuCores())
+            SystemMetricRow(icon = Icons.Default.Speed, label = "Threads", value = getActiveThreads())
+        }
 
         // Device Info
-        Text(
-            text = "Device Info",
-            style = MaterialTheme.typography.labelMedium,
-            color = appState.getColor(),
-            fontWeight = FontWeight.SemiBold
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
+            Text(
+                text = "Device",
+                style = MaterialTheme.typography.labelMedium,
+                color = appState.getColor(),
+                fontWeight = FontWeight.SemiBold
+            )
 
-        InfoRow("Model", Build.MODEL)
-        InfoRow("Android", Build.VERSION.RELEASE)
-        InfoRow("SDK", Build.VERSION.SDK_INT.toString())
+            InfoRow("Model", Build.MODEL)
+            InfoRow("Android", Build.VERSION.RELEASE)
+            InfoRow("SDK", Build.VERSION.SDK_INT.toString())
+        }
     }
 }
 
 @Composable
-private fun ModelStatusRow(label: String, status: String, color: androidx.compose.ui.graphics.Color) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(color.copy(alpha = 0.1f), RoundedCornerShape(rDp(8.dp)))
-            .padding(horizontal = rDp(12.dp), vertical = rDp(8.dp)),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+private fun ModelListItem(
+    modifier: Modifier,
+    model: Model,
+    isLoaded: Boolean,
+    onClickListener: (Model) -> Unit
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = if (isLoaded)
+                MaterialTheme.colorScheme.primary.copy(0.12f)
+            else
+                MaterialTheme.colorScheme.surfaceVariant.copy(0.5f)
+        ),
+        shape = RoundedCornerShape(rDp(10.dp))
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(rDp(12.dp)),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(rDp(8.dp))
-                    .background(color, shape = androidx.compose.foundation.shape.CircleShape)
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium
-            )
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(rDp(10.dp)),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    painter = painterResource(
+                        if (model.providerType.name == "GGUF") R.drawable.smart_temp_message
+                        else R.drawable.vl_models
+                    ),
+                    contentDescription = null,
+                    modifier = Modifier.size(rDp(20.dp)),
+                    tint = if (isLoaded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = model.modelName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (isLoaded) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (isLoaded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = model.providerType.name,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+            }
+
+            Crossfade(targetState = isLoaded, label = "button_state") { loaded ->
+                if (loaded) {
+                    ActionTextButton(
+                        onClickListener = { onClickListener(model) },
+                        icon = Icons.Default.SubdirectoryArrowLeft,
+                        text = "Unload",
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error.copy(0.12f),
+                            contentColor = MaterialTheme.colorScheme.error
+                        ),
+                        shape = RoundedCornerShape(rDp(8.dp))
+                    )
+                } else {
+                    ActionButton(
+                        onClickListener = { onClickListener(model) },
+                        icon = Icons.Default.ArrowOutward,
+                        contentDescription = "Load",
+                        shape = RoundedCornerShape(rDp(8.dp)),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primary.copy(0.12f),
+                            contentColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun ModelStatusChip(label: String, color: androidx.compose.ui.graphics.Color) {
+    Row(
+        modifier = Modifier
+            .background(color.copy(alpha = 0.12f), RoundedCornerShape(rDp(8.dp)))
+            .padding(horizontal = rDp(12.dp), vertical = rDp(6.dp)),
+        horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(rDp(6.dp))
+                .background(color, shape = androidx.compose.foundation.shape.CircleShape)
+        )
         Text(
-            text = status,
+            text = "$label Model",
             style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium,
             color = color
         )
     }
@@ -311,17 +420,17 @@ private fun SystemMetricRow(
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                modifier = Modifier.size(rDp(18.dp)),
-                tint = MaterialTheme.colorScheme.primary
+                modifier = Modifier.size(rDp(16.dp)),
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
             )
             Text(
                 text = label,
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodySmall
             )
         }
         Text(
             text = value,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -337,7 +446,7 @@ private fun InfoRow(label: String, value: String) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
         )
         Text(
             text = value,
@@ -347,21 +456,20 @@ private fun InfoRow(label: String, value: String) {
     }
 }
 
-// State-specific content composables
+// State-specific content composables (compact versions)
 
 @Composable
 private fun WelcomeContent() {
     val appState by AppStateManager.appState.collectAsState()
-
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+        verticalArrangement = Arrangement.spacedBy(rDp(10.dp))
     ) {
         Icon(
             painter = painterResource(R.drawable.user),
             contentDescription = null,
-            modifier = Modifier.size(rDp(36.dp)),
+            modifier = Modifier.size(rDp(32.dp)),
             tint = appState.getColor()
         )
         Text(
@@ -381,16 +489,15 @@ private fun WelcomeContent() {
 @Composable
 private fun NoModelLoadedContent(chatViewModel: ChatViewModel) {
     val appState by AppStateManager.appState.collectAsState()
-
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+        verticalArrangement = Arrangement.spacedBy(rDp(10.dp))
     ) {
         Icon(
             painter = painterResource(R.drawable.vl_models),
             contentDescription = null,
-            modifier = Modifier.size(rDp(36.dp)),
+            modifier = Modifier.size(rDp(32.dp)),
             tint = appState.getColor()
         )
         Text(
@@ -400,28 +507,16 @@ private fun NoModelLoadedContent(chatViewModel: ChatViewModel) {
             color = appState.getContentColor()
         )
         Text(
-            text = "Select a model to continue",
+            text = "Switch to Models tab",
             style = MaterialTheme.typography.bodySmall,
             color = appState.getContentColor().copy(alpha = 0.7f)
         )
-
-        Button(
-            onClick = { chatViewModel.showModelList() },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = appState.getColor()
-            )
-        ) {
-            Icon(Icons.Default.ModelTraining, contentDescription = null)
-            Spacer(modifier = Modifier.width(rDp(8.dp)))
-            Text("Select Model")
-        }
     }
 }
 
 @Composable
 private fun ModelLoadedContent(state: AppState.ModelLoaded) {
     val appState by AppStateManager.appState.collectAsState()
-
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -435,7 +530,7 @@ private fun ModelLoadedContent(state: AppState.ModelLoaded) {
             Icon(
                 painter = painterResource(R.drawable.smart_temp_message),
                 contentDescription = null,
-                modifier = Modifier.size(rDp(32.dp)),
+                modifier = Modifier.size(rDp(28.dp)),
                 tint = appState.getColor()
             )
             Column {
@@ -454,7 +549,6 @@ private fun ModelLoadedContent(state: AppState.ModelLoaded) {
                 )
             }
         }
-
         Icon(
             imageVector = Icons.Default.CheckCircle,
             contentDescription = "Ready",
@@ -467,7 +561,6 @@ private fun ModelLoadedContent(state: AppState.ModelLoaded) {
 @Composable
 private fun LoadingModelContent(state: AppState.LoadingModel) {
     val appState by AppStateManager.appState.collectAsState()
-
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
@@ -484,11 +577,10 @@ private fun LoadingModelContent(state: AppState.LoadingModel) {
             ) {
                 CircularProgressIndicator(
                     progress = { state.progress },
-                    modifier = Modifier.size(rDp(32.dp)),
+                    modifier = Modifier.size(rDp(28.dp)),
                     color = appState.getColor(),
                     strokeWidth = rDp(3.dp)
                 )
-
                 Column {
                     Text(
                         text = "Loading",
@@ -505,7 +597,6 @@ private fun LoadingModelContent(state: AppState.LoadingModel) {
                     )
                 }
             }
-
             Text(
                 text = "${(state.progress * 100).toInt()}%",
                 style = MaterialTheme.typography.titleMedium,
@@ -513,13 +604,12 @@ private fun LoadingModelContent(state: AppState.LoadingModel) {
                 color = appState.getColor()
             )
         }
-
         LinearProgressIndicator(
             progress = { state.progress },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(rDp(6.dp))
-                .clip(RoundedCornerShape(rDp(3.dp))),
+                .height(rDp(4.dp))
+                .clip(RoundedCornerShape(rDp(2.dp))),
             color = appState.getColor(),
             trackColor = appState.getColor().copy(alpha = 0.2f)
         )
@@ -555,16 +645,14 @@ private fun GeneratingTextContent(state: AppState.GeneratingText, chatViewModel:
                     ),
                     label = "rotation"
                 )
-
                 Icon(
                     painter = painterResource(R.drawable.tool),
                     contentDescription = null,
                     modifier = Modifier
-                        .size(rDp(32.dp))
+                        .size(rDp(28.dp))
                         .rotate(rotation),
                     tint = appState.getColor()
                 )
-
                 Column {
                     Text(
                         text = "Generating",
@@ -581,45 +669,22 @@ private fun GeneratingTextContent(state: AppState.GeneratingText, chatViewModel:
                     )
                 }
             }
-
             if (streamingText.isNotEmpty()) {
-                val tokenCount = streamingText.split("\\s+".toRegex()).size
                 Text(
-                    text = "$tokenCount",
+                    text = "${streamingText.split("\\s+".toRegex()).size}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = appState.getColor()
                 )
             }
         }
-
         LinearProgressIndicator(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(rDp(4.dp))
+                .height(rDp(3.dp))
                 .clip(RoundedCornerShape(rDp(2.dp))),
             color = appState.getColor()
         )
-
-        if (streamingText.isNotEmpty()) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(rDp(8.dp)),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            ) {
-                Text(
-                    text = streamingText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier
-                        .padding(rDp(12.dp))
-                        .heightIn(max = rDp(100.dp))
-                        .verticalScroll(rememberScrollState()),
-                    maxLines = 4,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
     }
 }
 
@@ -654,21 +719,21 @@ private fun GeneratingImageContent(state: AppState.GeneratingImage, chatViewMode
                     ),
                     label = "scale"
                 )
-
                 Icon(
                     painter = painterResource(R.drawable.tool),
                     contentDescription = null,
                     modifier = Modifier
-                        .size(rDp(32.dp))
+                        .size(rDp(28.dp))
                         .scale(scale),
                     tint = appState.getColor()
                 )
-
                 Column {
                     Text(
-                        text = if (step.isNotEmpty()) step else "Creating",
+                        text = step.ifEmpty { "Creating" },
                         style = MaterialTheme.typography.labelSmall,
-                        color = appState.getContentColor().copy(alpha = 0.7f)
+                        color = appState.getContentColor().copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = state.modelName,
@@ -680,7 +745,6 @@ private fun GeneratingImageContent(state: AppState.GeneratingImage, chatViewMode
                     )
                 }
             }
-
             Text(
                 text = "${(progress * 100).toInt()}%",
                 style = MaterialTheme.typography.titleMedium,
@@ -688,17 +752,15 @@ private fun GeneratingImageContent(state: AppState.GeneratingImage, chatViewMode
                 color = appState.getColor()
             )
         }
-
         LinearProgressIndicator(
             progress = { progress },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(rDp(6.dp))
-                .clip(RoundedCornerShape(rDp(3.dp))),
+                .height(rDp(4.dp))
+                .clip(RoundedCornerShape(rDp(2.dp))),
             color = appState.getColor(),
             trackColor = appState.getColor().copy(alpha = 0.2f)
         )
-
         streamingImage?.let { bitmap ->
             Image(
                 bitmap = bitmap.asImageBitmap(),
@@ -706,7 +768,7 @@ private fun GeneratingImageContent(state: AppState.GeneratingImage, chatViewMode
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    .clip(RoundedCornerShape(rDp(12.dp)))
+                    .clip(RoundedCornerShape(rDp(10.dp)))
             )
         }
     }
@@ -715,25 +777,22 @@ private fun GeneratingImageContent(state: AppState.GeneratingImage, chatViewMode
 @Composable
 private fun GeneratingAudioContent(state: AppState.GeneratingAudio) {
     val appState by AppStateManager.appState.collectAsState()
-
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
     ) {
         AudioWaveAnimation(appState.getColor())
-
         Text(
             text = "Generating Audio",
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
             color = appState.getContentColor()
         )
-
         LinearProgressIndicator(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(rDp(4.dp))
+                .height(rDp(3.dp))
                 .clip(RoundedCornerShape(rDp(2.dp))),
             color = appState.getColor()
         )
@@ -743,30 +802,24 @@ private fun GeneratingAudioContent(state: AppState.GeneratingAudio) {
 @Composable
 private fun AudioWaveAnimation(color: androidx.compose.ui.graphics.Color) {
     val infiniteTransition = rememberInfiniteTransition(label = "audio_wave")
-
     Row(
         horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.height(rDp(32.dp))
+        modifier = Modifier.height(rDp(28.dp))
     ) {
         repeat(5) { index ->
             val height by infiniteTransition.animateFloat(
                 initialValue = 0.3f,
                 targetValue = 1f,
                 animationSpec = infiniteRepeatable(
-                    animation = tween(
-                        durationMillis = 500,
-                        delayMillis = index * 80,
-                        easing = FastOutSlowInEasing
-                    ),
+                    animation = tween(500, delayMillis = index * 80, easing = FastOutSlowInEasing),
                     repeatMode = RepeatMode.Reverse
                 ),
                 label = "wave_$index"
             )
-
             Box(
                 modifier = Modifier
-                    .width(rDp(4.dp))
+                    .width(rDp(3.dp))
                     .fillMaxHeight(height)
                     .clip(RoundedCornerShape(rDp(2.dp)))
                     .background(color)
@@ -785,10 +838,9 @@ private fun ErrorContent(state: AppState.Error) {
         Icon(
             painter = painterResource(R.drawable.error),
             contentDescription = null,
-            modifier = Modifier.size(rDp(32.dp)),
+            modifier = Modifier.size(rDp(28.dp)),
             tint = MaterialTheme.colorScheme.error
         )
-
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "Error",
@@ -796,64 +848,31 @@ private fun ErrorContent(state: AppState.Error) {
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.error
             )
-
             Spacer(modifier = Modifier.height(rDp(4.dp)))
-
             Text(
                 text = state.message,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
-
-            state.modelName?.let { modelName ->
-                Spacer(modifier = Modifier.height(rDp(4.dp)))
-                Text(
-                    text = modelName,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                )
-            }
         }
     }
 }
 
-// System info helper functions
-
+// System info helpers
 @Composable
 private fun getMemoryUsage(context: Context): String {
     val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
     val memoryInfo = ActivityManager.MemoryInfo()
     activityManager.getMemoryInfo(memoryInfo)
-
     val usedMemory = (memoryInfo.totalMem - memoryInfo.availMem) / (1024 * 1024)
     val totalMemory = memoryInfo.totalMem / (1024 * 1024)
-
     return "${usedMemory}MB / ${totalMemory}MB"
 }
 
 @Composable
-private fun getCpuCores(): String {
-    return "${Runtime.getRuntime().availableProcessors()}"
-}
+private fun getCpuCores(): String = "${Runtime.getRuntime().availableProcessors()}"
 
 @Composable
-private fun getActiveThreads(): String {
-    return "${Thread.activeCount()}"
-}
-
-@Composable
-private fun getCpuUsage(): String {
-    return try {
-        val reader = RandomAccessFile("/proc/stat", "r")
-        val load = reader.readLine()
-        reader.close()
-        val toks = load.split(" +".toRegex())
-        val idle = toks[4].toLong()
-        val cpu = toks[1].toLong() + toks[2].toLong() + toks[3].toLong()
-        val total = idle + cpu
-        val usage = if (total > 0) ((cpu.toFloat() / total) * 100).toInt() else 0
-        "$usage%"
-    } catch (e: Exception) {
-        "N/A"
-    }
-}
+private fun getActiveThreads(): String = "${Thread.activeCount()}"

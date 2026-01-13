@@ -6,22 +6,28 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.di.AppContainer
+import com.dark.tool_neuron.models.data.HFModelRepository
 import com.dark.tool_neuron.models.data.HuggingFaceModel
 import com.dark.tool_neuron.models.data.ModelType
-import com.dark.tool_neuron.repo.ModelRepository
+import com.dark.tool_neuron.models.table_schema.Model
+import com.dark.tool_neuron.repo.ModelRepositoryDataStore
 import com.dark.tool_neuron.repo.ModelStoreRepository
 import com.dark.tool_neuron.service.ModelDownloadService
+import com.dark.tool_neuron.ui.screen.StoreTab
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.toSet
 import kotlinx.coroutines.launch
+import java.io.File
 
 class ModelStoreViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = ModelStoreRepository(application)
     private val systemRepo = AppContainer.getModelRepository()
+    private val repoDataStore = ModelRepositoryDataStore(application)
+
+    private val _selectedTab = MutableStateFlow(StoreTab.MODELS)
+    val selectedTab: StateFlow<StoreTab> = _selectedTab
 
     private val _models = MutableStateFlow<List<HuggingFaceModel>>(emptyList())
     val models: StateFlow<List<HuggingFaceModel>> = _models
@@ -35,14 +41,33 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
 
-    private val _installedModels = MutableStateFlow<Set<String>>(emptySet())
-    val installedModels: StateFlow<Set<String>> = _installedModels
+    private val _installedModels = MutableStateFlow<List<Model>>(emptyList())
+    val installedModels: StateFlow<List<Model>> = _installedModels
 
+    private val _deviceInfo = MutableStateFlow<Map<String, String>>(emptyMap())
+    val deviceInfo: StateFlow<Map<String, String>> = _deviceInfo
+
+    private val _deleteInProgress = MutableStateFlow<String?>(null)
+    val deleteInProgress: StateFlow<String?> = _deleteInProgress
+
+    val repositories = repoDataStore.repositories
     val downloadState = ModelDownloadService.downloadState
 
+    // App's internal models directory
+    private val appModelsDir = File(application.filesDir, "models")
+
     init {
+        loadDeviceInfo()
         loadModels()
         loadInstalledModels()
+    }
+
+    private fun loadDeviceInfo() {
+        _deviceInfo.value = repository.getDeviceInfo()
+    }
+
+    fun selectTab(tab: StoreTab) {
+        _selectedTab.value = tab
     }
 
     fun loadModels() {
@@ -50,24 +75,27 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
             _isLoading.value = true
             _error.value = null
 
-            repository.getAvailableModels()
-                .onSuccess { modelsList ->
+            try {
+                val repos = repositories.first()
+                repository.getAvailableModels(repos).onSuccess { modelsList ->
                     _models.value = modelsList
                     _filteredModels.value = modelsList
-                }
-                .onFailure { exception ->
+                }.onFailure { exception ->
                     _error.value = exception.message
                 }
-
-            _isLoading.value = false
+            } catch (e: Exception) {
+                _error.value = e.message
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
 
     private fun loadInstalledModels() {
         viewModelScope.launch {
             try {
-                val installedList = systemRepo.getAllModels().first() // Get first emission only
-                _installedModels.value = installedList.map { it.modelName }.toSet()
+                val installedList = systemRepo.getAllModels().first()
+                _installedModels.value = installedList
             } catch (e: Exception) {
                 Log.e("ModelStoreViewModel", "Error loading installed models", e)
             }
@@ -79,8 +107,10 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
             _models.value
         } else {
             _models.value.filter {
-                it.name.contains(query, ignoreCase = true) ||
-                        it.description.contains(query, ignoreCase = true)
+                it.name.contains(query, ignoreCase = true) || it.description.contains(
+                    query,
+                    ignoreCase = true
+                ) || it.tags.any { tag -> tag.contains(query, ignoreCase = true) }
             }
         }
     }
@@ -109,13 +139,6 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
         }
 
         context.startForegroundService(intent)
-
-        // Refresh installed models after download completes
-        // You might want to observe the download completion and then refresh
-    }
-
-    fun isInstalled(modelName: String): Boolean {
-        return _installedModels.value.contains(modelName)
     }
 
     fun cancelDownload() {
@@ -124,5 +147,64 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
             action = ModelDownloadService.ACTION_CANCEL_DOWNLOAD
         }
         context.startService(intent)
+    }
+
+    fun deleteModel(model: Model) {
+        viewModelScope.launch {
+            _deleteInProgress.value = model.id
+            try {
+                // Delete model file if it's in app's internal directory
+                val modelFile = File(model.modelPath)
+                if (modelFile.exists() && modelFile.absolutePath.startsWith(appModelsDir.absolutePath)) {
+                    val deleted = modelFile.delete()
+                    Log.d("ModelStoreViewModel", "Model file deleted: $deleted - ${modelFile.absolutePath}")
+
+                    // If it's a directory (for SD models), delete recursively
+                    if (modelFile.isDirectory) {
+                        modelFile.deleteRecursively()
+                    }
+                }
+
+                // Delete config from database
+                val config = systemRepo.getConfigByModelId(model.id)
+                if (config != null) {
+                    systemRepo.deleteConfig(config)
+                    Log.d("ModelStoreViewModel", "Model config deleted for: ${model.id}")
+                }
+
+                // Delete model from database
+                systemRepo.deleteModel(model)
+                Log.d("ModelStoreViewModel", "Model deleted from database: ${model.modelName}")
+
+                // Reload installed models
+                loadInstalledModels()
+            } catch (e: Exception) {
+                Log.e("ModelStoreViewModel", "Error deleting model", e)
+                _error.value = "Failed to delete model: ${e.message}"
+            } finally {
+                _deleteInProgress.value = null
+            }
+        }
+    }
+
+    fun addRepository(repo: HFModelRepository) {
+        viewModelScope.launch {
+            repoDataStore.addRepository(repo)
+            loadModels()
+        }
+    }
+
+    fun removeRepository(repoId: String) {
+        viewModelScope.launch {
+            repoDataStore.removeRepository(repoId)
+            loadModels()
+        }
+    }
+
+    fun toggleRepository(repoId: String) {
+        viewModelScope.launch {
+            repoDataStore.toggleRepository(repoId)
+            loadModels()
+        }
     }
 }

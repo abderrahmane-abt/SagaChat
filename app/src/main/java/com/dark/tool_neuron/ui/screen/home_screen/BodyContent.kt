@@ -2,15 +2,10 @@ package com.dark.tool_neuron.ui.screen.home_screen
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.*
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,10 +17,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -33,6 +32,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.dark.tool_neuron.R
 import com.dark.tool_neuron.models.messages.ContentType
 import com.dark.tool_neuron.models.messages.ImageGenerationMetrics
@@ -40,12 +40,30 @@ import com.dark.tool_neuron.models.messages.MessageContent
 import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.models.messages.Role
 import com.dark.tool_neuron.ui.components.MarkdownText
+import com.dark.tool_neuron.ui.theme.maple
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
 import com.dark.tool_neuron.worker.GenerationManager
 import com.mp.ai_gguf.models.DecodingMetrics
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.Base64
+
+data class ParsedMessage(
+    val thinkingContent: String?,
+    val actualContent: String
+)
+
+suspend fun parseThinkingTags(content: String): ParsedMessage = withContext(Dispatchers.IO) {
+    val thinkingRegex = Regex("<think>(.*?)</think>", RegexOption.DOT_MATCHES_ALL)
+    val thinkingMatch = thinkingRegex.find(content)
+
+    val thinkingContent = thinkingMatch?.groupValues?.getOrNull(1)?.trim()
+    val actualContent = content.replace(thinkingRegex, "").trim()
+
+    ParsedMessage(thinkingContent, actualContent)
+}
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -114,7 +132,6 @@ fun BodyContent(
             }
         }
 
-        // Shared transition dialog
         AnimatedVisibility(
             visible = showDynamicWindow,
             enter = fadeIn(animationSpec = tween(300)),
@@ -132,7 +149,6 @@ fun BodyContent(
                     })
         }
 
-        // Dynamic window overlay
         AnimatedVisibility(
             visible = showDynamicWindow,
             enter = fadeIn(animationSpec = tween(300)) + slideInVertically(
@@ -181,7 +197,6 @@ private fun StreamingView(
             .padding(rDp(8.dp)),
         verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
     ) {
-        // User message bubble
         UserMessageBubble(
             message = Messages(
                 role = Role.User,
@@ -192,7 +207,6 @@ private fun StreamingView(
             )
         )
 
-        // Assistant streaming bubble (text or image)
         if (isImageGeneration) {
             ImageGenerationStreamingBubble(
                 streamingImage = streamingImage,
@@ -219,7 +233,6 @@ private fun ImageGenerationStreamingBubble(
             .padding(rDp(8.dp)),
         verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
     ) {
-        // Progress indicator
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
@@ -247,7 +260,6 @@ private fun ImageGenerationStreamingBubble(
             }
         }
 
-        // Preview image if available
         streamingImage?.let { bitmap ->
             Surface(
                 modifier = Modifier
@@ -269,31 +281,117 @@ private fun ImageGenerationStreamingBubble(
 
 @Composable
 private fun AssistantStreamingBubble(text: String) {
+    val parsedMessage by produceState(
+        initialValue = ParsedMessage(null, text),
+        key1 = text
+    ) {
+        value = parseThinkingTags(text)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(rDp(8.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+            .padding(vertical = rDp(8.dp)),
+        verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
     ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
-            verticalAlignment = Alignment.Top
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(rDp(8.dp))
-                    .background(
-                        MaterialTheme.colorScheme.primary,
-                        shape = CircleShape
-                    )
-            )
+        if (parsedMessage.thinkingContent != null) {
+            ThinkingBlock(parsedMessage.thinkingContent!!)
+        }
 
-            Text(
-                text = text.ifEmpty { "..." },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
-            )
+        if (parsedMessage.actualContent.isNotEmpty()) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                verticalAlignment = Alignment.Top
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(rDp(8.dp))
+                        .background(MaterialTheme.colorScheme.primary, shape = CircleShape)
+                )
+
+                Text(
+                    text = parsedMessage.actualContent.ifEmpty { "..." },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ThinkingBlock(thinkingText: String) {
+    var isExpanded by remember { mutableStateOf(false) }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = rDp(12.dp)),
+        shape = RoundedCornerShape(rDp(10.dp)),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        tonalElevation = rDp(2.dp)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isExpanded = !isExpanded }
+                    .padding(vertical = rDp(8.dp), horizontal = rDp(12.dp)),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.thinking),
+                        contentDescription = null,
+                        modifier = Modifier.size(rDp(16.dp)),
+                        tint = MaterialTheme.colorScheme.tertiary
+                    )
+                    Text(
+                        text = "Thinking",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                }
+
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    modifier = Modifier.size(rDp(20.dp)),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically(
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    )
+                ) + fadeIn(),
+                exit = shrinkVertically(
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    )
+                ) + fadeOut()
+            ) {
+                Column {
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                    )
+                    Text(
+                        text = thinkingText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(rDp(12.dp))
+                    )
+                }
+            }
         }
     }
 }
@@ -351,11 +449,9 @@ private fun UserMessageBubble(message: Messages) {
         ) {
             MarkdownText(
                 text = message.content.content,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.padding(
                     horizontal = rDp(12.dp),
-                    vertical = rDp(10.dp)
+                    vertical = rDp(6.dp)
                 )
             )
         }
@@ -372,29 +468,37 @@ private fun AssistantMessageBubble(message: Messages) {
         message.imageMetrics != null
     }
 
+    val parsedMessage by produceState(
+        initialValue = ParsedMessage(null, message.content.content),
+        key1 = message.content.content
+    ) {
+        value = parseThinkingTags(message.content.content)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(rDp(8.dp)),
+            .padding(vertical = rDp(8.dp)),
         verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
     ) {
-        // Check if it's an image message
         when (message.content.contentType) {
             ContentType.Image -> {
                 ImageMessageBubble(message)
             }
             else -> {
-                MarkdownText(
-                    text = message.content.content,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(horizontal = rDp(4.dp))
-                )
+                if (parsedMessage.thinkingContent != null) {
+                    ThinkingBlock(parsedMessage.thinkingContent!!)
+                }
+
+                if (parsedMessage.actualContent.isNotEmpty()) {
+                    MarkdownText(
+                        text = parsedMessage.actualContent,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = rDp(4.dp))
+                    )
+                }
             }
         }
-        //TODO: Add Delete Icon
 
-        // Show metrics based on message type
         if (showMetrics) {
             message.decodingMetrics?.let { metrics ->
                 MetricsDisplay(metrics)
@@ -411,10 +515,12 @@ private fun AssistantMessageBubble(message: Messages) {
 
 @Composable
 private fun ImageMessageBubble(message: Messages) {
+    var isImageRevealed by remember { mutableStateOf(false) }
+
     Column(
-        verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+        verticalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+        modifier = Modifier.padding(rDp(12.dp))
     ) {
-        // Show prompt if available
         message.content.imagePrompt?.let { prompt ->
             Text(
                 text = "Prompt: $prompt",
@@ -424,7 +530,6 @@ private fun ImageMessageBubble(message: Messages) {
             )
         }
 
-        // Display image
         message.content.imageData?.let { base64Image ->
             val bitmap = remember(base64Image) {
                 try {
@@ -436,26 +541,65 @@ private fun ImageMessageBubble(message: Messages) {
             }
 
             bitmap?.let {
-                Surface(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(1f),
-                    shape = RoundedCornerShape(rDp(12.dp)),
-                    color = MaterialTheme.colorScheme.surfaceVariant
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(rDp(12.dp)))
+                        .clickable { isImageRevealed = !isImageRevealed },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Image(
-                        bitmap = it.asImageBitmap(),
-                        contentDescription = message.content.content,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(rDp(12.dp))),
-                        contentScale = ContentScale.Crop
-                    )
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        shape = RoundedCornerShape(rDp(12.dp)),
+                        color = MaterialTheme.colorScheme.surfaceVariant
+                    ) {
+                        Image(
+                            bitmap = it.asImageBitmap(),
+                            contentDescription = message.content.content,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(
+                                    if (!isImageRevealed) Modifier.blur(radius = 46.dp)
+                                    else Modifier
+                                ),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+
+                    // Overlay when blurred
+                    if (!isImageRevealed) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.3f)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.smart_temp_message),
+                                    contentDescription = "Reveal image",
+                                    modifier = Modifier.size(rDp(32.dp)),
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Tap to reveal",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        // Show seed if available
         message.content.imageSeed?.let { seed ->
             Text(
                 text = "Seed: $seed",
@@ -469,6 +613,8 @@ private fun ImageMessageBubble(message: Messages) {
 
 @Composable
 private fun MetricsDisplay(metrics: DecodingMetrics) {
+    var isExpanded by remember { mutableStateOf(false) }
+
     val formattedSpeed = remember(metrics.tokensPerSecond) {
         "%.1f".format(metrics.tokensPerSecond)
     }
@@ -476,73 +622,312 @@ private fun MetricsDisplay(metrics: DecodingMetrics) {
         if (metrics.totalTimeMs > 0) "%.1f".format(metrics.totalTimeMs / 1000f) else null
     }
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(4.dp)),
-        horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            .padding(horizontal = rDp(12.dp))
     ) {
-        MetricItem(icon = "⚡", value = formattedSpeed, unit = "t/s")
+        // Summary row
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { isExpanded = !isExpanded },
+            shape = RoundedCornerShape(rDp(8.dp)),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+            tonalElevation = rDp(1.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = rDp(10.dp), vertical = rDp(8.dp)),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.speed),
+                        contentDescription = null,
+                        modifier = Modifier.size(rDp(14.dp)),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "$formattedSpeed t/s",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
 
-        if (metrics.totalTokens > 0) {
-            MetricItem(icon = "📊", value = metrics.totalTokens.toString(), unit = "tokens")
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    )
+
+                    Text(
+                        text = "${metrics.totalTokens} tokens",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    modifier = Modifier.size(rDp(18.dp)),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
-        if (metrics.timeToFirstToken > 0) {
-            MetricItem(icon = "⏱️", value = metrics.timeToFirstToken.toString(), unit = "ms")
-        }
+        // Detailed metrics
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            ) + fadeIn(),
+            exit = shrinkVertically(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            ) + fadeOut()
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = rDp(6.dp)),
+                shape = RoundedCornerShape(rDp(8.dp)),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(rDp(10.dp)),
+                    verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                ) {
+                    MetricRow(
+                        icon = R.drawable.tokens,
+                        label = "Total Tokens",
+                        value = metrics.totalTokens.toString()
+                    )
 
-        formattedTime?.let { time ->
-            MetricItem(icon = "⏰", value = time, unit = "s")
+                    if (metrics.promptTokens > 0) {
+                        MetricRow(
+                            icon = R.drawable.prompt,
+                            label = "Prompt Tokens",
+                            value = metrics.promptTokens.toString()
+                        )
+                    }
+
+                    if (metrics.generatedTokens > 0) {
+                        MetricRow(
+                            icon = R.drawable.generated,
+                            label = "Generated Tokens",
+                            value = metrics.generatedTokens.toString()
+                        )
+                    }
+
+                    MetricRow(
+                        icon = R.drawable.speed,
+                        label = "Speed",
+                        value = "$formattedSpeed t/s"
+                    )
+
+                    if (metrics.timeToFirstToken > 0) {
+                        MetricRow(
+                            icon = R.drawable.timer,
+                            label = "Time to First Token",
+                            value = "${metrics.timeToFirstToken} ms"
+                        )
+                    }
+
+                    formattedTime?.let { time ->
+                        MetricRow(
+                            icon = R.drawable.clock,
+                            label = "Total Duration",
+                            value = "$time s"
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
 private fun ImageMetricsDisplay(metrics: ImageGenerationMetrics) {
+    var isExpanded by remember { mutableStateOf(false) }
+
     val formattedTime = remember(metrics.generationTimeMs) {
         "%.1f".format(metrics.generationTimeMs / 1000f)
     }
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(4.dp)),
-        horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            .padding(horizontal = rDp(12.dp))
     ) {
-        MetricItem(icon = "🎨", value = metrics.steps.toString(), unit = "steps")
-        MetricItem(icon = "📐", value = "${metrics.width}×${metrics.height}", unit = "")
-        MetricItem(icon = "⚙️", value = "%.1f".format(metrics.cfgScale), unit = "cfg")
-        MetricItem(icon = "⏰", value = formattedTime, unit = "s")
+        // Summary row
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { isExpanded = !isExpanded },
+            shape = RoundedCornerShape(rDp(8.dp)),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+            tonalElevation = rDp(1.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = rDp(10.dp), vertical = rDp(8.dp)),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.dimensions),
+                        contentDescription = null,
+                        modifier = Modifier.size(rDp(14.dp)),
+                        tint = MaterialTheme.colorScheme.tertiary
+                    )
+                    Text(
+                        text = "${metrics.width}×${metrics.height}",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    )
+
+                    Text(
+                        text = "${metrics.steps} steps",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    modifier = Modifier.size(rDp(18.dp)),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // Detailed metrics
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            ) + fadeIn(),
+            exit = shrinkVertically(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            ) + fadeOut()
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = rDp(6.dp)),
+                shape = RoundedCornerShape(rDp(8.dp)),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(rDp(10.dp)),
+                    verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                ) {
+                    MetricRow(
+                        icon = R.drawable.dimensions,
+                        label = "Dimensions",
+                        value = "${metrics.width} × ${metrics.height}"
+                    )
+
+                    MetricRow(
+                        icon = R.drawable.steps,
+                        label = "Steps",
+                        value = metrics.steps.toString()
+                    )
+
+                    MetricRow(
+                        icon = R.drawable.cgf,
+                        label = "CFG Scale",
+                        value = "%.1f".format(metrics.cfgScale)
+                    )
+
+                    MetricRow(
+                        icon = R.drawable.tokens,
+                        label = "Seed",
+                        value = metrics.seed.toString()
+                    )
+
+                    MetricRow(
+                        icon = R.drawable.scheduler,
+                        label = "Scheduler",
+                        value = metrics.scheduler.uppercase()
+                    )
+
+                    MetricRow(
+                        icon = R.drawable.clock,
+                        label = "Generation Time",
+                        value = "$formattedTime s"
+                    )
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun MetricItem(
-    icon: String,
-    value: String,
-    unit: String
+private fun MetricRow(
+    icon: Int,
+    label: String,
+    value: String
 ) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = icon,
-            style = MaterialTheme.typography.labelSmall,
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.Medium
-        )
-        if (unit.isNotEmpty()) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = null,
+                modifier = Modifier.size(rDp(14.dp)),
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+            )
             Text(
-                text = unit,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontFamily = maple
+        )
     }
 }

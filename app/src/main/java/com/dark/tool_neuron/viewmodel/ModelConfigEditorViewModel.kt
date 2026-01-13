@@ -3,17 +3,20 @@ package com.dark.tool_neuron.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.models.engine_schema.GgufEngineSchema
-import com.dark.tool_neuron.models.engine_schema.GgufInferenceParams
-import com.dark.tool_neuron.models.engine_schema.GgufLoadingParams
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.models.table_schema.ModelConfig
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.worker.DiffusionConfig
+import com.dark.tool_neuron.worker.DiffusionInferenceParams
 import dagger.hilt.android.lifecycle.HiltViewModel
 import jakarta.inject.Inject
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 @HiltViewModel
@@ -31,6 +34,10 @@ class ModelConfigEditorViewModel @Inject constructor(
 
     private val _diffusionConfig = MutableStateFlow(DiffusionConfig())
     val diffusionConfig: StateFlow<DiffusionConfig> = _diffusionConfig.asStateFlow()
+
+    private val _diffusionInferenceParams = MutableStateFlow(DiffusionInferenceParams())
+    val diffusionInferenceParams: StateFlow<DiffusionInferenceParams> =
+        _diffusionInferenceParams.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -50,22 +57,27 @@ class ModelConfigEditorViewModel @Inject constructor(
                 val config = repository.getConfigByModelId(model.id)
 
                 when (model.providerType) {
-                    com.dark.tool_neuron.models.enums.ProviderType.GGUF -> {
+                    ProviderType.GGUF -> {
                         _ggufConfig.value = if (config != null) {
                             GgufEngineSchema.fromJson(
-                                config.modelLoadingParams,
-                                config.modelInferenceParams
+                                config.modelLoadingParams, config.modelInferenceParams
                             )
                         } else {
                             GgufEngineSchema()
                         }
                     }
 
-                    com.dark.tool_neuron.models.enums.ProviderType.DIFFUSION -> {
+                    ProviderType.DIFFUSION -> {
                         _diffusionConfig.value = if (config != null) {
                             parseDiffusionConfig(config.modelLoadingParams)
                         } else {
                             DiffusionConfig()
+                        }
+
+                        _diffusionInferenceParams.value = if (config != null) {
+                            DiffusionInferenceParams.fromJson(config.modelInferenceParams)
+                        } else {
+                            DiffusionInferenceParams()
                         }
                     }
 
@@ -122,7 +134,7 @@ class ModelConfigEditorViewModel @Inject constructor(
                             id = existingConfig?.id ?: "",
                             modelId = model.id,
                             modelLoadingParams = _diffusionConfig.value.toJson(),
-                            modelInferenceParams = null
+                            modelInferenceParams = _diffusionInferenceParams.value.toJson()
                         )
                     }
 
@@ -273,6 +285,56 @@ class ModelConfigEditorViewModel @Inject constructor(
     fun updateDiffusionHeight(value: Int) {
         _diffusionConfig.update {
             it.copy(height = value)
+        }
+    }
+
+    // ==================== Diffusion Inference Params Updates ====================
+
+    fun updateDiffusionNegativePrompt(value: String) {
+        _diffusionInferenceParams.update {
+            it.copy(negativePrompt = value)
+        }
+    }
+
+    fun updateDiffusionSteps(value: Int) {
+        _diffusionInferenceParams.update {
+            it.copy(steps = value)
+        }
+    }
+
+    fun updateDiffusionCfgScale(value: Float) {
+        _diffusionInferenceParams.update {
+            it.copy(cfgScale = value)
+        }
+    }
+
+    fun updateDiffusionScheduler(value: String) {
+        _diffusionInferenceParams.update {
+            it.copy(scheduler = value)
+        }
+    }
+
+    fun updateDiffusionUseOpenCL(value: Boolean) {
+        _diffusionInferenceParams.update {
+            it.copy(useOpenCL = value)
+        }
+    }
+
+    fun updateDiffusionDenoiseStrength(value: Float) {
+        _diffusionInferenceParams.update {
+            it.copy(denoiseStrength = value)
+        }
+    }
+
+    fun updateDiffusionShowProcess(value: Boolean) {
+        _diffusionInferenceParams.update {
+            it.copy(showDiffusionProcess = value)
+        }
+    }
+
+    fun updateDiffusionShowStride(value: Int) {
+        _diffusionInferenceParams.update {
+            it.copy(showDiffusionStride = value)
         }
     }
 }

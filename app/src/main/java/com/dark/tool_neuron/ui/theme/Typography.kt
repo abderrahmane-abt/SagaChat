@@ -16,3 +16,13 @@ val ManropeFontFamily = FontFamily(
         )
     )
 )
+
+@OptIn(ExperimentalTextApi::class)
+val maple = FontFamily(
+    Font(
+        resId = R.font.maple_mono,
+        variationSettings = FontVariation.Settings(
+            FontVariation.weight(FontWeight.Normal.weight)
+        )
+    )
+)

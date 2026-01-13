@@ -70,7 +70,7 @@ class DiffusionEngine {
         httpPort: Int = 8081,
         width: Int = 512,
         height: Int = 512,
-        safetyMode: Boolean = false
+        safetyMode: Boolean
     ): Result<String> {
         return try {
             val model = modelConfig {
@@ -83,6 +83,8 @@ class DiffusionEngine {
                 httpPort(httpPort)
                 setSafetyMode(safetyMode)
             }
+
+            Log.i(TAG, "Loading model: $model")
 
             val success = sdManager.loadModel(model, width = width, height = height)
 

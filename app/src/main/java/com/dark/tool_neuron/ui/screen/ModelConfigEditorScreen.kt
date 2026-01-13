@@ -3,9 +3,11 @@ package com.dark.tool_neuron.ui.screen
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -468,6 +470,7 @@ private fun GgufConfigEditor(viewModel: ModelConfigEditorViewModel) {
 @Composable
 private fun DiffusionConfigEditor(viewModel: ModelConfigEditorViewModel) {
     val diffusionConfig by viewModel.diffusionConfig.collectAsStateWithLifecycle()
+    val inferenceParams by viewModel.diffusionInferenceParams.collectAsStateWithLifecycle()
 
     Column(verticalArrangement = Arrangement.spacedBy(rDp(16.dp))) {
         ConfigSection("Model Configuration") {
@@ -477,13 +480,6 @@ private fun DiffusionConfigEditor(viewModel: ModelConfigEditorViewModel) {
                 onValueChange = { viewModel.updateDiffusionEmbeddingSize(it) },
                 range = 512..2048,
                 step = 256
-            )
-
-            IntField(
-                label = "HTTP Port",
-                value = diffusionConfig.httpPort,
-                onValueChange = { viewModel.updateDiffusionHttpPort(it) },
-                range = 8000..9999
             )
 
             SwitchField(
@@ -515,22 +511,93 @@ private fun DiffusionConfigEditor(viewModel: ModelConfigEditorViewModel) {
             )
         }
 
-        ConfigSection("Default Generation Settings") {
-            IntField(
-                label = "Width",
-                value = diffusionConfig.width,
-                onValueChange = { viewModel.updateDiffusionWidth(it) },
-                range = 256..1024,
-                step = 64
+        ConfigSection("Inference Parameters") {
+            TextField(
+                label = "Negative Prompt",
+                value = inferenceParams.negativePrompt,
+                onValueChange = { viewModel.updateDiffusionNegativePrompt(it) },
+                multiline = true,
+                minLines = 2
             )
 
             IntField(
-                label = "Height",
-                value = diffusionConfig.height,
-                onValueChange = { viewModel.updateDiffusionHeight(it) },
-                range = 256..1024,
-                step = 64
+                label = "Steps",
+                value = inferenceParams.steps,
+                onValueChange = { viewModel.updateDiffusionSteps(it) },
+                range = 1..50,
+                step = 1,
+                description = "Number of denoising steps"
             )
+
+            FloatField(
+                label = "CFG Scale",
+                value = inferenceParams.cfgScale,
+                onValueChange = { viewModel.updateDiffusionCfgScale(it) },
+                range = 1f..20f,
+                step = 0.5f,
+                description = "Classifier-free guidance scale"
+            )
+
+            FloatField(
+                label = "Denoise Strength",
+                value = inferenceParams.denoiseStrength,
+                onValueChange = { viewModel.updateDiffusionDenoiseStrength(it) },
+                range = 0f..1f,
+                step = 0.05f,
+                description = "Strength for img2img (0 = original, 1 = full denoise)"
+            )
+
+            // Scheduler dropdown
+            Column(verticalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
+                Text(
+                    text = "Scheduler",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                ) {
+                    listOf("dpm", "euler", "euler_a", "ddim", "pndm").forEach { scheduler ->
+                        FilterChip(
+                            selected = inferenceParams.scheduler == scheduler,
+                            onClick = { viewModel.updateDiffusionScheduler(scheduler) },
+                            label = {
+                                Text(
+                                    scheduler.uppercase(),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            SwitchField(
+                label = "Use OpenCL",
+                description = "Enable OpenCL acceleration",
+                checked = inferenceParams.useOpenCL,
+                onCheckedChange = { viewModel.updateDiffusionUseOpenCL(it) }
+            )
+
+            SwitchField(
+                label = "Show Diffusion Process",
+                description = "Display intermediate images during generation",
+                checked = inferenceParams.showDiffusionProcess,
+                onCheckedChange = { viewModel.updateDiffusionShowProcess(it) }
+            )
+
+            if (inferenceParams.showDiffusionProcess) {
+                IntField(
+                    label = "Show Stride",
+                    value = inferenceParams.showDiffusionStride,
+                    onValueChange = { viewModel.updateDiffusionShowStride(it) },
+                    range = 1..10,
+                    step = 1,
+                    description = "Show intermediate image every N steps"
+                )
+            }
         }
     }
 }

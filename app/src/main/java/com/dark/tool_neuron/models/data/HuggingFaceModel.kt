@@ -11,5 +11,16 @@ data class HuggingFaceModel(
     val isZip: Boolean,
     val chipsetSuffix: String? = null,
     val runOnCpu: Boolean = false,
-    val textEmbeddingSize: Int = 768
+    val textEmbeddingSize: Int = 768,
+    val tags: List<String> = emptyList(),
+    val requiresNPU: Boolean = false,
+    val repositoryUrl: String = ""
+)
+
+data class HFModelRepository(
+    val id: String,
+    val name: String,
+    val repoPath: String,
+    val modelType: ModelType,
+    val isEnabled: Boolean = true
 )

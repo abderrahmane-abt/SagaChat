@@ -6,6 +6,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -38,9 +44,12 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -49,6 +58,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -58,7 +68,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -72,12 +84,14 @@ import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.models.table_schema.ModelConfig
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
+import com.dark.tool_neuron.ui.theme.maple
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.worker.DiffusionConfig
 import com.dark.tool_neuron.worker.DiffusionModelInfo
 import com.dark.tool_neuron.worker.ModelDataParser
 import com.dark.tool_neuron.worker.ModelInfo
 import com.dark.tool_neuron.worker.ModelLoadResult
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -117,7 +131,7 @@ class ModelLoadingActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ModelLoadingScreen(
     modelPath: String?,
@@ -132,13 +146,28 @@ fun ModelLoadingScreen(
     var currentModel by remember { mutableStateOf<Model?>(null) }
     val scope = rememberCoroutineScope()
     val repository = AppContainer.getModelRepository()
+    var isProcessing by remember { mutableStateOf(false) }
+
+    // Animated blur effect
+    val infiniteTransition = rememberInfiniteTransition(label = "blur_animation")
+    val blurRadius by infiniteTransition.animateFloat(
+        initialValue = 5f,
+        targetValue = 16f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "blur_radius"
+    )
 
 // In ModelLoadingActivity.kt
     LaunchedEffect(modelPath) {
         if (modelPath != null) {
             loadingState = LoadingState.Loading
-            scope.launch {
-                val providerTypeString = intent.getStringExtra(ModelPickerActivity.EXTRA_PICKER_MODE)
+            scope.launch(Dispatchers.IO) {
+                isProcessing = true
+                val providerTypeString =
+                    intent.getStringExtra(ModelPickerActivity.EXTRA_PICKER_MODE)
                 val providerType = try {
                     ProviderType.valueOf(providerTypeString ?: "GGUF")
                 } catch (e: Exception) {
@@ -180,6 +209,7 @@ fun ModelLoadingScreen(
                         loadingState = LoadingState.Error(result.message)
                     }
                 }
+                isProcessing = false
             }
         } else {
             loadingState = LoadingState.Idle
@@ -204,6 +234,7 @@ fun ModelLoadingScreen(
                                 modelInferenceParams = defaultSchema.toInferenceJson()
                             )
                         }
+
                         ProviderType.DIFFUSION -> {
                             val diffusionConfig = DiffusionConfig()
                             ModelConfig(
@@ -243,21 +274,21 @@ fun ModelLoadingScreen(
         topBar = {
             TopAppBar(
                 title = {
-                Text(
-                    "Model Loader",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold
+                    Text(
+                        "Model Loader",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }, actions = {
+                    ActionButton(
+                        onClickListener = onClose,
+                        icon = Icons.Outlined.Close,
+                        contentDescription = "Close",
+                        shape = RoundedCornerShape(rDp(12.dp))
+                    )
+                }, colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
                 )
-            }, actions = {
-                ActionButton(
-                    onClickListener = onClose,
-                    icon = Icons.Outlined.Close,
-                    contentDescription = "Close",
-                    shape = RoundedCornerShape(rDp(12.dp))
-                )
-            }, colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.background
-            )
             )
         }) { padding ->
         Box(
@@ -266,7 +297,11 @@ fun ModelLoadingScreen(
                 .padding(padding)
         ) {
             AnimatedContent(
-                targetState = loadingState, transitionSpec = {
+                targetState = loadingState,
+                modifier = Modifier.then(
+                    if (isProcessing) Modifier.blur(radius = blurRadius.dp) else Modifier
+                ),
+                transitionSpec = {
                     fadeIn(tween(300)) togetherWith fadeOut(tween(300))
                 }, label = "loading_state"
             ) { state ->
@@ -281,6 +316,43 @@ fun ModelLoadingScreen(
                         onUninstall = { uninstallModel() })
 
                     is LoadingState.Error -> ErrorStateView(state.message, onPickModel)
+                }
+            }
+
+            AnimatedVisibility(
+                visible = isProcessing,
+                enter = fadeIn(animationSpec = tween(300)),
+                exit = fadeOut(animationSpec = tween(300))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.White.copy(alpha = 0.3f))
+                )
+            }
+
+            AnimatedVisibility(
+                visible = isProcessing,
+                modifier = Modifier.align(Alignment.Center),
+                enter = fadeIn(animationSpec = tween(300)) + scaleIn(
+                    initialScale = 0.8f,
+                    animationSpec = tween(300)
+                ),
+                exit = fadeOut(animationSpec = tween(300)) + scaleOut(
+                    targetScale = 0.8f,
+                    animationSpec = tween(300)
+                )
+            ) {
+                Column(
+                    Modifier
+                        .size(rDp(200.dp))
+                      ,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    LoadingIndicator()
+                    Spacer(Modifier.height(rDp(8.dp)))
+                    Text("Processing Model....", fontFamily = maple, fontWeight = FontWeight.Bold)
                 }
             }
         }

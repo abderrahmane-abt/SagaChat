@@ -5,14 +5,18 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.engine.GenerationEvent
 import com.dark.tool_neuron.models.messages.ContentType
 import com.dark.tool_neuron.models.messages.ImageGenerationMetrics
 import com.dark.tool_neuron.models.messages.MessageContent
 import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.models.messages.Role
+import com.dark.tool_neuron.models.table_schema.ModelConfig
 import com.dark.tool_neuron.state.AppStateManager
 import com.dark.tool_neuron.worker.ChatManager
+import com.dark.tool_neuron.worker.DiffusionConfig
+import com.dark.tool_neuron.worker.DiffusionInferenceParams
 import com.dark.tool_neuron.worker.GenerationManager
 import com.dark.tool_neuron.worker.LlmModelWorker
 import com.mp.ai_gguf.models.DecodingMetrics
@@ -340,13 +344,13 @@ class ChatViewModel @Inject constructor(
 
     fun sendImageRequest(
         prompt: String,
-        negativePrompt: String = "blurry, low quality, distorted",
-        steps: Int = 28,
-        cfgScale: Float = 7.5f,
+        negativePrompt: String? = null,
+        steps: Int? = null,
+        cfgScale: Float? = null,
         seed: Long = -1L,
-        width: Int = 512,
-        height: Int = 512,
-        scheduler: String = "dpm"
+        width: Int? = null,
+        height: Int? = null,
+        scheduler: String? = null
     ) {
         if (!generationManager.isImageModelLoaded()) {
             _error.value = "Please load an image generation model first"
@@ -356,11 +360,41 @@ class ChatViewModel @Inject constructor(
 
         if (_isGenerating.value) return
 
-        _streamingUserMessage.value = prompt
-        imageGenerationStartTime = System.currentTimeMillis()
-        userMessageAdded = false
-
         viewModelScope.launch {
+            // Get current diffusion model ID
+            val modelId = LlmModelWorker.currentDiffusionModelId.value
+            if (modelId == null) {
+                _error.value = "Model configuration not found"
+                return@launch
+            }
+
+            // Get config from repository
+            val config = getModelConfig(modelId) // Assuming chatManager has access to repository
+
+            val inferenceParams = if (config != null) {
+                DiffusionInferenceParams.fromJson(config.modelInferenceParams)
+            } else {
+                DiffusionInferenceParams()
+            }
+
+            val diffusionConfig = if (config != null) {
+                parseDiffusionConfig(config)
+            } else {
+                DiffusionConfig()
+            }
+
+            // Use provided values or fall back to stored config
+            val finalNegativePrompt = negativePrompt ?: inferenceParams.negativePrompt
+            val finalSteps = steps ?: inferenceParams.steps
+            val finalCfgScale = cfgScale ?: inferenceParams.cfgScale
+            val finalWidth = width ?: diffusionConfig.width
+            val finalHeight = height ?: diffusionConfig.height
+            val finalScheduler = scheduler ?: inferenceParams.scheduler
+
+            _streamingUserMessage.value = prompt
+            imageGenerationStartTime = System.currentTimeMillis()
+            userMessageAdded = false
+
             if (isNewConversation) {
                 currentUserMessage = Messages(
                     msgId = "",
@@ -371,7 +405,16 @@ class ChatViewModel @Inject constructor(
                     )
                 )
                 AppStateManager.setHasMessages(true)
-                generateImageForNewChat(prompt, negativePrompt, steps, cfgScale, seed, width, height, scheduler)
+                generateImageForNewChat(
+                    prompt,
+                    finalNegativePrompt,
+                    finalSteps,
+                    finalCfgScale,
+                    seed,
+                    finalWidth,
+                    finalHeight,
+                    finalScheduler
+                )
             } else {
                 val chatId = _currentChatId.value
                 if (chatId == null) {
@@ -382,12 +425,50 @@ class ChatViewModel @Inject constructor(
                 chatManager.addUserMessage(chatId, "Generate image: $prompt").onSuccess { userMessage ->
                     currentUserMessage = userMessage
                     AppStateManager.setHasMessages(true)
-                    generateImage(chatId, userMessage, prompt, negativePrompt, steps, cfgScale, seed, width, height, scheduler)
+                    generateImage(
+                        chatId,
+                        userMessage,
+                        prompt,
+                        finalNegativePrompt,
+                        finalSteps,
+                        finalCfgScale,
+                        seed,
+                        finalWidth,
+                        finalHeight,
+                        finalScheduler
+                    )
                 }.onFailure { e ->
                     _error.value = "Failed to save message: ${e.message}"
                     resetStreamingState()
                 }
             }
+        }
+    }
+
+    // Also add this helper if you don't have it
+    suspend fun getModelConfig(modelId: String): ModelConfig? {
+        return AppContainer.getModelRepository().getConfigByModelId(modelId)
+    }
+
+    private fun parseDiffusionConfig(config: ModelConfig): DiffusionConfig {
+        if (config.modelLoadingParams == null) {
+            return DiffusionConfig()
+        }
+
+        return try {
+            val json = org.json.JSONObject(config.modelLoadingParams)
+            DiffusionConfig(
+                textEmbeddingSize = json.optInt("text_embedding_size", 768),
+                runOnCpu = json.optBoolean("run_on_cpu", false),
+                useCpuClip = json.optBoolean("use_cpu_clip", true),
+                isPony = json.optBoolean("is_pony", false),
+                httpPort = json.optInt("http_port", 8081),
+                safetyMode = json.optBoolean("safety_mode", false),
+                width = json.optInt("width", 512),
+                height = json.optInt("height", 512)
+            )
+        } catch (e: Exception) {
+            DiffusionConfig()
         }
     }
 

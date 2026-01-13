@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeout
 import java.util.Base64
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -42,6 +43,7 @@ object LlmModelWorker {
     private var service: ILLMService? = null
     private var boundContext: Context? = null
     private val serviceBound = CompletableDeferred<Unit>()
+    private var isBinding = false
 
     // GGUF state
     private val _isGgufModelLoaded = MutableStateFlow(false)
@@ -54,45 +56,90 @@ object LlmModelWorker {
     private val _diffusionBackendState = MutableStateFlow("Idle")
     val diffusionBackendState: StateFlow<String> = _diffusionBackendState.asStateFlow()
 
+    val _currentGgufModelId = MutableStateFlow<String?>(null)
+    val currentGgufModelId: StateFlow<String?> = _currentGgufModelId.asStateFlow()
+
+    val _currentDiffusionModelId = MutableStateFlow<String?>(null)
+    val currentDiffusionModelId: StateFlow<String?> = _currentDiffusionModelId.asStateFlow()
+
+
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             service = ILLMService.Stub.asInterface(binder)
+            isBinding = false
             serviceBound.complete(Unit)
             Log.i(TAG, "Service connected")
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
             service = null
-            Log.w(TAG, "Service disconnected")
+            isBinding = false
+            Log.w(TAG, "Service disconnected unexpectedly")
+        }
+
+        override fun onBindingDied(name: ComponentName?) {
+            service = null
+            isBinding = false
+            Log.e(TAG, "Service binding died")
+        }
+
+        override fun onNullBinding(name: ComponentName?) {
+            isBinding = false
+            Log.e(TAG, "Service returned null binding")
         }
     }
 
-    // ==================== Service Management ====================
-
     fun bindService(context: Context) {
-        if (boundContext != null) {
-            Log.w(TAG, "Service already bound")
+        if (boundContext != null && service != null) {
+            Log.w(TAG, "Service already bound and connected")
             return
         }
 
-        val intent = Intent(context, LLMService::class.java)
-        context.bindService(intent, connection, Context.BIND_AUTO_CREATE)
-        boundContext = context.applicationContext
-        Log.i(TAG, "Binding service...")
+        if (isBinding) {
+            Log.w(TAG, "Service binding already in progress")
+            return
+        }
+
+        isBinding = true
+        val appContext = context.applicationContext
+        val intent = Intent(appContext, LLMService::class.java)
+
+        val bound = appContext.bindService(
+            intent,
+            connection,
+            Context.BIND_AUTO_CREATE or Context.BIND_IMPORTANT
+        )
+
+        if (bound) {
+            boundContext = appContext
+            Log.i(TAG, "Service binding initiated")
+        } else {
+            isBinding = false
+            Log.e(TAG, "Failed to bind service")
+        }
     }
 
     fun unbindService() {
-        boundContext?.unbindService(connection)
-        service = null
-        boundContext = null
-        _isGgufModelLoaded.value = false
-        _isDiffusionModelLoaded.value = false
-        Log.i(TAG, "Service unbound")
+        try {
+            boundContext?.unbindService(connection)
+            Log.i(TAG, "Service unbound")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unbinding service", e)
+        } finally {
+            service = null
+            boundContext = null
+            isBinding = false
+            _isGgufModelLoaded.value = false
+            _isDiffusionModelLoaded.value = false
+        }
     }
 
     private suspend fun ensureServiceBound(): ILLMService {
-        serviceBound.await()
-        return service ?: throw IllegalStateException("Service not available")
+        // Increased timeout for slow devices
+        return withTimeout(10000) {
+            serviceBound.await()
+            service ?: throw IllegalStateException("Service not available")
+        }
     }
 
     // ==================== GGUF Methods ====================
@@ -218,12 +265,14 @@ object LlmModelWorker {
     suspend fun loadDiffusionModel(
         name: String,
         modelDir: String,
+        height: Int = 212,
+        width: Int = 212,
         textEmbeddingSize: Int = 768,
         runOnCpu: Boolean = false,
         useCpuClip: Boolean = false,
         isPony: Boolean = false,
         httpPort: Int = 8081,
-        safetyMode: Boolean = false
+        safetyMode: Boolean
     ): Boolean {
         val svc = ensureServiceBound()
 
@@ -248,6 +297,8 @@ object LlmModelWorker {
                 svc.loadDiffusionModel(
                     name,
                     modelDir,
+                    height,
+                    width,
                     textEmbeddingSize,
                     runOnCpu,
                     useCpuClip,
@@ -370,8 +421,8 @@ object LlmModelWorker {
                 steps,
                 cfgScale,
                 seed,
-                width,
-                height,
+                512,
+                512,
                 scheduler,
                 useOpenCL,
                 inputImage,

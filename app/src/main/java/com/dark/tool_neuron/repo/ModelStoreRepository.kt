@@ -3,12 +3,13 @@ package com.dark.tool_neuron.repo
 import android.content.Context
 import android.os.Build
 import android.util.Log
+import com.dark.tool_neuron.models.data.HFModelRepository
 import com.dark.tool_neuron.models.data.HuggingFaceModel
 import com.dark.tool_neuron.models.data.ModelType
 import com.dark.tool_neuron.network.HuggingFaceClient
 
 class ModelStoreRepository(private val context: Context) {
-    
+
     private val chipsetModelSuffixes = mapOf(
         "SM8475" to "8gen1",
         "SM8450" to "8gen1",
@@ -16,34 +17,34 @@ class ModelStoreRepository(private val context: Context) {
         "SM8550P" to "8gen2",
         "QCS8550" to "8gen2",
         "QCM8550" to "8gen2",
-        "SM8650" to "8gen2",
-        "SM8650P" to "8gen2",
-        "SM8750" to "8gen2",
-        "SM8750P" to "8gen2",
-        "SM8850" to "8gen2",
-        "SM8850P" to "8gen2",
-        "SM8735" to "8gen2",
-        "SM8845" to "8gen2",
+        "SM8650" to "8gen3",
+        "SM8650P" to "8gen3",
+        "SM8750" to "8elite",
+        "SM8750P" to "8elite",
+        "SM8850" to "8elite",
+        "SM8850P" to "8elite",
+        "SM8735" to "8gen3",
+        "SM8845" to "8gen3",
     )
-    
+
     private fun getDeviceSoc(): String {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             Build.SOC_MODEL
         } else {
-            "CPU"
+            "UNKNOWN"
         }
     }
-    
+
     fun isDeviceSupported(): Boolean {
         val soc = getDeviceSoc()
         return getChipsetSuffix(soc) != null
     }
-    
+
     fun isQualcommDevice(): Boolean {
         val soc = getDeviceSoc()
         return soc.startsWith("SM") || soc.startsWith("QCS") || soc.startsWith("QCM")
     }
-    
+
     fun getChipsetSuffix(soc: String): String? {
         if (soc in chipsetModelSuffixes) {
             return chipsetModelSuffixes[soc]
@@ -53,34 +54,54 @@ class ModelStoreRepository(private val context: Context) {
         }
         return null
     }
-    
-    suspend fun getAvailableModels(): Result<List<HuggingFaceModel>> {
+
+    fun getDeviceInfo(): Map<String, String> {
+        val soc = getDeviceSoc()
+        return mapOf(
+            "soc" to soc,
+            "chipset" to (getChipsetSuffix(soc) ?: "Not Supported"),
+            "npu" to if (isQualcommDevice()) "Available" else "Not Available",
+            "device" to "${Build.MANUFACTURER} ${Build.MODEL}"
+        )
+    }
+
+    suspend fun getAvailableModels(repositories: List<HFModelRepository>): Result<List<HuggingFaceModel>> {
         return try {
             val models = mutableListOf<HuggingFaceModel>()
-            
+
             val sdModels = getSDModels()
-            val ggufModels = getGGUFModels()
-            
-            models.addAll(sdModels)
+            val ggufModels =
+                getGGUFModels(repositories.filter { it.modelType == ModelType.GGUF && it.isEnabled })
+
+            // Filter NPU models based on device support
+            val filteredSDModels = if (isQualcommDevice()) {
+                sdModels
+            } else {
+                sdModels.filter { it.runOnCpu }
+            }
+
+            models.addAll(filteredSDModels)
             models.addAll(ggufModels)
-            
+
             Result.success(models)
         } catch (e: Exception) {
+            Log.e("ModelStoreRepository", "Error loading models", e)
             Result.failure(e)
         }
     }
-    
+
     private suspend fun getSDModels(): List<HuggingFaceModel> {
         val models = mutableListOf<HuggingFaceModel>()
         val soc = getDeviceSoc()
         val suffix = getChipsetSuffix(soc) ?: "min"
         val isQualcomm = isQualcommDevice()
-        
+
+        // NPU models - only for Qualcomm devices
         if (isQualcomm) {
             models.add(
                 HuggingFaceModel(
-                    id = "anythingv5",
-                    name = "Anything V5.0 (NPU)",
+                    id = "anythingv5-npu",
+                    name = "Anything V5.0",
                     description = "Anime-style image generation optimized for Qualcomm NPU",
                     fileUri = "xororz/sd-qnn/resolve/main/AnythingV5_qnn2.28_${suffix}.zip",
                     approximateSize = "1.1GB",
@@ -88,14 +109,17 @@ class ModelStoreRepository(private val context: Context) {
                     isZip = true,
                     chipsetSuffix = suffix,
                     runOnCpu = false,
-                    textEmbeddingSize = 768
+                    textEmbeddingSize = 768,
+                    tags = listOf("NPU", "Anime", "Art"),
+                    requiresNPU = true,
+                    repositoryUrl = "xororz/sd-qnn"
                 )
             )
-            
+
             models.add(
                 HuggingFaceModel(
-                    id = "qteamix",
-                    name = "QteaMix (NPU)",
+                    id = "qteamix-npu",
+                    name = "QteaMix",
                     description = "Chibi-style image generation for Qualcomm NPU",
                     fileUri = "xororz/sd-qnn/resolve/main/QteaMix_qnn2.28_${suffix}.zip",
                     approximateSize = "1.1GB",
@@ -103,14 +127,17 @@ class ModelStoreRepository(private val context: Context) {
                     isZip = true,
                     chipsetSuffix = suffix,
                     runOnCpu = false,
-                    textEmbeddingSize = 768
+                    textEmbeddingSize = 768,
+                    tags = listOf("NPU", "Chibi", "Cute"),
+                    requiresNPU = true,
+                    repositoryUrl = "xororz/sd-qnn"
                 )
             )
-            
+
             models.add(
                 HuggingFaceModel(
-                    id = "cuteyukimix",
-                    name = "CuteYukiMix (NPU)",
+                    id = "cuteyukimix-npu",
+                    name = "CuteYukiMix",
                     description = "Cute anime characters for Qualcomm NPU",
                     fileUri = "xororz/sd-qnn/resolve/main/CuteYukiMix_qnn2.28_${suffix}.zip",
                     approximateSize = "1.1GB",
@@ -118,14 +145,17 @@ class ModelStoreRepository(private val context: Context) {
                     isZip = true,
                     chipsetSuffix = suffix,
                     runOnCpu = false,
-                    textEmbeddingSize = 768
+                    textEmbeddingSize = 768,
+                    tags = listOf("NPU", "Anime", "Cute"),
+                    requiresNPU = true,
+                    repositoryUrl = "xororz/sd-qnn"
                 )
             )
-            
+
             models.add(
                 HuggingFaceModel(
-                    id = "absolutereality",
-                    name = "Absolute Reality (NPU)",
+                    id = "absolutereality-npu",
+                    name = "Absolute Reality",
                     description = "Photorealistic image generation for Qualcomm NPU",
                     fileUri = "xororz/sd-qnn/resolve/main/AbsoluteReality_qnn2.28_${suffix}.zip",
                     approximateSize = "1.1GB",
@@ -133,14 +163,17 @@ class ModelStoreRepository(private val context: Context) {
                     isZip = true,
                     chipsetSuffix = suffix,
                     runOnCpu = false,
-                    textEmbeddingSize = 768
+                    textEmbeddingSize = 768,
+                    tags = listOf("NPU", "Realistic", "Photo"),
+                    requiresNPU = true,
+                    repositoryUrl = "xororz/sd-qnn"
                 )
             )
-            
+
             models.add(
                 HuggingFaceModel(
-                    id = "chilloutmix",
-                    name = "ChilloutMix (NPU)",
+                    id = "chilloutmix-npu",
+                    name = "ChilloutMix",
                     description = "Realistic portraits for Qualcomm NPU",
                     fileUri = "xororz/sd-qnn/resolve/main/ChilloutMix_qnn2.28_${suffix}.zip",
                     approximateSize = "1.1GB",
@@ -148,120 +181,152 @@ class ModelStoreRepository(private val context: Context) {
                     isZip = true,
                     chipsetSuffix = suffix,
                     runOnCpu = false,
-                    textEmbeddingSize = 768
+                    textEmbeddingSize = 768,
+                    tags = listOf("NPU", "Portrait", "Realistic"),
+                    requiresNPU = true,
+                    repositoryUrl = "xororz/sd-qnn"
                 )
             )
         }
-        
+
+        // CPU models - available for all devices
         models.add(
             HuggingFaceModel(
-                id = "anythingv5cpu",
-                name = "Anything V5.0 (CPU)",
+                id = "anythingv5-cpu",
+                name = "Anything V5.0",
                 description = "Anime-style image generation for CPU",
                 fileUri = "xororz/sd-mnn/resolve/main/AnythingV5.zip",
                 approximateSize = "1.2GB",
                 modelType = ModelType.SD,
                 isZip = true,
                 runOnCpu = true,
-                textEmbeddingSize = 768
+                textEmbeddingSize = 768,
+                tags = listOf("CPU", "Anime", "Art"),
+                requiresNPU = false,
+                repositoryUrl = "xororz/sd-mnn"
             )
         )
-        
+
         models.add(
             HuggingFaceModel(
-                id = "qteamixcpu",
-                name = "QteaMix (CPU)",
+                id = "qteamix-cpu",
+                name = "QteaMix",
                 description = "Chibi-style image generation for CPU",
                 fileUri = "xororz/sd-mnn/resolve/main/QteaMix.zip",
                 approximateSize = "1.2GB",
                 modelType = ModelType.SD,
                 isZip = true,
                 runOnCpu = true,
-                textEmbeddingSize = 768
+                textEmbeddingSize = 768,
+                tags = listOf("CPU", "Chibi", "Cute"),
+                requiresNPU = false,
+                repositoryUrl = "xororz/sd-mnn"
             )
         )
-        
+
         models.add(
             HuggingFaceModel(
-                id = "cuteyukimixcpu",
-                name = "CuteYukiMix (CPU)",
+                id = "cuteyukimix-cpu",
+                name = "CuteYukiMix",
                 description = "Cute anime characters for CPU",
                 fileUri = "xororz/sd-mnn/resolve/main/CuteYukiMix.zip",
                 approximateSize = "1.2GB",
                 modelType = ModelType.SD,
                 isZip = true,
                 runOnCpu = true,
-                textEmbeddingSize = 768
+                textEmbeddingSize = 768,
+                tags = listOf("CPU", "Anime", "Cute"),
+                requiresNPU = false,
+                repositoryUrl = "xororz/sd-mnn"
             )
         )
-        
+
         models.add(
             HuggingFaceModel(
-                id = "absoluterealitycpu",
-                name = "Absolute Reality (CPU)",
+                id = "absolutereality-cpu",
+                name = "Absolute Reality",
                 description = "Photorealistic image generation for CPU",
                 fileUri = "xororz/sd-mnn/resolve/main/AbsoluteReality.zip",
                 approximateSize = "1.2GB",
                 modelType = ModelType.SD,
                 isZip = true,
                 runOnCpu = true,
-                textEmbeddingSize = 768
+                textEmbeddingSize = 768,
+                tags = listOf("CPU", "Realistic", "Photo"),
+                requiresNPU = false,
+                repositoryUrl = "xororz/sd-mnn"
             )
         )
-        
+
         models.add(
             HuggingFaceModel(
-                id = "chilloutmixcpu",
-                name = "ChilloutMix (CPU)",
+                id = "chilloutmix-cpu",
+                name = "ChilloutMix",
                 description = "Realistic portraits for CPU",
                 fileUri = "xororz/sd-mnn/resolve/main/ChilloutMix.zip",
                 approximateSize = "1.2GB",
                 modelType = ModelType.SD,
                 isZip = true,
                 runOnCpu = true,
-                textEmbeddingSize = 768
+                textEmbeddingSize = 768,
+                tags = listOf("CPU", "Portrait", "Realistic"),
+                requiresNPU = false,
+                repositoryUrl = "xororz/sd-mnn"
             )
         )
-        
+
         return models
     }
 
-    private suspend fun getGGUFModels(): List<HuggingFaceModel> {
+    private suspend fun getGGUFModels(repositories: List<HFModelRepository>): List<HuggingFaceModel> {
         val models = mutableListOf<HuggingFaceModel>()
 
-        val response = HuggingFaceClient.api.getRepoFiles("Qwen/Qwen2.5-0.5B-Instruct-GGUF")
+        repositories.forEach { repo ->
+            try {
+                val response = HuggingFaceClient.api.getRepoFiles(repo.repoPath)
 
-        Log.i("ModelStoreRepository", "getGGUFModels: $response")
+                if (response.isSuccessful) {
+                    val files = response.body() ?: emptyList()
 
-        if (response.isSuccessful) {
-            val files = response.body() ?: emptyList()
+                    files.filter { it.path.endsWith(".gguf") }.forEach { file ->
+                            val fileName = file.path.substringAfterLast("/")
+                            val sizeStr = formatFileSize(file.size ?: 0)
 
-            files
-                .filter { it.path.endsWith(".gguf") }
-                .forEach { file ->
-                    val fileName = file.path.substringAfterLast("/")
-                    val sizeStr = formatFileSize(file.size ?: 0)
+                            // Extract quantization type from filename
+                            val quantType =
+                                fileName.substringAfterLast("-").removeSuffix(".gguf").uppercase()
 
-                    models.add(
-                        HuggingFaceModel(
-                            id = "qwen-${fileName.removeSuffix(".gguf")}",
-                            name = "Qwen 2.5 0.5B - $fileName",
-                            description = "Qwen2.5 0.5B Instruct quantized model",
-                            fileUri = "Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/${file.path}",
-                            approximateSize = sizeStr,
-                            modelType = ModelType.GGUF,
-                            isZip = false,
-                            runOnCpu = false,
-                            textEmbeddingSize = 0
-                        )
+                            models.add(
+                                HuggingFaceModel(
+                                    id = "${repo.id}-${fileName.removeSuffix(".gguf")}",
+                                    name = "${repo.name} - $quantType",
+                                    description = "${repo.name} model with $quantType quantization",
+                                    fileUri = "${repo.repoPath}/resolve/main/${file.path}",
+                                    approximateSize = sizeStr,
+                                    modelType = ModelType.GGUF,
+                                    isZip = false,
+                                    runOnCpu = false,
+                                    textEmbeddingSize = 0,
+                                    tags = listOf("GGUF", quantType, repo.name),
+                                    requiresNPU = false,
+                                    repositoryUrl = repo.repoPath
+                                )
+                            )
+                        }
+                } else {
+                    Log.e(
+                        "ModelStoreRepository",
+                        "Failed to fetch from ${repo.repoPath}: ${response.code()}"
                     )
                 }
-
+            } catch (e: Exception) {
+                Log.e("ModelStoreRepository", "Error fetching GGUF models from ${repo.repoPath}", e)
+            }
         }
 
         return models
     }
-    
+
     private fun formatFileSize(bytes: Long): String {
         return when {
             bytes >= 1_000_000_000 -> String.format("%.2f GB", bytes / 1_000_000_000.0)

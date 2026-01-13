@@ -1,5 +1,6 @@
 package com.dark.tool_neuron.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.models.enums.ProviderType
@@ -8,9 +9,11 @@ import com.dark.tool_neuron.models.table_schema.ModelConfig
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.state.AppStateManager
 import com.dark.tool_neuron.worker.DiffusionConfig
+import com.dark.tool_neuron.worker.DiffusionInferenceParams
 import com.dark.tool_neuron.worker.LlmModelWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import jakarta.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +34,8 @@ class LLMModelViewModel @Inject constructor(
     private val _currentModelType = MutableStateFlow<ProviderType?>(null)
     val currentModelType: StateFlow<ProviderType?> = _currentModelType.asStateFlow()
 
+
+
     // Model loading states
     val isGgufModelLoaded = LlmModelWorker.isGgufModelLoaded
     val isDiffusionModelLoaded = LlmModelWorker.isDiffusionModelLoaded
@@ -41,8 +46,14 @@ class LLMModelViewModel @Inject constructor(
     }
 
     fun loadModel(model: Model) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
+                // Unload any existing model first
+                if (_currentModelID.value.isNotEmpty()) {
+                    unloadCurrentModel()
+                    delay(300)
+                }
+
                 AppStateManager.setLoadingModel(model.modelName, 0f)
 
                 val config = getModelConfig(model.id)
@@ -50,8 +61,6 @@ class LLMModelViewModel @Inject constructor(
                     AppStateManager.setError("Model configuration not found")
                     return@launch
                 }
-
-                simulateLoadingProgress()
 
                 when (model.providerType) {
                     ProviderType.GGUF -> loadGgufModel(model, config)
@@ -70,9 +79,7 @@ class LLMModelViewModel @Inject constructor(
         val success = LlmModelWorker.loadGgufModel(model, config)
 
         if (success) {
-            AppStateManager.updateLoadingProgress(1.0f)
-            delay(200) // Brief pause to show 100%
-
+            LlmModelWorker._currentGgufModelId.value = model.id // ADD THIS
             _currentModelID.value = model.id
             _currentModelType.value = ProviderType.GGUF
             AppStateManager.setModelLoaded(model.modelName)
@@ -82,12 +89,13 @@ class LLMModelViewModel @Inject constructor(
     }
 
     private suspend fun loadDiffusionModel(model: Model, config: ModelConfig) {
-        // Parse diffusion config
         val diffusionConfig = parseDiffusionConfig(config)
 
         val success = LlmModelWorker.loadDiffusionModel(
             name = model.modelName,
             modelDir = model.modelPath,
+            height = diffusionConfig.height,
+            width = diffusionConfig.width,
             textEmbeddingSize = diffusionConfig.textEmbeddingSize,
             runOnCpu = diffusionConfig.runOnCpu,
             useCpuClip = diffusionConfig.useCpuClip,
@@ -97,9 +105,7 @@ class LLMModelViewModel @Inject constructor(
         )
 
         if (success) {
-            AppStateManager.updateLoadingProgress(1.0f)
-            delay(200) // Brief pause to show 100%
-
+            LlmModelWorker._currentDiffusionModelId.value = model.id // ADD THIS
             _currentModelID.value = model.id
             _currentModelType.value = ProviderType.DIFFUSION
             AppStateManager.setModelLoaded(model.modelName)
@@ -108,34 +114,9 @@ class LLMModelViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Simulates model loading progress through different stages
-     * In a real implementation, this would be replaced with actual loading callbacks
-     */
-    private suspend fun simulateLoadingProgress() {
-        // Stage 1: Initialization (0-20%)
-        for (i in 0..20 step 5) {
-            AppStateManager.updateLoadingProgress(i / 100f)
-            delay(50)
-        }
-
-        // Stage 2: Loading weights (20-60%)
-        for (i in 20..60 step 4) {
-            AppStateManager.updateLoadingProgress(i / 100f)
-            delay(80)
-        }
-
-        // Stage 3: Optimization (60-90%)
-        for (i in 60..90 step 3) {
-            AppStateManager.updateLoadingProgress(i / 100f)
-            delay(60)
-        }
-
-        // Stage 4: Finalization (90-95%)
-        for (i in 90..95) {
-            AppStateManager.updateLoadingProgress(i / 100f)
-            delay(100)
-        }
+    // ADD THIS NEW METHOD
+    private fun parseDiffusionInferenceParams(config: ModelConfig): DiffusionInferenceParams {
+        return DiffusionInferenceParams.fromJson(config.modelInferenceParams)
     }
 
     private fun parseDiffusionConfig(config: ModelConfig): DiffusionConfig {
@@ -145,6 +126,7 @@ class LLMModelViewModel @Inject constructor(
 
         return try {
             val json = org.json.JSONObject(config.modelLoadingParams)
+            Log.d("DiffusionConfig", "JSON: $json")
             DiffusionConfig(
                 textEmbeddingSize = json.optInt("text_embedding_size", 768),
                 runOnCpu = json.optBoolean("run_on_cpu", false),
@@ -156,9 +138,32 @@ class LLMModelViewModel @Inject constructor(
                 height = json.optInt("height", 512)
             )
         } catch (e: Exception) {
+            Log.e("DiffusionConfig", "Error parsing JSON: ${e.message}")
             DiffusionConfig()
         }
     }
+
+    private suspend fun unloadCurrentModel() {
+        try {
+            when (_currentModelType.value) {
+                ProviderType.GGUF -> {
+                    LlmModelWorker.unloadGgufModel()
+                    LlmModelWorker._currentGgufModelId.value = null // ADD THIS
+                }
+                ProviderType.DIFFUSION -> {
+                    LlmModelWorker.stopDiffusionBackend()
+                    LlmModelWorker._currentDiffusionModelId.value = null // ADD THIS
+                }
+                else -> {}
+            }
+
+            _currentModelID.value = ""
+            _currentModelType.value = null
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
 
     fun unloadModel() {
         viewModelScope.launch {
@@ -166,9 +171,11 @@ class LLMModelViewModel @Inject constructor(
                 when (_currentModelType.value) {
                     ProviderType.GGUF -> {
                         LlmModelWorker.unloadGgufModel()
+                        LlmModelWorker._currentGgufModelId.value = null // ADD THIS
                     }
                     ProviderType.DIFFUSION -> {
                         LlmModelWorker.stopDiffusionBackend()
+                        LlmModelWorker._currentDiffusionModelId.value = null // ADD THIS
                     }
                     else -> {}
                 }

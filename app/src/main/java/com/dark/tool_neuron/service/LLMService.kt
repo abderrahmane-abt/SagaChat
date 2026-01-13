@@ -142,6 +142,8 @@ class LLMService : Service() {
         override fun loadDiffusionModel(
             name: String,
             modelDir: String,
+            height: Int,
+            width: Int,
             textEmbeddingSize: Int,
             runOnCpu: Boolean,
             useCpuClip: Boolean,
@@ -163,7 +165,9 @@ class LLMService : Service() {
                         useCpuClip = useCpuClip,
                         isPony = isPony,
                         httpPort = httpPort,
-                        safetyMode = safetyMode
+                        safetyMode = safetyMode,
+                        height = height,
+                        width = width
                     )
 
                     result.fold(onSuccess = { message ->

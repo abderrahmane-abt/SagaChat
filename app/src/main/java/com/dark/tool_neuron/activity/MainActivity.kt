@@ -56,7 +56,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             NeuroVerseTheme {
                 // Check if terms are accepted
-                val hasAcceptedTerms by termsDataStore.hasAcceptedTerms.collectAsState(initial = false)
+                val hasAcceptedTerms by termsDataStore.hasAcceptedTerms.collectAsState(initial = true)
                 val scope = rememberCoroutineScope()
 
                 if (hasAcceptedTerms) {
@@ -80,12 +80,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        AppContainer.shutdown()
-        LlmModelWorker.unbindService()
     }
 }
 

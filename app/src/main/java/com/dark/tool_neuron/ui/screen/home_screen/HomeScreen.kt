@@ -71,7 +71,8 @@ import kotlinx.coroutines.launch
 fun HomeScreen(
     onStoreButtonClicked: () -> Unit,
     onModelEditor: () -> Unit,
-    chatViewModel: ChatViewModel, llmModelViewModel: LLMModelViewModel
+    chatViewModel: ChatViewModel,
+    llmModelViewModel: LLMModelViewModel
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -96,9 +97,9 @@ fun HomeScreen(
             containerColor = MaterialTheme.colorScheme.background,
             modifier = Modifier.fillMaxSize(),
             topBar = {
-                TopBar(onStoreButtonClicked = {
+                TopBar( onStoreButtonClicked = {
                     onStoreButtonClicked()
-                },onMenuClick = {
+                }, onMenuClick = {
                     scope.launch {
                         drawerState.open()
                     }
@@ -110,8 +111,7 @@ fun HomeScreen(
                 BottomBar(
                     onModelEditor = {
                         onModelEditor()
-                    },
-                    chatViewModel = chatViewModel, llmModelViewModel = llmModelViewModel
+                    }, chatViewModel = chatViewModel, llmModelViewModel = llmModelViewModel
                 )
             }) { paddingValues ->
             BodyContent(paddingValues, chatViewModel, llmModelViewModel = llmModelViewModel)
@@ -131,10 +131,9 @@ fun TopBar(
 
     CenterAlignedTopAppBar(title = {
         AnimatedTitle(
-            modifier = Modifier
-        ) {
-            showDynamicWindow()
-        }
+            modifier = Modifier, onShowDynamicWindow = {
+                showDynamicWindow()
+            })
     }, navigationIcon = {
         ActionButton(
             onClickListener = onMenuClick,
@@ -189,8 +188,7 @@ fun BottomBar(
                         MaterialTheme.colorScheme.primary.copy(0.04f)
                             .compositeOver(MaterialTheme.colorScheme.background),
                         shape = RoundedCornerShape(rDp(8.dp))
-                    ),
-                contentPadding = PaddingValues(bottom = rDp(8.dp))
+                    ), contentPadding = PaddingValues(bottom = rDp(8.dp))
             ) {
                 items(installedModels) { modelConfig ->
                     ModelListItem(
@@ -200,10 +198,10 @@ fun BottomBar(
                         isLoaded = currentModelID == modelConfig.id,
                         model = modelConfig
                     ) { selectedModel ->
-                        if(isModelLoaded) {
+                        if (isModelLoaded) {
                             llmModelViewModel.unloadModel()
                             chatViewModel.hideModelList()
-                        }else{
+                        } else {
                             llmModelViewModel.loadModel(selectedModel)
                             chatViewModel.hideModelList()
                         }
@@ -291,9 +289,7 @@ fun BottomBar(
                             } else {
                                 chatViewModel.showModelList()
                             }
-                        },
-                        checked = showModelList,
-                        icon = R.drawable.smart_temp_message
+                        }, checked = showModelList, icon = R.drawable.ai_model
                     )
 
                     Spacer(Modifier.weight(1f))
@@ -320,6 +316,7 @@ fun BottomBar(
                                             GenerationManager.ModelType.TEXT_GENERATION -> {
                                                 chatViewModel.sendTextMessage(value)
                                             }
+
                                             GenerationManager.ModelType.IMAGE_GENERATION -> {
                                                 chatViewModel.sendImageRequest(value)
                                             }

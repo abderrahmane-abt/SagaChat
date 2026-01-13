@@ -9,8 +9,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -27,42 +25,37 @@ enum class ProgressMode {
 
 @Composable
 fun PixelProgressBar(
-    progress: Float = 0f,
     modifier: Modifier = Modifier,
+    progress: Float = 0f,
     mode: ProgressMode = ProgressMode.DETERMINATE,
     color: Color = Color.Black,
     backgroundColor: Color = Color.LightGray.copy(alpha = 0.3f),
     rows: Int = 2,
-    cornerRadius: CornerRadius = CornerRadius.Zero,
+    cornerRadius: CornerRadius = CornerRadius(2f, 2f),
     pixelSize: Dp = 4.dp,
     pixelGap: Dp = 1.dp,
-    shimmerSpeed: Int = 2000,
+    shimmerSpeed: Int = 1800,
     shimmerEnabled: Boolean = true,
-    indeterminateSpeed: Int = 1500,
-    indeterminateWidth: Float = 0.3f
+    indeterminateSpeed: Int = 1200,
+    indeterminateWidth: Float = 0.25f
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "pixel_animation")
 
-    // Only animate shimmer if enabled and speed > 0
-    val shimmerOffset by if (shimmerEnabled && shimmerSpeed > 0) {
-        infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(shimmerSpeed, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "shimmer"
-        )
-    } else {
-        remember { mutableStateOf(0f) }
-    }
+    val shimmerOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(shimmerSpeed, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmer"
+    )
 
     val indeterminateOffset by infiniteTransition.animateFloat(
         initialValue = -indeterminateWidth,
         targetValue = 1f + indeterminateWidth,
         animationSpec = infiniteRepeatable(
-            animation = tween(indeterminateSpeed.coerceAtLeast(1), easing = LinearEasing),
+            animation = tween(indeterminateSpeed, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "indeterminate"
@@ -75,7 +68,6 @@ fun PixelProgressBar(
 
         val totalPixelsX = (this.size.width / totalPixelSize).toInt()
 
-        // Early return if canvas is too small
         if (totalPixelsX <= 0 || this.size.width <= 0) return@Canvas
 
         // Draw background pixels
@@ -107,11 +99,12 @@ fun PixelProgressBar(
 
                         val normalizedX = x.toFloat() / totalPixelsX.toFloat()
 
-                        val alpha = if (normalizedX > shimmerOffset - 0.2f &&
-                            normalizedX < shimmerOffset) {
-                            1f
+                        val alpha = if (shimmerEnabled && normalizedX > shimmerOffset - 0.15f &&
+                            normalizedX < shimmerOffset + 0.05f) {
+                            val fadeProgress = 1f - abs(normalizedX - shimmerOffset) / 0.15f
+                            0.6f + (fadeProgress * 0.4f)
                         } else {
-                            0.7f
+                            0.65f
                         }
 
                         drawRoundRect(
@@ -138,7 +131,7 @@ fun PixelProgressBar(
 
                         if (distanceFromCenter < halfWidth) {
                             val fadeProgress = 1f - (distanceFromCenter / halfWidth)
-                            val alpha = 0.3f + (fadeProgress * 0.7f)
+                            val alpha = 0.35f + (fadeProgress * 0.65f)
 
                             drawRoundRect(
                                 color = color.copy(alpha = alpha),

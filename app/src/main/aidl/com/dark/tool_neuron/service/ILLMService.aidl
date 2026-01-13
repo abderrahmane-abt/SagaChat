@@ -17,6 +17,8 @@ interface ILLMService {
     void loadDiffusionModel(
         String name,
         String modelDir,
+        int height,
+        int width,
         int textEmbeddingSize,
         boolean runOnCpu,
         boolean useCpuClip,
