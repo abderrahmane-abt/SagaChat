@@ -40,9 +40,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
 
-// ============================================================================
+
 // Main Screen
-// ============================================================================
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -489,9 +489,9 @@ fun NeuronExampleScreen() {
     }
 }
 
-// ============================================================================
+
 // Data Classes
-// ============================================================================
+
 
 data class LoadedPacketState(
     val packetId: String,
@@ -500,9 +500,9 @@ data class LoadedPacketState(
     val recoveryKey: String? = null
 )
 
-// ============================================================================
+
 // Components
-// ============================================================================
+
 
 @Composable
 private fun StatItem(label: String, value: String) {
@@ -572,9 +572,9 @@ private fun SearchResultCard(
     }
 }
 
-// ============================================================================
+
 // Settings Bottom Sheet
-// ============================================================================
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -689,9 +689,9 @@ private fun SettingSlider(
     }
 }
 
-// ============================================================================
+
 // Add Text Dialog
-// ============================================================================
+
 
 @Composable
 private fun AddTextDialog(
@@ -743,9 +743,9 @@ private fun AddTextDialog(
     )
 }
 
-// ============================================================================
+
 // Chat Picker Dialog
-// ============================================================================
+
 
 @Composable
 private fun ChatPickerDialog(
@@ -833,9 +833,9 @@ private fun ChatPickerDialog(
     )
 }
 
-// ============================================================================
+
 // Export Dialog - Full Options
-// ============================================================================
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1304,9 +1304,9 @@ private fun AddUserDialog(
     )
 }
 
-// ============================================================================
+
 // Load Packet Dialog
-// ============================================================================
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

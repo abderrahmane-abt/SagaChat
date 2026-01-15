@@ -2,10 +2,14 @@
 
     import android.content.Context
     import com.dark.tool_neuron.database.AppDatabase
+    import com.dark.tool_neuron.neuron_example.EmbeddingProvider
+    import com.dark.tool_neuron.neuron_example.SentenceEmbeddingProvider
     import com.dark.tool_neuron.repo.ChatRepository
     import com.dark.tool_neuron.repo.ModelRepository
+    import com.dark.tool_neuron.repo.RagRepository
     import com.dark.tool_neuron.worker.ChatManager
     import com.dark.tool_neuron.worker.GenerationManager
+    import com.dark.tool_neuron.worker.RagVaultIntegration
     import dagger.Module
     import dagger.Provides
     import dagger.hilt.InstallIn
@@ -50,6 +54,29 @@
         fun provideChatRepository(): ChatRepository {
             return ChatRepository()
         }
+
+        @Provides
+        @Singleton
+        fun provideRagRepository(
+            database: AppDatabase,
+            @ApplicationContext context: Context
+        ): RagRepository {
+            return RagRepository(
+                ragDao = database.ragDao(),
+                context = context
+            )
+        }
+    }
+
+    @Module
+    @InstallIn(SingletonComponent::class)
+    object EmbeddingModule {
+
+        @Provides
+        @Singleton
+        fun provideEmbeddingProvider(): EmbeddingProvider {
+            return SentenceEmbeddingProvider()
+        }
     }
 
     @Module
@@ -73,5 +100,19 @@
         @ApplicationScope
         fun provideApplicationScope(): CoroutineScope {
             return CoroutineScope(Dispatchers.IO + SupervisorJob())
+        }
+
+        @Provides
+        @Singleton
+        fun provideRagVaultIntegration(
+            @ApplicationContext context: Context,
+            ragRepository: RagRepository,
+            embeddingProvider: EmbeddingProvider
+        ): RagVaultIntegration {
+            return RagVaultIntegration(
+                context = context,
+                ragRepository = ragRepository,
+                embeddingProvider = embeddingProvider
+            )
         }
     }

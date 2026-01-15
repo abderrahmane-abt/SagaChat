@@ -99,6 +99,27 @@
             tools:targetApi="33" >
         </activity>
 
+        <activity
+            android:name=".activity.RagActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.NeuroVerse"
+            android:windowSoftInputMode="adjustResize"
+            tools:targetApi="33" >
+
+            <!-- Intent filter for .neuron RAG files -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.rag" />
+                <data android:pathPattern=".*\\.RAG" />
+            </intent-filter>
+        </activity>
 
         <service
             android:name=".service.LLMService"

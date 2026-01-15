@@ -82,6 +82,7 @@ fun BodyContent(
     val imageStep by chatViewModel.imageGenerationStep.collectAsState()
     val showDynamicWindow by chatViewModel.showDynamicWindow.collectAsState()
     val currentGenerationType by chatViewModel.currentGenerationType.collectAsState()
+    val currentRagResults by chatViewModel.currentRagResults.collectAsState()
 
     val listState = rememberLazyListState()
 
@@ -107,7 +108,8 @@ fun BodyContent(
                     streamingImage = streamingImage,
                     imageProgress = imageProgress,
                     imageStep = imageStep,
-                    isImageGeneration = currentGenerationType == GenerationManager.ModelType.IMAGE_GENERATION
+                    isImageGeneration = currentGenerationType == GenerationManager.ModelType.IMAGE_GENERATION,
+                    ragResults = currentRagResults
                 )
             } else {
                 LazyColumn(
@@ -183,7 +185,8 @@ private fun StreamingView(
     streamingImage: Bitmap?,
     imageProgress: Float,
     imageStep: String,
-    isImageGeneration: Boolean
+    isImageGeneration: Boolean,
+    ragResults: List<com.dark.tool_neuron.viewmodel.RagQueryDisplayResult> = emptyList()
 ) {
     val scrollState = rememberScrollState()
 
@@ -207,6 +210,11 @@ private fun StreamingView(
                 )
             )
         )
+
+        // Show RAG context if available
+        if (ragResults.isNotEmpty()) {
+            RagResultsDisplay(results = ragResults)
+        }
 
         if (isImageGeneration) {
             ImageGenerationStreamingBubble(
@@ -1117,6 +1125,189 @@ private fun MetricRow(
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
             fontFamily = maple
+        )
+    }
+}
+
+// RAG Results UI Component
+@Composable
+fun RagResultsDisplay(
+    results: List<com.dark.tool_neuron.viewmodel.RagQueryDisplayResult>,
+    modifier: Modifier = Modifier
+) {
+    if (results.isEmpty()) return
+
+    var isExpanded by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = rDp(12.dp))
+    ) {
+        // Summary row
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { isExpanded = !isExpanded },
+            shape = RoundedCornerShape(rDp(8.dp)),
+            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f),
+            tonalElevation = rDp(1.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = rDp(10.dp), vertical = rDp(8.dp)),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.rag),
+                        contentDescription = null,
+                        modifier = Modifier.size(rDp(14.dp)),
+                        tint = MaterialTheme.colorScheme.secondary
+                    )
+                    Text(
+                        text = "RAG Context",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    )
+
+                    Text(
+                        text = "${results.size} matches",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    modifier = Modifier.size(rDp(18.dp)),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // Detailed results
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            ) + fadeIn(),
+            exit = shrinkVertically(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            ) + fadeOut()
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = rDp(6.dp)),
+                shape = RoundedCornerShape(rDp(8.dp)),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(rDp(10.dp)),
+                    verticalArrangement = Arrangement.spacedBy(rDp(10.dp))
+                ) {
+                    results.take(5).forEachIndexed { index, result ->
+                        RagResultItem(result = result, index = index)
+                        if (index < results.size - 1 && index < 4) {
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                            )
+                        }
+                    }
+
+                    if (results.size > 5) {
+                        Text(
+                            text = "... and ${results.size - 5} more results",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(top = rDp(4.dp))
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RagResultItem(
+    result: com.dark.tool_neuron.viewmodel.RagQueryDisplayResult,
+    index: Int
+) {
+    val scorePercent = (result.score * 100).toInt()
+    val scoreColor = when {
+        scorePercent >= 80 -> MaterialTheme.colorScheme.primary
+        scorePercent >= 60 -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${index + 1}.",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                Text(
+                    text = result.ragName,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1
+                )
+            }
+
+            Surface(
+                color = scoreColor.copy(alpha = 0.15f),
+                shape = RoundedCornerShape(rDp(4.dp))
+            ) {
+                Text(
+                    text = "$scorePercent%",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = scoreColor,
+                    modifier = Modifier.padding(horizontal = rDp(6.dp), vertical = rDp(2.dp))
+                )
+            }
+        }
+
+        Text(
+            text = result.content.take(200) + if (result.content.length > 200) "..." else "",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 3,
+            lineHeight = 16.sp
         )
     }
 }

@@ -25,3 +25,18 @@
 -keep class com.mp.ai_core.helpers.** { *; }
 -keep class com.mp.ai_core.services.** { *; }
 -keep class com.mp.ai_core.** { *; }
+
+# Keep RAG and NeuronGraph classes
+-keep class com.dark.tool_neuron.neuron_example.** { *; }
+-keep class com.dark.tool_neuron.models.table_schema.InstalledRag { *; }
+-keep class com.dark.tool_neuron.models.table_schema.RagSourceType { *; }
+-keep class com.dark.tool_neuron.models.table_schema.RagStatus { *; }
+-keep class com.dark.tool_neuron.repo.RagRepository { *; }
+-keep class com.dark.tool_neuron.worker.RagVaultIntegration { *; }
+
+# Keep ViewModel RAG result classes
+-keep class com.dark.tool_neuron.viewmodel.RagQueryDisplayResult { *; }
+-keep class com.dark.tool_neuron.viewmodel.RagViewModel { *; }
+
+# Keep AI GGUF models
+-keep class com.mp.ai_gguf.models.** { *; }

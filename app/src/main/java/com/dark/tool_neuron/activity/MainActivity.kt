@@ -1,6 +1,7 @@
 package com.dark.tool_neuron.activity
 
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -10,6 +11,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -22,6 +24,7 @@ import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.ui.screen.ModelConfigEditorScreen
 import com.dark.tool_neuron.ui.screen.ModelStoreScreen
 import com.dark.tool_neuron.ui.screen.TermsAndConditionsScreen
+import com.dark.tool_neuron.ui.screen.copyEmbeddingModelsFromAssets
 import com.dark.tool_neuron.ui.screen.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.screen.memory.VaultDashboard
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
@@ -30,7 +33,9 @@ import com.dark.tool_neuron.viewmodel.LLMModelViewModel
 import com.dark.tool_neuron.worker.LlmModelWorker
 import com.dark.tool_neuron.worker.NotificationPermissionHelper
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -55,7 +60,17 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
+            val context = this
+
             NeuroVerseTheme {
+                LaunchedEffect(Unit) {
+                    withContext(Dispatchers.IO) {
+                        copyEmbeddingModelsFromAssets(context) { status ->
+                            Log.d("Embedding", status)
+                        }
+                    }
+                }
+
                 // Check if terms are accepted
                 val hasAcceptedTerms by termsDataStore.hasAcceptedTerms.collectAsState(initial = true)
                 val scope = rememberCoroutineScope()

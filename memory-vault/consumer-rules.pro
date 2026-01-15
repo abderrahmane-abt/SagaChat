@@ -19,3 +19,11 @@
 -keep public class com.memoryvault.CorruptedBlock
 
 -keep class net.jpountz.lz4.** { *; }
+
+# Keep ItemMetadata for RAG integration
+-keep public class com.memoryvault.core.BlockType { *; }
+
+# Keep all VaultItem subclasses with their fields
+-keepclassmembers class * extends com.memoryvault.VaultItem {
+    *;
+}

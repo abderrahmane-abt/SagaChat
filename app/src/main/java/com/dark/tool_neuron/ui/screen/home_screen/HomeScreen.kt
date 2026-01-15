@@ -1,6 +1,7 @@
 package com.dark.tool_neuron.ui.screen.home_screen
 
 import android.content.Intent
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -51,19 +52,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.R
 import com.dark.tool_neuron.activity.ModelLoadingActivity
+import com.dark.tool_neuron.activity.RagActivity
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionProgressButton
 import com.dark.tool_neuron.ui.components.ActionToggleButton
 import com.dark.tool_neuron.ui.components.AnimatedTitle
 import com.dark.tool_neuron.ui.components.ModeToggleSwitch
 import com.dark.tool_neuron.ui.components.ModelListItem
+import com.dark.tool_neuron.ui.components.RagOverlayBottomSheet
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
+import com.dark.tool_neuron.viewmodel.RagViewModel
 import com.dark.tool_neuron.worker.GenerationManager
 import kotlinx.coroutines.launch
 
@@ -182,8 +186,10 @@ fun TopBar(
 fun BottomBar(
     onModelEditor: () -> Unit,
     chatViewModel: ChatViewModel = hiltViewModel(),
-    llmModelViewModel: LLMModelViewModel = hiltViewModel()
+    llmModelViewModel: LLMModelViewModel = hiltViewModel(),
+    ragViewModel: RagViewModel = hiltViewModel()
 ) {
+    val context = LocalContext.current
     var value by remember { mutableStateOf("") }
     val installedModels by llmModelViewModel.installedModels.collectAsStateWithLifecycle(emptyList())
     val currentModelID by llmModelViewModel.currentModelID.collectAsStateWithLifecycle()
@@ -193,8 +199,55 @@ fun BottomBar(
     val isTextModelLoaded by chatViewModel.isTextModelLoaded.collectAsStateWithLifecycle()
     val isImageModelLoaded by chatViewModel.isImageModelLoaded.collectAsStateWithLifecycle()
 
+    // RAG State
+    val showRagOverlay by ragViewModel.showRagOverlay.collectAsStateWithLifecycle()
+    val installedRags by ragViewModel.installedRags.collectAsStateWithLifecycle()
+    val loadedRags by ragViewModel.loadedRags.collectAsStateWithLifecycle()
+    val installedCount by ragViewModel.installedCount.collectAsStateWithLifecycle()
+    val loadedCount by ragViewModel.loadedCount.collectAsStateWithLifecycle()
+    val isRagEnabledForChat by ragViewModel.isRagEnabledForChat.collectAsStateWithLifecycle()
+    val lastRagResults by ragViewModel.lastRagResults.collectAsStateWithLifecycle()
+
+    // Coroutine scope for RAG queries
+    val scope = rememberCoroutineScope()
+
     // Track if any model is loaded
     val isModelLoaded = currentModelID.isNotEmpty()
+
+    // SAF file picker for RAG installation
+    val ragFilePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            ragViewModel.installRagFromUri(uri)
+        }
+    }
+
+    // RAG Overlay
+    RagOverlayBottomSheet(
+        show = showRagOverlay,
+        installedRags = installedRags,
+        loadedRags = loadedRags,
+        installedCount = installedCount,
+        loadedCount = loadedCount,
+        onDismiss = { ragViewModel.hideRagOverlay() },
+        onRagSelected = { ragViewModel.selectRag(it) },
+        onRagToggleEnabled = { id, enabled -> ragViewModel.toggleRagEnabled(id, enabled) },
+        onRagLoad = { ragViewModel.loadRag(it) },
+        onRagUnload = { ragViewModel.unloadRag(it) },
+        onRagDelete = { ragViewModel.deleteRag(it) },
+        onOpenRagActivity = {
+            ragViewModel.hideRagOverlay()
+            context.startActivity(Intent(context, RagActivity::class.java))
+        },
+        onInstallRag = {
+            ragFilePicker.launch(arrayOf("*/*"))
+        }
+    )
 
     Column {
         AnimatedVisibility(showModelList) {
@@ -311,6 +364,19 @@ fun BottomBar(
                         }, checked = showModelList, icon = R.drawable.ai_model
                     )
 
+                    // RAG Button
+                    ActionToggleButton(
+                        onCheckedChange = {
+                            if (showRagOverlay) {
+                                ragViewModel.hideRagOverlay()
+                            } else {
+                                ragViewModel.showRagOverlay()
+                            }
+                        },
+                        checked = showRagOverlay,
+                        icon = R.drawable.rag
+                    )
+
                     Spacer(Modifier.weight(1f))
 
                     when (isGenerating) {
@@ -333,14 +399,36 @@ fun BottomBar(
                                     if (value.isNotBlank()) {
                                         when (currentGenerationType) {
                                             GenerationManager.ModelType.TEXT_GENERATION -> {
-                                                chatViewModel.sendTextMessage(value)
+                                                // Check if RAG is enabled and there are loaded RAGs
+                                                Log.d("Home Screen", loadedRags.isEmpty().toString())
+                                                if (loadedRags.isNotEmpty()) {
+                                                    val userQuery = value
+                                                    value = ""
+                                                    scope.launch {
+                                                        // Query RAG first
+                                                        val ragContext = ragViewModel.queryAndStoreResults(userQuery)
+                                                        // Set RAG context and results in ChatViewModel
+                                                        Log.d("Home-Screen", ragContext)
+                                                        chatViewModel.setRagContext(
+                                                            ragContext.ifBlank { null },
+                                                            ragViewModel.lastRagResults.value
+                                                        )
+                                                        // Now send the message
+                                                        chatViewModel.sendTextMessage(userQuery)
+                                                    }
+                                                } else {
+                                                    // No RAG loaded, send directly
+                                                    chatViewModel.clearRagContext()
+                                                    chatViewModel.sendTextMessage(value)
+                                                    value = ""
+                                                }
                                             }
 
                                             GenerationManager.ModelType.IMAGE_GENERATION -> {
                                                 chatViewModel.sendImageRequest(value)
+                                                value = ""
                                             }
                                         }
-                                        value = ""
                                     }
                                 },
                                 icon = R.drawable.send_chat,

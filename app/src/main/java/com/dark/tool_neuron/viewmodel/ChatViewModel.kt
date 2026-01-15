@@ -92,6 +92,32 @@ class ChatViewModel @Inject constructor(
     val isTextModelLoaded = LlmModelWorker.isGgufModelLoaded
     val isImageModelLoaded = LlmModelWorker.isDiffusionModelLoaded
 
+    // RAG state
+    private val _isRagEnabled = MutableStateFlow(false)
+    val isRagEnabled: StateFlow<Boolean> = _isRagEnabled
+
+    private val _currentRagContext = MutableStateFlow<String?>(null)
+    val currentRagContext: StateFlow<String?> = _currentRagContext
+
+    private val _currentRagResults = MutableStateFlow<List<RagQueryDisplayResult>>(emptyList())
+    val currentRagResults: StateFlow<List<RagQueryDisplayResult>> = _currentRagResults
+
+    // ==================== RAG Controls ====================
+
+    fun setRagEnabled(enabled: Boolean) {
+        _isRagEnabled.value = enabled
+    }
+
+    fun setRagContext(context: String?, results: List<RagQueryDisplayResult> = emptyList()) {
+        _currentRagContext.value = context
+        _currentRagResults.value = results
+    }
+
+    fun clearRagContext() {
+        _currentRagContext.value = null
+        _currentRagResults.value = emptyList()
+    }
+
     // ==================== Chat Management ====================
 
     fun startNewConversation() {
@@ -213,7 +239,12 @@ class ChatViewModel @Inject constructor(
             val tokenBatchSize = 3
 
             try {
-                generationManager.generateTextStreaming(prompt, maxTokens).collect { event ->
+                // Prepend RAG context if available
+                val finalPrompt = _currentRagContext.value?.let { ragContext ->
+                    "$ragContext\n\n### User Query:\n$prompt"
+                } ?: prompt
+
+                generationManager.generateTextStreaming(finalPrompt, maxTokens).collect { event ->
                     when (event) {
                         is GenerationEvent.Token -> {
                             currentGeneratedContent += event.text
@@ -272,9 +303,14 @@ class ChatViewModel @Inject constructor(
             val tokenBatchSize = 3
 
             try {
-                val conversationPrompt = generationManager.buildConversationPrompt(
+                var conversationPrompt = generationManager.buildConversationPrompt(
                     _messages, userMessage.content.content
                 )
+
+                // Prepend RAG context if available
+                _currentRagContext.value?.let { ragContext ->
+                    conversationPrompt = "$ragContext\n\n$conversationPrompt"
+                }
 
                 generationManager.generateTextStreaming(conversationPrompt, maxTokens)
                     .collect { event ->

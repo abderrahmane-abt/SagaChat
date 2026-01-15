@@ -1,5 +1,6 @@
 package com.dark.tool_neuron.ui.screen
 
+import android.content.Context
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -29,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -36,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -43,16 +46,30 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.R
 import com.dark.tool_neuron.ui.theme.rDp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import java.io.File
 
 @Composable
 fun IntroScreen() {
+    val context = LocalContext.current
 
     var progress by remember { mutableFloatStateOf(0f) }
     var delayTime by remember { mutableLongStateOf(8L) }
+    var loadingStatus by remember { mutableStateOf("Initializing App...") }
 
     val pulseScale = remember { Animatable(1f) }
     val shimmerAlpha = remember { Animatable(0.3f) }
+
+    // Copy embedding models from assets on first launch
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            copyEmbeddingModelsFromAssets(context) { status ->
+                loadingStatus = status
+            }
+        }
+    }
 
     // Pulsing animation for the icon
     LaunchedEffect(Unit) {
@@ -214,7 +231,7 @@ fun IntroScreen() {
             ) {
                 // Loading text
                 Text(
-                    "Initializing App...",
+                    loadingStatus,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = rDp(12.dp))
@@ -241,5 +258,73 @@ fun IntroScreen() {
                 )
             }
         }
+    }
+}
+
+/**
+ * Copies embedding model files from assets to app's internal storage.
+ * Only copies if the files don't already exist.
+ */
+fun copyEmbeddingModelsFromAssets(
+    context: Context,
+    onStatusUpdate: (String) -> Unit
+) {
+    try {
+        val embeddingDir = File(context.filesDir, "models/embedding")
+
+        // Check if models already exist
+        val modelFile = File(embeddingDir, "model.onnx")
+        val tokenizerFile = File(embeddingDir, "tokenizer.json")
+
+        if (modelFile.exists() && tokenizerFile.exists()) {
+            onStatusUpdate("Embedding models ready")
+            return
+        }
+
+        // Create directory if it doesn't exist
+        if (!embeddingDir.exists()) {
+            embeddingDir.mkdirs()
+        }
+
+        onStatusUpdate("Setting up embedding models...")
+
+        // Copy model file from assets
+        if (!modelFile.exists()) {
+            onStatusUpdate("Copying embedding model...")
+            try {
+                context.assets.open("embedding-model/model_fp16.onnx").use { input ->
+                    modelFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            } catch (_: Exception) {
+                // Model file might not exist in assets, that's okay
+                onStatusUpdate("Embedding model not bundled")
+            }
+        }
+
+        // Copy tokenizer file from assets
+        if (!tokenizerFile.exists()) {
+            onStatusUpdate("Copying tokenizer...")
+            try {
+                context.assets.open("embedding-model/tokenizer.json").use { input ->
+                    tokenizerFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            } catch (_: Exception) {
+                // Tokenizer file might not exist in assets, that's okay
+                onStatusUpdate("Tokenizer not bundled")
+            }
+        }
+
+        // Verify files were copied
+        if (modelFile.exists() && tokenizerFile.exists()) {
+            onStatusUpdate("Embedding models ready")
+        } else {
+            onStatusUpdate("Initializing App...")
+        }
+    } catch (_: Exception) {
+        onStatusUpdate("Initializing App...")
     }
 }
