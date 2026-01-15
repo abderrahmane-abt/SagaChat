@@ -14,7 +14,8 @@ data class Messages(
     val role: Role = Role.Assistant,
     val content: MessageContent = MessageContent(),
     val decodingMetrics: DecodingMetrics? = null,
-    val imageMetrics: ImageGenerationMetrics? = null
+    val imageMetrics: ImageGenerationMetrics? = null,
+    val memoryMetrics: MemoryMetrics? = null
 )
 
 @Immutable
@@ -36,6 +37,14 @@ data class ImageGenerationMetrics(
     val height: Int,
     val scheduler: String,
     val generationTimeMs: Long
+)
+
+@Serializable
+data class MemoryMetrics(
+    val modelSizeMB: Int = 0,
+    val contextSizeMB: Int = 0,
+    val peakMemoryMB: Int = 0,
+    val memoryUsagePercent: Float = 0f
 )
 
 @Serializable

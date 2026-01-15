@@ -1,8 +1,12 @@
 package com.dark.tool_neuron.engine
 
+import android.app.ActivityManager
+import android.content.Context
 import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.models.table_schema.ModelConfig
+import com.dark.tool_neuron.models.engine_schema.DeviceTier
 import com.dark.tool_neuron.models.engine_schema.GgufEngineSchema
+import com.dark.tool_neuron.models.engine_schema.GgufLoadingParams
 import com.mp.ai_gguf.GGUFNativeLib
 import com.mp.ai_gguf.models.DecodingMetrics
 import com.mp.ai_gguf.models.StreamCallback
@@ -19,6 +23,7 @@ class GGUFEngine {
     private val nativeLib = GGUFNativeLib()
     private var isLoaded = false
     private var currentModelId: String? = null
+    private var currentToolsJson: String? = null  // Cache for grammar optimization
 
     suspend fun load(model: Model, config: ModelConfig?): Boolean = withContext(Dispatchers.IO) {
         if (isLoaded) unload()
@@ -128,6 +133,7 @@ class GGUFEngine {
             nativeLib.nativeRelease()
             isLoaded = false
             currentModelId = null
+            currentToolsJson = null  // Clear tools cache
         }
     }
 
@@ -136,6 +142,86 @@ class GGUFEngine {
 
     fun getModelInfo(): String? =
         if (isLoaded) nativeLib.nativeGetModelInfo() else null
+
+    /**
+     * Set tools JSON for function calling support.
+     * Uses grammar caching - only rebuilds grammar when tools JSON changes.
+     *
+     * @param toolsJson JSON array of tool definitions, or empty string to disable
+     * @return true if tools were set successfully
+     */
+    fun setToolsJson(toolsJson: String): Boolean {
+        if (!isLoaded) return false
+
+        // Grammar caching: skip if tools haven't changed
+        if (toolsJson == currentToolsJson) return true
+
+        return try {
+            nativeLib.nativeSetToolsJson(toolsJson)
+            currentToolsJson = toolsJson
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Clear tools configuration and disable function calling
+     */
+    fun clearTools() {
+        if (isLoaded) {
+            try {
+                nativeLib.nativeSetToolsJson("")
+                currentToolsJson = null
+            } catch (_: Exception) {
+                // Ignore errors when clearing
+            }
+        }
+    }
+
+    /**
+     * Check if tools/function calling is currently enabled
+     */
+    fun hasToolsEnabled(): Boolean = !currentToolsJson.isNullOrEmpty()
+
+    companion object {
+        /**
+         * Detect device tier based on available RAM
+         */
+        fun detectDeviceTier(context: Context): DeviceTier {
+            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val memInfo = ActivityManager.MemoryInfo()
+            activityManager.getMemoryInfo(memInfo)
+
+            val totalRamGB = memInfo.totalMem / (1024.0 * 1024.0 * 1024.0)
+
+            return when {
+                totalRamGB < 4.0 -> DeviceTier.LOW_END
+                totalRamGB < 8.0 -> DeviceTier.MID_RANGE
+                else -> DeviceTier.HIGH_END
+            }
+        }
+
+        /**
+         * Get recommended loading params for the current device
+         */
+        fun getRecommendedParams(context: Context): GgufLoadingParams {
+            val tier = detectDeviceTier(context)
+            return GgufLoadingParams.forDeviceTier(tier)
+        }
+
+        /**
+         * Calculate recommended context size based on available memory and model size
+         */
+        fun getRecommendedContextSize(context: Context, modelSizeMB: Int): Int {
+            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val memInfo = ActivityManager.MemoryInfo()
+            activityManager.getMemoryInfo(memInfo)
+
+            val availableMemoryMB = (memInfo.availMem / (1024 * 1024)).toInt()
+            return GgufLoadingParams.recommendedContextSize(availableMemoryMB, modelSizeMB)
+        }
+    }
 }
 
 sealed class GenerationEvent {

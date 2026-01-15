@@ -137,6 +137,14 @@ class LLMService : Service() {
 
         override fun getModelInfoGguf(): String? = ggufEngine.getModelInfo()
 
+        override fun setToolsJsonGguf(toolsJson: String): Boolean {
+            return ggufEngine.setToolsJson(toolsJson)
+        }
+
+        override fun clearToolsGguf() {
+            ggufEngine.clearTools()
+        }
+
         // ==================== Diffusion Methods ====================
 
         override fun loadDiffusionModel(

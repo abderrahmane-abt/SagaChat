@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import com.dark.tool_neuron.R
 import com.dark.tool_neuron.models.messages.ContentType
 import com.dark.tool_neuron.models.messages.ImageGenerationMetrics
+import com.dark.tool_neuron.models.messages.MemoryMetrics
 import com.dark.tool_neuron.models.messages.MessageContent
 import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.models.messages.Role
@@ -468,6 +469,10 @@ private fun AssistantMessageBubble(message: Messages) {
         message.imageMetrics != null
     }
 
+    val showMemoryMetrics = remember(message.memoryMetrics) {
+        message.memoryMetrics?.let { it.modelSizeMB > 0 || it.peakMemoryMB > 0 } ?: false
+    }
+
     val parsedMessage by produceState(
         initialValue = ParsedMessage(null, message.content.content),
         key1 = message.content.content
@@ -501,13 +506,19 @@ private fun AssistantMessageBubble(message: Messages) {
 
         if (showMetrics) {
             message.decodingMetrics?.let { metrics ->
-                MetricsDisplay(metrics)
+                MetricsDisplay(metrics, message.memoryMetrics)
             }
         }
 
         if (showImageMetrics) {
             message.imageMetrics?.let { metrics ->
                 ImageMetricsDisplay(metrics)
+            }
+        }
+
+        if (showMemoryMetrics && !showMetrics) {
+            message.memoryMetrics?.let { metrics ->
+                MemoryMetricsDisplay(metrics)
             }
         }
     }
@@ -612,7 +623,7 @@ private fun ImageMessageBubble(message: Messages) {
 }
 
 @Composable
-private fun MetricsDisplay(metrics: DecodingMetrics) {
+private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetrics? = null) {
     var isExpanded by remember { mutableStateOf(false) }
 
     val formattedSpeed = remember(metrics.tokensPerSecond) {
@@ -750,6 +761,184 @@ private fun MetricsDisplay(metrics: DecodingMetrics) {
                             icon = R.drawable.clock,
                             label = "Total Duration",
                             value = "$time s"
+                        )
+                    }
+
+                    // Memory metrics section
+                    memoryMetrics?.let { mem ->
+                        if (mem.modelSizeMB > 0 || mem.peakMemoryMB > 0) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = rDp(4.dp)),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                            )
+
+                            Text(
+                                text = "Memory",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.padding(bottom = rDp(4.dp))
+                            )
+
+                            if (mem.modelSizeMB > 0) {
+                                MetricRow(
+                                    icon = R.drawable.tokens,
+                                    label = "Model Size",
+                                    value = "${mem.modelSizeMB} MB"
+                                )
+                            }
+
+                            if (mem.contextSizeMB > 0) {
+                                MetricRow(
+                                    icon = R.drawable.tokens,
+                                    label = "Context Size",
+                                    value = "${mem.contextSizeMB} MB"
+                                )
+                            }
+
+                            if (mem.peakMemoryMB > 0) {
+                                MetricRow(
+                                    icon = R.drawable.tokens,
+                                    label = "Peak Memory",
+                                    value = "${mem.peakMemoryMB} MB"
+                                )
+                            }
+
+                            if (mem.memoryUsagePercent > 0) {
+                                MetricRow(
+                                    icon = R.drawable.tokens,
+                                    label = "Memory Usage",
+                                    value = "${"%.1f".format(mem.memoryUsagePercent)}%"
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MemoryMetricsDisplay(metrics: MemoryMetrics) {
+    var isExpanded by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = rDp(12.dp))
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { isExpanded = !isExpanded },
+            shape = RoundedCornerShape(rDp(8.dp)),
+            color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f),
+            tonalElevation = rDp(1.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = rDp(10.dp), vertical = rDp(8.dp)),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.tokens),
+                        contentDescription = null,
+                        modifier = Modifier.size(rDp(14.dp)),
+                        tint = MaterialTheme.colorScheme.tertiary
+                    )
+                    Text(
+                        text = "Memory",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    if (metrics.peakMemoryMB > 0) {
+                        Text(
+                            text = "•",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        )
+
+                        Text(
+                            text = "${metrics.peakMemoryMB} MB peak",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    modifier = Modifier.size(rDp(18.dp)),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            ) + fadeIn(),
+            exit = shrinkVertically(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            ) + fadeOut()
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = rDp(6.dp)),
+                shape = RoundedCornerShape(rDp(8.dp)),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(rDp(10.dp)),
+                    verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                ) {
+                    if (metrics.modelSizeMB > 0) {
+                        MetricRow(
+                            icon = R.drawable.tokens,
+                            label = "Model Size",
+                            value = "${metrics.modelSizeMB} MB"
+                        )
+                    }
+
+                    if (metrics.contextSizeMB > 0) {
+                        MetricRow(
+                            icon = R.drawable.tokens,
+                            label = "Context Size",
+                            value = "${metrics.contextSizeMB} MB"
+                        )
+                    }
+
+                    if (metrics.peakMemoryMB > 0) {
+                        MetricRow(
+                            icon = R.drawable.tokens,
+                            label = "Peak Memory",
+                            value = "${metrics.peakMemoryMB} MB"
+                        )
+                    }
+
+                    if (metrics.memoryUsagePercent > 0) {
+                        MetricRow(
+                            icon = R.drawable.tokens,
+                            label = "Memory Usage",
+                            value = "${"%.1f".format(metrics.memoryUsagePercent)}%"
                         )
                     }
                 }

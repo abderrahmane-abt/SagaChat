@@ -22,7 +22,7 @@ android {
         applicationId = "com.dark.tool_neuron"
         minSdk = 31
         targetSdk = 36
-        versionCode = 9
+        versionCode = 10
         versionName = "1.0.1"
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
@@ -93,6 +93,7 @@ dependencies {
     implementation(":ai_gguf-release@aar")
     implementation(":ai_sd-release@aar")
     implementation(project(":memory-vault"))
+    implementation(project(":neuron-packet"))
 
     // Core Android
     implementation(libs.androidx.core.ktx)

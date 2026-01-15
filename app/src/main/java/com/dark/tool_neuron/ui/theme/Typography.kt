@@ -10,7 +10,7 @@ import com.dark.tool_neuron.R
 @OptIn(ExperimentalTextApi::class)
 val ManropeFontFamily = FontFamily(
     Font(
-        resId = R.font.manrope,  // your filename without .ttf
+        resId = R.font.manrope,
         variationSettings = FontVariation.Settings(
             FontVariation.weight(FontWeight.Normal.weight)
         )

@@ -71,6 +71,7 @@ import kotlinx.coroutines.launch
 fun HomeScreen(
     onStoreButtonClicked: () -> Unit,
     onModelEditor: () -> Unit,
+    onVaultManagerClick: () -> Unit,
     chatViewModel: ChatViewModel,
     llmModelViewModel: LLMModelViewModel
 ) {
@@ -85,7 +86,9 @@ fun HomeScreen(
     ModalNavigationDrawer(
         drawerState = drawerState, drawerContent = {
             ModalDrawerSheet {
-                HomeDrawerScreen(onChatSelected = {
+                HomeDrawerScreen(onVaultManagerClick = {
+                    onVaultManagerClick()
+                }, onChatSelected = {
                     chatViewModel.loadChat(it)
                     scope.launch {
                         drawerState.close()

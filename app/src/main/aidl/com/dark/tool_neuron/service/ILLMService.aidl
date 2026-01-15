@@ -12,6 +12,8 @@ interface ILLMService {
     void stopGenerationGguf();
     void unloadModelGguf();
     String getModelInfoGguf();
+    boolean setToolsJsonGguf(String toolsJson);
+    void clearToolsGguf();
 
     //Diffusion
     void loadDiffusionModel(

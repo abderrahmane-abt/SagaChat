@@ -6,7 +6,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -20,19 +19,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -200,104 +195,10 @@ fun VaultManagementScreen(
 
 @Composable
 fun OverviewTab(viewModel: VaultManagementViewModel) {
-    val stats = viewModel.vaultStats
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(rDp(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
-    ) {
-        item {
-            Text(
-                "Vault Statistics",
-                fontSize = rSp(18.sp),
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-
-        if (stats != null) {
-            item {
-                StatsCard(
-                    title = "Storage Overview", items = listOf(
-                        StatItem("Total Items", stats.totalItems.toString(), Icons.Default.List),
-                        StatItem(
-                            "Total Size", formatBytes(stats.totalSizeBytes), Icons.Default.Star
-                        ),
-                        StatItem(
-                            "Wasted Space",
-                            formatBytes(stats.wastedSpaceBytes),
-                            Icons.Default.Delete
-                        ),
-                        StatItem(
-                            "Compression Ratio",
-                            "${(stats.compressionRatio * 100).toInt()}%",
-                            Icons.Default.Build
-                        )
-                    )
-                )
-            }
-
-            item {
-                StatsCard(
-                    title = "Content Breakdown", items = listOf(
-                        StatItem("Messages", stats.messageCount.toString(), Icons.Default.Email),
-                        StatItem("Files", stats.fileCount.toString(), Icons.Default.Face),
-                        StatItem("Embeddings", stats.embeddingCount.toString(), Icons.Default.Face),
-                        StatItem("Custom Data", stats.customDataCount.toString(), Icons.Default.Add)
-                    )
-                )
-            }
-
-            item {
-                StatsCard(
-                    title = "Time Range", items = listOf(
-                        StatItem(
-                            "Oldest Item", formatDate(stats.oldestItem), Icons.Default.DateRange
-                        ), StatItem(
-                            "Newest Item", formatDate(stats.newestItem), Icons.Default.DateRange
-                        )
-                    )
-                )
-            }
-
-            item {
-                StatsCard(
-                    title = "Index Information", items = listOf(
-                        StatItem(
-                            "Index Size", formatBytes(stats.indexSizeBytes), Icons.Default.Star
-                        )
-                    )
-                )
-            }
-        } else {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(rDp(12.dp))
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(rDp(24.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
-                        ) {
-                            CircularProgressIndicator()
-                            Text(
-                                "Loading vault statistics...",
-                                fontSize = rSp(14.sp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
+    VaultStatsOverview(
+        stats = viewModel.vaultStats,
+        onRefresh = { viewModel.loadVaultStats() }
+    )
 }
 
 @Composable

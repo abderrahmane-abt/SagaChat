@@ -32,3 +32,4 @@ dependencyResolutionManagement {
 rootProject.name = "Tool-Neuron"
 include(":app")
 include(":memory-vault")
+include(":neuron-packet")

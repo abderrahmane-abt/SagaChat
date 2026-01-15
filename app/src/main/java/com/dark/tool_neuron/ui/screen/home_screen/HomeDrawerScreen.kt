@@ -55,6 +55,7 @@ import java.util.Locale
 @Composable
 fun HomeDrawerScreen(
     onChatSelected: (String) -> Unit,
+    onVaultManagerClick: () -> Unit,
     viewModel: ChatListViewModel = hiltViewModel()
 ) {
     val chats by viewModel.chats.collectAsStateWithLifecycle()
@@ -77,6 +78,7 @@ fun HomeDrawerScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopBar(
+                onVaultManagerClick,
                 onCreateNewChat = {
                     viewModel.createNewChat { chatId ->
                         onChatSelected(chatId)
@@ -121,6 +123,7 @@ fun HomeDrawerScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TopBar(
+    onVaultManagerClick: () -> Unit,
     onCreateNewChat: () -> Unit
 ) {
     TopAppBar(
@@ -131,11 +134,18 @@ private fun TopBar(
             )
         },
         actions = {
-            ActionButton(
-                onClickListener = onCreateNewChat,
-                icon = Icons.Filled.Add,
-                modifier = Modifier.padding(end = rDp(6.dp))
-            )
+            Row{
+                ActionButton(
+                    onClickListener = onVaultManagerClick,
+                    icon = R.drawable.smart_temp_message,
+                    modifier = Modifier.padding(end = rDp(6.dp))
+                )
+                ActionButton(
+                    onClickListener = onCreateNewChat,
+                    icon = Icons.Filled.Add,
+                    modifier = Modifier.padding(end = rDp(6.dp))
+                )
+            }
         }
     )
 }

@@ -23,6 +23,7 @@ import com.dark.tool_neuron.ui.screen.ModelConfigEditorScreen
 import com.dark.tool_neuron.ui.screen.ModelStoreScreen
 import com.dark.tool_neuron.ui.screen.TermsAndConditionsScreen
 import com.dark.tool_neuron.ui.screen.home_screen.HomeScreen
+import com.dark.tool_neuron.ui.screen.memory.VaultDashboard
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
@@ -87,6 +88,7 @@ sealed class Screen(val route: String) {
     object Chat : Screen("chat")
     object Store : Screen("store")
     object Editor : Screen("editor")
+    object VaultManager: Screen("vault_manager")
 }
 
 @Composable
@@ -139,6 +141,9 @@ fun AppNavigation(
                 onStoreButtonClicked = {
                     navController.navigate(Screen.Store.route)
                 },
+                onVaultManagerClick = {
+                    navController.navigate(Screen.VaultManager.route)
+                },
                 chatViewModel = chatViewModel,
                 llmModelViewModel = llmModelViewModel
             )
@@ -148,6 +153,16 @@ fun AppNavigation(
             ModelStoreScreen(onNavigateBack = {
                 navController.popBackStack()
             })
+        }
+
+        composable(Screen.Store.route) {
+            ModelStoreScreen(onNavigateBack = {
+                navController.popBackStack()
+            })
+        }
+
+        composable(Screen.VaultManager.route) {
+            VaultDashboard()
         }
     }
 }
