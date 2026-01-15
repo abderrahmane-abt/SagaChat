@@ -39,6 +39,7 @@ import com.dark.tool_neuron.models.messages.ImageGenerationMetrics
 import com.dark.tool_neuron.models.messages.MemoryMetrics
 import com.dark.tool_neuron.models.messages.MessageContent
 import com.dark.tool_neuron.models.messages.Messages
+import com.dark.tool_neuron.models.messages.RagResultItem
 import com.dark.tool_neuron.models.messages.Role
 import com.dark.tool_neuron.ui.components.MarkdownText
 import com.dark.tool_neuron.ui.theme.maple
@@ -481,6 +482,10 @@ private fun AssistantMessageBubble(message: Messages) {
         message.memoryMetrics?.let { it.modelSizeMB > 0 || it.peakMemoryMB > 0 } ?: false
     }
 
+    val hasRagResults = remember(message.ragResults) {
+        message.ragResults?.isNotEmpty() == true
+    }
+
     val parsedMessage by produceState(
         initialValue = ParsedMessage(null, message.content.content),
         key1 = message.content.content
@@ -494,6 +499,13 @@ private fun AssistantMessageBubble(message: Messages) {
             .padding(vertical = rDp(8.dp)),
         verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
     ) {
+        // Show RAG results if available (before the response)
+        if (hasRagResults) {
+            message.ragResults?.let { results ->
+                SavedRagResultsDisplay(results = results)
+            }
+        }
+
         when (message.content.contentType) {
             ContentType.Image -> {
                 ImageMessageBubble(message)
@@ -1252,6 +1264,189 @@ fun RagResultsDisplay(
 @Composable
 private fun RagResultItem(
     result: com.dark.tool_neuron.viewmodel.RagQueryDisplayResult,
+    index: Int
+) {
+    val scorePercent = (result.score * 100).toInt()
+    val scoreColor = when {
+        scorePercent >= 80 -> MaterialTheme.colorScheme.primary
+        scorePercent >= 60 -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${index + 1}.",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                Text(
+                    text = result.ragName,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1
+                )
+            }
+
+            Surface(
+                color = scoreColor.copy(alpha = 0.15f),
+                shape = RoundedCornerShape(rDp(4.dp))
+            ) {
+                Text(
+                    text = "$scorePercent%",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = scoreColor,
+                    modifier = Modifier.padding(horizontal = rDp(6.dp), vertical = rDp(2.dp))
+                )
+            }
+        }
+
+        Text(
+            text = result.content.take(200) + if (result.content.length > 200) "..." else "",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 3,
+            lineHeight = 16.sp
+        )
+    }
+}
+
+// Saved RAG Results Display (for persisted messages)
+@Composable
+fun SavedRagResultsDisplay(
+    results: List<RagResultItem>,
+    modifier: Modifier = Modifier
+) {
+    if (results.isEmpty()) return
+
+    var isExpanded by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = rDp(12.dp))
+    ) {
+        // Summary row
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { isExpanded = !isExpanded },
+            shape = RoundedCornerShape(rDp(8.dp)),
+            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f),
+            tonalElevation = rDp(1.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = rDp(10.dp), vertical = rDp(8.dp)),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.rag),
+                        contentDescription = null,
+                        modifier = Modifier.size(rDp(14.dp)),
+                        tint = MaterialTheme.colorScheme.secondary
+                    )
+                    Text(
+                        text = "RAG Context",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    )
+
+                    Text(
+                        text = "${results.size} matches",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    modifier = Modifier.size(rDp(18.dp)),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // Detailed results
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            ) + fadeIn(),
+            exit = shrinkVertically(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            ) + fadeOut()
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = rDp(6.dp)),
+                shape = RoundedCornerShape(rDp(8.dp)),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(rDp(10.dp)),
+                    verticalArrangement = Arrangement.spacedBy(rDp(10.dp))
+                ) {
+                    results.take(5).forEachIndexed { index, result ->
+                        SavedRagResultItemRow(result = result, index = index)
+                        if (index < results.size - 1 && index < 4) {
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                            )
+                        }
+                    }
+
+                    if (results.size > 5) {
+                        Text(
+                            text = "... and ${results.size - 5} more results",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(top = rDp(4.dp))
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SavedRagResultItemRow(
+    result: RagResultItem,
     index: Int
 ) {
     val scorePercent = (result.score * 100).toInt()

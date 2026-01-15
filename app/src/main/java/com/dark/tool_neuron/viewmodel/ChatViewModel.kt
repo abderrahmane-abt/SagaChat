@@ -11,6 +11,7 @@ import com.dark.tool_neuron.models.messages.ContentType
 import com.dark.tool_neuron.models.messages.ImageGenerationMetrics
 import com.dark.tool_neuron.models.messages.MessageContent
 import com.dark.tool_neuron.models.messages.Messages
+import com.dark.tool_neuron.models.messages.RagResultItem
 import com.dark.tool_neuron.models.messages.Role
 import com.dark.tool_neuron.models.table_schema.ModelConfig
 import com.dark.tool_neuron.state.AppStateManager
@@ -265,7 +266,8 @@ class ChatViewModel @Inject constructor(
 
                         is GenerationEvent.Done -> {
                             _streamingAssistantMessage.value = currentGeneratedContent
-                            _isGenerating.value = false
+                            // Don't set _isGenerating.value = false here
+                            // It will be set in resetStreamingState() after messages are added
                             createChatWithMessages(prompt, currentGeneratedContent, currentMetrics)
                         }
 
@@ -334,28 +336,42 @@ class ChatViewModel @Inject constructor(
 
                             is GenerationEvent.Done -> {
                                 _streamingAssistantMessage.value = currentGeneratedContent
-                                _isGenerating.value = false
 
+                                // Add user message first if not already added
                                 if (!userMessageAdded) {
                                     _messages.add(userMessage)
                                     userMessageAdded = true
                                 }
 
+                                // Convert current RAG results to serializable format
+                                val ragResultItems = _currentRagResults.value.takeIf { it.isNotEmpty() }?.map { result ->
+                                    RagResultItem(
+                                        ragName = result.ragName,
+                                        content = result.content,
+                                        score = result.score,
+                                        nodeId = result.nodeId
+                                    )
+                                }
+
+                                // Add assistant message
                                 val assistantMessage = Messages(
                                     role = Role.Assistant,
                                     content = MessageContent(
                                         contentType = ContentType.Text,
                                         content = currentGeneratedContent
                                     ),
-                                    decodingMetrics = currentMetrics
+                                    decodingMetrics = currentMetrics,
+                                    ragResults = ragResultItems
                                 )
                                 _messages.add(assistantMessage)
 
+                                // Save to vault
                                 chatManager.addAssistantMessage(
-                                    chatId, currentGeneratedContent, currentMetrics
+                                    chatId, currentGeneratedContent, currentMetrics, ragResultItems
                                 )
 
                                 AppStateManager.setGenerationComplete()
+                                // resetStreamingState will set _isGenerating = false
                                 resetStreamingState()
                             }
 
@@ -672,6 +688,16 @@ class ChatViewModel @Inject constructor(
         assistantResponse: String,
         metrics: DecodingMetrics?
     ) {
+        // Convert current RAG results to serializable format before clearing
+        val ragResultItems = _currentRagResults.value.takeIf { it.isNotEmpty() }?.map { result ->
+            RagResultItem(
+                ragName = result.ragName,
+                content = result.content,
+                score = result.score,
+                nodeId = result.nodeId
+            )
+        }
+
         chatManager.createNewChat().onSuccess { newChatId ->
             _currentChatId.value = newChatId
             isNewConversation = false
@@ -681,7 +707,7 @@ class ChatViewModel @Inject constructor(
                 userMessageAdded = true
 
                 chatManager.addAssistantMessage(
-                    newChatId, assistantResponse, metrics
+                    newChatId, assistantResponse, metrics, ragResultItems
                 ).onSuccess { assistantMessage ->
                     _messages.add(assistantMessage)
                     AppStateManager.setGenerationComplete()
@@ -851,6 +877,7 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun resetStreamingState() {
+        _isGenerating.value = false
         _streamingUserMessage.value = null
         _streamingAssistantMessage.value = ""
         _streamingImage.value = null
@@ -862,6 +889,9 @@ class ChatViewModel @Inject constructor(
         currentMetrics = null
         currentImageMetrics = null
         userMessageAdded = false
+        // Clear RAG context and results after message is saved
+        _currentRagContext.value = null
+        _currentRagResults.value = emptyList()
     }
 
     // ==================== Generation Control ====================

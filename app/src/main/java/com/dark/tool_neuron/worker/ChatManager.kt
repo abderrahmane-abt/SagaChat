@@ -4,6 +4,7 @@ import com.dark.tool_neuron.models.messages.ContentType
 import com.dark.tool_neuron.models.messages.ImageGenerationMetrics
 import com.dark.tool_neuron.models.messages.MessageContent
 import com.dark.tool_neuron.models.messages.Messages
+import com.dark.tool_neuron.models.messages.RagResultItem
 import com.dark.tool_neuron.models.messages.Role
 import com.dark.tool_neuron.models.vault.ChatExport
 import com.dark.tool_neuron.models.vault.ChatInfo
@@ -67,7 +68,8 @@ class ChatManager {
     suspend fun addAssistantMessage(
         chatId: String,
         content: String,
-        decodingMetrics: DecodingMetrics? = null
+        decodingMetrics: DecodingMetrics? = null,
+        ragResults: List<RagResultItem>? = null
     ): Result<Messages> = withContext(Dispatchers.IO) {
         try {
             val message = Messages(
@@ -76,7 +78,8 @@ class ChatManager {
                     contentType = ContentType.Text,
                     content = content
                 ),
-                decodingMetrics = decodingMetrics
+                decodingMetrics = decodingMetrics,
+                ragResults = ragResults
             )
             VaultHelper.addMessage(chatId, message)
             Result.success(message)

@@ -15,7 +15,19 @@ data class Messages(
     val content: MessageContent = MessageContent(),
     val decodingMetrics: DecodingMetrics? = null,
     val imageMetrics: ImageGenerationMetrics? = null,
-    val memoryMetrics: MemoryMetrics? = null
+    val memoryMetrics: MemoryMetrics? = null,
+    val ragResults: List<RagResultItem>? = null
+)
+
+/**
+ * Serializable RAG result item for storing with messages
+ */
+@Serializable
+data class RagResultItem(
+    val ragName: String,
+    val content: String,
+    val score: Float,
+    val nodeId: String
 )
 
 @Immutable
