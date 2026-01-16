@@ -22,8 +22,8 @@ android {
         applicationId = "com.dark.tool_neuron"
         minSdk = 31
         targetSdk = 36
-        versionCode = 11
-        versionName = "1.0.1"
+        versionCode = 13
+        versionName = "1.1.0-Rag+Letex"
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
         }
@@ -65,8 +65,10 @@ android {
 
 
 dependencies {
-    implementation("io.gitlab.shubham0204:sentence-embeddings:v6")
-    implementation("io.gitlab.shubham0204:model2vec:v6")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.23.0")
+    implementation(":model2vec@aar")
+    implementation(":sentence_embeddings@aar")
+
     implementation("com.google.dagger:hilt-android:2.57.2")
     ksp("com.google.dagger:hilt-android-compiler:2.57.2")
 

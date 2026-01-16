@@ -13,7 +13,14 @@
 -keepclassmembers class ** {
     @androidx.compose.runtime.Composable *;
 }
+# -- ONNX Runtime --
+-keep class ai.onnxruntime.** { *; }
+-keepclassmembers class ai.onnxruntime.** { *; }
+-dontwarn ai.onnxruntime.**
 
+# Keep sentence embeddings
+-keep class com.ml.shubham0204.sentence_embeddings.** { *; }
+-keep class com.model2vec.** { *; }
 # Keep classes with @Keep annotation
 -keep @androidx.annotation.Keep class * { *; }
 

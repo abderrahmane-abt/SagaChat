@@ -4,6 +4,9 @@ project("neuronpacket")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# 16KB page size support for Android 15+
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,max-page-size=16384")
+
 set(OPENSSL_ROOT_DIR ${CMAKE_SOURCE_DIR}/../jniLibs/${ANDROID_ABI})
 set(OPENSSL_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/third_party/openssl/include)
 
