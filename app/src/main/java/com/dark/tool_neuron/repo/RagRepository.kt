@@ -27,6 +27,9 @@ class RagRepository(
     // Loaded graphs in memory
     private val loadedGraphs = mutableMapOf<String, NeuronGraph>()
 
+    // Password cache for encrypted RAGs (cleared when app terminates)
+    private val passwordCache = mutableMapOf<String, String>()
+
     // ==================== Database Operations ====================
 
     fun getAllRags(): Flow<List<InstalledRag>> = ragDao.getAllRags()
@@ -52,8 +55,9 @@ class RagRepository(
         if (ragFile.exists()) {
             ragFile.delete()
         }
-        // Remove from loaded graphs
+        // Remove from loaded graphs and password cache
         loadedGraphs.remove(id)
+        passwordCache.remove(id)
     }
 
     suspend fun updateRagStatus(id: String, status: RagStatus) = ragDao.updateStatus(id, status)
@@ -67,6 +71,15 @@ class RagRepository(
     suspend fun unloadAllRags() {
         ragDao.unloadAllRags()
         loadedGraphs.clear()
+        // Don't clear password cache - keep passwords until app terminates
+    }
+
+    /**
+     * Clear all cached passwords (call on app termination)
+     */
+    fun clearPasswordCache() {
+        android.util.Log.d("RagRepository", "Clearing password cache for ${passwordCache.size} RAGs")
+        passwordCache.clear()
     }
 
     /**
@@ -306,16 +319,29 @@ class RagRepository(
                 return@withContext Result.failure(Exception("RAG file not found"))
             }
 
-            // Check if encrypted RAG is being loaded without password
-            if (rag.sourceType == RagSourceType.NEURON_PACKET && password == null) {
-                return@withContext Result.failure(Exception("This RAG is encrypted. Please provide a password to load it."))
+            // For encrypted RAGs, try to use cached password first
+            var effectivePassword = password
+            if (rag.sourceType == RagSourceType.NEURON_PACKET) {
+                if (password == null) {
+                    // Check cache
+                    effectivePassword = passwordCache[ragId]
+                    if (effectivePassword != null) {
+                        android.util.Log.d("RagRepository", "Using cached password for RAG: ${rag.name}")
+                    } else {
+                        return@withContext Result.failure(Exception("This RAG is encrypted. Please provide a password to load it."))
+                    }
+                } else {
+                    // Cache the provided password
+                    passwordCache[ragId] = password
+                    android.util.Log.d("RagRepository", "Cached password for RAG: ${rag.name}")
+                }
             }
 
             // For neuron packets, we need to decrypt
-            if (rag.sourceType == RagSourceType.NEURON_PACKET && password != null) {
+            if (rag.sourceType == RagSourceType.NEURON_PACKET && effectivePassword != null) {
                 val packetManager = NeuronPacketManager()
                 packetManager.open(file)
-                val authResult = packetManager.authenticate(password)
+                val authResult = packetManager.authenticate(effectivePassword)
                 if (authResult.isFailure) {
                     return@withContext Result.failure(authResult.exceptionOrNull() ?: Exception("Authentication failed"))
                 }
@@ -350,6 +376,7 @@ class RagRepository(
     suspend fun unloadGraph(ragId: String) {
         loadedGraphs.remove(ragId)
         ragDao.markAsUnloaded(ragId)
+        // Don't clear password - keep it cached for re-loading
     }
 
     // ==================== Query Operations ====================

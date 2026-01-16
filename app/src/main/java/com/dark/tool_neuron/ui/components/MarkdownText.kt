@@ -1059,6 +1059,12 @@ private fun renderMathToUnicode(expression: String): String {
     // Handle \textbf{...}, \textit{...}, \mathrm{...}, \mathbf{...}
     result = processTextFormattingCommands(result)
 
+    // Handle LaTeX environments (cases, matrix, align, etc.)
+    result = processLatexEnvironments(result)
+
+    // Handle left/right delimiters
+    result = processDelimiters(result)
+
     // Replace LaTeX/Typst symbols with Unicode
     mathSymbols.entries.sortedByDescending { it.key.length }.forEach { (latex, unicode) ->
         result = result.replace(latex, unicode)
@@ -1075,6 +1081,9 @@ private fun renderMathToUnicode(expression: String): String {
 
     // Handle sqrt: \sqrt{x} -> √x
     result = processSqrt(result)
+
+    // Handle line breaks in math mode: \\ becomes actual newline
+    result = processLineBreaks(result)
 
     // Clean up remaining braces
     result = result.replace("{", "").replace("}", "")
@@ -1174,6 +1183,110 @@ private fun processSqrt(input: String): String {
         val n = match.groupValues[1].map { superscriptMap[it] ?: it }.joinToString("")
         "${n}√(${match.groupValues[2]})"
     }
+    return result
+}
+
+/**
+ * Process LaTeX environments like \begin{cases}, \begin{matrix}, etc.
+ */
+private fun processLatexEnvironments(input: String): String {
+    var result = input
+
+    // Handle \begin{cases}...\end{cases}
+    // Format: { equation1, if condition1
+    //         { equation2, if condition2
+    val casesPattern = Regex("\\\\begin\\{cases\\}(.*?)\\\\end\\{cases\\}", RegexOption.DOT_MATCHES_ALL)
+    result = casesPattern.replace(result) { match ->
+        val content = match.groupValues[1].trim()
+        val lines = content.split("\\\\\\\\").map { it.trim() }.filter { it.isNotEmpty() }
+        "{\n" + lines.joinToString("\n") { "  $it" } + "\n"
+    }
+
+    // Handle \begin{matrix}...\end{matrix} (and variants: pmatrix, bmatrix, vmatrix)
+    val matrixTypes = listOf("matrix", "pmatrix", "bmatrix", "vmatrix", "Vmatrix")
+    for (matrixType in matrixTypes) {
+        val matrixPattern = Regex("\\\\begin\\{$matrixType\\}(.*?)\\\\end\\{$matrixType\\}", RegexOption.DOT_MATCHES_ALL)
+        result = matrixPattern.replace(result) { match ->
+            val content = match.groupValues[1].trim()
+            val rows = content.split("\\\\\\\\").map { it.trim() }.filter { it.isNotEmpty() }
+
+            // Add appropriate brackets
+            val (leftBracket, rightBracket) = when (matrixType) {
+                "pmatrix" -> "(" to ")"
+                "bmatrix" -> "[" to "]"
+                "vmatrix" -> "|" to "|"
+                "Vmatrix" -> "‖" to "‖"
+                else -> "" to ""
+            }
+
+            val formattedRows = rows.joinToString("\n") { row ->
+                val cells = row.split("&").map { it.trim() }
+                "  " + cells.joinToString("  ")
+            }
+
+            if (leftBracket.isNotEmpty()) {
+                "$leftBracket\n$formattedRows\n$rightBracket"
+            } else {
+                formattedRows
+            }
+        }
+    }
+
+    // Handle \begin{align}...\end{align} and \begin{align*}...\end{align*}
+    val alignPattern = Regex("\\\\begin\\{align\\*?\\}(.*?)\\\\end\\{align\\*?\\}", RegexOption.DOT_MATCHES_ALL)
+    result = alignPattern.replace(result) { match ->
+        val content = match.groupValues[1].trim()
+        val lines = content.split("\\\\\\\\").map { it.trim().replace("&", "") }.filter { it.isNotEmpty() }
+        lines.joinToString("\n")
+    }
+
+    return result
+}
+
+/**
+ * Process \left and \right delimiters
+ */
+private fun processDelimiters(input: String): String {
+    var result = input
+
+    // Map of delimiter replacements
+    val delimiterMap = mapOf(
+        "\\\\left\\{" to "{",
+        "\\\\right\\}" to "}",
+        "\\\\left\\(" to "(",
+        "\\\\right\\)" to ")",
+        "\\\\left\\[" to "[",
+        "\\\\right\\]" to "]",
+        "\\\\left\\|" to "|",
+        "\\\\right\\|" to "|",
+        "\\\\left\\." to "",  // . means no delimiter
+        "\\\\right\\." to "", // . means no delimiter
+        "\\\\left<" to "⟨",
+        "\\\\right>" to "⟩"
+    )
+
+    delimiterMap.forEach { (latex, unicode) ->
+        result = result.replace(latex, unicode)
+    }
+
+    return result
+}
+
+/**
+ * Process line breaks (\\) in math mode
+ */
+private fun processLineBreaks(input: String): String {
+    // Replace \\ with newline
+    // This handles cases where \\ is used for line breaks in math mode
+    var result = input
+
+    // Replace \\ followed by optional spacing like \\[2em]
+    result = result.replace(Regex("\\\\\\\\\\[.*?\\]"), "\n")
+
+    // Replace standalone \\ (not part of a command like \alpha, \beta, etc.)
+    // We need to be careful not to replace \\ that's part of another command
+    result = result.replace(Regex("\\\\\\\\(?![a-zA-Z])"), "\n")
+
     return result
 }
 

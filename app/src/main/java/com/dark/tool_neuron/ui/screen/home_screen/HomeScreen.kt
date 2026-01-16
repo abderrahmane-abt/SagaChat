@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -22,19 +23,27 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberDrawerState
@@ -51,6 +60,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -214,6 +225,10 @@ fun BottomBar(
     // Track if any model is loaded
     val isModelLoaded = currentModelID.isNotEmpty()
 
+    // Password dialog state for bottom bar
+    var showPasswordDialogBottomBar by remember { mutableStateOf(false) }
+    var ragToLoadBottomBar by remember { mutableStateOf<String?>(null) }
+
     // SAF file picker for RAG installation
     val ragFilePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -227,6 +242,21 @@ fun BottomBar(
         }
     }
 
+    // Password Dialog for encrypted RAGs in bottom bar
+    if (showPasswordDialogBottomBar && ragToLoadBottomBar != null) {
+        PasswordDialogBottomBar(
+            onDismiss = {
+                showPasswordDialogBottomBar = false
+                ragToLoadBottomBar = null
+            },
+            onConfirm = { password ->
+                ragViewModel.loadRag(ragToLoadBottomBar!!, password)
+                showPasswordDialogBottomBar = false
+                ragToLoadBottomBar = null
+            }
+        )
+    }
+
     // RAG Overlay
     RagOverlayBottomSheet(
         show = showRagOverlay,
@@ -237,7 +267,16 @@ fun BottomBar(
         onDismiss = { ragViewModel.hideRagOverlay() },
         onRagSelected = { ragViewModel.selectRag(it) },
         onRagToggleEnabled = { id, enabled -> ragViewModel.toggleRagEnabled(id, enabled) },
-        onRagLoad = { ragViewModel.loadRag(it) },
+        onRagLoad = { ragId ->
+            // Check if RAG is encrypted
+            val rag = installedRags.find { it.id == ragId }
+            if (rag?.isEncrypted == true) {
+                ragToLoadBottomBar = ragId
+                showPasswordDialogBottomBar = true
+            } else {
+                ragViewModel.loadRag(ragId)
+            }
+        },
         onRagUnload = { ragViewModel.unloadRag(it) },
         onRagDelete = { ragViewModel.deleteRag(it) },
         onOpenRagActivity = {
@@ -452,4 +491,68 @@ fun BottomBar(
             }
         }
     }
+}
+
+@Composable
+private fun PasswordDialogBottomBar(
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var password by remember { mutableStateOf("") }
+    var showPassword by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Enter Password") },
+        text = {
+            Column {
+                Text(
+                    "This RAG is encrypted. Please enter the password to load it.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Password") },
+                    visualTransformation = if (showPassword) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    trailingIcon = {
+                        IconButton(onClick = { showPassword = !showPassword }) {
+                            Icon(
+                                imageVector = if (showPassword) {
+                                    Icons.Default.VisibilityOff
+                                } else {
+                                    Icons.Default.Visibility
+                                },
+                                contentDescription = if (showPassword) "Hide password" else "Show password"
+                            )
+                        }
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (password.isNotBlank()) {
+                        onConfirm(password)
+                    }
+                },
+                enabled = password.isNotBlank()
+            ) {
+                Text("Load")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }

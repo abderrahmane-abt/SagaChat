@@ -672,4 +672,13 @@ class RagViewModel @Inject constructor(
             null
         }
     }
+
+    // ==================== Password Cache Management ====================
+
+    /**
+     * Clear all cached passwords (call when app terminates)
+     */
+    fun clearPasswordCache() {
+        ragRepository.clearPasswordCache()
+    }
 }
