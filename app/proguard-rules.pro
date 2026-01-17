@@ -92,6 +92,30 @@
 -keep class com.dark.ai_module.** { *; }
 -keep class com.android.tools.mlkit.** { *; }
 
+# Keep all callback interfaces and their methods (critical for JNI)
+-keep interface com.mp.ai_gguf.models.EmbeddingCallback { *; }
+-keep interface com.mp.ai_gguf.models.GenerationCallback { *; }
+-keep class com.mp.ai_gguf.models.EmbeddingResult { *; }
+-keep class com.mp.ai_gguf.models.** { *; }
+
+# Keep all methods that might be called from native code
+-keepclassmembers class com.mp.ai_gguf.** {
+    native <methods>;
+    public <methods>;
+    public <fields>;
+}
+
+# Keep callback implementations (created as anonymous classes)
+-keep class com.dark.tool_neuron.engine.EmbeddingEngine$** { *; }
+-keepclassmembers class com.dark.tool_neuron.engine.EmbeddingEngine {
+    *;
+}
+
+# Prevent callback interface methods from being renamed or removed
+-keepclassmembers interface com.mp.ai_gguf.models.** {
+    *;
+}
+
 # -- RAG & NeuronGraph --
 -keep class com.dark.tool_neuron.neuron_example.** { *; }
 -keepclassmembers class com.dark.tool_neuron.neuron_example.** {
@@ -129,12 +153,25 @@
 
 # PDFBox-Android (PDF)
 -keep class com.tom_roush.pdfbox.** { *; }
+-keepclassmembers class com.tom_roush.pdfbox.** { *; }
 -dontwarn com.tom_roush.pdfbox.**
 -keep class com.tom_roush.harmony.** { *; }
 -dontwarn com.tom_roush.harmony.**
 -dontwarn org.apache.commons.logging.**
 -dontwarn javax.imageio.**
 -dontwarn java.awt.**
+
+# Keep PDFBox classes used by reflection
+-keep class org.apache.fontbox.** { *; }
+-keep class org.apache.pdfbox.** { *; }
+-dontwarn org.apache.fontbox.**
+-dontwarn org.apache.pdfbox.**
+
+# Keep DocumentParser and its methods
+-keep class com.dark.tool_neuron.util.DocumentParser { *; }
+-keepclassmembers class com.dark.tool_neuron.util.DocumentParser {
+    *;
+}
 
 # EPUB Library
 -keep class nl.siegmann.epublib.** { *; }
@@ -145,10 +182,14 @@
 # Log4j2 (suppress optional OSGi and aQute.bnd dependencies)
 -dontwarn aQute.bnd.annotation.spi.ServiceConsumer
 -dontwarn aQute.bnd.annotation.spi.ServiceProvider
+-dontwarn aQute.bnd.annotation.baseline.BaselineIgnore
+-dontwarn edu.umd.cs.findbugs.annotations.Nullable
+-dontwarn edu.umd.cs.findbugs.annotations.SuppressFBWarnings
 -dontwarn org.osgi.framework.Bundle
 -dontwarn org.osgi.framework.BundleContext
 -dontwarn org.osgi.framework.FrameworkUtil
 -dontwarn org.osgi.framework.ServiceReference
+-dontwarn org.osgi.framework.wiring.BundleRevision
 
 # -- Retrofit & OkHttp --
 -keep class retrofit2.** { *; }

@@ -1,6 +1,7 @@
 package com.dark.tool_neuron.engine
 
 import android.content.Context
+import android.util.Log
 import com.mp.ai_gguf.GGUFNativeLib
 import com.mp.ai_gguf.models.EmbeddingCallback
 import com.mp.ai_gguf.models.EmbeddingResult
@@ -8,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -57,13 +59,23 @@ class EmbeddingEngine {
 
     suspend fun embed(text: String): FloatArray? = withContext(Dispatchers.IO) {
         suspendCancellableCoroutine { continuation ->
+            val resumed = AtomicBoolean(false)
+
             val callback = object : EmbeddingCallback {
                 override fun onComplete(result: EmbeddingResult) {
-                    continuation.resume(result.embeddings)
+                    if (resumed.compareAndSet(false, true)) {
+                        continuation.resume(result.embeddings)
+                    } else {
+                        Log.w("EmbeddingEngine", "Callback fired after continuation already resumed")
+                    }
                 }
 
                 override fun onError(message: String) {
-                    continuation.resumeWithException(Exception(message))
+                    if (resumed.compareAndSet(false, true)) {
+                        continuation.resumeWithException(Exception(message))
+                    } else {
+                        Log.w("EmbeddingEngine", "Error callback fired after continuation already resumed: $message")
+                    }
                 }
             }
 
@@ -74,7 +86,9 @@ class EmbeddingEngine {
             )
 
             if (!success) {
-                continuation.resumeWithException(Exception("Failed to start encoding"))
+                if (resumed.compareAndSet(false, true)) {
+                    continuation.resumeWithException(Exception("Failed to start encoding - native call returned false"))
+                }
             }
         }
     }

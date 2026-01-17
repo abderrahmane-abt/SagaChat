@@ -11,7 +11,11 @@ import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 
-class MemoryVault(context: Context) {
+class MemoryVault(
+    context: Context,
+    private val keyAlias: String,
+    val migrationListener: MigrationListener? = null
+) {
     private val vaultDir = File(context.filesDir, "memory_vault")
     private val vaultFile = VaultFile(File(vaultDir, "vault.mvlt"))
     private val walFile = File(vaultDir, "vault.wal")
@@ -34,11 +38,16 @@ class MemoryVault(context: Context) {
     private var initialized = false
 
     init {
+        // Validate keyAlias configuration
+        require(keyAlias != "sample_val") {
+            "Invalid keyAlias configuration. Please set ALIAS in local.properties or environment variables."
+        }
+
         vaultDir.mkdirs()
         writer = BlockWriter(vaultFile)
         reader = BlockReader(vaultFile)
         walManager = WALManager(walFile)
-        encryptionManager = EncryptionManager()
+        encryptionManager = EncryptionManager(keyAlias)
         contentProcessor = ContentProcessor(encryptionManager)
         index = VaultIndex()
         fullTextIndex = FullTextIndex()
@@ -56,9 +65,48 @@ class MemoryVault(context: Context) {
             vaultFile.open()
             walManager.open()
 
+            // Handle fresh vault - use new key from start
             if (!vaultFile.exists() || vaultFile.size() == 0L) {
-                val header = VaultHeader()
+                val header = VaultHeader(keyVersion = 1)  // Fresh vaults use new key
                 vaultFile.writeAt(0, header.toBytes())
+                initialized = true
+                return@withContext
+            }
+
+            // Check if migration is needed
+            val headerBytes = vaultFile.readAt(0, VaultHeader.HEADER_SIZE)
+            val header = VaultHeader.fromBytes(headerBytes)
+
+            if (header.keyVersion.toInt() == 0) {
+                // Migration needed
+                Log.d("MemoryVault", "Encryption key migration needed")
+                migrationListener?.onMigrationStarted()
+
+                try {
+                    val migrationManager = MigrationManager(vaultFile, reader, vaultDir)
+                    val result = migrationManager.migrate(
+                        newKeyAlias = keyAlias,
+                        onProgress = { percent ->
+                            migrationListener?.onMigrationProgress(percent)
+                        }
+                    )
+
+                    when (result) {
+                        is MigrationResult.Success -> {
+                            Log.d("MemoryVault", "Migration completed: ${result.blocksReEncrypted} blocks re-encrypted")
+                            migrationListener?.onMigrationComplete()
+                        }
+                        is MigrationResult.Failure -> {
+                            Log.e("MemoryVault", "Migration failed", result.error)
+                            migrationListener?.onMigrationFailed(result.error)
+                            throw result.error
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("MemoryVault", "Migration failed with exception", e)
+                    migrationListener?.onMigrationFailed(e)
+                    throw e
+                }
             }
 
             val uncommitted = walManager.getUncommittedEntries()
@@ -501,6 +549,7 @@ class MemoryVault(context: Context) {
             vaultFile.writeAt(indexOffset, finalData)
 
             val header = VaultHeader(
+                keyVersion = 1,  // Always use new key for checkpoints
                 indexOffset = indexOffset,
                 indexSize = finalData.size.toLong(),
                 modifiedTime = System.currentTimeMillis()

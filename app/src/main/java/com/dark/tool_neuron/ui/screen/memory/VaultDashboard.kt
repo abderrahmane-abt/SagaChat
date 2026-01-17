@@ -176,7 +176,7 @@ fun VaultDashboard() {
                     })
                 }
                 VaultScreen.MANAGEMENT -> VaultManagementScreen()
-                VaultScreen.LOGGER -> VaultLoggerScreen()
+                VaultScreen.LOGGER -> TerminalLoggerScreen()  // New TUI-style logger
                 VaultScreen.INSPECTOR -> VaultInspectorScreen()
             }
         }
@@ -218,12 +218,4 @@ fun VaultNavItem(
         shape = RoundedCornerShape(rDp(12.dp)),
         modifier = Modifier.padding(vertical = rDp(2.dp))
     )
-}
-
-@Composable
-fun NavigationDrawer(
-    drawerContent: @Composable () -> Unit,
-    content: @Composable () -> Unit
-) {
-
 }

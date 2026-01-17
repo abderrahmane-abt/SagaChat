@@ -67,6 +67,8 @@ import com.dark.tool_neuron.models.vault.ChatInfo
 import com.dark.tool_neuron.models.vault.MessageSearchResult
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionToggleButton
+import com.dark.tool_neuron.ui.theme.ManropeFontFamily
+import com.dark.tool_neuron.ui.theme.maple
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.ui.theme.rSp
 import com.dark.tool_neuron.viewmodel.memory.VaultManagementViewModel
@@ -91,7 +93,10 @@ fun VaultManagementScreen(
         topBar = {
             TopAppBar(title = {
                 Text(
-                    "Memory Vault Manager", fontSize = rSp(20.sp), fontWeight = FontWeight.Bold
+                    "Memory Vault Manager",
+                    fontSize = rSp(20.sp),
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = ManropeFontFamily
                 )
             }, actions = {
                 ActionToggleButton(
@@ -124,7 +129,8 @@ fun VaultManagementScreen(
                         Text(
                             title,
                             fontSize = rSp(14.sp),
-                            fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal
+                            fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
+                            fontFamily = ManropeFontFamily
                         )
                     })
                 }
@@ -220,7 +226,8 @@ fun ChatsTab(viewModel: VaultManagementViewModel) {
                 Text(
                     "Chats (${viewModel.chatList.size})",
                     fontSize = rSp(16.sp),
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = ManropeFontFamily
                 )
 
                 ActionButton(
@@ -345,7 +352,8 @@ fun MaintenanceTab(viewModel: VaultManagementViewModel) {
                 "Maintenance Operations",
                 fontSize = rSp(18.sp),
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
+                fontFamily = ManropeFontFamily
             )
         }
 
@@ -453,7 +461,8 @@ fun StatsCard(
                 title,
                 fontSize = rSp(16.sp),
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
+                fontFamily = ManropeFontFamily
             )
 
             items.forEach { item ->
@@ -517,17 +526,20 @@ fun ChatCard(
                 Text(
                     "Chat ID: ${chatInfo.chatId.take(8)}...",
                     fontSize = rSp(14.sp),
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = maple
                 )
                 Text(
                     "${chatInfo.messageCount} messages",
                     fontSize = rSp(12.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontFamily = ManropeFontFamily
                 )
                 Text(
                     "Created: ${formatDate(chatInfo.createdAt)}",
                     fontSize = rSp(11.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontFamily = maple
                 )
             }
 
@@ -624,12 +636,16 @@ fun MaintenanceCard(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        title, fontSize = rSp(15.sp), fontWeight = FontWeight.Bold
+                        title,
+                        fontSize = rSp(15.sp),
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = ManropeFontFamily
                     )
                     Text(
                         description,
                         fontSize = rSp(12.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontFamily = ManropeFontFamily
                     )
                 }
             }
