@@ -101,7 +101,7 @@ fun ModelStoreScreen(
     val models by viewModel.filteredModels.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
-    val downloadState by viewModel.downloadState.collectAsState()
+    val downloadStates by viewModel.downloadStates.collectAsState()
     val installedModels by viewModel.installedModels.collectAsState()
     val deviceInfo by viewModel.deviceInfo.collectAsState()
     val deleteInProgress by viewModel.deleteInProgress.collectAsState()
@@ -192,7 +192,7 @@ fun ModelStoreScreen(
                         models = models,
                         isLoading = isLoading,
                         error = error,
-                        downloadState = downloadState,
+                        downloadStates = downloadStates,
                         installedModels = installedModels.map { it.modelName }.toSet(),
                         selectedFilter = selectedFilter,
                         onFilterSelected = {
@@ -200,7 +200,7 @@ fun ModelStoreScreen(
                             viewModel.filterByType(it)
                         },
                         onDownload = { viewModel.downloadModel(it) },
-                        onCancelDownload = { viewModel.cancelDownload() },
+                        onCancelDownload = { modelId -> viewModel.cancelDownload(modelId) },
                         onRetry = { viewModel.loadModels() })
 
                     StoreTab.INSTALLED -> InstalledModelsTab(
@@ -223,12 +223,12 @@ private fun ModelsTab(
     models: List<HuggingFaceModel>,
     isLoading: Boolean,
     error: String?,
-    downloadState: ModelDownloadService.DownloadState,
+    downloadStates: Map<String, ModelDownloadService.DownloadState>,
     installedModels: Set<String>,
     selectedFilter: ModelType?,
     onFilterSelected: (ModelType?) -> Unit,
     onDownload: (HuggingFaceModel) -> Unit,
-    onCancelDownload: () -> Unit,
+    onCancelDownload: (String) -> Unit,
     onRetry: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -311,9 +311,9 @@ private fun ModelsTab(
                         ModelCard(
                             model = model,
                             isInstalled = installedModels.contains(model.name),
-                            downloadState = downloadState,
+                            downloadState = downloadStates[model.id],
                             onDownload = { onDownload(model) },
-                            onCancelDownload = onCancelDownload
+                            onCancelDownload = { onCancelDownload(model.id) }
                         )
                     }
                 }
@@ -857,18 +857,18 @@ fun FilterChips(
 fun ModelCard(
     model: HuggingFaceModel,
     isInstalled: Boolean,
-    downloadState: ModelDownloadService.DownloadState,
+    downloadState: ModelDownloadService.DownloadState?,
     onDownload: () -> Unit,
     onCancelDownload: () -> Unit
 ) {
-    val isDownloading = remember(downloadState, model.id) {
-        downloadState is ModelDownloadService.DownloadState.Downloading && downloadState.modelId == model.id
+    val isDownloading = remember(downloadState) {
+        downloadState is ModelDownloadService.DownloadState.Downloading
     }
-    val isExtracting = remember(downloadState, model.id) {
-        downloadState is ModelDownloadService.DownloadState.Extracting && downloadState.modelId == model.id
+    val isExtracting = remember(downloadState) {
+        downloadState is ModelDownloadService.DownloadState.Extracting
     }
-    val isProcessing = remember(downloadState, model.id) {
-        downloadState is ModelDownloadService.DownloadState.Processing && downloadState.modelId == model.id
+    val isProcessing = remember(downloadState) {
+        downloadState is ModelDownloadService.DownloadState.Processing
     }
 
     Card(

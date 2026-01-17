@@ -33,7 +33,8 @@ import java.util.zip.ZipInputStream
 class ModelDownloadService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
-    private var downloadJob: Job? = null
+    private val downloadJobs = mutableMapOf<String, Job>()
+    private var notificationIdCounter = NOTIFICATION_ID
 
     private val notificationManager by lazy {
         getSystemService(NOTIFICATION_SERVICE) as NotificationManager
@@ -46,8 +47,8 @@ class ModelDownloadService : Service() {
         private const val NOTIFICATION_CHANNEL_ID = "model_download_channel"
         private const val NOTIFICATION_ID = 3001
 
-        private val _downloadState = MutableStateFlow<DownloadState>(DownloadState.Idle)
-        val downloadState: StateFlow<DownloadState> = _downloadState
+        private val _downloadStates = MutableStateFlow<Map<String, DownloadState>>(emptyMap())
+        val downloadStates: StateFlow<Map<String, DownloadState>> = _downloadStates
 
         const val ACTION_START_DOWNLOAD = "action_start_download"
         const val ACTION_CANCEL_DOWNLOAD = "action_cancel_download"
@@ -62,7 +63,6 @@ class ModelDownloadService : Service() {
     }
 
     sealed class DownloadState {
-        object Idle : DownloadState()
         data class Downloading(
             val modelId: String,
             val progress: Float,
@@ -74,6 +74,15 @@ class ModelDownloadService : Service() {
         data class Processing(val modelId: String) : DownloadState()
         data class Success(val modelId: String) : DownloadState()
         data class Error(val modelId: String, val message: String) : DownloadState()
+        data class Cancelled(val modelId: String) : DownloadState()
+    }
+
+    private fun updateDownloadState(modelId: String, state: DownloadState?) {
+        _downloadStates.value = if (state == null) {
+            _downloadStates.value - modelId
+        } else {
+            _downloadStates.value + (modelId to state)
+        }
     }
 
     override fun onCreate() {
@@ -105,7 +114,10 @@ class ModelDownloadService : Service() {
             }
 
             ACTION_CANCEL_DOWNLOAD -> {
-                cancelDownload()
+                val modelId = intent.getStringExtra(EXTRA_MODEL_ID)
+                if (modelId != null) {
+                    cancelDownload(modelId)
+                }
             }
         }
         return START_NOT_STICKY
@@ -120,14 +132,17 @@ class ModelDownloadService : Service() {
         runOnCpu: Boolean,
         textEmbeddingSize: Int
     ) {
-        downloadJob?.cancel()
-        downloadJob = serviceScope.launch {
+        // Cancel existing download for this model if any
+        downloadJobs[modelId]?.cancel()
+
+        val notificationId = ++notificationIdCounter
+        val job = serviceScope.launch {
             var tempFile: File? = null
             var extractTempDir: File? = null
             try {
-                _downloadState.value = DownloadState.Downloading(modelId, 0f, 0, 0)
+                updateDownloadState(modelId, DownloadState.Downloading(modelId, 0f, 0, 0))
 
-                val tempDir = File(filesDir, "temp_downloads")
+                val tempDir = File(filesDir, "temp_downloads/$modelId")
                 if (tempDir.exists()) {
                     tempDir.deleteRecursively()
                 }
@@ -135,7 +150,7 @@ class ModelDownloadService : Service() {
 
                 tempFile = File(tempDir, "${modelId}_${System.currentTimeMillis()}.tmp")
 
-                downloadFile(fileUrl, tempFile, modelId, modelName)
+                downloadFile(fileUrl, tempFile, modelId, modelName, notificationId)
 
                 when (modelType) {
                     "SD" -> {
@@ -153,10 +168,10 @@ class ModelDownloadService : Service() {
                             extractTempDir = File(tempDir, "${modelId}_extract")
                             extractTempDir.mkdirs()
 
-                            _downloadState.value = DownloadState.Extracting(modelId)
-                            updateNotification(modelName, 0f, isExtracting = true)
+                            updateDownloadState(modelId, DownloadState.Extracting(modelId))
+                            updateNotification(modelName, 0f, notificationId, isExtracting = true)
 
-                            unzipFile(tempFile, extractTempDir)
+                            unzipFile(tempFile, extractTempDir, modelId)
 
                             extractTempDir.listFiles()?.forEach { file ->
                                 file.copyRecursively(File(modelDir, file.name), overwrite = true)
@@ -170,8 +185,8 @@ class ModelDownloadService : Service() {
                             tempFile.copyTo(File(modelDir, tempFile.name), overwrite = true)
                         }
 
-                        _downloadState.value = DownloadState.Processing(modelId)
-                        updateNotification(modelName, 0f, isProcessing = true)
+                        updateDownloadState(modelId, DownloadState.Processing(modelId))
+                        updateNotification(modelName, 0f, notificationId, isProcessing = true)
 
                         insertModelToDatabase(
                             modelId = modelId,
@@ -195,8 +210,8 @@ class ModelDownloadService : Service() {
 
                         tempFile.copyTo(targetFile, overwrite = true)
 
-                        _downloadState.value = DownloadState.Processing(modelId)
-                        updateNotification(modelName, 0f, isProcessing = true)
+                        updateDownloadState(modelId, DownloadState.Processing(modelId))
+                        updateNotification(modelName, 0f, notificationId, isProcessing = true)
 
                         insertModelToDatabase(
                             modelId = modelId,
@@ -211,82 +226,129 @@ class ModelDownloadService : Service() {
 
                 tempFile?.delete()
                 tempFile = null
+                tempDir.deleteRecursively()
 
-                _downloadState.value = DownloadState.Success(modelId)
-                updateNotification(modelName, 100f, isSuccess = true)
+                updateDownloadState(modelId, DownloadState.Success(modelId))
+                updateNotification(modelName, 100f, notificationId, isSuccess = true)
 
                 withContext(Dispatchers.Main) {
                     kotlinx.coroutines.delay(2000)
-                    _downloadState.value = DownloadState.Idle
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    stopSelf()
+                    updateDownloadState(modelId, null)
+                    downloadJobs.remove(modelId)
+
+                    if (downloadJobs.isEmpty()) {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        stopSelf()
+                    }
                 }
 
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                tempFile?.delete()
+                extractTempDir?.deleteRecursively()
+                File(filesDir, "temp_downloads/$modelId").deleteRecursively()
+
+                updateDownloadState(modelId, DownloadState.Cancelled(modelId))
+                updateNotification(modelName, 0f, notificationId, isCancelled = true)
+
+                withContext(Dispatchers.Main) {
+                    kotlinx.coroutines.delay(2000)
+                    updateDownloadState(modelId, null)
+                    downloadJobs.remove(modelId)
+
+                    if (downloadJobs.isEmpty()) {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        stopSelf()
+                    }
+                }
             } catch (e: Exception) {
                 tempFile?.delete()
                 extractTempDir?.deleteRecursively()
+                File(filesDir, "temp_downloads/$modelId").deleteRecursively()
 
-                _downloadState.value = DownloadState.Error(modelId, e.message ?: "Unknown error")
-                updateNotification(modelName, 0f, error = e.message)
+                updateDownloadState(modelId, DownloadState.Error(modelId, e.message ?: "Unknown error"))
+                updateNotification(modelName, 0f, notificationId, error = e.message)
 
                 withContext(Dispatchers.Main) {
                     kotlinx.coroutines.delay(3000)
-                    _downloadState.value = DownloadState.Idle
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    stopSelf()
-                }
-            }
-        }
-    }
+                    updateDownloadState(modelId, null)
+                    downloadJobs.remove(modelId)
 
-    private suspend fun downloadFile(
-        url: String, destFile: File, modelId: String, modelName: String
-    ) = withContext(Dispatchers.IO) {
-        val request = Request.Builder().url(url).build()
-
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw Exception("Download failed with code: ${response.code}")
-            }
-
-            val body = response.body ?: throw Exception("Response body is null")
-            val totalBytes = body.contentLength()
-            var downloadedBytes = 0L
-            var lastUpdateTime = 0L
-
-            FileOutputStream(destFile).buffered().use { output ->
-                body.byteStream().buffered().use { input ->
-                    val buffer = ByteArray(32 * 1024)
-                    var bytes: Int
-
-                    while (input.read(buffer).also { bytes = it } != -1) {
-                        output.write(buffer, 0, bytes)
-                        downloadedBytes += bytes
-
-                        val currentTime = System.currentTimeMillis()
-                        if (currentTime - lastUpdateTime >= 500 || downloadedBytes == totalBytes) {
-                            lastUpdateTime = currentTime
-                            val progress = if (totalBytes > 0) {
-                                downloadedBytes.toFloat() / totalBytes
-                            } else 0f
-
-                            _downloadState.value = DownloadState.Downloading(
-                                modelId, progress, downloadedBytes, totalBytes
-                            )
-
-                            updateNotification(modelName, progress)
-                        }
+                    if (downloadJobs.isEmpty()) {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        stopSelf()
                     }
                 }
             }
         }
+
+        downloadJobs[modelId] = job
     }
 
-    private suspend fun unzipFile(zipFile: File, destDir: File) = withContext(Dispatchers.IO) {
+    private suspend fun downloadFile(
+        url: String, destFile: File, modelId: String, modelName: String, notificationId: Int
+    ) = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url(url).build()
+        val call = client.newCall(request)
+
+        try {
+            call.execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw Exception("Download failed with code: ${response.code}")
+                }
+
+                val body = response.body ?: throw Exception("Response body is null")
+                val totalBytes = body.contentLength()
+                var downloadedBytes = 0L
+                var lastUpdateTime = 0L
+
+                FileOutputStream(destFile).buffered().use { output ->
+                    body.byteStream().buffered().use { input ->
+                        val buffer = ByteArray(32 * 1024)
+                        var bytes: Int
+
+                        while (input.read(buffer).also { bytes = it } != -1) {
+                            // Check for cancellation
+                            if (!downloadJobs.containsKey(modelId) || downloadJobs[modelId]?.isCancelled == true) {
+                                call.cancel()
+                                throw kotlinx.coroutines.CancellationException("Download cancelled")
+                            }
+
+                            output.write(buffer, 0, bytes)
+                            downloadedBytes += bytes
+
+                            val currentTime = System.currentTimeMillis()
+                            if (currentTime - lastUpdateTime >= 500 || downloadedBytes == totalBytes) {
+                                lastUpdateTime = currentTime
+                                val progress = if (totalBytes > 0) {
+                                    downloadedBytes.toFloat() / totalBytes
+                                } else 0f
+
+                                updateDownloadState(modelId, DownloadState.Downloading(
+                                    modelId, progress, downloadedBytes, totalBytes
+                                ))
+
+                                updateNotification(modelName, progress, notificationId)
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            call.cancel()
+            throw e
+        }
+    }
+
+    private suspend fun unzipFile(zipFile: File, destDir: File, modelId: String) = withContext(Dispatchers.IO) {
         ZipInputStream(zipFile.inputStream().buffered()).use { zis ->
             var entry = zis.nextEntry
 
             while (entry != null) {
+                // Check for cancellation
+                if (!downloadJobs.containsKey(modelId) || downloadJobs[modelId]?.isCancelled == true) {
+                    throw kotlinx.coroutines.CancellationException("Extraction cancelled")
+                }
+
                 if (!entry.isDirectory) {
                     val fileName = entry.name.substringAfterLast('/')
                     if (fileName.isNotEmpty() && !fileName.startsWith(".") && !fileName.startsWith("__MACOSX")) {
@@ -379,11 +441,8 @@ class ModelDownloadService : Service() {
         repository.insertConfig(config)
     }
 
-    private fun cancelDownload() {
-        downloadJob?.cancel()
-        _downloadState.value = DownloadState.Idle
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+    private fun cancelDownload(modelId: String) {
+        downloadJobs[modelId]?.cancel()
     }
 
     private fun createNotificationChannel() {
@@ -416,16 +475,25 @@ class ModelDownloadService : Service() {
     private fun updateNotification(
         modelName: String,
         progress: Float,
+        notificationId: Int,
         isSuccess: Boolean = false,
         error: String? = null,
         isExtracting: Boolean = false,
-        isProcessing: Boolean = false
+        isProcessing: Boolean = false,
+        isCancelled: Boolean = false
     ) {
         val notification = when {
             isSuccess -> {
                 NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
                     .setContentTitle("Download Complete").setContentText(modelName)
                     .setSmallIcon(android.R.drawable.stat_sys_download_done).setOngoing(false)
+                    .build()
+            }
+
+            isCancelled -> {
+                NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+                    .setContentTitle("Download Cancelled").setContentText(modelName)
+                    .setSmallIcon(android.R.drawable.ic_menu_close_clear_cancel).setOngoing(false)
                     .build()
             }
 
@@ -440,7 +508,7 @@ class ModelDownloadService : Service() {
             }
         }
 
-        notificationManager.notify(NOTIFICATION_ID, notification)
+        notificationManager.notify(notificationId, notification)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

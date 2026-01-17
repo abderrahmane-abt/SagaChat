@@ -51,7 +51,7 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
     val deleteInProgress: StateFlow<String?> = _deleteInProgress
 
     val repositories = repoDataStore.repositories
-    val downloadState = ModelDownloadService.downloadState
+    val downloadStates = ModelDownloadService.downloadStates
 
     // App's internal models directory
     private val appModelsDir = File(application.filesDir, "models")
@@ -141,10 +141,11 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
         context.startForegroundService(intent)
     }
 
-    fun cancelDownload() {
+    fun cancelDownload(modelId: String) {
         val context = getApplication<Application>()
         val intent = Intent(context, ModelDownloadService::class.java).apply {
             action = ModelDownloadService.ACTION_CANCEL_DOWNLOAD
+            putExtra(ModelDownloadService.EXTRA_MODEL_ID, modelId)
         }
         context.startService(intent)
     }
