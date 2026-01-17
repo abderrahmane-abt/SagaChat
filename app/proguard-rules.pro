@@ -142,6 +142,14 @@
 -dontwarn org.slf4j.**
 -dontwarn org.xmlpull.**
 
+# Log4j2 (suppress optional OSGi and aQute.bnd dependencies)
+-dontwarn aQute.bnd.annotation.spi.ServiceConsumer
+-dontwarn aQute.bnd.annotation.spi.ServiceProvider
+-dontwarn org.osgi.framework.Bundle
+-dontwarn org.osgi.framework.BundleContext
+-dontwarn org.osgi.framework.FrameworkUtil
+-dontwarn org.osgi.framework.ServiceReference
+
 # -- Retrofit & OkHttp --
 -keep class retrofit2.** { *; }
 -keepclasseswithmembers class * {
