@@ -1,5 +1,6 @@
 package com.dark.tool_neuron.ui.screen.memory
 
+import android.annotation.SuppressLint
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -43,6 +44,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -121,7 +123,7 @@ fun VaultManagementScreen(
                 .padding(paddingValues)
         ) {
             // Tab Row
-            TabRow(
+            SecondaryTabRow(
                 selectedTabIndex = selectedTab, modifier = Modifier.fillMaxWidth()
             ) {
                 tabs.forEachIndexed { index, title ->
@@ -444,61 +446,6 @@ fun MaintenanceTab(viewModel: VaultManagementViewModel) {
     }
 }
 
-// Supporting Composables
-
-@Composable
-fun StatsCard(
-    title: String, items: List<StatItem>
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(rDp(12.dp))
-    ) {
-        Column(
-            modifier = Modifier.padding(rDp(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
-        ) {
-            Text(
-                title,
-                fontSize = rSp(16.sp),
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                fontFamily = ManropeFontFamily
-            )
-
-            items.forEach { item ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
-                    ) {
-                        Icon(
-                            item.icon,
-                            contentDescription = null,
-                            modifier = Modifier.size(rDp(16.dp)),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            item.label,
-                            fontSize = rSp(14.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Text(
-                        item.value,
-                        fontSize = rSp(14.sp),
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
-        }
-    }
-}
-
 @Composable
 fun ChatCard(
     chatInfo: ChatInfo, isSelected: Boolean, onClick: () -> Unit, onDelete: () -> Unit
@@ -707,12 +654,8 @@ fun EmptyStateCard(
     }
 }
 
-// Data Classes
-data class StatItem(
-    val label: String, val value: String, val icon: androidx.compose.ui.graphics.vector.ImageVector
-)
-
 // Utility Functions
+@SuppressLint("DefaultLocale")
 fun formatBytes(bytes: Long): String {
     return when {
         bytes < 1024 -> "$bytes B"

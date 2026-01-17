@@ -41,7 +41,7 @@ class RagViewModel @Inject constructor(
     private val ragRepository: RagRepository,
     private val embeddingEngine: EmbeddingEngine,
     private val chatRepository: ChatRepository,
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) : ViewModel() {
 
     // UI State

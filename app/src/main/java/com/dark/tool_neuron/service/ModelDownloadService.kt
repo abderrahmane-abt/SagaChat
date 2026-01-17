@@ -296,7 +296,7 @@ class ModelDownloadService : Service() {
                     throw Exception("Download failed with code: ${response.code}")
                 }
 
-                val body = response.body ?: throw Exception("Response body is null")
+                val body = response.body
                 val totalBytes = body.contentLength()
                 var downloadedBytes = 0L
                 var lastUpdateTime = 0L

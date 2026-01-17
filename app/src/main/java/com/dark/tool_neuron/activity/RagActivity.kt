@@ -75,6 +75,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -232,7 +233,7 @@ fun RagScreen(
                 .padding(padding)
         ) {
             // Tabs
-            TabRow(
+            SecondaryTabRow(
                 selectedTabIndex = selectedTab,
                 containerColor = MaterialTheme.colorScheme.background
             ) {
@@ -267,35 +268,33 @@ fun RagScreen(
 
             // Error display
             error?.let { errorMsg ->
-                if (errorMsg != null){
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(rDp(8.dp)),
-                        color = MaterialTheme.colorScheme.errorContainer,
-                        shape = RoundedCornerShape(rDp(8.dp))
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(rDp(8.dp)),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(rDp(8.dp))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(rDp(12.dp)),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.padding(rDp(12.dp)),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = errorMsg,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.weight(1f)
+                        Text(
+                            text = errorMsg,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        ActionButton(
+                            onClickListener = { ragViewModel.clearError() },
+                            icon = Icons.Default.Close,
+                            contentDescription = "Dismiss",
+                            shape = RoundedCornerShape(rDp(8.dp)),
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer.copy(0.3f),
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer
                             )
-                            ActionButton(
-                                onClickListener = { ragViewModel.clearError() },
-                                icon = Icons.Default.Close,
-                                contentDescription = "Dismiss",
-                                shape = RoundedCornerShape(rDp(8.dp)),
-                                colors = IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(0.3f),
-                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                )
-                            )
-                        }
+                        )
                     }
                 }
             }

@@ -9,7 +9,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.ScrollableDefaults
+import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -31,6 +35,11 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
@@ -77,14 +86,18 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.tool_neuron.R
 import com.dark.tool_neuron.models.data.HFModelRepository
 import com.dark.tool_neuron.models.data.HuggingFaceModel
+import com.dark.tool_neuron.models.data.ModelCategory
 import com.dark.tool_neuron.models.data.ModelType
 import com.dark.tool_neuron.models.table_schema.Model
+import com.dark.tool_neuron.repo.ValidationResult
 import com.dark.tool_neuron.service.ModelDownloadService
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionProgressButton
 import com.dark.tool_neuron.ui.theme.maple
 import com.dark.tool_neuron.ui.theme.rDp
+import com.dark.tool_neuron.utils.SizeCategory
 import com.dark.tool_neuron.viewmodel.ModelStoreViewModel
+import com.dark.tool_neuron.viewmodel.SortOption
 import java.io.File
 import java.util.Locale
 
@@ -107,7 +120,6 @@ fun ModelStoreScreen(
     val deleteInProgress by viewModel.deleteInProgress.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
-    var selectedFilter by remember { mutableStateOf<ModelType?>(null) }
     var showSearch by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -194,11 +206,7 @@ fun ModelStoreScreen(
                         error = error,
                         downloadStates = downloadStates,
                         installedModels = installedModels.map { it.modelName }.toSet(),
-                        selectedFilter = selectedFilter,
-                        onFilterSelected = {
-                            selectedFilter = it
-                            viewModel.filterByType(it)
-                        },
+                        viewModel = viewModel,
                         onDownload = { viewModel.downloadModel(it) },
                         onCancelDownload = { modelId -> viewModel.cancelDownload(modelId) },
                         onRetry = { viewModel.loadModels() })
@@ -225,16 +233,13 @@ private fun ModelsTab(
     error: String?,
     downloadStates: Map<String, ModelDownloadService.DownloadState>,
     installedModels: Set<String>,
-    selectedFilter: ModelType?,
-    onFilterSelected: (ModelType?) -> Unit,
+    viewModel: ModelStoreViewModel,
     onDownload: (HuggingFaceModel) -> Unit,
     onCancelDownload: (String) -> Unit,
     onRetry: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        FilterChips(
-            selectedFilter = selectedFilter, onFilterSelected = onFilterSelected
-        )
+        ModelFiltersSection(viewModel = viewModel)
 
         when {
             isLoading -> {
@@ -591,7 +596,9 @@ private fun SettingsTab(
     deviceInfo: Map<String, String>, viewModel: ModelStoreViewModel
 ) {
     val repositories by viewModel.repositories.collectAsStateWithLifecycle(emptyList())
+    val validationResults by viewModel.validationResults.collectAsStateWithLifecycle()
     var showAddDialog by remember { mutableStateOf(false) }
+    var editingRepository by remember { mutableStateOf<HFModelRepository?>(null) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -624,8 +631,12 @@ private fun SettingsTab(
         items(repositories, key = { it.id }) { repo ->
             RepositoryCard(
                 repository = repo,
+                validationResult = validationResults[repo.id],
                 onToggle = { viewModel.toggleRepository(repo.id) },
-                onDelete = { viewModel.removeRepository(repo.id) })
+                onEdit = { editingRepository = repo },
+                onValidate = { viewModel.validateRepository(repo) },
+                onDelete = { viewModel.removeRepository(repo.id) }
+            )
         }
     }
 
@@ -634,6 +645,17 @@ private fun SettingsTab(
             viewModel.addRepository(repo)
             showAddDialog = false
         })
+    }
+
+    editingRepository?.let { repo ->
+        EditRepositoryDialog(
+            repository = repo,
+            onDismiss = { editingRepository = null },
+            onSave = { updatedRepo ->
+                viewModel.updateRepository(updatedRepo)
+                editingRepository = null
+            }
+        )
     }
 }
 
@@ -698,43 +720,145 @@ private fun DeviceInfoRow(label: String, value: String) {
 
 @Composable
 private fun RepositoryCard(
-    repository: HFModelRepository, onToggle: () -> Unit, onDelete: () -> Unit
+    repository: HFModelRepository,
+    validationResult: ValidationResult?,
+    onToggle: () -> Unit,
+    onEdit: () -> Unit,
+    onValidate: () -> Unit,
+    onDelete: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(rDp(10.dp))
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(rDp(12.dp)),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = repository.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = repository.repoPath,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontFamily = maple
-                )
-            }
-
+            // Top row: Name, validation status, edit, toggle, delete
             Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Switch(
-                    checked = repository.isEnabled, onCheckedChange = { onToggle() })
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        tint = MaterialTheme.colorScheme.error
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = repository.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Validation status icon
+                    when (validationResult) {
+                        is ValidationResult.Valid -> {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Valid",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(rDp(18.dp))
+                            )
+                        }
+                        is ValidationResult.Invalid -> {
+                            Icon(
+                                imageVector = Icons.Default.Error,
+                                contentDescription = "Invalid",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(rDp(18.dp))
+                            )
+                        }
+                        is ValidationResult.Checking -> {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(rDp(18.dp)),
+                                strokeWidth = rDp(2.dp)
+                            )
+                        }
+                        null -> {}
+                    }
+
+                    // Edit button
+                    ActionButton(
+                        onClickListener = onEdit,
+                        icon = Icons.Default.Edit,
+                        contentDescription = "Edit"
+                    )
+
+                    // Toggle switch
+                    Switch(
+                        checked = repository.isEnabled,
+                        onCheckedChange = { onToggle() }
+                    )
+
+                    // Delete button
+                    IconButton(onClick = onDelete) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+
+            // Repository path
+            Text(
+                text = repository.repoPath,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontFamily = maple
+            )
+
+            // Bottom row: Category chip, GGUF count, validate button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Category chip
+                    AssistChip(
+                        onClick = {},
+                        label = {
+                            Text(
+                                text = repository.category.displayName,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        },
+                        modifier = Modifier.height(rDp(28.dp))
+                    )
+
+                    // GGUF file count if validated
+                    if (validationResult is ValidationResult.Valid) {
+                        Text(
+                            text = "${validationResult.ggufFileCount} GGUF files",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else if (validationResult is ValidationResult.Invalid) {
+                        Text(
+                            text = validationResult.reason,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+
+                // Validate button
+                TextButton(
+                    onClick = onValidate,
+                    enabled = validationResult !is ValidationResult.Checking
+                ) {
+                    Text(
+                        text = "Validate",
+                        style = MaterialTheme.typography.labelSmall
                     )
                 }
             }
@@ -807,6 +931,152 @@ private fun AddRepositoryDialog(
     })
 }
 
+@Composable
+private fun EditRepositoryDialog(
+    repository: HFModelRepository,
+    onDismiss: () -> Unit,
+    onSave: (HFModelRepository) -> Unit
+) {
+    var repoName by remember { mutableStateOf(repository.name) }
+    var repoPath by remember { mutableStateOf(repository.repoPath) }
+    var selectedType by remember { mutableStateOf(repository.modelType) }
+    var selectedCategory by remember { mutableStateOf(repository.category) }
+    var showCategoryDropdown by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Repository") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(rDp(12.dp))) {
+                OutlinedTextField(
+                    value = repoName,
+                    onValueChange = { repoName = it },
+                    label = { Text("Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = repoPath,
+                    onValueChange = { repoPath = it },
+                    label = { Text("Repository Path") },
+                    placeholder = { Text("username/repo-name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Model Type
+                Text(
+                    text = "Model Type",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                ) {
+                    FilterChip(
+                        selected = selectedType == ModelType.GGUF,
+                        onClick = { selectedType = ModelType.GGUF },
+                        label = { Text("GGUF") }
+                    )
+                    FilterChip(
+                        selected = selectedType == ModelType.SD,
+                        onClick = { selectedType = ModelType.SD },
+                        label = { Text("Stable Diffusion") }
+                    )
+                }
+
+                // Category Dropdown
+                Text(
+                    text = "Category",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Category chips displayed as a grid
+                Column(verticalArrangement = Arrangement.spacedBy(rDp(8.dp)), modifier = Modifier.scrollable(rememberScrollState(), orientation = Orientation.Horizontal)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    ) {
+                        FilterChip(
+                            selected = selectedCategory == ModelCategory.GENERAL,
+                            onClick = { selectedCategory = ModelCategory.GENERAL },
+                            label = { Text("General") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = selectedCategory == ModelCategory.MEDICAL,
+                            onClick = { selectedCategory = ModelCategory.MEDICAL },
+                            label = { Text("Medical") },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    ) {
+                        FilterChip(
+                            selected = selectedCategory == ModelCategory.RESEARCH,
+                            onClick = { selectedCategory = ModelCategory.RESEARCH },
+                            label = { Text("Research") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = selectedCategory == ModelCategory.CODING,
+                            onClick = { selectedCategory = ModelCategory.CODING },
+                            label = { Text("Coding") },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    ) {
+                        FilterChip(
+                            selected = selectedCategory == ModelCategory.BUSINESS,
+                            onClick = { selectedCategory = ModelCategory.BUSINESS },
+                            label = { Text("Business") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = selectedCategory == ModelCategory.CYBERSECURITY,
+                            onClick = { selectedCategory = ModelCategory.CYBERSECURITY },
+                            label = { Text("Cybersecurity") },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (repoName.isNotBlank() && repoPath.isNotBlank()) {
+                        onSave(
+                            repository.copy(
+                                name = repoName,
+                                repoPath = repoPath,
+                                modelType = selectedType,
+                                category = selectedCategory
+                            )
+                        )
+                    }
+                },
+                enabled = repoName.isNotBlank() && repoPath.isNotBlank()
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchAppBar(
@@ -850,6 +1120,212 @@ fun FilterChips(
             selected = selectedFilter == ModelType.GGUF,
             onClick = { onFilterSelected(ModelType.GGUF) },
             label = { Text("GGUF") })
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ModelFiltersSection(
+    viewModel: ModelStoreViewModel
+) {
+    val selectedCategory by viewModel.selectedCategory.collectAsState()
+    val selectedParameters by viewModel.selectedParameters.collectAsState()
+    val selectedQuantizations by viewModel.selectedQuantizations.collectAsState()
+    val selectedSizeCategory by viewModel.selectedSizeCategory.collectAsState()
+    val sortBy by viewModel.sortBy.collectAsState()
+
+    var showAdvancedFilters by remember { mutableStateOf(false) }
+
+    // Calculate active filter count
+    val activeFilterCount = listOf(
+        selectedCategory != null,
+        selectedParameters.isNotEmpty(),
+        selectedQuantizations.isNotEmpty(),
+        selectedSizeCategory != null
+    ).count { it }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = rDp(8.dp))
+    ) {
+        // Category filter chips (horizontal scroll, always visible)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = rDp(16.dp)),
+            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+        ) {
+            FilterChip(
+                selected = selectedCategory == null,
+                onClick = { viewModel.filterByCategory(null) },
+                label = { Text("All") }
+            )
+            ModelCategory.values().forEach { category ->
+                FilterChip(
+                    selected = selectedCategory == category,
+                    onClick = { viewModel.filterByCategory(category) },
+                    label = { Text(category.displayName) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(rDp(8.dp)))
+
+        // Advanced filters toggle button
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = rDp(16.dp)),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(
+                onClick = { showAdvancedFilters = !showAdvancedFilters }
+            ) {
+                Icon(
+                    imageVector = if (showAdvancedFilters) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (showAdvancedFilters) "Hide" else "Show",
+                    modifier = Modifier.size(rDp(20.dp))
+                )
+                Spacer(modifier = Modifier.width(rDp(4.dp)))
+                Text("Advanced Filters")
+                if (activeFilterCount > 0) {
+                    Spacer(modifier = Modifier.width(rDp(4.dp)))
+                    AssistChip(
+                        onClick = {},
+                        label = { Text(activeFilterCount.toString()) },
+                        modifier = Modifier.height(rDp(24.dp))
+                    )
+                }
+            }
+
+            if (activeFilterCount > 0) {
+                TextButton(onClick = { viewModel.clearAllFilters() }) {
+                    Text("Clear All")
+                }
+            }
+        }
+
+        // Advanced filters section
+        AnimatedVisibility(
+            visible = showAdvancedFilters,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = rDp(16.dp), vertical = rDp(8.dp)),
+                verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            ) {
+                // Parameter count filter
+                Column(verticalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
+                    Text(
+                        text = "Parameters",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    ) {
+                        listOf("0.5B", "1B", "3B", "6.7B", "8B", "32B", "70B").forEach { param ->
+                            FilterChip(
+                                selected = param in selectedParameters,
+                                onClick = { viewModel.toggleParameterFilter(param) },
+                                label = { Text(param) }
+                            )
+                        }
+                    }
+                }
+
+                // Quantization filter
+                Column(verticalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
+                    Text(
+                        text = "Quantization",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    ) {
+                        listOf("Q4_0", "Q5_0", "Q8_0", "Q4_K_M", "Q5_K_M", "Q6_K").forEach { quant ->
+                            FilterChip(
+                                selected = quant in selectedQuantizations,
+                                onClick = { viewModel.toggleQuantizationFilter(quant) },
+                                label = { Text(quant) }
+                            )
+                        }
+                    }
+                }
+
+                // Size category filter
+                Column(verticalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
+                    Text(
+                        text = "Size",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    ) {
+                        SizeCategory.entries.forEach { size ->
+                            FilterChip(
+                                selected = selectedSizeCategory == size,
+                                onClick = {
+                                    viewModel.filterBySizeCategory(
+                                        if (selectedSizeCategory == size) null else size
+                                    )
+                                },
+                                label = { Text(size.displayName) }
+                            )
+                        }
+                    }
+                }
+
+                // Sort option
+                Column(verticalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
+                    Text(
+                        text = "Sort By",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    ) {
+                        FilterChip(
+                            selected = sortBy == SortOption.NAME,
+                            onClick = { viewModel.setSortOption(SortOption.NAME) },
+                            label = { Text("Name") }
+                        )
+                        FilterChip(
+                            selected = sortBy == SortOption.SIZE,
+                            onClick = { viewModel.setSortOption(SortOption.SIZE) },
+                            label = { Text("Size") }
+                        )
+                        FilterChip(
+                            selected = sortBy == SortOption.RECENTLY_ADDED,
+                            onClick = { viewModel.setSortOption(SortOption.RECENTLY_ADDED) },
+                            label = { Text("Recently Added") }
+                        )
+                    }
+                }
+            }
+        }
+
+        HorizontalDivider(
+            modifier = Modifier.padding(top = rDp(8.dp)),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+        )
     }
 }
 
@@ -937,7 +1413,7 @@ fun ModelCard(
 
             // Tags
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
                 verticalAlignment = Alignment.CenterVertically
             ) {

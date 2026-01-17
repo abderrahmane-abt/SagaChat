@@ -1,5 +1,9 @@
 package com.dark.tool_neuron.ui.components
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -33,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
@@ -677,6 +682,8 @@ private fun TableView(
 @Composable
 private fun CodeBlockExpanded(code: String, language: String) {
     var isExpanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
 
     Column(
         modifier = Modifier
@@ -718,7 +725,11 @@ private fun CodeBlockExpanded(code: String, language: String) {
 
             Row(horizontalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
                 ActionButton(
-                    onClickListener = { /* Copy code */ },
+                    onClickListener = {
+                        val clip = ClipData.newPlainText("label", "Your text to copy here")
+                        clipboardManager.setPrimaryClip(clip)
+                        Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                    },
                     icon = R.drawable.copy,
                     contentDescription = "Copy",
                     shape = RoundedCornerShape(rDp(8.dp)),
