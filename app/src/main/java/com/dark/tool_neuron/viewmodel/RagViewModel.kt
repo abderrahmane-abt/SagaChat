@@ -5,6 +5,8 @@ import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.dark.tool_neuron.engine.EmbeddingConfig
 import com.dark.tool_neuron.engine.EmbeddingEngine
 import com.dark.tool_neuron.models.table_schema.InstalledRag
@@ -64,6 +66,9 @@ class RagViewModel @Inject constructor(
     private val _isEmbeddingInitialized = MutableStateFlow(false)
     val isEmbeddingInitialized: StateFlow<Boolean> = _isEmbeddingInitialized
 
+    private val _isEmbeddingModelDownloading = MutableStateFlow(false)
+    val isEmbeddingModelDownloading: StateFlow<Boolean> = _isEmbeddingModelDownloading
+
     // Chat list for creating RAG from chats
     private val _availableChats = MutableStateFlow<List<ChatInfo>>(emptyList())
     val availableChats: StateFlow<List<ChatInfo>> = _availableChats
@@ -107,6 +112,27 @@ class RagViewModel @Inject constructor(
         _isEmbeddingInitialized.value = embeddingEngine.isInitialized()
         if (embeddingEngine.isInitialized()) {
             _embeddingStatus.value = "Ready (dim: ${embeddingEngine.getDimension()})"
+        }
+
+        // Monitor embedding model download status
+        checkEmbeddingDownloadStatus()
+    }
+
+    private fun checkEmbeddingDownloadStatus() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val workManager = WorkManager.getInstance(context)
+                val workInfos = workManager.getWorkInfosByTag(com.dark.tool_neuron.worker.EmbeddingModelDownloadWorker.TAG).get()
+
+                if (workInfos.any { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }) {
+                    _isEmbeddingModelDownloading.value = true
+                    _embeddingStatus.value = "Downloading embedding model..."
+                } else {
+                    _isEmbeddingModelDownloading.value = false
+                }
+            } catch (e: Exception) {
+                Log.e("RagViewModel", "Failed to check download status", e)
+            }
         }
     }
 
@@ -161,7 +187,13 @@ class RagViewModel @Inject constructor(
                     val modelFile = com.dark.tool_neuron.engine.EmbeddingEngine.getModelPath(context)
 
                     if (!modelFile.exists()) {
-                        _error.value = "Embedding model not found. Please install the embedding model first."
+                        checkEmbeddingDownloadStatus()
+                        val errorMsg = if (_isEmbeddingModelDownloading.value) {
+                            "Embedding model is currently downloading. Please wait for download to complete."
+                        } else {
+                            "Embedding model not found. The model will be downloaded in the background."
+                        }
+                        _error.value = errorMsg
                         _isLoading.value = false
                         ragRepository.updateRagStatus(ragId, RagStatus.ERROR)
                         return@launch

@@ -20,8 +20,7 @@ class NVApplication : Application() {
         // Initialize app container first
         AppContainer.init(applicationContext, this)
 
-        // Bind service with application context (survives configuration changes)
-        LlmModelWorker.bindService(applicationContext)
+        // Note: Service binding moved to MainActivity to comply with Android 14+ foreground service restrictions
     }
 
     override fun onTerminate() {

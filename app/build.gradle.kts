@@ -22,8 +22,8 @@ android {
         applicationId = "com.dark.tool_neuron"
         minSdk = 31
         targetSdk = 36
-        versionCode = 15
-        versionName = "1.1.1-Rag+Letex"
+        versionCode = 16
+        versionName = "1.1.2-Fix"
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
         }
@@ -83,6 +83,9 @@ dependencies {
 
     // Hilt Navigation Compose
     implementation("androidx.hilt:hilt-navigation-compose:1.3.0")
+
+    // WorkManager for background tasks
+    implementation("androidx.work:work-runtime-ktx:2.11.0")
     implementation ("org.apache.commons:commons-compress:1.28.0")
     implementation ("org.tukaani:xz:1.11")
     implementation(libs.okhttp)

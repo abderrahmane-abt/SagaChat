@@ -55,6 +55,9 @@ class MainActivity : ComponentActivity() {
 
         termsDataStore = TermsDataStore(this)
 
+        // Bind LLM service after activity is created (Android 14+ requirement)
+        LlmModelWorker.bindService(applicationContext)
+
         if (!NotificationPermissionHelper.hasNotificationPermission(this)) {
             NotificationPermissionHelper.requestNotificationPermission(this) {
                 if (it) {
@@ -72,41 +75,33 @@ class MainActivity : ComponentActivity() {
 
             NeuroVerseTheme {
                 val hasAcceptedTerms by termsDataStore.hasAcceptedTerms.collectAsState(initial = true)
-                var embeddingModelReady by remember { mutableStateOf(false) }
                 val scope = rememberCoroutineScope()
 
+                // Start background download if model not present
                 LaunchedEffect(Unit) {
                     withContext(Dispatchers.IO) {
-                        embeddingModelReady = EmbeddingEngine.isModelDownloaded(context)
+                        if (!EmbeddingEngine.isModelDownloaded(context)) {
+                            LlmModelWorker.startEmbeddingModelDownload(context)
+                        }
                     }
                 }
 
-                when {
-                    !hasAcceptedTerms -> {
-                        TermsAndConditionsScreen(
-                            onAccept = {
-                                scope.launch {
-                                    termsDataStore.acceptTerms()
-                                }
+                if (!hasAcceptedTerms) {
+                    TermsAndConditionsScreen(
+                        onAccept = {
+                            scope.launch {
+                                termsDataStore.acceptTerms()
                             }
-                        )
-                    }
-                    !embeddingModelReady -> {
-                        EmbeddingSetupScreen(
-                            onSetupComplete = {
-                                embeddingModelReady = true
-                            }
-                        )
-                    }
-                    else -> {
-                        val chatViewModel: ChatViewModel = hiltViewModel()
-                        val llmModelViewModel: LLMModelViewModel = hiltViewModel()
+                        }
+                    )
+                } else {
+                    val chatViewModel: ChatViewModel = hiltViewModel()
+                    val llmModelViewModel: LLMModelViewModel = hiltViewModel()
 
-                        AppNavigation(
-                            chatViewModel = chatViewModel,
-                            llmModelViewModel = llmModelViewModel
-                        )
-                    }
+                    AppNavigation(
+                        chatViewModel = chatViewModel,
+                        llmModelViewModel = llmModelViewModel
+                    )
                 }
             }
         }

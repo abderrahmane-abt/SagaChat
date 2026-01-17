@@ -11,6 +11,9 @@ import android.net.Uri
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.util.Log
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import com.dark.tool_neuron.engine.GenerationEvent
 import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.models.table_schema.ModelConfig
@@ -595,5 +598,24 @@ object LlmModelWorker {
         }
 
         return Base64.getEncoder().encodeToString(rgbBytes)
+    }
+
+    // ==================== Embedding Model Download ====================
+
+    /**
+     * Start background download of embedding model
+     */
+    fun startEmbeddingModelDownload(context: Context) {
+        val workRequest = OneTimeWorkRequestBuilder<EmbeddingModelDownloadWorker>()
+            .addTag(EmbeddingModelDownloadWorker.TAG)
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            EmbeddingModelDownloadWorker.TAG,
+            ExistingWorkPolicy.KEEP,
+            workRequest
+        )
+
+        Log.i(TAG, "Embedding model download started in background")
     }
 }
