@@ -13,6 +13,7 @@ data class Messages(
     val msgId: String = UUID.randomUUID().toString(),
     val role: Role = Role.Assistant,
     val content: MessageContent = MessageContent(),
+    val timestamp: Long? = null, // Nullable for backward compatibility with old messages
     val decodingMetrics: DecodingMetrics? = null,
     val imageMetrics: ImageGenerationMetrics? = null,
     val memoryMetrics: MemoryMetrics? = null,

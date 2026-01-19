@@ -103,14 +103,18 @@ fun HomeScreen(
     ModalNavigationDrawer(
         drawerState = drawerState, drawerContent = {
             ModalDrawerSheet {
-                HomeDrawerScreen(onVaultManagerClick = {
-                    onVaultManagerClick()
-                }, onChatSelected = {
-                    chatViewModel.loadChat(it)
-                    scope.launch {
-                        drawerState.close()
-                    }
-                })
+                HomeDrawerScreen(
+                    onVaultManagerClick = {
+                        onVaultManagerClick()
+                    },
+                    onChatSelected = {
+                        chatViewModel.loadChat(it)
+                        scope.launch {
+                            drawerState.close()
+                        }
+                    },
+                    chatViewModel = chatViewModel
+                )
             }
         }) {
         Scaffold(

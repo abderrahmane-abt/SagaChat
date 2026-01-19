@@ -371,6 +371,7 @@ class ChatViewModel @Inject constructor(
                                 )
 
                                 AppStateManager.setGenerationComplete()
+                                AppStateManager.chatRefreshed()
                                 // resetStreamingState will set _isGenerating = false
                                 resetStreamingState()
                             }
@@ -667,6 +668,7 @@ class ChatViewModel @Inject constructor(
                             chatManager.addImageMessage(chatId, imageBase64, prompt, event.seed, currentImageMetrics)
 
                             AppStateManager.setGenerationComplete()
+                            AppStateManager.chatRefreshed()
                             resetStreamingState()
                         }
 
@@ -711,6 +713,7 @@ class ChatViewModel @Inject constructor(
                 ).onSuccess { assistantMessage ->
                     _messages.add(assistantMessage)
                     AppStateManager.setGenerationComplete()
+                    AppStateManager.chatRefreshed()
                     resetStreamingState()
                 }
             }.onFailure { e ->
@@ -742,6 +745,7 @@ class ChatViewModel @Inject constructor(
                 ).onSuccess { imageMessage ->
                     _messages.add(imageMessage)
                     AppStateManager.setGenerationComplete()
+                    AppStateManager.chatRefreshed()
                     resetStreamingState()
                 }
             }.onFailure { e ->

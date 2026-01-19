@@ -202,8 +202,15 @@ object VaultHelper {
         VaultLogger.log(LogLevel.DEBUG, "CRYPTO", "✓ Message decrypted (${decryptDuration}ms)")
 
         try {
-            json.decodeFromString<Messages>(item.content)
+            val message = json.decodeFromString<Messages>(item.content)
+            // Use vault's timestamp if message timestamp is missing (for backward compatibility)
+            if (message.timestamp == null) {
+                message.copy(timestamp = item.timestamp)
+            } else {
+                message
+            }
         } catch (e: Exception) {
+            VaultLogger.log(LogLevel.ERROR, "VAULT", "Failed to decode message: ${e.message}")
             null
         }
     }
@@ -222,11 +229,19 @@ object VaultHelper {
 
         val messages = items.mapNotNull { item ->
             try {
-                json.decodeFromString<Messages>(item.content)
+                val message = json.decodeFromString<Messages>(item.content)
+                // Use vault's timestamp if message timestamp is missing
+                // This ensures backward compatibility with old messages
+                if (message.timestamp == null) {
+                    message.copy(timestamp = item.timestamp)
+                } else {
+                    message
+                }
             } catch (e: Exception) {
+                VaultLogger.log(LogLevel.ERROR, "VAULT", "Failed to decode message in chat: ${e.message}")
                 null
             }
-        }.sortedBy { it.msgId }
+        }.sortedBy { it.timestamp ?: 0L }
 
         val decryptDuration = System.currentTimeMillis() - decryptStart
         VaultLogger.log(LogLevel.DEBUG, "CRYPTO", "✓ Decrypted ${messages.size} messages (${decryptDuration}ms)")
@@ -252,8 +267,15 @@ object VaultHelper {
 
         val messages = items.mapNotNull { item ->
             try {
-                json.decodeFromString<Messages>(item.content)
+                val message = json.decodeFromString<Messages>(item.content)
+                // Use vault's timestamp if message timestamp is missing
+                if (message.timestamp == null) {
+                    message.copy(timestamp = item.timestamp)
+                } else {
+                    message
+                }
             } catch (e: Exception) {
+                VaultLogger.log(LogLevel.ERROR, "VAULT", "Failed to decode paged message: ${e.message}")
                 null
             }
         }
@@ -340,12 +362,19 @@ object VaultHelper {
                 if (item is MessageItem && item.category != "chats") {
                     try {
                         val message = json.decodeFromString<Messages>(item.content)
+                        // Use vault's timestamp if message timestamp is missing
+                        val messageWithTimestamp = if (message.timestamp == null) {
+                            message.copy(timestamp = item.timestamp)
+                        } else {
+                            message
+                        }
                         MessageSearchResult(
                             chatId = item.category ?: "",
-                            message = message,
+                            message = messageWithTimestamp,
                             timestamp = item.timestamp
                         )
                     } catch (e: Exception) {
+                        VaultLogger.log(LogLevel.ERROR, "VAULT", "Failed to decode search result: ${e.message}")
                         null
                     }
                 } else null
