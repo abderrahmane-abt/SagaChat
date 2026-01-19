@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DrawerValue
@@ -417,7 +418,7 @@ fun BottomBar(
                         onClickListener = {
                             onModelEditor()
                         },
-                        icon = R.drawable.settings,
+                        icon = Icons.Outlined.Settings,
                         modifier = Modifier.padding(start = rDp(6.dp))
                     )
 
@@ -454,7 +455,7 @@ fun BottomBar(
                             }
                         },
                         checked = showPluginOverlay,
-                        icon = R.drawable.settings // Using settings icon as placeholder
+                        icon = R.drawable.tools // Using settings icon as placeholder
                     )
 
                     Spacer(Modifier.weight(1f))

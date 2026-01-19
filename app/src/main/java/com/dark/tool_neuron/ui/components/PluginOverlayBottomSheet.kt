@@ -124,7 +124,7 @@ private fun PluginOverlayHeader(
     ) {
         Column {
             Text(
-                text = "Plugins",
+                text = "Plugins ( Beta )",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
@@ -162,7 +162,7 @@ private fun PluginListItem(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(16.dp))
+                .padding(horizontal = rDp(16.dp), vertical = rDp(6.dp))
         ) {
             // Header Row
             Row(
