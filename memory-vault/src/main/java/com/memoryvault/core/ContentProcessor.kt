@@ -47,7 +47,7 @@ class ContentProcessor(
         var processed = data
 
         if (encrypted) {
-            Log.d(TAG, "Decrypting block data: ${processed.size} bytes")
+            //Log.d(TAG, "Decrypting block data: ${processed.size} bytes")
             val encryptedData = EncryptedData.fromBytes(processed)
             processed = encryptionManager.decrypt(encryptedData)
         }
@@ -55,7 +55,7 @@ class ContentProcessor(
         if (compressed) {
             val beforeSize = processed.size
             processed = CompressionUtils.decompress(processed, originalSize)
-            Log.d(TAG, "Decompressed block: ${beforeSize}B → ${processed.size}B")
+            //Log.d(TAG, "Decompressed block: ${beforeSize}B → ${processed.size}B")
         }
 
         return processed

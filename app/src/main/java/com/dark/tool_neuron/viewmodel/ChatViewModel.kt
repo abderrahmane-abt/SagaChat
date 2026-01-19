@@ -1,6 +1,7 @@
 package com.dark.tool_neuron.viewmodel
 
 import android.graphics.Bitmap
+import android.util.Log
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.lifecycle.ViewModel
@@ -13,7 +14,10 @@ import com.dark.tool_neuron.models.messages.MessageContent
 import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.models.messages.RagResultItem
 import com.dark.tool_neuron.models.messages.Role
+import com.dark.tool_neuron.models.plugins.PluginResultData
 import com.dark.tool_neuron.models.table_schema.ModelConfig
+import com.dark.tool_neuron.plugins.PluginExecutionResult
+import com.dark.tool_neuron.plugins.PluginManager
 import com.dark.tool_neuron.state.AppStateManager
 import com.dark.tool_neuron.worker.ChatManager
 import com.dark.tool_neuron.worker.DiffusionConfig
@@ -21,12 +25,14 @@ import com.dark.tool_neuron.worker.DiffusionInferenceParams
 import com.dark.tool_neuron.worker.GenerationManager
 import com.dark.tool_neuron.worker.LlmModelWorker
 import com.mp.ai_gguf.models.DecodingMetrics
+import com.mp.ai_gguf.toolcalling.ToolCall
 import dagger.hilt.android.lifecycle.HiltViewModel
 import jakarta.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
@@ -279,7 +285,12 @@ class ChatViewModel @Inject constructor(
                             currentMetrics = event.metrics
                         }
 
-                        is GenerationEvent.ToolCall -> {}
+                        is GenerationEvent.ToolCall -> {
+                            Log.e("ChatViewModel", "Tool call received: ${event.name} && ${event.args}")
+                            viewModelScope.launch {
+                                handlePluginToolCall(event.name, event.args)
+                            }
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -353,22 +364,29 @@ class ChatViewModel @Inject constructor(
                                     )
                                 }
 
-                                // Add assistant message
-                                val assistantMessage = Messages(
-                                    role = Role.Assistant,
-                                    content = MessageContent(
-                                        contentType = ContentType.Text,
-                                        content = currentGeneratedContent
-                                    ),
-                                    decodingMetrics = currentMetrics,
-                                    ragResults = ragResultItems
-                                )
-                                _messages.add(assistantMessage)
+                                // Filter out tool call syntax from the generated content
+                                val filteredContent = filterToolCallSyntax(currentGeneratedContent)
 
-                                // Save to vault
-                                chatManager.addAssistantMessage(
-                                    chatId, currentGeneratedContent, currentMetrics, ragResultItems
-                                )
+                                // Only add assistant message if there's actual content
+                                if (filteredContent.isNotBlank()) {
+                                    val assistantMessage = Messages(
+                                        role = Role.Assistant,
+                                        content = MessageContent(
+                                            contentType = ContentType.Text,
+                                            content = filteredContent
+                                        ),
+                                        decodingMetrics = currentMetrics,
+                                        ragResults = ragResultItems
+                                    )
+                                    _messages.add(assistantMessage)
+
+                                    // Save to vault
+                                    chatManager.addAssistantMessage(
+                                        chatId, filteredContent, currentMetrics, ragResultItems
+                                    )
+                                } else {
+                                    Log.d("ChatViewModel", "Skipped empty assistant message (was only tool call syntax)")
+                                }
 
                                 AppStateManager.setGenerationComplete()
                                 AppStateManager.chatRefreshed()
@@ -384,7 +402,11 @@ class ChatViewModel @Inject constructor(
                                 currentMetrics = event.metrics
                             }
 
-                            is GenerationEvent.ToolCall -> {}
+                            is GenerationEvent.ToolCall -> {
+                                viewModelScope.launch {
+                                    handlePluginToolCall(event.name, event.args)
+                                }
+                            }
                         }
                     }
             } catch (e: Exception) {
@@ -690,6 +712,9 @@ class ChatViewModel @Inject constructor(
         assistantResponse: String,
         metrics: DecodingMetrics?
     ) {
+        // Filter out tool call syntax
+        val filteredResponse = filterToolCallSyntax(assistantResponse)
+
         // Convert current RAG results to serializable format before clearing
         val ragResultItems = _currentRagResults.value.takeIf { it.isNotEmpty() }?.map { result ->
             RagResultItem(
@@ -700,20 +725,45 @@ class ChatViewModel @Inject constructor(
             )
         }
 
+        // Get any plugin results that were added during generation
+        val pluginResults = _messages.filter { it.content.contentType == ContentType.PluginResult }
+        Log.d("ChatViewModel", "Creating new chat with ${pluginResults.size} plugin results, filtered response: '${filteredResponse.take(50)}'")
+
         chatManager.createNewChat().onSuccess { newChatId ->
             _currentChatId.value = newChatId
             isNewConversation = false
+            Log.d("ChatViewModel", "Created chat: $newChatId")
 
             chatManager.addUserMessage(newChatId, userPrompt).onSuccess { userMessage ->
-                _messages.add(userMessage)
-                userMessageAdded = true
+                Log.d("ChatViewModel", "Saved user message")
 
-                chatManager.addAssistantMessage(
-                    newChatId, assistantResponse, metrics, ragResultItems
-                ).onSuccess { assistantMessage ->
-                    _messages.add(assistantMessage)
+                // Save plugin results first
+                pluginResults.forEachIndexed { index, pluginMsg ->
+                    chatManager.addMessage(newChatId, pluginMsg).onSuccess {
+                        Log.d("ChatViewModel", "Saved plugin result ${index + 1}/${pluginResults.size}")
+                    }
+                }
+
+                // Save assistant message if there's actual content
+                if (filteredResponse.isNotBlank()) {
+                    chatManager.addAssistantMessage(
+                        newChatId, filteredResponse, metrics, ragResultItems
+                    ).onSuccess {
+                        Log.d("ChatViewModel", "Saved assistant message")
+                    }
+                }
+
+                // Now reload the chat to get all messages with proper IDs
+                chatManager.getChatMessages(newChatId).onSuccess { loadedMessages ->
+                    Log.d("ChatViewModel", "Reloaded ${loadedMessages.size} messages from vault")
+                    _messages.clear()
+                    _messages.addAll(loadedMessages)
                     AppStateManager.setGenerationComplete()
                     AppStateManager.chatRefreshed()
+                    resetStreamingState()
+                }.onFailure { e ->
+                    Log.e("ChatViewModel", "Failed to reload chat: ${e.message}")
+                    AppStateManager.setGenerationComplete()
                     resetStreamingState()
                 }
             }.onFailure { e ->
@@ -1021,5 +1071,256 @@ class ChatViewModel @Inject constructor(
 
     fun hideModelList() {
         _showModelList.value = false
+    }
+
+    // ==================== Plugin Tool Call Handling ====================
+
+    private suspend fun handlePluginToolCall(toolName: String, argsJson: String) {
+        Log.d("ChatViewModel", "🎯 Tool call intercepted! Tool: $toolName, Args: $argsJson")
+
+        var pluginName = "Unknown Plugin"
+        var actualToolName = toolName
+
+        try {
+            // Parse the JSON properly - it comes wrapped in a tool_calls array
+            val argsObject = JSONObject(argsJson)
+            val toolCallsArray = argsObject.optJSONArray("tool_calls")
+
+            if (toolCallsArray == null || toolCallsArray.length() == 0) {
+                Log.e("ChatViewModel", "No tool_calls found in args: $argsJson")
+                AppStateManager.setError("Invalid tool call format")
+                return
+            }
+
+            // Get the first tool call
+            val firstToolCall = toolCallsArray.getJSONObject(0)
+            val rawToolName = firstToolCall.getString("name")
+            val arguments = firstToolCall.getJSONObject("arguments")
+
+            Log.d("ChatViewModel", "Parsed tool: $rawToolName, arguments: $arguments")
+
+            // Normalize tool name (handle cases like "Web Scraping" -> "web_scraping")
+            actualToolName = normalizeToolName(rawToolName)
+            Log.d("ChatViewModel", "Normalized tool name: $rawToolName -> $actualToolName")
+
+            // Get plugin name
+            val plugin = PluginManager.getPlugin(
+                PluginManager.registeredPlugins.value.firstOrNull { pluginInfo ->
+                    pluginInfo.toolDefinitionBuilder.any {
+                        it.name.equals(actualToolName, ignoreCase = true)
+                    }
+                }?.name ?: ""
+            )
+            pluginName = plugin?.getPluginInfo()?.name ?: "Unknown Plugin"
+
+            // Set ExecutingPlugin state
+            AppStateManager.setExecutingPlugin(pluginName, actualToolName)
+
+            // Create ToolCall object
+            val toolCall = ToolCall(name = actualToolName, arguments = arguments)
+
+            // Execute via PluginManager
+            val result = PluginManager.executeTool(toolCall)
+
+            // Add result message to chat (or queue it for new conversations)
+            when (result) {
+                is PluginExecutionResult.Success -> {
+                    Log.d("ChatViewModel", "✅ Tool executed successfully")
+
+                    // Set completion state with success
+                    AppStateManager.setPluginExecutionComplete(
+                        pluginName = pluginName,
+                        toolName = actualToolName,
+                        success = true,
+                        executionTimeMs = result.metrics.executionTimeMs
+                    )
+
+                    // Wait a bit to show the success state
+                    kotlinx.coroutines.delay(800)
+
+                    addPluginResultMessage(result)
+
+                    // Return to GeneratingText state since we're still in text generation
+                    AppStateManager.setGeneratingText()
+                }
+                is PluginExecutionResult.Failure -> {
+                    Log.e("ChatViewModel", "❌ Tool execution failed: ${result.metrics.errorMessage}")
+
+                    // Set completion state with error
+                    AppStateManager.setPluginExecutionComplete(
+                        pluginName = pluginName,
+                        toolName = actualToolName,
+                        success = false,
+                        executionTimeMs = result.metrics.executionTimeMs,
+                        errorMessage = result.metrics.errorMessage
+                    )
+
+                    // Wait a bit to show the error state
+                    kotlinx.coroutines.delay(1500)
+
+                    // Add error result to messages as a plugin result with failure status
+                    addPluginErrorMessage(
+                        pluginName = pluginName,
+                        toolName = actualToolName,
+                        errorMessage = result.metrics.errorMessage ?: "Unknown error",
+                        executionTimeMs = result.metrics.executionTimeMs
+                    )
+
+                    // Return to GeneratingText state
+                    AppStateManager.setGeneratingText()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("ChatViewModel", "Exception in handlePluginToolCall", e)
+
+            // Set completion state with error
+            AppStateManager.setPluginExecutionComplete(
+                pluginName = pluginName,
+                toolName = actualToolName,
+                success = false,
+                executionTimeMs = 0,
+                errorMessage = e.message ?: "Unknown error"
+            )
+
+            kotlinx.coroutines.delay(1500)
+
+            _error.value = "Error executing plugin tool: ${e.message}"
+            AppStateManager.setError("Error executing plugin tool: ${e.message}")
+        }
+    }
+
+    /**
+     * Normalize tool name to match the actual tool definition
+     * Converts "Web Scraping" -> "web_scraping", "DuckDuckGo Search" -> "duckduckgo_search"
+     */
+    private fun normalizeToolName(toolName: String): String {
+        return toolName
+            .lowercase()
+            .replace(" ", "_")
+            .replace("-", "_")
+    }
+
+    /**
+     * Filter out tool call syntax and code blocks from generated text
+     * Removes:
+     * - ```json ... ``` blocks
+     * - Tool call JSON syntax
+     * - Empty or whitespace-only content
+     */
+    private fun filterToolCallSyntax(content: String): String {
+        var filtered = content
+
+        // Remove ```json code blocks
+        filtered = filtered.replace(Regex("```json\\s*\\{[^`]*```", RegexOption.DOT_MATCHES_ALL), "")
+        filtered = filtered.replace(Regex("```\\s*\\{[^`]*```", RegexOption.DOT_MATCHES_ALL), "")
+
+        // Remove standalone JSON objects that look like tool calls
+        filtered = filtered.replace(Regex("\\{\\s*\"tool_calls\"\\s*:[^}]*\\}\\s*", RegexOption.DOT_MATCHES_ALL), "")
+
+        // Clean up excessive whitespace
+        filtered = filtered.trim()
+        filtered = filtered.replace(Regex("\\n{3,}"), "\n\n")
+
+        return filtered
+    }
+
+    private suspend fun addPluginResultMessage(result: PluginExecutionResult.Success) {
+        try {
+            // IMPORTANT: Add user message first if not already added
+            // This ensures proper ordering: User Message → Plugin Result → Assistant Response
+            if (!userMessageAdded && currentUserMessage != null) {
+                _messages.add(currentUserMessage!!)
+                userMessageAdded = true
+                Log.d("ChatViewModel", "Added user message before plugin result")
+            }
+
+            val message = Messages(
+                role = Role.Assistant,
+                content = MessageContent(
+                    contentType = ContentType.PluginResult,
+                    content = formatPluginResult(result),
+                    pluginResultData = result.resultData
+                ),
+                pluginMetrics = result.metrics
+            )
+
+            // Add to UI immediately
+            _messages.add(message)
+            Log.d("ChatViewModel", "Plugin result added to UI messages")
+
+            // Save to vault if chat exists
+            val chatId = _currentChatId.value
+            if (chatId != null) {
+                // For existing chats, user message is already saved before generation starts
+                // (in sendTextMessage line 217), so we only need to save the plugin result
+                chatManager.addMessage(chatId, message).onFailure { e ->
+                    Log.e("ChatViewModel", "Failed to save plugin result to vault: ${e.message}")
+                    _error.value = "Failed to save plugin result: ${e.message}"
+                }
+            } else {
+                // For new chats, we'll save everything when the chat is created
+                Log.d("ChatViewModel", "No chatId yet (new conversation), will save with chat creation")
+            }
+        } catch (e: Exception) {
+            Log.e("ChatViewModel", "Error adding plugin result", e)
+            _error.value = "Error adding plugin result: ${e.message}"
+        }
+    }
+
+    private fun formatPluginResult(result: PluginExecutionResult.Success): String {
+        return "Plugin '${result.metrics.pluginName}' executed tool '${result.metrics.toolName}' " +
+                "in ${result.metrics.executionTimeMs}ms"
+    }
+
+    private suspend fun addPluginErrorMessage(
+        pluginName: String,
+        toolName: String,
+        errorMessage: String,
+        executionTimeMs: Long
+    ) {
+        try {
+            // IMPORTANT: Add user message first if not already added
+            // This ensures proper ordering: User Message → Plugin Error → Assistant Response
+            if (!userMessageAdded && currentUserMessage != null) {
+                _messages.add(currentUserMessage!!)
+                userMessageAdded = true
+                Log.d("ChatViewModel", "Added user message before plugin error")
+            }
+
+            val message = Messages(
+                role = Role.Assistant,
+                content = MessageContent(
+                    contentType = ContentType.PluginResult,
+                    content = "Plugin '$pluginName' tool '$toolName' failed: $errorMessage (${executionTimeMs}ms)",
+                    pluginResultData = PluginResultData(
+                        success = false,
+                        pluginName = pluginName,
+                        toolName = toolName,
+                        resultData = errorMessage,
+                        inputParams = "{}"
+                    )
+                ),
+                pluginMetrics = null
+            )
+
+            // Add to UI immediately
+            _messages.add(message)
+            Log.d("ChatViewModel", "Plugin error added to UI messages")
+
+            // Save to vault if chat exists
+            val chatId = _currentChatId.value
+            if (chatId != null) {
+                chatManager.addMessage(chatId, message).onFailure { e ->
+                    Log.e("ChatViewModel", "Failed to save plugin error to vault: ${e.message}")
+                    _error.value = "Failed to save plugin error: ${e.message}"
+                }
+            } else {
+                // For new chats, we'll save everything when the chat is created
+                Log.d("ChatViewModel", "No chatId yet (new conversation), will save with chat creation")
+            }
+        } catch (e: Exception) {
+            Log.e("ChatViewModel", "Error adding plugin error message", e)
+            _error.value = "Error adding plugin error message: ${e.message}"
+        }
     }
 }

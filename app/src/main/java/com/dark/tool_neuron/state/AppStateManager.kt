@@ -98,6 +98,32 @@ object AppStateManager {
     }
 
     /**
+     * Update when plugin tool execution starts
+     */
+    fun setExecutingPlugin(pluginName: String, toolName: String) {
+        _appState.value = AppState.ExecutingPlugin(pluginName, toolName)
+    }
+
+    /**
+     * Update when plugin tool execution completes (success or failure)
+     */
+    fun setPluginExecutionComplete(
+        pluginName: String,
+        toolName: String,
+        success: Boolean,
+        executionTimeMs: Long,
+        errorMessage: String? = null
+    ) {
+        _appState.value = AppState.PluginExecutionComplete(
+            pluginName = pluginName,
+            toolName = toolName,
+            success = success,
+            executionTimeMs = executionTimeMs,
+            errorMessage = errorMessage
+        )
+    }
+
+    /**
      * Update when generation completes (returns to idle)
      */
     fun setGenerationComplete() {
@@ -141,7 +167,9 @@ object AppStateManager {
      */
     fun isGenerating(): Boolean = _appState.value is AppState.GeneratingText ||
             _appState.value is AppState.GeneratingImage ||
-            _appState.value is AppState.GeneratingAudio
+            _appState.value is AppState.GeneratingAudio ||
+            _appState.value is AppState.ExecutingPlugin ||
+            _appState.value is AppState.PluginExecutionComplete
 
     /**
      * Check if model is loaded

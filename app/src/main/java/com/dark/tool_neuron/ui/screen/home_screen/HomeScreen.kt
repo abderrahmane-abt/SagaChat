@@ -74,10 +74,12 @@ import com.dark.tool_neuron.ui.components.ActionToggleButton
 import com.dark.tool_neuron.ui.components.AnimatedTitle
 import com.dark.tool_neuron.ui.components.ModeToggleSwitch
 import com.dark.tool_neuron.ui.components.ModelListItem
+import com.dark.tool_neuron.ui.components.PluginOverlayBottomSheet
 import com.dark.tool_neuron.ui.components.RagOverlayBottomSheet
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
+import com.dark.tool_neuron.viewmodel.PluginViewModel
 import com.dark.tool_neuron.viewmodel.RagViewModel
 import com.dark.tool_neuron.worker.GenerationManager
 import kotlinx.coroutines.launch
@@ -202,7 +204,8 @@ fun BottomBar(
     onModelEditor: () -> Unit,
     chatViewModel: ChatViewModel = hiltViewModel(),
     llmModelViewModel: LLMModelViewModel = hiltViewModel(),
-    ragViewModel: RagViewModel = hiltViewModel()
+    ragViewModel: RagViewModel = hiltViewModel(),
+    pluginViewModel: PluginViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     var value by remember { mutableStateOf("") }
@@ -222,6 +225,12 @@ fun BottomBar(
     val loadedCount by ragViewModel.loadedCount.collectAsStateWithLifecycle()
     val isRagEnabledForChat by ragViewModel.isRagEnabledForChat.collectAsStateWithLifecycle()
     val lastRagResults by ragViewModel.lastRagResults.collectAsStateWithLifecycle()
+
+    // Plugin State
+    val showPluginOverlay by pluginViewModel.showPluginOverlay.collectAsStateWithLifecycle()
+    val registeredPlugins by pluginViewModel.registeredPlugins.collectAsStateWithLifecycle()
+    val enabledPluginNames by pluginViewModel.enabledPluginNames.collectAsStateWithLifecycle()
+    val expandedPluginIds by pluginViewModel.expandedPluginIds.collectAsStateWithLifecycle()
 
     // Coroutine scope for RAG queries
     val scope = rememberCoroutineScope()
@@ -289,6 +298,21 @@ fun BottomBar(
         },
         onInstallRag = {
             ragFilePicker.launch(arrayOf("*/*"))
+        }
+    )
+
+    // Plugin Overlay
+    PluginOverlayBottomSheet(
+        show = showPluginOverlay,
+        plugins = registeredPlugins,
+        enabledPluginNames = enabledPluginNames,
+        expandedPluginIds = expandedPluginIds,
+        onDismiss = { pluginViewModel.hidePluginOverlay() },
+        onPluginToggle = { name, enabled ->
+            pluginViewModel.togglePluginEnabled(name, enabled)
+        },
+        onPluginExpand = { name ->
+            pluginViewModel.togglePluginExpanded(name)
         }
     )
 
@@ -418,6 +442,19 @@ fun BottomBar(
                         },
                         checked = showRagOverlay,
                         icon = R.drawable.rag
+                    )
+
+                    // Plugin Button
+                    ActionToggleButton(
+                        onCheckedChange = {
+                            if (showPluginOverlay) {
+                                pluginViewModel.hidePluginOverlay()
+                            } else {
+                                pluginViewModel.showPluginOverlay()
+                            }
+                        },
+                        checked = showPluginOverlay,
+                        icon = R.drawable.settings // Using settings icon as placeholder
                     )
 
                     Spacer(Modifier.weight(1f))

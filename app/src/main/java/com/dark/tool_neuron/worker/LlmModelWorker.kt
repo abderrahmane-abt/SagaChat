@@ -309,6 +309,34 @@ object LlmModelWorker {
         return service?.modelInfoGguf
     }
 
+    // ==================== Tool Calling Methods ====================
+
+    /**
+     * Set tools for tool calling
+     * @param toolsJson JSON string containing tool definitions in OpenAI format
+     * @return true if tools were set successfully
+     */
+    fun setToolsGguf(toolsJson: String): Boolean {
+        return try {
+            service?.setToolsJsonGguf(toolsJson) ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set tools: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Clear all registered tools
+     */
+    fun clearToolsGguf() {
+        try {
+            service?.clearToolsGguf()
+            Log.i(TAG, "Tools cleared")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear tools: ${e.message}")
+        }
+    }
+
     // ==================== Diffusion Methods ====================
 
     /**

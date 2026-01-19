@@ -11,7 +11,7 @@ interface SuperPlugin {
     fun getPluginInfo(): PluginInfo
 
     //This Function is to execute the called Tool
-    fun executeTool(toolCall: ToolCall): Result<Any>
+    suspend fun executeTool(toolCall: ToolCall): Result<Any>
 
     //This is a function that will use internal ViewModel For the Tool, and update the UI
     @Composable

@@ -3,9 +3,7 @@ package com.dark.tool_neuron.ui.screen.home_screen
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.animation.*
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,6 +17,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -43,6 +44,7 @@ import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.models.messages.RagResultItem
 import com.dark.tool_neuron.models.messages.Role
 import com.dark.tool_neuron.ui.components.MarkdownText
+import com.dark.tool_neuron.ui.components.PluginResultCard
 import com.dark.tool_neuron.ui.theme.maple
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ChatViewModel
@@ -85,6 +87,7 @@ fun BodyContent(
     val showDynamicWindow by chatViewModel.showDynamicWindow.collectAsState()
     val currentGenerationType by chatViewModel.currentGenerationType.collectAsState()
     val currentRagResults by chatViewModel.currentRagResults.collectAsState()
+    val appState by com.dark.tool_neuron.state.AppStateManager.appState.collectAsState()
 
     val listState = rememberLazyListState()
 
@@ -111,7 +114,8 @@ fun BodyContent(
                     imageProgress = imageProgress,
                     imageStep = imageStep,
                     isImageGeneration = currentGenerationType == GenerationManager.ModelType.IMAGE_GENERATION,
-                    ragResults = currentRagResults
+                    ragResults = currentRagResults,
+                    appState = appState
                 )
             } else {
                 LazyColumn(
@@ -188,7 +192,8 @@ private fun StreamingView(
     imageProgress: Float,
     imageStep: String,
     isImageGeneration: Boolean,
-    ragResults: List<com.dark.tool_neuron.viewmodel.RagQueryDisplayResult> = emptyList()
+    ragResults: List<com.dark.tool_neuron.viewmodel.RagQueryDisplayResult> = emptyList(),
+    appState: com.dark.tool_neuron.models.state.AppState
 ) {
     val scrollState = rememberScrollState()
 
@@ -218,14 +223,33 @@ private fun StreamingView(
             RagResultsDisplay(results = ragResults)
         }
 
-        if (isImageGeneration) {
-            ImageGenerationStreamingBubble(
-                streamingImage = streamingImage,
-                progress = imageProgress,
-                step = imageStep
-            )
-        } else {
-            AssistantStreamingBubble(text = assistantMessage)
+        when {
+            appState is com.dark.tool_neuron.models.state.AppState.ExecutingPlugin -> {
+                PluginExecutionStreamingBubble(
+                    pluginName = appState.pluginName,
+                    toolName = appState.toolName,
+                    isExecuting = true
+                )
+            }
+            appState is com.dark.tool_neuron.models.state.AppState.PluginExecutionComplete -> {
+                PluginExecutionCompleteStreamingBubble(
+                    pluginName = appState.pluginName,
+                    toolName = appState.toolName,
+                    success = appState.success,
+                    executionTimeMs = appState.executionTimeMs,
+                    errorMessage = appState.errorMessage
+                )
+            }
+            isImageGeneration -> {
+                ImageGenerationStreamingBubble(
+                    streamingImage = streamingImage,
+                    progress = imageProgress,
+                    step = imageStep
+                )
+            }
+            else -> {
+                AssistantStreamingBubble(text = assistantMessage)
+            }
         }
 
         Spacer(modifier = Modifier.height(rDp(16.dp)))
@@ -284,6 +308,157 @@ private fun ImageGenerationStreamingBubble(
                     contentDescription = "Generating image preview",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PluginExecutionStreamingBubble(
+    pluginName: String,
+    toolName: String,
+    isExecuting: Boolean = true
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(rDp(8.dp)),
+        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val infiniteTransition = rememberInfiniteTransition(label = "plugin_execution")
+            val rotation by infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 360f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(1500, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "rotation"
+            )
+
+            Icon(
+                painter = painterResource(R.drawable.tool),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(rDp(24.dp))
+                    .rotate(rotation),
+                tint = MaterialTheme.colorScheme.tertiary
+            )
+
+            Column {
+                Text(
+                    text = "Executing tool...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = "$pluginName • $toolName",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        LinearProgressIndicator(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(rDp(3.dp))
+                .clip(RoundedCornerShape(rDp(2.dp))),
+            color = MaterialTheme.colorScheme.tertiary
+        )
+    }
+}
+
+@Composable
+private fun PluginExecutionCompleteStreamingBubble(
+    pluginName: String,
+    toolName: String,
+    success: Boolean,
+    executionTimeMs: Long,
+    errorMessage: String?
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(rDp(8.dp)),
+        shape = RoundedCornerShape(rDp(12.dp)),
+        color = if (success) {
+            MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
+        } else {
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+        },
+        tonalElevation = rDp(2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(rDp(12.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = if (success) Icons.Default.CheckCircle else Icons.Default.Error,
+                    contentDescription = null,
+                    modifier = Modifier.size(rDp(24.dp)),
+                    tint = if (success) {
+                        MaterialTheme.colorScheme.tertiary
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    }
+                )
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (success) "Tool executed successfully" else "Tool execution failed",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (success) {
+                            MaterialTheme.colorScheme.onTertiaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        },
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "$pluginName • $toolName",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (success) {
+                            MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f)
+                        } else {
+                            MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
+                        }
+                    )
+                }
+
+                Text(
+                    text = "${executionTimeMs}ms",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (success) {
+                        MaterialTheme.colorScheme.tertiary
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    }
+                )
+            }
+
+            if (!success && errorMessage != null) {
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
+                )
+                Text(
+                    text = errorMessage,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(start = rDp(36.dp))
                 )
             }
         }
@@ -512,6 +687,9 @@ private fun AssistantMessageBubble(message: Messages) {
         when (message.content.contentType) {
             ContentType.Image -> {
                 ImageMessageBubble(message)
+            }
+            ContentType.PluginResult -> {
+                PluginResultCard(message = message)
             }
             else -> {
                 if (parsedMessage.thinkingContent != null) {

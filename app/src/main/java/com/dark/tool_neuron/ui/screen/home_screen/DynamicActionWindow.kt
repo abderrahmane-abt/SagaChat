@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -75,20 +76,18 @@ fun DynamicActionWindow(
     ) {
         Column {
             // Tab Row
-            TabRow(
+            SecondaryTabRow(
                 selectedTabIndex = selectedTab.ordinal,
                 containerColor = appState.getBackgroundColor(),
                 contentColor = appState.getContentColor(),
-                indicator = { tabPositions ->
-                    if (selectedTab.ordinal < tabPositions.size) {
-                        TabRowDefaults.SecondaryIndicator(
-                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab.ordinal]),
-                            height = rDp(3.dp),
-                            color = appState.getColor()
-                        )
-                    }
+                indicator = @Composable {
+                    TabRowDefaults.SecondaryIndicator(
+                        modifier = Modifier.tabIndicatorOffset(selectedTab.ordinal),
+                        height = rDp(3.dp),
+                        color = appState.getColor()
+                    )
                 }
-            ) {
+            ){
                 Tab(
                     selected = selectedTab == DynamicWindowTab.STATUS,
                     onClick = { selectedTab = DynamicWindowTab.STATUS },
@@ -158,12 +157,14 @@ private fun StatusTabContent(appState: AppState, chatViewModel: ChatViewModel) {
     ) {
         when (appState) {
             is AppState.Welcome -> WelcomeContent()
-            is AppState.NoModelLoaded -> NoModelLoadedContent(chatViewModel)
+            is AppState.NoModelLoaded -> NoModelLoadedContent()
             is AppState.ModelLoaded -> ModelLoadedContent(appState)
             is AppState.LoadingModel -> LoadingModelContent(appState)
             is AppState.GeneratingText -> GeneratingTextContent(appState, chatViewModel)
             is AppState.GeneratingImage -> GeneratingImageContent(appState, chatViewModel)
-            is AppState.GeneratingAudio -> GeneratingAudioContent(appState)
+            is AppState.GeneratingAudio -> GeneratingAudioContent()
+            is AppState.ExecutingPlugin -> ExecutingPluginContent(appState)
+            is AppState.PluginExecutionComplete -> PluginExecutionCompleteContent(appState)
             is AppState.Error -> ErrorContent(appState)
         }
     }
@@ -301,15 +302,15 @@ private fun ModelListItem(
     isLoaded: Boolean,
     onClickListener: (Model) -> Unit
 ) {
-    Card(
+    Surface(
         modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = if (isLoaded)
-                MaterialTheme.colorScheme.primary.copy(0.12f)
-            else
-                MaterialTheme.colorScheme.surfaceVariant.copy(0.5f)
-        ),
-        shape = RoundedCornerShape(rDp(10.dp))
+        shape = RoundedCornerShape(rDp(10.dp)),
+        color = if (isLoaded) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        },
+        tonalElevation = if (isLoaded) rDp(2.dp) else rDp(1.dp)
     ) {
         Row(
             modifier = Modifier
@@ -320,33 +321,70 @@ private fun ModelListItem(
         ) {
             Row(
                 modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(rDp(10.dp)),
+                horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    painter = painterResource(
-                        if (model.providerType.name == "GGUF") R.drawable.smart_temp_message
-                        else R.drawable.vl_models
-                    ),
-                    contentDescription = null,
-                    modifier = Modifier.size(rDp(20.dp)),
-                    tint = if (isLoaded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Surface(
+                    shape = RoundedCornerShape(rDp(8.dp)),
+                    color = if (isLoaded) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    }
+                ) {
+                    Icon(
+                        painter = painterResource(
+                            if (model.providerType.name == "GGUF") R.drawable.smart_temp_message
+                            else R.drawable.vl_models
+                        ),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(rDp(36.dp))
+                            .padding(rDp(8.dp)),
+                        tint = if (isLoaded) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = model.modelName,
                         style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = if (isLoaded) FontWeight.SemiBold else FontWeight.Normal,
-                        color = if (isLoaded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        fontWeight = if (isLoaded) FontWeight.SemiBold else FontWeight.Medium,
+                        color = if (isLoaded) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Text(
-                        text = model.providerType.name,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isLoaded) {
+                            Box(
+                                modifier = Modifier
+                                    .size(rDp(6.dp))
+                                    .background(
+                                        MaterialTheme.colorScheme.primary,
+                                        shape = androidx.compose.foundation.shape.CircleShape
+                                    )
+                            )
+                        }
+                        Text(
+                            text = model.providerType.name,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                alpha = if (isLoaded) 0.8f else 0.6f
+                            )
+                        )
+                    }
                 }
             }
 
@@ -460,113 +498,89 @@ private fun InfoRow(label: String, value: String) {
 
 @Composable
 private fun WelcomeContent() {
-    val appState by AppStateManager.appState.collectAsState()
-    Column(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(rDp(10.dp))
+        shape = RoundedCornerShape(rDp(12.dp)),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+        tonalElevation = rDp(2.dp)
     ) {
-        Icon(
-            painter = painterResource(R.drawable.user),
-            contentDescription = null,
-            modifier = Modifier.size(rDp(32.dp)),
-            tint = appState.getColor()
-        )
-        Text(
-            text = "Welcome",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = appState.getContentColor()
-        )
-        Text(
-            text = "Load a model to begin",
-            style = MaterialTheme.typography.bodySmall,
-            color = appState.getContentColor().copy(alpha = 0.7f)
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(rDp(24.dp)),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.user),
+                contentDescription = null,
+                modifier = Modifier.size(rDp(32.dp)),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = "Welcome",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = "Load a model to begin",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+            )
+        }
     }
 }
 
 @Composable
-private fun NoModelLoadedContent(chatViewModel: ChatViewModel) {
-    val appState by AppStateManager.appState.collectAsState()
-    Column(
+private fun NoModelLoadedContent() {
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(rDp(10.dp))
+        shape = RoundedCornerShape(rDp(12.dp)),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        tonalElevation = rDp(2.dp)
     ) {
-        Icon(
-            painter = painterResource(R.drawable.vl_models),
-            contentDescription = null,
-            modifier = Modifier.size(rDp(32.dp)),
-            tint = appState.getColor()
-        )
-        Text(
-            text = "No Model Loaded",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = appState.getContentColor()
-        )
-        Text(
-            text = "Switch to Models tab",
-            style = MaterialTheme.typography.bodySmall,
-            color = appState.getContentColor().copy(alpha = 0.7f)
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(rDp(24.dp)),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.vl_models),
+                contentDescription = null,
+                modifier = Modifier.size(rDp(32.dp)),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "No Model Loaded",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "Switch to Models tab to load a model",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+        }
     }
 }
+
 
 @Composable
 private fun ModelLoadedContent(state: AppState.ModelLoaded) {
-    val appState by AppStateManager.appState.collectAsState()
-    Row(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        shape = RoundedCornerShape(rDp(12.dp)),
+        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f),
+        tonalElevation = rDp(2.dp)
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f)
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.smart_temp_message),
-                contentDescription = null,
-                modifier = Modifier.size(rDp(28.dp)),
-                tint = appState.getColor()
-            )
-            Column {
-                Text(
-                    text = "Ready",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = appState.getContentColor().copy(alpha = 0.7f)
-                )
-                Text(
-                    text = state.modelName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = appState.getColor(),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-        Icon(
-            imageVector = Icons.Default.CheckCircle,
-            contentDescription = "Ready",
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(rDp(20.dp))
-        )
-    }
-}
-
-@Composable
-private fun LoadingModelContent(state: AppState.LoadingModel) {
-    val appState by AppStateManager.appState.collectAsState()
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(rDp(16.dp)),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -575,44 +589,109 @@ private fun LoadingModelContent(state: AppState.LoadingModel) {
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
-                CircularProgressIndicator(
-                    progress = { state.progress },
-                    modifier = Modifier.size(rDp(28.dp)),
-                    color = appState.getColor(),
-                    strokeWidth = rDp(3.dp)
+                Icon(
+                    painter = painterResource(R.drawable.smart_temp_message),
+                    contentDescription = null,
+                    modifier = Modifier.size(rDp(24.dp)),
+                    tint = MaterialTheme.colorScheme.tertiary
                 )
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Loading",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = appState.getContentColor().copy(alpha = 0.7f)
+                        text = "Model Ready",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.tertiary
                     )
                     Text(
                         text = state.modelName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = appState.getContentColor(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
             }
-            Text(
-                text = "${(state.progress * 100).toInt()}%",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = appState.getColor()
+
+            Icon(
+                imageVector = Icons.Default.CheckCircle,
+                contentDescription = "Ready",
+                tint = MaterialTheme.colorScheme.tertiary,
+                modifier = Modifier.size(rDp(20.dp))
             )
         }
-        LinearProgressIndicator(
-            progress = { state.progress },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(rDp(4.dp))
-                .clip(RoundedCornerShape(rDp(2.dp))),
-            color = appState.getColor(),
-            trackColor = appState.getColor().copy(alpha = 0.2f)
-        )
+    }
+}
+
+@Composable
+private fun LoadingModelContent(state: AppState.LoadingModel) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(rDp(12.dp)),
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f),
+        tonalElevation = rDp(2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(rDp(16.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    CircularProgressIndicator(
+                        progress = { state.progress },
+                        modifier = Modifier.size(rDp(24.dp)),
+                        color = MaterialTheme.colorScheme.secondary,
+                        strokeWidth = rDp(3.dp),
+                        trackColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Loading Model",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                        Text(
+                            text = state.modelName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(rDp(6.dp)),
+                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
+                ) {
+                    Text(
+                        text = "${(state.progress * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.padding(horizontal = rDp(8.dp), vertical = rDp(4.dp))
+                    )
+                }
+            }
+
+            LinearProgressIndicator(
+                progress = { state.progress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(rDp(4.dp))
+                    .clip(RoundedCornerShape(rDp(2.dp))),
+                color = MaterialTheme.colorScheme.secondary,
+                trackColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
+            )
+        }
     }
 }
 
@@ -775,7 +854,7 @@ private fun GeneratingImageContent(state: AppState.GeneratingImage, chatViewMode
 }
 
 @Composable
-private fun GeneratingAudioContent(state: AppState.GeneratingAudio) {
+private fun GeneratingAudioContent() {
     val appState by AppStateManager.appState.collectAsState()
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -796,6 +875,89 @@ private fun GeneratingAudioContent(state: AppState.GeneratingAudio) {
                 .clip(RoundedCornerShape(rDp(2.dp))),
             color = appState.getColor()
         )
+    }
+}
+
+@Composable
+private fun ExecutingPluginContent(state: AppState.ExecutingPlugin) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(rDp(12.dp)),
+        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f),
+        tonalElevation = rDp(2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(rDp(16.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    val infiniteTransition = rememberInfiniteTransition(label = "executing_plugin")
+                    val rotation by infiniteTransition.animateFloat(
+                        initialValue = 0f,
+                        targetValue = 360f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(1500, easing = LinearEasing),
+                            repeatMode = RepeatMode.Restart
+                        ),
+                        label = "rotation"
+                    )
+                    Icon(
+                        painter = painterResource(R.drawable.tool),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(rDp(24.dp))
+                            .rotate(rotation),
+                        tint = MaterialTheme.colorScheme.tertiary
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Executing Tool",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                        Text(
+                            text = state.toolName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(rDp(6.dp)),
+                    color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
+                ) {
+                    Text(
+                        text = state.pluginName,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.padding(horizontal = rDp(8.dp), vertical = rDp(4.dp))
+                    )
+                }
+            }
+
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(rDp(4.dp))
+                    .clip(RoundedCornerShape(rDp(2.dp))),
+                color = MaterialTheme.colorScheme.tertiary,
+                trackColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f)
+            )
+        }
     }
 }
 
@@ -829,33 +991,202 @@ private fun AudioWaveAnimation(color: androidx.compose.ui.graphics.Color) {
 }
 
 @Composable
-private fun ErrorContent(state: AppState.Error) {
-    Row(
+private fun PluginExecutionCompleteContent(state: AppState.PluginExecutionComplete) {
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
-        verticalAlignment = Alignment.Top
+        shape = RoundedCornerShape(rDp(12.dp)),
+        color = if (state.success) {
+            MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
+        } else {
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+        },
+        tonalElevation = rDp(2.dp)
     ) {
-        Icon(
-            painter = painterResource(R.drawable.error),
-            contentDescription = null,
-            modifier = Modifier.size(rDp(28.dp)),
-            tint = MaterialTheme.colorScheme.error
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Error",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.error
+        Column(
+            modifier = Modifier.padding(rDp(16.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = if (state.success) Icons.Default.CheckCircle else Icons.Default.Error,
+                        contentDescription = null,
+                        modifier = Modifier.size(rDp(24.dp)),
+                        tint = if (state.success) {
+                            MaterialTheme.colorScheme.tertiary
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        }
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (state.success) "Tool Completed" else "Tool Failed",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (state.success) {
+                                MaterialTheme.colorScheme.tertiary
+                            } else {
+                                MaterialTheme.colorScheme.error
+                            }
+                        )
+                        Text(
+                            text = state.toolName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (state.success) {
+                                MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f)
+                            } else {
+                                MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(rDp(6.dp)),
+                    color = if (state.success) {
+                        MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
+                    } else {
+                        MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
+                    }
+                ) {
+                    Text(
+                        text = "${state.executionTimeMs}ms",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (state.success) {
+                            MaterialTheme.colorScheme.tertiary
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        },
+                        modifier = Modifier.padding(horizontal = rDp(8.dp), vertical = rDp(4.dp))
+                    )
+                }
+            }
+
+            if (!state.success && state.errorMessage != null) {
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.error),
+                        contentDescription = null,
+                        modifier = Modifier.size(rDp(16.dp)),
+                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = state.errorMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            if (state.success) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(rDp(6.dp))
+                            .background(
+                                MaterialTheme.colorScheme.tertiary,
+                                shape = androidx.compose.foundation.shape.CircleShape
+                            )
+                    )
+                    Text(
+                        text = state.pluginName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.6f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ErrorContent(state: AppState.Error) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(rDp(12.dp)),
+        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
+        tonalElevation = rDp(2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(rDp(16.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Error,
+                    contentDescription = null,
+                    modifier = Modifier.size(rDp(24.dp)),
+                    tint = MaterialTheme.colorScheme.error
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Error",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    state.modelName?.let { model ->
+                        Text(
+                            text = model,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
             )
-            Spacer(modifier = Modifier.height(rDp(4.dp)))
-            Text(
-                text = state.message,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                verticalAlignment = Alignment.Top
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.error),
+                    contentDescription = null,
+                    modifier = Modifier.size(rDp(16.dp)),
+                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                )
+                Text(
+                    text = state.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }

@@ -56,7 +56,7 @@ class EncryptionManager(private val keyAlias: String) {
         val encrypted = cipher.doFinal(data)
 
         val duration = System.currentTimeMillis() - startTime
-        Log.d(TAG, "Encrypted ${data.size} bytes → ${encrypted.size} bytes (${duration}ms)")
+        //Log.d(TAG, "Encrypted ${data.size} bytes → ${encrypted.size} bytes (${duration}ms)")
 
         return EncryptedData(iv, encrypted)
     }

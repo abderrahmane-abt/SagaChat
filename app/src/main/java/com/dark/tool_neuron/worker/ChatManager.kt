@@ -114,6 +114,16 @@ class ChatManager {
         }
     }
 
+    suspend fun addMessage(chatId: String, message: Messages): Result<Messages> =
+        withContext(Dispatchers.IO) {
+            try {
+                VaultHelper.addMessage(chatId, message)
+                Result.success(message)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
     suspend fun updateMessage(chatId: String, message: Messages): Result<Unit> =
         withContext(Dispatchers.IO) {
             try {

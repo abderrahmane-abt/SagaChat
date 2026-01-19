@@ -2,6 +2,8 @@ package com.dark.tool_neuron.models.messages
 
 import android.graphics.Bitmap
 import androidx.compose.runtime.Immutable
+import com.dark.tool_neuron.models.plugins.PluginExecutionMetrics
+import com.dark.tool_neuron.models.plugins.PluginResultData
 import com.mp.ai_gguf.models.DecodingMetrics
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
@@ -17,7 +19,8 @@ data class Messages(
     val decodingMetrics: DecodingMetrics? = null,
     val imageMetrics: ImageGenerationMetrics? = null,
     val memoryMetrics: MemoryMetrics? = null,
-    val ragResults: List<RagResultItem>? = null
+    val ragResults: List<RagResultItem>? = null,
+    val pluginMetrics: PluginExecutionMetrics? = null
 )
 
 /**
@@ -38,7 +41,8 @@ data class MessageContent(
     val content: String = "",
     val imageData: String? = null, // Base64 encoded image
     val imagePrompt: String? = null, // Original prompt used for image
-    val imageSeed: Long? = null // Seed used for image generation
+    val imageSeed: Long? = null, // Seed used for image generation
+    val pluginResultData: PluginResultData? = null
 )
 
 @Serializable
@@ -65,7 +69,8 @@ enum class ContentType {
     None,
     Text,
     Image,
-    TextWithImage // For messages that contain both text and image
+    TextWithImage, // For messages that contain both text and image
+    PluginResult
 }
 
 @Serializable
