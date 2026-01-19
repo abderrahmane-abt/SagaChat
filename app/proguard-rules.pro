@@ -15,10 +15,37 @@
 -keep class com.dark.tool_neuron.util.** { *; }
 -keep class com.dark.plugins.api.** { *; }
 
+# Network data classes (for Retrofit)
+-keep class com.dark.tool_neuron.network.HuggingFaceRepoResponse { *; }
+-keep class com.dark.tool_neuron.network.HuggingFaceFileResponse { *; }
+
+# Worker data classes (for model parsing and loading)
+-keep class com.dark.tool_neuron.worker.DiffusionConfig { *; }
+-keep class com.dark.tool_neuron.worker.DiffusionInferenceParams { *; }
+-keep class com.dark.tool_neuron.worker.GGUFModelInfo { *; }
+-keep class com.dark.tool_neuron.worker.DiffusionModelInfo { *; }
+-keep class com.dark.tool_neuron.worker.ModelInfo { *; }
+-keep class * extends com.dark.tool_neuron.worker.ModelLoadResult { *; }
+
 # -- Data Classes & Enums --
 -keepclassmembers class com.dark.tool_neuron.models.** {
     *;
 }
+
+# Explicit model subdirectories (for better serialization protection)
+-keep class com.dark.tool_neuron.models.data.** { *; }
+-keep class com.dark.tool_neuron.models.engine_schema.** { *; }
+-keep class com.dark.tool_neuron.models.enums.** { *; }
+-keep class com.dark.tool_neuron.models.messages.** { *; }
+-keep class com.dark.tool_neuron.models.plugins.** { *; }
+-keep class com.dark.tool_neuron.models.state.** { *; }
+-keep class com.dark.tool_neuron.models.vault.** { *; }
+
+# Keep sealed classes and their subclasses
+-keep class * extends com.dark.tool_neuron.models.state.AppState { *; }
+-keep class * extends com.dark.tool_neuron.models.plugins.ToolState { *; }
+-keep class * extends com.dark.tool_neuron.service.ModelDownloadService$DownloadState { *; }
+
 -keepclassmembers enum * {
     <fields>;
     public static **[] values();
@@ -55,7 +82,6 @@
 -keep @kotlinx.serialization.Serializable class com.dark.tool_neuron.** { *; }
 
 # -- Jetpack Compose --
--keep class androidx.compose.** { *; }
 -keepclassmembers class ** {
     @androidx.compose.runtime.Composable *;
 }
@@ -94,7 +120,7 @@
 
 # Keep all callback interfaces and their methods (critical for JNI)
 -keep interface com.mp.ai_gguf.models.EmbeddingCallback { *; }
--keep interface com.mp.ai_gguf.models.GenerationCallback { *; }
+-keep interface com.mp.ai_gguf.models.StreamCallback { *; }
 -keep class com.mp.ai_gguf.models.EmbeddingResult { *; }
 -keep class com.mp.ai_gguf.models.** { *; }
 
@@ -121,6 +147,16 @@
 -keepclassmembers class com.dark.tool_neuron.neuron_example.** {
     *;
 }
+
+# Keep NeuronGraph serializable classes explicitly
+-keep class com.dark.tool_neuron.neuron_example.GraphSettings { *; }
+-keep class com.dark.tool_neuron.neuron_example.SourceType { *; }
+-keep class com.dark.tool_neuron.neuron_example.EdgeType { *; }
+-keep class com.dark.tool_neuron.neuron_example.NeuronEdge { *; }
+-keep class com.dark.tool_neuron.neuron_example.NodeMetadata { *; }
+-keep class com.dark.tool_neuron.neuron_example.NeuronNode { *; }
+-keep class com.dark.tool_neuron.neuron_example.QueryResult { *; }
+-keep class com.dark.tool_neuron.neuron_example.GraphStats { *; }
 
 # -- NeuronPacket Library --
 -keep class com.neuronpacket.** { *; }
@@ -178,6 +214,10 @@
 -dontwarn nl.siegmann.epublib.**
 -dontwarn org.slf4j.**
 -dontwarn org.xmlpull.**
+
+# Jsoup optional dependencies (RE2J regex library)
+-dontwarn com.google.re2j.Matcher
+-dontwarn com.google.re2j.Pattern
 
 # Log4j2 (suppress optional OSGi and aQute.bnd dependencies)
 -dontwarn aQute.bnd.annotation.spi.ServiceConsumer
