@@ -1,16 +1,22 @@
 package com.dark.tool_neuron.plugins.api
 
+import androidx.compose.runtime.Composable
 import com.dark.tool_neuron.models.plugins.PluginInfo
 import com.mp.ai_gguf.toolcalling.ToolCall
+import org.json.JSONObject
 
-class SuperPlugin {
+interface SuperPlugin {
 
-    fun getPluginInfo(): PluginInfo {
-        return PluginInfo()
-    }
+    // This Function is for Plugin Definition
+    fun getPluginInfo(): PluginInfo
 
-    fun executeTool(toolCall: ToolCall): Result<Any>{
-        return Result.success(Any())
-    }
+    //This Function is to execute the called Tool
+    fun executeTool(toolCall: ToolCall): Result<Any>
 
+    //This is a function that will use internal ViewModel For the Tool, and update the UI
+    @Composable
+    fun ToolCallUI()
+
+    @Composable
+    fun CacheToolUI(data: JSONObject)
 }

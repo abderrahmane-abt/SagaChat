@@ -95,6 +95,7 @@ dependencies {
     implementation(libs.xz)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging.interceptor)
+    implementation(libs.jsoup)
 
     // Document Parsing
     implementation(libs.poi)
