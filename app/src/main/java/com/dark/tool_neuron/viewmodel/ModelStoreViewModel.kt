@@ -108,6 +108,11 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
         _selectedTab.value = tab
     }
 
+    fun refreshModels() {
+        repository.invalidateCache()
+        loadModels()
+    }
+
     fun loadModels() {
         viewModelScope.launch {
             _isLoading.value = true

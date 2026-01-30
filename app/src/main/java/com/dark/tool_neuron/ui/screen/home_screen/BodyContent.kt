@@ -18,12 +18,10 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -41,6 +39,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dark.tool_neuron.R
+import com.dark.tool_neuron.models.ui.ActionIcon
+import com.dark.tool_neuron.models.ui.ActionItem
+import com.dark.tool_neuron.ui.components.MultiActionButton
 import com.dark.tool_neuron.models.messages.ContentType
 import com.dark.tool_neuron.models.messages.ImageGenerationMetrics
 import com.dark.tool_neuron.models.messages.MemoryMetrics
@@ -93,8 +94,6 @@ fun BodyContent(
     val currentGenerationType by chatViewModel.currentGenerationType.collectAsState()
     val currentRagResults by chatViewModel.currentRagResults.collectAsState()
     val appState by com.dark.tool_neuron.state.AppStateManager.appState.collectAsState()
-    val currentToolRound by chatViewModel.currentToolRound.collectAsState()
-    val maxToolRounds by chatViewModel.maxToolRounds.collectAsState()
     val currentToolName by chatViewModel.currentToolName.collectAsState()
     val ttsPlayingMsgId by chatViewModel.ttsPlayingMsgId.collectAsState()
     val ttsIsPlaying by chatViewModel.ttsIsPlaying.collectAsState()
@@ -129,8 +128,6 @@ fun BodyContent(
                     ragResults = currentRagResults,
                     appState = appState,
                     messages = messages,
-                    currentToolRound = currentToolRound,
-                    maxToolRounds = maxToolRounds,
                     currentToolName = currentToolName
                 )
             } else {
@@ -219,8 +216,6 @@ private fun StreamingView(
     ragResults: List<com.dark.tool_neuron.viewmodel.RagQueryDisplayResult> = emptyList(),
     appState: com.dark.tool_neuron.models.state.AppState,
     messages: List<Messages> = emptyList(),
-    currentToolRound: Int = 0,
-    maxToolRounds: Int = 5,
     currentToolName: String? = null
 ) {
     val scrollState = rememberScrollState()
@@ -228,9 +223,6 @@ private fun StreamingView(
     LaunchedEffect(assistantMessage, streamingImage, messages.size, appState) {
         scrollState.animateScrollTo(scrollState.maxValue)
     }
-
-    // Check if we're in multi-turn mode
-    val isMultiTurn = currentToolRound > 0 || messages.any { it.content.contentType == ContentType.PluginResult }
 
     Column(
         modifier = Modifier
@@ -254,15 +246,7 @@ private fun StreamingView(
             RagResultsDisplay(results = ragResults)
         }
 
-        // Show multi-turn round indicator
-        if (isMultiTurn && currentToolRound > 0) {
-            MultiTurnRoundIndicator(
-                currentRound = currentToolRound,
-                maxRounds = maxToolRounds
-            )
-        }
-
-        // Show accumulated tool results from previous rounds
+        // Show tool results
         messages.filter { it.content.contentType == ContentType.PluginResult }.forEach { msg ->
             PluginResultCard(message = msg)
         }
@@ -297,60 +281,6 @@ private fun StreamingView(
         }
 
         Spacer(modifier = Modifier.height(rDp(16.dp)))
-    }
-}
-
-@Composable
-private fun MultiTurnRoundIndicator(
-    currentRound: Int,
-    maxRounds: Int
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = rDp(12.dp)),
-        shape = RoundedCornerShape(rDp(8.dp)),
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-        tonalElevation = rDp(1.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = rDp(12.dp), vertical = rDp(8.dp)),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.tool),
-                    contentDescription = null,
-                    modifier = Modifier.size(rDp(14.dp)),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = "Multi-turn",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-
-            Surface(
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(rDp(4.dp))
-            ) {
-                Text(
-                    text = "Round $currentRound/$maxRounds",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = rDp(8.dp), vertical = rDp(2.dp))
-                )
-            }
-        }
     }
 }
 
@@ -833,19 +763,6 @@ private fun AssistantMessageBubble(
             }
         }
 
-        // Action row: TTS speak + Copy (only for text messages with content)
-        if (isTextContent && parsedMessage.actualContent.isNotEmpty()) {
-            MessageActionRow(
-                message = message,
-                textContent = parsedMessage.actualContent,
-                isPlaying = isThisMessagePlaying,
-                isSynthesizing = isThisMessageSynthesizing,
-                ttsModelLoaded = ttsModelLoaded,
-                onSpeak = onSpeak,
-                onStopTTS = onStopTTS
-            )
-        }
-
         if (showMetrics) {
             message.decodingMetrics?.let { metrics ->
                 MetricsDisplay(metrics, message.memoryMetrics)
@@ -863,9 +780,23 @@ private fun AssistantMessageBubble(
                 MemoryMetricsDisplay(metrics)
             }
         }
+
+        // Action row: TTS speak + Copy (only for text messages with content)
+        if (isTextContent && parsedMessage.actualContent.isNotEmpty()) {
+            MessageActionRow(
+                message = message,
+                textContent = parsedMessage.actualContent,
+                isPlaying = isThisMessagePlaying,
+                isSynthesizing = isThisMessageSynthesizing,
+                ttsModelLoaded = ttsModelLoaded,
+                onSpeak = onSpeak,
+                onStopTTS = onStopTTS
+            )
+        }
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun MessageActionRow(
     message: Messages,
@@ -886,68 +817,49 @@ private fun MessageActionRow(
         }
     }
 
+    val actions = buildList {
+        // TTS Speak / Stop action
+        if (isPlaying || isSynthesizing) {
+            add(ActionItem(
+                icon = ActionIcon.Vector(Icons.Default.Stop),
+                onClick = { onStopTTS() },
+                contentDescription = "Stop"
+            ))
+        } else {
+            add(ActionItem(
+                icon = ActionIcon.Resource(R.drawable.volume),
+                onClick = { if (ttsModelLoaded) onSpeak(message) },
+                contentDescription = "Speak"
+            ))
+        }
+
+        // Copy action
+        if (showCopied) {
+            add(ActionItem(
+                icon = ActionIcon.Vector(Icons.Default.CheckCircle),
+                onClick = {},
+                contentDescription = "Copied"
+            ))
+        } else {
+            add(ActionItem(
+                icon = ActionIcon.Resource(R.drawable.copy),
+                onClick = {
+                    clipboardManager.setText(AnnotatedString(textContent))
+                    showCopied = true
+                },
+                contentDescription = "Copy"
+            ))
+        }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(4.dp)),
+            .padding(horizontal = rDp(12.dp)),
         horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // TTS Speak / Stop button
-        if (ttsModelLoaded) {
-            if (isPlaying || isSynthesizing) {
-                // Stop button
-                IconButton(
-                    onClick = { onStopTTS() },
-                    modifier = Modifier.size(rDp(32.dp))
-                ) {
-                    if (isSynthesizing && !isPlaying) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(rDp(16.dp)),
-                            strokeWidth = rDp(2.dp),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Stop,
-                            contentDescription = "Stop",
-                            modifier = Modifier.size(rDp(18.dp)),
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-            } else {
-                // Speak button
-                IconButton(
-                    onClick = { onSpeak(message) },
-                    modifier = Modifier.size(rDp(32.dp))
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                        contentDescription = "Speak",
-                        modifier = Modifier.size(rDp(18.dp)),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-
-        // Copy button
-        IconButton(
-            onClick = {
-                clipboardManager.setText(AnnotatedString(textContent))
-                showCopied = true
-            },
-            modifier = Modifier.size(rDp(32.dp))
-        ) {
-            Icon(
-                imageVector = if (showCopied) Icons.Default.CheckCircle else Icons.Default.ContentCopy,
-                contentDescription = if (showCopied) "Copied" else "Copy",
-                modifier = Modifier.size(rDp(18.dp)),
-                tint = if (showCopied) MaterialTheme.colorScheme.primary
-                       else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+        MultiActionButton(actions = actions)
 
         if (showCopied) {
             Text(
@@ -961,7 +873,10 @@ private fun MessageActionRow(
 
 @Composable
 private fun ImageMessageBubble(message: Messages) {
-    var isImageRevealed by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val appSettingsDataStore = remember { com.dark.tool_neuron.data.AppSettingsDataStore(context) }
+    val imageBlurEnabled by appSettingsDataStore.imageBlurEnabled.collectAsState(initial = true)
+    var isImageRevealed by remember(imageBlurEnabled) { mutableStateOf(!imageBlurEnabled) }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(rDp(8.dp)),

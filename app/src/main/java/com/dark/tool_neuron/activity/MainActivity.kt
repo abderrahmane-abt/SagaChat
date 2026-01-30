@@ -28,6 +28,7 @@ import com.dark.tool_neuron.engine.EmbeddingEngine
 import com.dark.tool_neuron.ui.screen.EmbeddingSetupScreen
 import com.dark.tool_neuron.ui.screen.ModelConfigEditorScreen
 import com.dark.tool_neuron.ui.screen.ModelStoreScreen
+import com.dark.tool_neuron.ui.screen.SettingsScreen
 import com.dark.tool_neuron.ui.screen.TermsAndConditionsScreen
 import com.dark.tool_neuron.ui.screen.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.screen.memory.VaultDashboard
@@ -120,6 +121,7 @@ sealed class Screen(val route: String) {
     object Chat : Screen("chat")
     object Store : Screen("store")
     object Editor : Screen("editor")
+    object Settings : Screen("settings")
     object VaultManager: Screen("vault_manager")
 }
 
@@ -170,6 +172,9 @@ fun AppNavigation(
                 onModelEditor = {
                     navController.navigate(Screen.Editor.route)
                 },
+                onSettingsClick = {
+                    navController.navigate(Screen.Settings.route)
+                },
                 onStoreButtonClicked = {
                     navController.navigate(Screen.Store.route)
                 },
@@ -187,8 +192,8 @@ fun AppNavigation(
             })
         }
 
-        composable(Screen.Store.route) {
-            ModelStoreScreen(onNavigateBack = {
+        composable(Screen.Settings.route) {
+            SettingsScreen(onNavigateBack = {
                 navController.popBackStack()
             })
         }

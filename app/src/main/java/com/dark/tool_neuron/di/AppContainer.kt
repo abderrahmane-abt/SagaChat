@@ -41,7 +41,7 @@ object AppContainer {
 
         llmModelViewModelFactory = LLMModelViewModelFactory(application, modelRepository)
         chatListViewModelFactory = ChatListViewModelFactory(chatManager)
-        chatViewModelFactory = ChatViewModelFactory(chatManager, generationManager)
+        chatViewModelFactory = ChatViewModelFactory(context, chatManager, generationManager)
 
         initVault(context)
     }

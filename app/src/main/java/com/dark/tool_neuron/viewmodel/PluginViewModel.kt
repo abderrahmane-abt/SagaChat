@@ -37,6 +37,9 @@ class PluginViewModel @Inject constructor() : ViewModel() {
     val multiTurnEnabled: StateFlow<Boolean> = PluginManager.multiTurnEnabled
     val toolCallingConfig: StateFlow<ToolCallingConfig> = PluginManager.toolCallingConfig
 
+    // Whether the loaded model supports tool calling
+    val isToolCallingModelLoaded: StateFlow<Boolean> = PluginManager.isToolCallingModelLoaded
+
     // ==================== UI Controls ====================
 
     fun showPluginOverlay() {

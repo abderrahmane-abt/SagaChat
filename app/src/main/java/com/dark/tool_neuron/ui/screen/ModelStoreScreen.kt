@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
@@ -51,14 +52,16 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -77,6 +80,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -143,6 +147,11 @@ fun ModelStoreScreen(
                     )
                 }, actions = {
                     if (selectedTab == StoreTab.MODELS) {
+                        ActionButton(
+                            onClickListener = { viewModel.refreshModels() },
+                            icon = Icons.Default.Refresh,
+                            contentDescription = "Refresh"
+                        )
                         ActionButton(
                             onClickListener = { showSearch = true },
                             icon = Icons.Default.Search,
@@ -227,6 +236,7 @@ fun ModelStoreScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ModelsTab(
     models: List<HuggingFaceModel>,
@@ -247,7 +257,7 @@ private fun ModelsTab(
                 Box(
                     modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator()
+                    LoadingIndicator()
                 }
             }
 
@@ -306,20 +316,30 @@ private fun ModelsTab(
             }
 
             else -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(rDp(16.dp)),
-                    verticalArrangement = Arrangement.spacedBy(rDp(12.dp)),
-                    flingBehavior = ScrollableDefaults.flingBehavior()
-                ) {
-                    items(
-                        items = models, key = { model -> model.id }) { model ->
-                        ModelCard(
-                            model = model,
-                            isInstalled = installedModels.contains(model.name),
-                            downloadState = downloadStates[model.id],
-                            onDownload = { onDownload(model) },
-                            onCancelDownload = { onCancelDownload(model.id) }
+                Box(modifier = Modifier.fillMaxSize()) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .then(if (isLoading) Modifier.blur(rDp(6.dp)) else Modifier),
+                        contentPadding = PaddingValues(rDp(16.dp)),
+                        verticalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                        flingBehavior = ScrollableDefaults.flingBehavior()
+                    ) {
+                        items(
+                            items = models, key = { model -> model.id }) { model ->
+                            ModelCard(
+                                model = model,
+                                isInstalled = installedModels.contains(model.name),
+                                downloadState = downloadStates[model.id],
+                                onDownload = { onDownload(model) },
+                                onCancelDownload = { onCancelDownload(model.id) }
+                            )
+                        }
+                    }
+
+                    if (isLoading) {
+                        LoadingIndicator(
+                            modifier = Modifier.align(Alignment.Center)
                         )
                     }
                 }
@@ -411,6 +431,7 @@ private fun InstalledModelsTab(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun InstalledModelCard(
     model: Model,
@@ -466,9 +487,8 @@ private fun InstalledModelCard(
                             modifier = Modifier.size(rDp(40.dp)),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(rDp(24.dp)),
-                                strokeWidth = rDp(2.dp)
+                            LoadingIndicator(
+                                modifier = Modifier.size(rDp(24.dp))
                             )
                         }
                     } else {
@@ -719,6 +739,7 @@ private fun DeviceInfoRow(label: String, value: String) {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun RepositoryCard(
     repository: HFModelRepository,
@@ -774,9 +795,8 @@ private fun RepositoryCard(
                             )
                         }
                         is ValidationResult.Checking -> {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(rDp(18.dp)),
-                                strokeWidth = rDp(2.dp)
+                            LoadingIndicator(
+                                modifier = Modifier.size(rDp(18.dp))
                             )
                         }
                         null -> {}

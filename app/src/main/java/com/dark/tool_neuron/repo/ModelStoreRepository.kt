@@ -333,6 +333,11 @@ class ModelStoreRepository(private val context: Context) {
                 if (response.isSuccessful) {
                     val files = response.body() ?: emptyList()
 
+                    // Detect if this repo supports tool calling (Qwen/ChatML models)
+                    val supportsToolCalling = repo.repoPath.contains("qwen", ignoreCase = true) ||
+                            repo.repoPath.contains("Qwen", ignoreCase = false) ||
+                            repo.name.contains("qwen", ignoreCase = true)
+
                     files.filter { it.path.endsWith(".gguf") }.forEach { file ->
                             val fileName = file.path.substringAfterLast("/")
                             val sizeStr = formatFileSize(file.size ?: 0)
@@ -340,6 +345,11 @@ class ModelStoreRepository(private val context: Context) {
                             // Extract quantization type from filename
                             val quantType =
                                 fileName.substringAfterLast("-").removeSuffix(".gguf").uppercase()
+
+                            val baseTags = mutableListOf("GGUF", quantType, repo.name)
+                            if (supportsToolCalling) {
+                                baseTags.add("Tool Calling")
+                            }
 
                             models.add(
                                 HuggingFaceModel(
@@ -352,7 +362,7 @@ class ModelStoreRepository(private val context: Context) {
                                     isZip = false,
                                     runOnCpu = false,
                                     textEmbeddingSize = 0,
-                                    tags = listOf("GGUF", quantType, repo.name),
+                                    tags = baseTags,
                                     requiresNPU = false,
                                     repositoryUrl = repo.repoPath
                                 )

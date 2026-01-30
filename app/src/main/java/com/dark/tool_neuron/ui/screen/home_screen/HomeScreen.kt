@@ -28,7 +28,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -68,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.R
+import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.activity.ModelLoadingActivity
 import com.dark.tool_neuron.activity.RagActivity
 import com.dark.tool_neuron.ui.components.ActionButton
@@ -78,10 +78,7 @@ import com.dark.tool_neuron.ui.components.ModeToggleSwitch
 import com.dark.tool_neuron.ui.components.ModelListItem
 import com.dark.tool_neuron.ui.components.PluginOverlayBottomSheet
 import com.dark.tool_neuron.ui.components.RagOverlayBottomSheet
-import com.dark.tool_neuron.ui.components.TTSSettingsBottomSheet
 import com.dark.tool_neuron.ui.theme.rDp
-import com.dark.tool_neuron.tts.TTSDataStore
-import com.dark.tool_neuron.tts.TTSSettings
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
 import com.dark.tool_neuron.viewmodel.PluginViewModel
@@ -95,6 +92,7 @@ import kotlinx.coroutines.launch
 fun HomeScreen(
     onStoreButtonClicked: () -> Unit,
     onModelEditor: () -> Unit,
+    onSettingsClick: () -> Unit,
     onVaultManagerClick: () -> Unit,
     chatViewModel: ChatViewModel,
     llmModelViewModel: LLMModelViewModel
@@ -142,7 +140,12 @@ fun HomeScreen(
                 BottomBar(
                     onModelEditor = {
                         onModelEditor()
-                    }, chatViewModel = chatViewModel, llmModelViewModel = llmModelViewModel
+                    },
+                    onSettingsClick = {
+                        onSettingsClick()
+                    },
+                    chatViewModel = chatViewModel,
+                    llmModelViewModel = llmModelViewModel
                 )
             }) { paddingValues ->
             BodyContent(paddingValues, chatViewModel, llmModelViewModel = llmModelViewModel)
@@ -207,6 +210,7 @@ fun TopBar(
 @Composable
 fun BottomBar(
     onModelEditor: () -> Unit,
+    onSettingsClick: () -> Unit,
     chatViewModel: ChatViewModel = hiltViewModel(),
     llmModelViewModel: LLMModelViewModel = hiltViewModel(),
     ragViewModel: RagViewModel = hiltViewModel(),
@@ -239,13 +243,11 @@ fun BottomBar(
     val grammarMode by pluginViewModel.grammarMode.collectAsStateWithLifecycle()
     val multiTurnEnabled by pluginViewModel.multiTurnEnabled.collectAsStateWithLifecycle()
     val toolCallingConfig by pluginViewModel.toolCallingConfig.collectAsStateWithLifecycle()
+    val isToolCallingModelLoaded by pluginViewModel.isToolCallingModelLoaded.collectAsStateWithLifecycle()
 
-    // TTS State
-    val showTtsSettings by chatViewModel.showTtsSettings.collectAsStateWithLifecycle()
-    val ttsModelLoaded by chatViewModel.ttsModelLoaded.collectAsStateWithLifecycle()
-    val ttsAvailableVoices by chatViewModel.ttsAvailableVoices.collectAsStateWithLifecycle()
-    val ttsDataStore = remember { TTSDataStore(context) }
-    val ttsSettings by ttsDataStore.settings.collectAsStateWithLifecycle(initialValue = TTSSettings())
+    // App settings
+    val appSettingsDataStore = remember { com.dark.tool_neuron.data.AppSettingsDataStore(context) }
+    val toolCallingEnabled by appSettingsDataStore.toolCallingEnabled.collectAsStateWithLifecycle(initialValue = true)
 
     // Coroutine scope for RAG queries
     val scope = rememberCoroutineScope()
@@ -338,26 +340,6 @@ fun BottomBar(
         onMaxTokensPerTurnChange = { pluginViewModel.setMaxTokensPerTurn(it) }
     )
 
-    // Sync TTS settings to ChatViewModel for use in speak
-    LaunchedEffect(ttsSettings) {
-        chatViewModel.updateTtsSettings(ttsSettings)
-    }
-
-    // TTS Settings Overlay
-    TTSSettingsBottomSheet(
-        show = showTtsSettings,
-        settings = ttsSettings,
-        isModelLoaded = ttsModelLoaded,
-        availableVoices = ttsAvailableVoices,
-        onDismiss = { chatViewModel.hideTtsSettings() },
-        onVoiceChange = { scope.launch { ttsDataStore.updateVoice(it) } },
-        onSpeedChange = { scope.launch { ttsDataStore.updateSpeed(it) } },
-        onStepsChange = { scope.launch { ttsDataStore.updateSteps(it) } },
-        onLanguageChange = { scope.launch { ttsDataStore.updateLanguage(it) } },
-        onAutoSpeakToggle = { scope.launch { ttsDataStore.updateAutoSpeak(it) } },
-        onUseNNAPIToggle = { scope.launch { ttsDataStore.updateUseNNAPI(it) } }
-    )
-
     Column {
         AnimatedVisibility(showModelList) {
             LazyColumn(
@@ -438,7 +420,7 @@ fun BottomBar(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(rDp(Standards.ActionIconSpace)),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Mode toggle switch (Text/Image)
@@ -456,14 +438,14 @@ fun BottomBar(
                         modifier = Modifier.padding(start = rDp(12.dp))
                     )
 
+                    // Settings
                     ActionButton(
-                        onClickListener = {
-                            onModelEditor()
-                        },
+                        onClickListener = { onSettingsClick() },
                         icon = Icons.Outlined.Settings,
                         modifier = Modifier.padding(start = rDp(6.dp))
                     )
 
+                    // Model selector
                     ActionToggleButton(
                         onCheckedChange = {
                             if (showModelList) {
@@ -487,31 +469,21 @@ fun BottomBar(
                         icon = R.drawable.rag
                     )
 
-                    // Plugin Button
-                    ActionToggleButton(
-                        onCheckedChange = {
-                            if (showPluginOverlay) {
-                                pluginViewModel.hidePluginOverlay()
-                            } else {
-                                pluginViewModel.showPluginOverlay()
-                            }
-                        },
-                        checked = showPluginOverlay,
-                        icon = R.drawable.tools // Using settings icon as placeholder
-                    )
-
-                    // TTS Button
-                    ActionToggleButton(
-                        onCheckedChange = {
-                            if (showTtsSettings) {
-                                chatViewModel.hideTtsSettings()
-                            } else {
-                                chatViewModel.showTtsSettings()
-                            }
-                        },
-                        checked = showTtsSettings,
-                        icon = Icons.AutoMirrored.Filled.VolumeUp
-                    )
+                    // Plugin Button (hidden when tool calling disabled in settings)
+                    if (toolCallingEnabled) {
+                        ActionToggleButton(
+                            onCheckedChange = {
+                                if (showPluginOverlay) {
+                                    pluginViewModel.hidePluginOverlay()
+                                } else {
+                                    pluginViewModel.showPluginOverlay()
+                                }
+                            },
+                            checked = showPluginOverlay,
+                            enabled = isToolCallingModelLoaded,
+                            icon = R.drawable.tools
+                        )
+                    }
 
                     Spacer(Modifier.weight(1f))
 

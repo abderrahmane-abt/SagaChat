@@ -43,6 +43,19 @@ object PluginManager {
     private val _multiTurnEnabled = MutableStateFlow(true)
     val multiTurnEnabled: StateFlow<Boolean> = _multiTurnEnabled.asStateFlow()
 
+    // Whether the currently loaded model supports tool calling (Qwen/ChatML)
+    private val _isToolCallingModelLoaded = MutableStateFlow(false)
+    val isToolCallingModelLoaded: StateFlow<Boolean> = _isToolCallingModelLoaded.asStateFlow()
+
+    /**
+     * Update whether the loaded model supports tool calling.
+     * Should be called when a model is loaded or unloaded.
+     */
+    fun setToolCallingModelLoaded(modelName: String?) {
+        _isToolCallingModelLoaded.value = modelName != null &&
+                modelName.contains("qwen", ignoreCase = true)
+    }
+
     /**
      * Register a plugin
      */

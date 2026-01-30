@@ -41,16 +41,18 @@ object TTSManager {
     private val _availableVoices = MutableStateFlow<List<String>>(emptyList())
     val availableVoices: StateFlow<List<String>> = _availableVoices.asStateFlow()
 
-    fun init(appContext: Context) {
+    fun init(appContext: Context, autoLoad: Boolean = true) {
         context = appContext.applicationContext
         tts = SupertonicTTS(appContext)
         Log.d(TAG, "TTSManager initialized")
 
-        // Auto-load model if it exists in the models directory
-        val modelsDir = File(appContext.filesDir, "models/$TTS_MODEL_DIR_NAME")
-        if (modelsDir.exists() && modelsDir.isDirectory) {
-            val success = loadModel(modelsDir.absolutePath)
-            Log.d(TAG, "Auto-loaded TTS model: $success")
+        if (autoLoad) {
+            // Auto-load model if it exists in the models directory
+            val modelsDir = File(appContext.filesDir, "models/$TTS_MODEL_DIR_NAME")
+            if (modelsDir.exists() && modelsDir.isDirectory) {
+                val success = loadModel(modelsDir.absolutePath)
+                Log.d(TAG, "Auto-loaded TTS model: $success")
+            }
         }
     }
 

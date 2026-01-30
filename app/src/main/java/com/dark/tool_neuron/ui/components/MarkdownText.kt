@@ -59,7 +59,7 @@ fun MarkdownText(
     val parsedContent = remember(text) { parseMarkdown(text) }
 
     Column(
-        modifier = modifier.padding(horizontal = rDp(16.dp)),
+        modifier = modifier.padding(horizontal = rDp(8.dp)),
         verticalArrangement = Arrangement.spacedBy(rDp(10.dp))
     ) {
         parsedContent.forEach { element ->
@@ -726,7 +726,7 @@ private fun CodeBlockExpanded(code: String, language: String) {
             Row(horizontalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
                 ActionButton(
                     onClickListener = {
-                        val clip = ClipData.newPlainText("label", "Your text to copy here")
+                        val clip = ClipData.newPlainText(language, code)
                         clipboardManager.setPrimaryClip(clip)
                         Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
                     },

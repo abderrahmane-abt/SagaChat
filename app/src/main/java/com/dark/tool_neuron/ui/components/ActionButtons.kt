@@ -1,8 +1,10 @@
 package com.dark.tool_neuron.ui.components
 
 import android.annotation.SuppressLint
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -25,17 +27,22 @@ import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.IconToggleButtonColors
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.global.Standards
+import com.dark.tool_neuron.models.ui.ActionIcon
+import com.dark.tool_neuron.models.ui.ActionItem
 import com.dark.tool_neuron.ui.theme.rDp
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -137,6 +144,65 @@ fun ActionButton(
     }
 }
 
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@SuppressLint("ModifierParameter")
+@Composable
+fun MultiActionButton(
+    actions: List<ActionItem>,
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(rDp(6.dp)),
+    containerColor: Color = MaterialTheme.colorScheme.primary.copy(0.06f),
+    contentColor: Color = MaterialTheme.colorScheme.primary,
+    dividerColor: Color = MaterialTheme.colorScheme.outline.copy(0.3f)
+) {
+    Surface(
+        shape = shape,
+        color = containerColor,
+        modifier = modifier.height(rDp(Standards.ActionIconSize))
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            actions.forEachIndexed { index, action ->
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(rDp(Standards.ActionIconSize))
+                        .clickable { action.onClick() }
+                ) {
+                    when (action.icon) {
+                        is ActionIcon.Vector -> Icon(
+                            imageVector = action.icon.imageVector,
+                            contentDescription = action.contentDescription,
+                            tint = contentColor,
+                            modifier = Modifier.padding(rDp(Standards.ActionIconPadding))
+                        )
+                        is ActionIcon.Resource -> Icon(
+                            painter = painterResource(action.icon.resId),
+                            contentDescription = action.contentDescription,
+                            tint = contentColor,
+                            modifier = Modifier.padding(rDp(Standards.ActionIconPadding))
+                        )
+                    }
+                }
+
+                // Add divider between items (not after the last one)
+                if (index < actions.lastIndex) {
+                    VerticalDivider(
+                        modifier = Modifier
+                            .height(rDp(Standards.ActionIconSize - 16.dp)),
+                        thickness = rDp(1.dp),
+                        color = dividerColor
+                    )
+                }
+            }
+        }
+    }
+}
+
+
+
 @SuppressLint("ModifierParameter")
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -202,6 +268,7 @@ fun ActionToggleButton(
     icon: Int,
     contentDescription: String = "Description",
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     shape: Shape = MaterialShapes.Square.toShape(),
     colors: IconToggleButtonColors = IconButtonDefaults.filledIconToggleButtonColors(
         containerColor = MaterialTheme.colorScheme.primary.copy(0.06f),
@@ -212,6 +279,7 @@ fun ActionToggleButton(
     FilledIconToggleButton(
         checked = checked,
         onCheckedChange = onCheckedChange,
+        enabled = enabled,
         colors = colors,
         shape = shape,
         modifier = modifier.size(rDp(Standards.ActionIconSize))
@@ -229,9 +297,10 @@ fun ActionToggleButton(
 fun ActionToggleButton(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    icon: ImageVector,  // Add this overload
+    icon: ImageVector,
     contentDescription: String = "Description",
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     shape: Shape = MaterialShapes.Square.toShape(),
     colors: IconToggleButtonColors = IconButtonDefaults.filledIconToggleButtonColors(
         containerColor = MaterialTheme.colorScheme.primary.copy(0.06f),
@@ -242,6 +311,7 @@ fun ActionToggleButton(
     FilledIconToggleButton(
         checked = checked,
         onCheckedChange = onCheckedChange,
+        enabled = enabled,
         colors = colors,
         shape = shape,
         modifier = modifier.size(rDp(Standards.ActionIconSize))

@@ -95,7 +95,8 @@ class LLMModelViewModel @Inject constructor(
             _currentModelType.value = ProviderType.GGUF
             AppStateManager.setModelLoaded(model.modelName)
 
-            // Sync plugin tools with LLM after model loads
+            // Update tool calling model state and sync tools
+            com.dark.tool_neuron.plugins.PluginManager.setToolCallingModelLoaded(model.modelName)
             com.dark.tool_neuron.plugins.PluginManager.syncToolsWithLLM()
         } else {
             AppStateManager.setError("Failed to load GGUF model")
@@ -168,6 +169,7 @@ class LLMModelViewModel @Inject constructor(
 
             _currentModelID.value = ""
             _currentModelType.value = null
+            com.dark.tool_neuron.plugins.PluginManager.setToolCallingModelLoaded(null)
         } catch (e: Exception) {
             e.printStackTrace()
         }
