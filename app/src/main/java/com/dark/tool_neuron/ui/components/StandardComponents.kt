@@ -165,7 +165,7 @@ fun SwitchRow(
             }
 
             // Switch
-            CuteSwitch(
+            ActionSwitch(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
                 enabled = enabled

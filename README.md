@@ -2,9 +2,9 @@
 
 ### Privacy-First AI Assistant for Android - Complete On-Device Intelligence
 
-[![Platform](https://img.shields.io/badge/Platform-Android_8.0%2B-3DDC84?logo=android&logoColor=white)](https://github.com/Siddhesh2377/ToolNeuron)
+[![Platform](https://img.shields.io/badge/Platform-Android_12%2B-3DDC84?logo=android&logoColor=white)](https://github.com/Siddhesh2377/ToolNeuron)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-1.1.2-blue)](https://github.com/Siddhesh2377/ToolNeuron/releases)
+[![Release](https://img.shields.io/badge/Release-1.2.0-blue)](https://github.com/Siddhesh2377/ToolNeuron/releases)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/mVPwHDhrAP)
 
 <p align="left">
@@ -15,7 +15,7 @@
   </a>
 </p>
 
-ToolNeuron is the most advanced offline-first AI assistant for Android, featuring complete on-device processing with enterprise-grade encryption, intelligent document understanding through RAG (Retrieval-Augmented Generation), and sophisticated memory management. Your data never leaves your device. No cloud dependencies. No subscriptions. True digital sovereignty.
+ToolNeuron is the most advanced offline-first AI assistant for Android, featuring complete on-device processing with enterprise-grade encryption, intelligent document understanding through RAG (Retrieval-Augmented Generation), text-to-speech, an extensible plugin system, and sophisticated memory management. Your data never leaves your device. No cloud dependencies. No subscriptions. True digital sovereignty.
 
 [Download APK](https://github.com/Siddhesh2377/ToolNeuron/releases) ·
 [Join Discord](https://discord.gg/mVPwHDhrAP) ·
@@ -33,6 +33,10 @@ ToolNeuron is the most advanced offline-first AI assistant for Android, featurin
 
 **Offline-First**: Works completely offline after model downloads. No internet required for AI inference.
 
+**On-Device TTS**: Text-to-speech with 10 voices, 5 languages, adjustable speed and quality — all processed locally.
+
+**Plugin System**: Built-in web search, calculator, and developer utilities — extensible with custom plugins.
+
 **Advanced Features**: Function calling, multi-modal generation, customizable inference parameters, and concurrent model downloads.
 
 ---
@@ -42,12 +46,13 @@ ToolNeuron is the most advanced offline-first AI assistant for Android, featurin
 - [Features Overview](#features-overview)
 - [Text Generation](#text-generation)
 - [Image Generation](#image-generation)
+- [Text-to-Speech (TTS)](#text-to-speech-tts)
+- [Plugin System](#plugin-system)
 - [RAG System (Document Intelligence)](#rag-system-document-intelligence)
 - [Memory Vault (Secure Storage)](#memory-vault-secure-storage)
 - [Document Processing](#document-processing)
 - [Model Management](#model-management)
 - [Privacy & Security](#privacy--security)
-- [Coming Soon](#coming-soon)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Technical Details](#technical-details)
@@ -66,6 +71,8 @@ ToolNeuron is the most advanced offline-first AI assistant for Android, featurin
 |---------|-------------|
 | **Text Generation** | Run any GGUF model locally (Llama, Mistral, Gemma, Phi, etc.) with streaming output |
 | **Image Generation** | Stable Diffusion 1.5 with censored & uncensored variants, inpainting support |
+| **Text-to-Speech** | On-device TTS with 10 voices, 5 languages, adjustable speed and denoising steps |
+| **Plugin System** | Web search, calculator, and dev utils plugins with tool calling integration |
 | **RAG System** | Document injection with semantic search, encrypted knowledge bases, multi-source support |
 | **Memory Vault** | Hardware-backed AES-256-GCM encryption, WAL crash recovery, LZ4 compression |
 | **Document Processing** | Parse PDF, Word (.doc/.docx), Excel (.xls/.xlsx), EPUB, and plain text |
@@ -138,6 +145,67 @@ onMetrics(metrics: Metrics)      // Performance metrics
 - **Pony Model Support**: Specialized anime/cartoon models
 - **Backend Control**: Start, stop, restart generation backend
 - **State Monitoring**: Real-time backend and generation state tracking
+
+---
+
+## Text-to-Speech (TTS)
+
+On-device speech synthesis powered by Supertonic TTS. All processing happens locally — no cloud APIs, no data leaves your device.
+
+### Voice Options
+- **10 Voices**: 5 female (F1–F5) and 5 male (M1–M5)
+- **5 Languages**: English, Korean, Spanish, Portuguese, French
+- **Speed Control**: 0.5x to 2.0x playback speed
+- **Denoising Steps**: 1–8 steps (higher = better quality, slower synthesis)
+
+### Features
+- **Auto-speak**: Automatically read assistant responses aloud after generation
+- **On-demand Loading**: TTS model loads automatically on first use if not preloaded
+- **Load on App Start**: Optionally preload the TTS model at launch for instant speech
+- **NNAPI Acceleration**: Hardware acceleration on supported devices
+- **Playback Controls**: Play, pause, resume, stop with real-time synthesis progress
+- **Per-message TTS**: Tap the speak button on any assistant message to hear it
+
+### Settings
+All TTS preferences are persisted and configurable from the Settings screen:
+- Voice, language, speed, denoising steps
+- Auto-speak toggle
+- NNAPI hardware acceleration toggle
+- Load on app start toggle
+
+---
+
+## Plugin System
+
+Extensible plugin architecture that integrates with LLM tool calling. Plugins execute locally and render custom UI for results.
+
+### Built-in Plugins
+
+#### Web Search
+- **Engine**: DuckDuckGo search with configurable result count (5–10)
+- **Web Scraping**: CSS selector-based content extraction from search results
+- **Safe Search**: Optional safe search filtering
+- **Custom UI**: Rich display of search results and scraped content
+
+#### Calculator
+- **Expressions**: Supports +, -, *, /, ^, %, parentheses
+- **Functions**: sqrt, sin, cos, tan, asin, acos, atan, log, log10, ln, abs, ceil, floor, round
+- **Constants**: pi, e
+- **Unit Conversion**: Length (m, km, mi, ft, in...), weight (kg, lb, oz...), time (s, min, h, day), data (b, kb, mb, gb, tb), temperature (C, F, K)
+
+#### Dev Utils
+- **Text Transforms**: uppercase, lowercase, reverse, title_case, snake_case, camel_case, trim
+- **Hashing**: MD5, SHA-1, SHA-256, SHA-512
+- **UUID Generation**: Bulk generation up to 10 at once
+- **Text Statistics**: Character, word, line, and sentence counts
+- **JSON**: Formatting and validation
+- **Base64**: Encoding and decoding
+
+### Plugin Architecture
+- **Tool Calling Integration**: Plugins register as tools the LLM can invoke via grammar-based JSON schema enforcement (LAZY/STRICT modes)
+- **Custom UI Rendering**: Each plugin provides Compose UI for displaying results
+- **Enable/Disable**: Toggle individual plugins from the Settings screen
+- **Execution Metrics**: Tracks execution time, success/failure per plugin call
 
 ---
 
@@ -442,6 +510,8 @@ Comprehensive document parsing with format detection and content extraction.
 ### What Stays Local
 - All conversations and chat history
 - Generated images and files
+- Speech synthesis and TTS audio
+- Plugin execution results
 - Model configurations
 - User preferences
 - RAG knowledge bases
@@ -478,55 +548,18 @@ Fully open source. Audit the code or review community security assessments.
 
 ---
 
-## Coming Soon
-
-### In Active Development
-
-#### Text-to-Speech (TTS)
-- On-device speech synthesis
-- Multiple voice options
-- Read AI responses aloud
-- Adjustable speech rate and pitch
-- Offline-first (no cloud APIs)
-
-#### Speech-to-Text (STT)
-- Voice input for conversations
-- On-device speech recognition
-- Multi-language support
-- Real-time transcription
-- Privacy-preserving (no cloud APIs)
-
-#### Plugin System with UI
-- Extensible plugin architecture
-- Custom tool/function definitions
-- Plugin UI rendering
-- Web search plugin
-- Calculator plugin
-- Code execution plugin
-- Community plugin marketplace
-- Plugin sandboxing for security
-
-#### Additional Upcoming Features
-- Multi-modal support (vision models for image understanding)
-- Additional model formats (ONNX, TFLite)
-- Desktop companion app
-- Advanced memory management with semantic clustering
-- Conversation summarization and insights
-
----
-
 ## Installation
 
 ### System Requirements
 
 **Minimum (Text Only)**:
-- Android 8.0+ (API 26)
+- Android 12+ (API 31)
 - 6GB RAM
 - 4GB free storage
 - ARM64 or x86_64 processor
 
-**Recommended (Text + Image + RAG)**:
-- Android 10+
+**Recommended (Text + Image + TTS + RAG)**:
+- Android 13+
 - 8GB RAM (12GB preferred)
 - 10GB free storage
 - Snapdragon 8 Gen 1 or equivalent
@@ -644,6 +677,7 @@ Download from [GitHub Releases](https://github.com/Siddhesh2377/ToolNeuron/relea
 - `neuron-packet`: RAG packet format with encryption and access control
 - `ai_gguf-release.aar`: Native GGUF inference library
 - `ai_sd-release.aar`: Native Stable Diffusion library
+- `ai_supertonic_tts`: On-device TTS with ONNX Runtime
 
 ### Inference Engines
 
@@ -668,6 +702,20 @@ Download from [GitHub Releases](https://github.com/Siddhesh2377/ToolNeuron/relea
 - Dimensions: 768
 - Operations: Single/batch embedding, normalization
 - Auto-download on first use
+
+**TTS Engine** (`TTSManager.kt`):
+- Supertonic TTS with ONNX Runtime Android
+- 10 voices (F1–F5, M1–M5), 5 languages
+- Configurable denoising steps (1–8) and speed (0.5x–2.0x)
+- Optional NNAPI hardware acceleration
+- StateFlow-based reactive state management
+
+**Plugin Engine** (`PluginManager.kt`):
+- Plugin registration with tool schemas for LLM integration
+- Grammar modes: LAZY (flexible) and STRICT (enforced JSON schema)
+- Execution metrics tracking (timing, success/failure)
+- Compose UI rendering per plugin result
+- Enable/disable per plugin at runtime
 
 ### Storage System
 
@@ -750,7 +798,7 @@ Download from [GitHub Releases](https://github.com/Siddhesh2377/ToolNeuron/relea
 ### Prerequisites
 - Android Studio Ladybug (2024.2.1) or newer
 - JDK 17
-- Android SDK 34+
+- Android SDK 36+
 - Android NDK 26.x
 - Git
 
@@ -796,7 +844,7 @@ cd ToolNeuron
 
 ## Roadmap
 
-### Version 1.1.2 (Current - January 2026)
+### Version 1.2.0 (Current - January 2026)
 - ✅ Text generation with any GGUF model
 - ✅ Image generation with SD 1.5
 - ✅ HuggingFace repository integration
@@ -808,21 +856,18 @@ cd ToolNeuron
 - ✅ Concurrent model downloads
 - ✅ Function calling support
 - ✅ Inpainting support
-
-### Version 1.2 (Q1 2026)
-- 🚧 Text-to-Speech (TTS) integration (in development)
-- 🚧 Speech-to-Text (STT) support (in development)
-- 🚧 Plugin system with UI (in development)
-- 📋 Web search plugin
-- 📋 Calculator plugin
-- 📋 Conversation export improvements
+- ✅ Text-to-Speech (10 voices, 5 languages, NNAPI, auto-speak)
+- ✅ Plugin system with UI (web search, calculator, dev utils)
+- ✅ Settings screen with persistent preferences
+- ✅ On-demand TTS model loading
 
 ### Version 1.3 (Q2 2026)
-- Multi-modal support (vision models like LLaVA, BakLLaVA)
-- Code execution plugin with sandboxing
-- Advanced memory clustering and insights
-- Conversation summarization
-- Thread-based conversation organization
+- 🚧 Speech-to-Text (STT) support
+- 📋 Multi-modal support (vision models like LLaVA, BakLLaVA)
+- 📋 Code execution plugin with sandboxing
+- 📋 Advanced memory clustering and insights
+- 📋 Conversation summarization
+- 📋 Thread-based conversation organization
 
 ### Version 1.4 (Q3 2026)
 - Additional model formats (ONNX, TFLite, CoreML)
@@ -839,6 +884,8 @@ cd ToolNeuron
 |---------|------------|---------------|---------------------|
 | **Text Generation** | Any GGUF model | Cloud only | Limited models |
 | **Image Generation** | SD 1.5 offline | Cloud only | Rare |
+| **Text-to-Speech** | On-device, 10 voices | Cloud-based | Rare |
+| **Plugin System** | Web search, calc, dev utils | Cloud-based | None |
 | **RAG System** | Full offline RAG | Cloud-based | Basic or none |
 | **Document Processing** | PDF/Word/Excel/EPUB | Cloud upload | Limited |
 | **Privacy** | Complete offline | Server logging | Varies |
@@ -911,6 +958,15 @@ A: AES-256-GCM with hardware-backed keys (Android KeyStore) is military-grade en
 **Q: Can I share encrypted RAGs?**
 A: Yes. Export RAG as `.neuron` packet with encryption enabled. Share the file and password separately. Recipients can import and decrypt with the password.
 
+**Q: How does Text-to-Speech work?**
+A: TTS uses the Supertonic TTS engine running entirely on-device via ONNX Runtime. Download the TTS model from the Model Store, then tap the speak button on any assistant message. You can also enable auto-speak in Settings to have responses read aloud automatically.
+
+**Q: Can I use TTS offline?**
+A: Yes. After downloading the TTS model (~100MB), all speech synthesis happens locally with no internet required.
+
+**Q: What do "denoising steps" control in TTS?**
+A: Higher steps produce clearer, more natural speech but take longer to synthesize. The default of 2 steps provides a good balance. Increase to 4–8 for maximum quality.
+
 ### Troubleshooting
 
 **Q: App crashes on model load?**
@@ -955,9 +1011,9 @@ Contributions are welcome! Focus areas:
 - UI/UX enhancements (accessibility, dark theme refinements)
 
 ### Development Areas
-- Plugin system implementation
-- TTS/STT integration
+- Speech-to-Text (STT) integration
 - Multi-modal model support
+- Additional plugins and plugin marketplace
 - Additional document format support
 - Advanced RAG features
 
@@ -1014,6 +1070,8 @@ ToolNeuron stands on the shoulders of giants:
 - [Jetpack Compose](https://developer.android.com/jetpack/compose) - Modern Android UI framework
 
 ### Libraries
+- [ONNX Runtime](https://onnxruntime.ai/) - TTS model inference
+- [Jsoup](https://jsoup.org/) - HTML parsing for web search plugin
 - [Apache POI](https://poi.apache.org/) - Microsoft document parsing
 - [PDFBox-Android](https://github.com/TomRoush/PdfBox-Android) - PDF processing
 - [EpubLib](https://github.com/psiegman/epublib) - EPUB support
@@ -1074,6 +1132,6 @@ We take security seriously and will respond promptly.
 
 ---
 
-**License**: Apache 2.0 · **Version**: 1.1.2 · **Platform**: Android 8.0+
+**License**: Apache 2.0 · **Version**: 1.2.0 · **Platform**: Android 12+
 
 </div>

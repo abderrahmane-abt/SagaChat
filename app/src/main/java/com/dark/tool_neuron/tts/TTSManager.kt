@@ -1,5 +1,6 @@
 package com.dark.tool_neuron.tts
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
 import com.mp.ai_supertonic_tts.SupertonicTTS
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import java.io.File
 
+@SuppressLint("StaticFieldLeak")
 object TTSManager {
 
     private const val TAG = "TTSManager"

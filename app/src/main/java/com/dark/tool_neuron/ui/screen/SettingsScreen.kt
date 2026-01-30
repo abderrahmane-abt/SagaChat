@@ -2,8 +2,6 @@ package com.dark.tool_neuron.ui.screen
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,8 +14,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -34,6 +30,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.ui.components.ActionButton
+import com.dark.tool_neuron.ui.components.ActionToggleGroup
 import com.dark.tool_neuron.ui.components.BodyLabel
 import com.dark.tool_neuron.ui.components.CaptionText
 import com.dark.tool_neuron.ui.components.SectionDivider
@@ -44,7 +41,7 @@ import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.SettingsViewModel
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
@@ -148,37 +145,29 @@ fun SettingsScreen(
             item {
                 StandardCard(title = "Voice") {
                     Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))) {
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm)),
-                            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))
-                        ) {
-                            voices.forEach { voice ->
-                                FilterChip(
-                                    selected = ttsSettings.voice == voice,
-                                    onClick = { viewModel.updateVoice(voice) },
-                                    enabled = ttsModelLoaded,
-                                    label = {
-                                        Text(
-                                            text = voice,
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = if (ttsSettings.voice == voice) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                    },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                )
-                            }
+                        val femaleVoices = voices.filter { it.startsWith("F") }
+                        val maleVoices = voices.filter { it.startsWith("M") }
+
+                        if (femaleVoices.isNotEmpty()) {
+                            CaptionText(text = "Female")
+                            ActionToggleGroup(
+                                items = femaleVoices,
+                                selectedItem = ttsSettings.voice,
+                                onItemSelected = { viewModel.updateVoice(it) },
+                                itemLabel = { it },
+                                enabled = ttsModelLoaded
+                            )
                         }
-                        CaptionText(
-                            text = when {
-                                ttsSettings.voice.startsWith("F") -> "Female voice ${ttsSettings.voice.last()}"
-                                ttsSettings.voice.startsWith("M") -> "Male voice ${ttsSettings.voice.last()}"
-                                else -> ttsSettings.voice
-                            }
-                        )
+                        if (maleVoices.isNotEmpty()) {
+                            CaptionText(text = "Male")
+                            ActionToggleGroup(
+                                items = maleVoices,
+                                selectedItem = ttsSettings.voice,
+                                onItemSelected = { viewModel.updateVoice(it) },
+                                itemLabel = { it },
+                                enabled = ttsModelLoaded
+                            )
+                        }
                     }
                 }
             }
@@ -186,30 +175,13 @@ fun SettingsScreen(
             // Language selector
             item {
                 StandardCard(title = "Language") {
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm)),
-                        verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))
-                    ) {
-                        languages.forEach { (code, label) ->
-                            FilterChip(
-                                selected = ttsSettings.language == code,
-                                onClick = { viewModel.updateLanguage(code) },
-                                enabled = ttsModelLoaded,
-                                label = {
-                                    Text(
-                                        text = label,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = if (ttsSettings.language == code) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                            )
-                        }
-                    }
+                    ActionToggleGroup(
+                        items = languages.map { it.first },
+                        selectedItem = ttsSettings.language,
+                        onItemSelected = { viewModel.updateLanguage(it) },
+                        itemLabel = { code -> languages.first { it.first == code }.second },
+                        enabled = ttsModelLoaded
+                    )
                 }
             }
 

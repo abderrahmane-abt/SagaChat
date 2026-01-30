@@ -37,7 +37,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -54,10 +56,10 @@ class ChatViewModel @Inject constructor(
     private val ttsDataStore = com.dark.tool_neuron.tts.TTSDataStore(context)
 
     val streamingEnabled: StateFlow<Boolean> = appSettings.streamingEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     val chatMemoryEnabled: StateFlow<Boolean> = appSettings.chatMemoryEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     private val _messages = mutableStateListOf<Messages>()
     val messages: SnapshotStateList<Messages> = _messages
@@ -172,7 +174,6 @@ class ChatViewModel @Inject constructor(
         currentImageMetrics = null
         userMessageAdded = false
         _error.value = null
-        isNewConversation = true
         _currentToolName.value = null
         AppStateManager.setHasMessages(false)
     }
@@ -369,7 +370,6 @@ class ChatViewModel @Inject constructor(
                 // Tool executed but no text — persist chat silently
                 chatManager.createNewChat().onSuccess { newChatId ->
                     _currentChatId.value = newChatId
-                    isNewConversation = false
                     chatManager.addUserMessage(newChatId, prompt)
                     _messages.filter { it.content.contentType == ContentType.PluginResult }
                         .forEach { chatManager.addMessage(newChatId, it) }
@@ -503,6 +503,7 @@ class ChatViewModel @Inject constructor(
                 )
                 _messages.add(assistantMessage)
                 chatManager.addAssistantMessage(chatId, filteredContent, currentMetrics, ragResultItems)
+                autoSpeakIfEnabled(filteredContent)
             }
 
             AppStateManager.setGenerationComplete()
@@ -676,6 +677,7 @@ class ChatViewModel @Inject constructor(
                                     chatManager.addAssistantMessage(
                                         chatId, filteredContent, currentMetrics, ragResultItems
                                     )
+                                    autoSpeakIfEnabled(filteredContent)
                                 } else {
                                     Log.d("ChatViewModel", "Skipped empty assistant message (was only tool call syntax)")
                                 }
@@ -1021,7 +1023,6 @@ class ChatViewModel @Inject constructor(
 
         chatManager.createNewChat().onSuccess { newChatId ->
             _currentChatId.value = newChatId
-            isNewConversation = false
             Log.d("ChatViewModel", "Created chat: $newChatId")
 
             chatManager.addUserMessage(newChatId, userPrompt).onSuccess { userMessage ->
@@ -1048,6 +1049,7 @@ class ChatViewModel @Inject constructor(
                     Log.d("ChatViewModel", "Reloaded ${loadedMessages.size} messages from vault")
                     _messages.clear()
                     _messages.addAll(loadedMessages)
+                    autoSpeakIfEnabled(filteredResponse)
                     AppStateManager.setGenerationComplete()
                     AppStateManager.chatRefreshed()
                     resetStreamingState()
@@ -1074,7 +1076,6 @@ class ChatViewModel @Inject constructor(
     ) {
         chatManager.createNewChat().onSuccess { newChatId ->
             _currentChatId.value = newChatId
-            isNewConversation = false
 
             chatManager.addUserMessage(newChatId, userPrompt).onSuccess { userMessage ->
                 _messages.add(userMessage)
@@ -1329,12 +1330,38 @@ class ChatViewModel @Inject constructor(
 
     // ==================== TTS Controls ====================
 
+    private suspend fun autoSpeakIfEnabled(text: String) {
+        if (text.isBlank()) return
+        val settings = ttsDataStore.settings.first()
+        if (!settings.autoSpeak) return
+
+        if (!TTSManager.isLoaded()) {
+            val modelDir = TTSManager.getModelDirectory() ?: return
+            withContext(Dispatchers.IO) {
+                TTSManager.loadModel(modelDir, settings.useNNAPI)
+            }
+            if (!TTSManager.isLoaded()) return
+        }
+
+        TTSManager.speak(text = text, settings = settings)
+    }
+
     fun speakMessage(message: Messages) {
         if (message.content.contentType != ContentType.Text) return
         val text = message.content.content
         if (text.isBlank()) return
 
         viewModelScope.launch {
+            // Auto-load TTS model if not loaded
+            if (!TTSManager.isLoaded()) {
+                val modelDir = TTSManager.getModelDirectory() ?: return@launch
+                val settings = ttsDataStore.settings.first()
+                withContext(Dispatchers.IO) {
+                    TTSManager.loadModel(modelDir, settings.useNNAPI)
+                }
+                if (!TTSManager.isLoaded()) return@launch
+            }
+
             val settings = ttsDataStore.settings.first()
             TTSManager.speak(
                 text = text,

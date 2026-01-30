@@ -125,6 +125,7 @@ dependencies {
     //implementation(":runanywhere-kotlin-release@aar")
     implementation(project(":memory-vault"))
     implementation(project(":neuron-packet"))
+    implementation(project(":n_apps"))
 
     // AndroidX Core & Lifecycle
     implementation(libs.androidx.core.ktx)

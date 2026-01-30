@@ -94,16 +94,12 @@ fun HomeScreen(
     onModelEditor: () -> Unit,
     onSettingsClick: () -> Unit,
     onVaultManagerClick: () -> Unit,
+    onNAppClick: () -> Unit = {},
     chatViewModel: ChatViewModel,
     llmModelViewModel: LLMModelViewModel
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-
-    // Start with a new conversation instead of loading a chat
-    LaunchedEffect(Unit) {
-        chatViewModel.startNewConversation()
-    }
 
     ModalNavigationDrawer(
         drawerState = drawerState, drawerContent = {

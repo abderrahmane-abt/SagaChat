@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import androidx.core.net.toUri
 
@@ -32,6 +33,7 @@ class LLMModelViewModel @Inject constructor(
 ) : AndroidViewModel(application) {
 
     val installedModels: Flow<List<Model>> = repository.getAllModels()
+        .map { models -> models.filter { it.providerType != ProviderType.TTS } }
 
     private val _currentModelID = MutableStateFlow("")
     val currentModelID: StateFlow<String> = _currentModelID.asStateFlow()

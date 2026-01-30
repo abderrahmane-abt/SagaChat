@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -32,6 +33,8 @@ import com.dark.tool_neuron.ui.screen.SettingsScreen
 import com.dark.tool_neuron.ui.screen.TermsAndConditionsScreen
 import com.dark.tool_neuron.ui.screen.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.screen.memory.VaultDashboard
+import com.mp.n_apps.ui.NAppScreen
+import com.mp.n_apps.ui.NAppViewModel
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
@@ -123,6 +126,7 @@ sealed class Screen(val route: String) {
     object Editor : Screen("editor")
     object Settings : Screen("settings")
     object VaultManager: Screen("vault_manager")
+    object NApp : Screen("napp")
 }
 
 @Composable
@@ -134,7 +138,7 @@ fun AppNavigation(
 
     NavHost(
         navController = navController,
-        startDestination = Screen.Chat.route,
+        startDestination = Screen.NApp.route,
         enterTransition = {
             slideIntoContainer(
                 towards = AnimatedContentTransitionScope.SlideDirection.Left,
@@ -181,6 +185,9 @@ fun AppNavigation(
                 onVaultManagerClick = {
                     navController.navigate(Screen.VaultManager.route)
                 },
+                onNAppClick = {
+                    navController.navigate(Screen.NApp.route)
+                },
                 chatViewModel = chatViewModel,
                 llmModelViewModel = llmModelViewModel
             )
@@ -200,6 +207,14 @@ fun AppNavigation(
 
         composable(Screen.VaultManager.route) {
             VaultDashboard()
+        }
+
+        composable(Screen.NApp.route) {
+            val nappViewModel: NAppViewModel = viewModel()
+            NAppScreen(
+                onNavigateBack = { navController.popBackStack() },
+                viewModel = nappViewModel
+            )
         }
     }
 }

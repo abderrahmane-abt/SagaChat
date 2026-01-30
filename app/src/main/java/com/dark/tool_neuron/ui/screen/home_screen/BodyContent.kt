@@ -828,7 +828,7 @@ private fun MessageActionRow(
         } else {
             add(ActionItem(
                 icon = ActionIcon.Resource(R.drawable.volume),
-                onClick = { if (ttsModelLoaded) onSpeak(message) },
+                onClick = { onSpeak(message) },
                 contentDescription = "Speak"
             ))
         }
