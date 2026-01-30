@@ -29,6 +29,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -42,6 +45,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.models.plugins.PluginInfo
 import com.dark.tool_neuron.ui.theme.rDp
+import com.mp.ai_gguf.toolcalling.GrammarMode
+import com.mp.ai_gguf.toolcalling.ToolCallingConfig
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,9 +56,16 @@ fun PluginOverlayBottomSheet(
     plugins: List<PluginInfo>,
     enabledPluginNames: Set<String>,
     expandedPluginIds: Set<String>,
+    grammarMode: GrammarMode = GrammarMode.LAZY,
+    multiTurnEnabled: Boolean = true,
+    toolCallingConfig: ToolCallingConfig = ToolCallingConfig(),
     onDismiss: () -> Unit,
     onPluginToggle: (String, Boolean) -> Unit,
-    onPluginExpand: (String) -> Unit
+    onPluginExpand: (String) -> Unit,
+    onGrammarModeChange: (GrammarMode) -> Unit = {},
+    onMultiTurnToggle: (Boolean) -> Unit = {},
+    onMaxRoundsChange: (Int) -> Unit = {},
+    onMaxTokensPerTurnChange: (Int) -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -75,7 +88,7 @@ fun PluginOverlayBottomSheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = rDp(500.dp))
+                    .heightIn(max = rDp(600.dp))
                     .padding(bottom = rDp(16.dp))
             ) {
                 // Header
@@ -84,16 +97,36 @@ fun PluginOverlayBottomSheet(
                     totalCount = plugins.size
                 )
 
-                Spacer(modifier = Modifier.height(rDp(16.dp)))
+                Spacer(modifier = Modifier.height(rDp(12.dp)))
 
-                // Plugin List
-                if (plugins.isEmpty()) {
-                    EmptyPluginState()
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
-                    ) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                ) {
+                    // Tool Calling Config Section
+                    item {
+                        ToolCallingConfigSection(
+                            grammarMode = grammarMode,
+                            multiTurnEnabled = multiTurnEnabled,
+                            toolCallingConfig = toolCallingConfig,
+                            onGrammarModeChange = onGrammarModeChange,
+                            onMultiTurnToggle = onMultiTurnToggle,
+                            onMaxRoundsChange = onMaxRoundsChange,
+                            onMaxTokensPerTurnChange = onMaxTokensPerTurnChange
+                        )
+                    }
+
+                    item {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = rDp(16.dp), vertical = rDp(4.dp)),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                    }
+
+                    // Plugin List
+                    if (plugins.isEmpty()) {
+                        item { EmptyPluginState() }
+                    } else {
                         items(plugins) { plugin ->
                             PluginListItem(
                                 plugin = plugin,
@@ -107,6 +140,180 @@ fun PluginOverlayBottomSheet(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ToolCallingConfigSection(
+    grammarMode: GrammarMode,
+    multiTurnEnabled: Boolean,
+    toolCallingConfig: ToolCallingConfig,
+    onGrammarModeChange: (GrammarMode) -> Unit,
+    onMultiTurnToggle: (Boolean) -> Unit,
+    onMaxRoundsChange: (Int) -> Unit,
+    onMaxTokensPerTurnChange: (Int) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = rDp(16.dp)),
+        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+    ) {
+        Text(
+            text = "Tool Calling Config",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        // Grammar Mode Toggle
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(rDp(10.dp)),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+        ) {
+            Column(
+                modifier = Modifier.padding(rDp(12.dp)),
+                verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Grammar Mode",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = if (grammarMode == GrammarMode.STRICT) "Strict: Forces JSON tool output"
+                            else "Lazy: Model chooses text or tool",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    // Toggle chip for STRICT/LAZY
+                    GrammarModeChip(
+                        mode = grammarMode,
+                        onModeChange = onGrammarModeChange
+                    )
+                }
+
+                // Multi-turn toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Multi-turn",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Allow model to chain multiple tool calls",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Switch(
+                        checked = multiTurnEnabled,
+                        onCheckedChange = onMultiTurnToggle,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.primary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    )
+                }
+
+                // Max Rounds Slider (only visible when multi-turn is enabled)
+                AnimatedVisibility(visible = multiTurnEnabled) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Max Rounds",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Surface(
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(rDp(4.dp))
+                            ) {
+                                Text(
+                                    text = "${toolCallingConfig.maxRounds}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(
+                                        horizontal = rDp(8.dp),
+                                        vertical = rDp(2.dp)
+                                    )
+                                )
+                            }
+                        }
+
+                        Slider(
+                            value = toolCallingConfig.maxRounds.toFloat(),
+                            onValueChange = { onMaxRoundsChange(it.roundToInt()) },
+                            valueRange = 1f..10f,
+                            steps = 8,
+                            colors = SliderDefaults.colors(
+                                thumbColor = MaterialTheme.colorScheme.primary,
+                                activeTrackColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GrammarModeChip(
+    mode: GrammarMode,
+    onModeChange: (GrammarMode) -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .clip(RoundedCornerShape(rDp(8.dp)))
+            .clickable {
+                onModeChange(
+                    if (mode == GrammarMode.STRICT) GrammarMode.LAZY else GrammarMode.STRICT
+                )
+            },
+        shape = RoundedCornerShape(rDp(8.dp)),
+        color = if (mode == GrammarMode.STRICT) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+        } else {
+            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
+        }
+    ) {
+        Text(
+            text = if (mode == GrammarMode.STRICT) "STRICT" else "LAZY",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = if (mode == GrammarMode.STRICT) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.tertiary
+            },
+            modifier = Modifier.padding(horizontal = rDp(12.dp), vertical = rDp(6.dp))
+        )
     }
 }
 

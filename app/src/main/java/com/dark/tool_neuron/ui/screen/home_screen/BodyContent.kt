@@ -18,12 +18,17 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
@@ -88,6 +93,13 @@ fun BodyContent(
     val currentGenerationType by chatViewModel.currentGenerationType.collectAsState()
     val currentRagResults by chatViewModel.currentRagResults.collectAsState()
     val appState by com.dark.tool_neuron.state.AppStateManager.appState.collectAsState()
+    val currentToolRound by chatViewModel.currentToolRound.collectAsState()
+    val maxToolRounds by chatViewModel.maxToolRounds.collectAsState()
+    val currentToolName by chatViewModel.currentToolName.collectAsState()
+    val ttsPlayingMsgId by chatViewModel.ttsPlayingMsgId.collectAsState()
+    val ttsIsPlaying by chatViewModel.ttsIsPlaying.collectAsState()
+    val ttsSynthesizing by chatViewModel.ttsSynthesizing.collectAsState()
+    val ttsModelLoaded by chatViewModel.ttsModelLoaded.collectAsState()
 
     val listState = rememberLazyListState()
 
@@ -115,7 +127,11 @@ fun BodyContent(
                     imageStep = imageStep,
                     isImageGeneration = currentGenerationType == GenerationManager.ModelType.IMAGE_GENERATION,
                     ragResults = currentRagResults,
-                    appState = appState
+                    appState = appState,
+                    messages = messages,
+                    currentToolRound = currentToolRound,
+                    maxToolRounds = maxToolRounds,
+                    currentToolName = currentToolName
                 )
             } else {
                 LazyColumn(
@@ -132,7 +148,15 @@ fun BodyContent(
                         },
                         contentType = { index -> messages[index].role }
                     ) { index ->
-                        MessageBubble(message = messages[index])
+                        MessageBubble(
+                            message = messages[index],
+                            ttsPlayingMsgId = ttsPlayingMsgId,
+                            ttsIsPlaying = ttsIsPlaying,
+                            ttsSynthesizing = ttsSynthesizing,
+                            ttsModelLoaded = ttsModelLoaded,
+                            onSpeak = { chatViewModel.speakMessage(it) },
+                            onStopTTS = { chatViewModel.stopTTS() }
+                        )
                     }
                     item {
                         Spacer(modifier = Modifier.height(rDp(16.dp)))
@@ -193,13 +217,20 @@ private fun StreamingView(
     imageStep: String,
     isImageGeneration: Boolean,
     ragResults: List<com.dark.tool_neuron.viewmodel.RagQueryDisplayResult> = emptyList(),
-    appState: com.dark.tool_neuron.models.state.AppState
+    appState: com.dark.tool_neuron.models.state.AppState,
+    messages: List<Messages> = emptyList(),
+    currentToolRound: Int = 0,
+    maxToolRounds: Int = 5,
+    currentToolName: String? = null
 ) {
     val scrollState = rememberScrollState()
 
-    LaunchedEffect(assistantMessage, streamingImage) {
+    LaunchedEffect(assistantMessage, streamingImage, messages.size, appState) {
         scrollState.animateScrollTo(scrollState.maxValue)
     }
+
+    // Check if we're in multi-turn mode
+    val isMultiTurn = currentToolRound > 0 || messages.any { it.content.contentType == ContentType.PluginResult }
 
     Column(
         modifier = Modifier
@@ -221,6 +252,19 @@ private fun StreamingView(
         // Show RAG context if available
         if (ragResults.isNotEmpty()) {
             RagResultsDisplay(results = ragResults)
+        }
+
+        // Show multi-turn round indicator
+        if (isMultiTurn && currentToolRound > 0) {
+            MultiTurnRoundIndicator(
+                currentRound = currentToolRound,
+                maxRounds = maxToolRounds
+            )
+        }
+
+        // Show accumulated tool results from previous rounds
+        messages.filter { it.content.contentType == ContentType.PluginResult }.forEach { msg ->
+            PluginResultCard(message = msg)
         }
 
         when {
@@ -253,6 +297,60 @@ private fun StreamingView(
         }
 
         Spacer(modifier = Modifier.height(rDp(16.dp)))
+    }
+}
+
+@Composable
+private fun MultiTurnRoundIndicator(
+    currentRound: Int,
+    maxRounds: Int
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = rDp(12.dp)),
+        shape = RoundedCornerShape(rDp(8.dp)),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+        tonalElevation = rDp(1.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = rDp(12.dp), vertical = rDp(8.dp)),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.tool),
+                    contentDescription = null,
+                    modifier = Modifier.size(rDp(14.dp)),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "Multi-turn",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            Surface(
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                shape = RoundedCornerShape(rDp(4.dp))
+            ) {
+                Text(
+                    text = "Round $currentRound/$maxRounds",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = rDp(8.dp), vertical = rDp(2.dp))
+                )
+            }
+        }
     }
 }
 
@@ -613,10 +711,26 @@ private fun EmptyMessagesState() {
 }
 
 @Composable
-private fun MessageBubble(message: Messages) {
+private fun MessageBubble(
+    message: Messages,
+    ttsPlayingMsgId: String? = null,
+    ttsIsPlaying: Boolean = false,
+    ttsSynthesizing: Boolean = false,
+    ttsModelLoaded: Boolean = false,
+    onSpeak: (Messages) -> Unit = {},
+    onStopTTS: () -> Unit = {}
+) {
     when (message.role) {
         Role.User -> UserMessageBubble(message)
-        else -> AssistantMessageBubble(message)
+        else -> AssistantMessageBubble(
+            message = message,
+            ttsPlayingMsgId = ttsPlayingMsgId,
+            ttsIsPlaying = ttsIsPlaying,
+            ttsSynthesizing = ttsSynthesizing,
+            ttsModelLoaded = ttsModelLoaded,
+            onSpeak = onSpeak,
+            onStopTTS = onStopTTS
+        )
     }
 }
 
@@ -647,7 +761,15 @@ private fun UserMessageBubble(message: Messages) {
 }
 
 @Composable
-private fun AssistantMessageBubble(message: Messages) {
+private fun AssistantMessageBubble(
+    message: Messages,
+    ttsPlayingMsgId: String? = null,
+    ttsIsPlaying: Boolean = false,
+    ttsSynthesizing: Boolean = false,
+    ttsModelLoaded: Boolean = false,
+    onSpeak: (Messages) -> Unit = {},
+    onStopTTS: () -> Unit = {}
+) {
     val showMetrics = remember(message.decodingMetrics) {
         message.decodingMetrics?.tokensPerSecond?.let { it > 0 } ?: false
     }
@@ -670,6 +792,10 @@ private fun AssistantMessageBubble(message: Messages) {
     ) {
         value = parseThinkingTags(message.content.content)
     }
+
+    val isTextContent = message.content.contentType == ContentType.Text
+    val isThisMessagePlaying = ttsPlayingMsgId == message.msgId && ttsIsPlaying
+    val isThisMessageSynthesizing = ttsPlayingMsgId == message.msgId && ttsSynthesizing
 
     Column(
         modifier = Modifier
@@ -707,6 +833,19 @@ private fun AssistantMessageBubble(message: Messages) {
             }
         }
 
+        // Action row: TTS speak + Copy (only for text messages with content)
+        if (isTextContent && parsedMessage.actualContent.isNotEmpty()) {
+            MessageActionRow(
+                message = message,
+                textContent = parsedMessage.actualContent,
+                isPlaying = isThisMessagePlaying,
+                isSynthesizing = isThisMessageSynthesizing,
+                ttsModelLoaded = ttsModelLoaded,
+                onSpeak = onSpeak,
+                onStopTTS = onStopTTS
+            )
+        }
+
         if (showMetrics) {
             message.decodingMetrics?.let { metrics ->
                 MetricsDisplay(metrics, message.memoryMetrics)
@@ -723,6 +862,99 @@ private fun AssistantMessageBubble(message: Messages) {
             message.memoryMetrics?.let { metrics ->
                 MemoryMetricsDisplay(metrics)
             }
+        }
+    }
+}
+
+@Composable
+private fun MessageActionRow(
+    message: Messages,
+    textContent: String,
+    isPlaying: Boolean,
+    isSynthesizing: Boolean,
+    ttsModelLoaded: Boolean,
+    onSpeak: (Messages) -> Unit,
+    onStopTTS: () -> Unit
+) {
+    val clipboardManager = LocalClipboardManager.current
+    var showCopied by remember { mutableStateOf(false) }
+
+    LaunchedEffect(showCopied) {
+        if (showCopied) {
+            kotlinx.coroutines.delay(1500)
+            showCopied = false
+        }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = rDp(4.dp)),
+        horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // TTS Speak / Stop button
+        if (ttsModelLoaded) {
+            if (isPlaying || isSynthesizing) {
+                // Stop button
+                IconButton(
+                    onClick = { onStopTTS() },
+                    modifier = Modifier.size(rDp(32.dp))
+                ) {
+                    if (isSynthesizing && !isPlaying) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(rDp(16.dp)),
+                            strokeWidth = rDp(2.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Stop,
+                            contentDescription = "Stop",
+                            modifier = Modifier.size(rDp(18.dp)),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            } else {
+                // Speak button
+                IconButton(
+                    onClick = { onSpeak(message) },
+                    modifier = Modifier.size(rDp(32.dp))
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                        contentDescription = "Speak",
+                        modifier = Modifier.size(rDp(18.dp)),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        // Copy button
+        IconButton(
+            onClick = {
+                clipboardManager.setText(AnnotatedString(textContent))
+                showCopied = true
+            },
+            modifier = Modifier.size(rDp(32.dp))
+        ) {
+            Icon(
+                imageVector = if (showCopied) Icons.Default.CheckCircle else Icons.Default.ContentCopy,
+                contentDescription = if (showCopied) "Copied" else "Copy",
+                modifier = Modifier.size(rDp(18.dp)),
+                tint = if (showCopied) MaterialTheme.colorScheme.primary
+                       else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        if (showCopied) {
+            Text(
+                text = "Copied",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }

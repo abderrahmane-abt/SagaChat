@@ -81,6 +81,9 @@ class ModelConfigEditorViewModel @Inject constructor(
                         }
                     }
 
+                    ProviderType.TTS -> {
+                        // TTS config managed via TTSDataStore
+                    }
                 }
             } catch (_: Exception) {
                 // Handle error
@@ -137,6 +140,14 @@ class ModelConfigEditorViewModel @Inject constructor(
                         )
                     }
 
+                    ProviderType.TTS -> {
+                        ModelConfig(
+                            id = existingConfig?.id ?: "",
+                            modelId = model.id,
+                            modelLoadingParams = existingConfig?.modelLoadingParams ?: """{"type":"tts","useNNAPI":false}""",
+                            modelInferenceParams = existingConfig?.modelInferenceParams ?: """{"voice":"F1","speed":1.05,"steps":2,"language":"en"}"""
+                        )
+                    }
                 }
 
                 if (existingConfig != null) {

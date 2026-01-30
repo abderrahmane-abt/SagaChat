@@ -83,6 +83,7 @@ android {
 
 dependencies {
 
+    implementation(libs.onnxruntime.android)
 
     // Dependency Injection
     implementation(libs.hilt.android)
@@ -119,6 +120,7 @@ dependencies {
     // Local Projects & AI Libraries
     implementation(":ai_gguf-release@aar")
     implementation(":ai_sd-release@aar")
+    implementation(":ai_supertonic_tts-release@aar")
     //implementation(":runanywhere-core-onnx-release@aar")
     //implementation(":runanywhere-kotlin-release@aar")
     implementation(project(":memory-vault"))

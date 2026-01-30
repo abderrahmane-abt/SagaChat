@@ -11,7 +11,8 @@ class GenerationManager {
 
     enum class ModelType {
         TEXT_GENERATION,
-        IMAGE_GENERATION
+        IMAGE_GENERATION,
+        AUDIO_GENERATION
     }
 
     private var currentModelType: ModelType = ModelType.TEXT_GENERATION
@@ -40,6 +41,17 @@ class GenerationManager {
 
     fun generateTextStreaming(prompt: String, maxTokens: Int = 512): Flow<GenerationEvent> {
         return LlmModelWorker.ggufGenerateStreaming(prompt, maxTokens)
+    }
+
+    /**
+     * Multi-turn streaming generation using full conversation history.
+     * Used for multi-turn tool calling flows.
+     *
+     * @param messagesJson JSON array of {role, content} message objects
+     * @param maxTokens Maximum tokens per turn
+     */
+    fun generateMultiTurnStreaming(messagesJson: String, maxTokens: Int = 256): Flow<GenerationEvent> {
+        return LlmModelWorker.ggufGenerateMultiTurnStreaming(messagesJson, maxTokens)
     }
 
     fun stopTextGeneration() {

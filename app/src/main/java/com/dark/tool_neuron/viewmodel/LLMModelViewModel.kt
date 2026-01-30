@@ -66,6 +66,7 @@ class LLMModelViewModel @Inject constructor(
                 when (model.providerType) {
                     ProviderType.GGUF -> loadGgufModel(model, config)
                     ProviderType.DIFFUSION -> loadDiffusionModel(model, config)
+                    ProviderType.TTS -> { /* TTS models are managed by TTSManager, not LLMService */ }
                 }
             } catch (e: Exception) {
                 AppStateManager.setError(e.message ?: "Unknown error")

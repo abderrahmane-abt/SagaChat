@@ -10,6 +10,11 @@ import com.dark.tool_neuron.network.HuggingFaceClient
 
 class ModelStoreRepository(private val context: Context) {
 
+    // In-memory cache for model lists
+    private var cachedModels: List<HuggingFaceModel>? = null
+    private var cacheTimestamp: Long = 0
+    private val CACHE_TTL_MS = 5 * 60 * 1000L // 5 minutes
+
     private val chipsetModelSuffixes = mapOf(
         "SM8475" to "8gen1",
         "SM8450" to "8gen1",
@@ -65,13 +70,24 @@ class ModelStoreRepository(private val context: Context) {
         )
     }
 
-    suspend fun getAvailableModels(repositories: List<HFModelRepository>): Result<List<HuggingFaceModel>> {
+    suspend fun getAvailableModels(
+        repositories: List<HFModelRepository>,
+        forceRefresh: Boolean = false
+    ): Result<List<HuggingFaceModel>> {
+        // Return cached models if still fresh
+        if (!forceRefresh && cachedModels != null &&
+            System.currentTimeMillis() - cacheTimestamp < CACHE_TTL_MS
+        ) {
+            return Result.success(cachedModels!!)
+        }
+
         return try {
             val models = mutableListOf<HuggingFaceModel>()
 
             val sdModels = getSDModels()
             val ggufModels =
                 getGGUFModels(repositories.filter { it.modelType == ModelType.GGUF && it.isEnabled })
+            val ttsModels = getTTSModels()
 
             // Filter NPU models based on device support
             val filteredSDModels = if (isQualcommDevice()) {
@@ -82,12 +98,22 @@ class ModelStoreRepository(private val context: Context) {
 
             models.addAll(filteredSDModels)
             models.addAll(ggufModels)
+            models.addAll(ttsModels)
+
+            // Update cache
+            cachedModels = models.toList()
+            cacheTimestamp = System.currentTimeMillis()
 
             Result.success(models)
         } catch (e: Exception) {
             Log.e("ModelStoreRepository", "Error loading models", e)
             Result.failure(e)
         }
+    }
+
+    fun invalidateCache() {
+        cachedModels = null
+        cacheTimestamp = 0
     }
 
     private suspend fun getSDModels(): List<HuggingFaceModel> {
@@ -276,6 +302,25 @@ class ModelStoreRepository(private val context: Context) {
         )
 
         return models
+    }
+
+    private fun getTTSModels(): List<HuggingFaceModel> {
+        return listOf(
+            HuggingFaceModel(
+                id = "supertonic-v2-tts",
+                name = "Supertonic v2 (Multilingual TTS)",
+                description = "On-device TTS engine: 5 languages (EN/KO/ES/PT/FR), 10 voices, 44.1kHz, 66M params",
+                fileUri = "Supertone/supertonic-2/resolve/main",
+                approximateSize = "263 MB",
+                modelType = ModelType.TTS,
+                isZip = false,
+                runOnCpu = true,
+                textEmbeddingSize = 0,
+                tags = listOf("TTS", "Multilingual", "EN", "KO", "ES", "PT", "FR", "10 Voices"),
+                requiresNPU = false,
+                repositoryUrl = "Supertone/supertonic-2"
+            )
+        )
     }
 
     private suspend fun getGGUFModels(repositories: List<HFModelRepository>): List<HuggingFaceModel> {

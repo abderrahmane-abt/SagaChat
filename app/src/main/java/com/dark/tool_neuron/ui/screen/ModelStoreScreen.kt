@@ -12,6 +12,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -1099,35 +1100,10 @@ fun SearchAppBar(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FilterChips(
-    selectedFilter: ModelType?, onFilterSelected: (ModelType?) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = rDp(16.dp), vertical = rDp(8.dp)),
-        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
-    ) {
-        FilterChip(
-            selected = selectedFilter == null,
-            onClick = { onFilterSelected(null) },
-            label = { Text("All") })
-        FilterChip(
-            selected = selectedFilter == ModelType.SD,
-            onClick = { onFilterSelected(ModelType.SD) },
-            label = { Text("Stable Diffusion") })
-        FilterChip(
-            selected = selectedFilter == ModelType.GGUF,
-            onClick = { onFilterSelected(ModelType.GGUF) },
-            label = { Text("GGUF") })
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
 fun ModelFiltersSection(
     viewModel: ModelStoreViewModel
 ) {
+    val selectedModelType by viewModel.selectedModelType.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val selectedParameters by viewModel.selectedParameters.collectAsState()
     val selectedQuantizations by viewModel.selectedQuantizations.collectAsState()
@@ -1136,8 +1112,8 @@ fun ModelFiltersSection(
 
     var showAdvancedFilters by remember { mutableStateOf(false) }
 
-    // Calculate active filter count
     val activeFilterCount = listOf(
+        selectedModelType != null,
         selectedCategory != null,
         selectedParameters.isNotEmpty(),
         selectedQuantizations.isNotEmpty(),
@@ -1149,7 +1125,7 @@ fun ModelFiltersSection(
             .fillMaxWidth()
             .padding(vertical = rDp(8.dp))
     ) {
-        // Category filter chips (horizontal scroll, always visible)
+        // Model type filter (always visible, top-level)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1158,22 +1134,56 @@ fun ModelFiltersSection(
             horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
         ) {
             FilterChip(
-                selected = selectedCategory == null,
-                onClick = { viewModel.filterByCategory(null) },
+                selected = selectedModelType == null,
+                onClick = { viewModel.filterByModelType(null) },
                 label = { Text("All") }
             )
-            ModelCategory.values().forEach { category ->
-                FilterChip(
-                    selected = selectedCategory == category,
-                    onClick = { viewModel.filterByCategory(category) },
-                    label = { Text(category.displayName) }
-                )
-            }
+            FilterChip(
+                selected = selectedModelType == ModelType.GGUF,
+                onClick = { viewModel.filterByModelType(ModelType.GGUF) },
+                label = { Text("LLM (GGUF)") }
+            )
+            FilterChip(
+                selected = selectedModelType == ModelType.SD,
+                onClick = { viewModel.filterByModelType(ModelType.SD) },
+                label = { Text("Image (SD)") }
+            )
+            FilterChip(
+                selected = selectedModelType == ModelType.TTS,
+                onClick = { viewModel.filterByModelType(ModelType.TTS) },
+                label = { Text("TTS") }
+            )
         }
 
-        Spacer(modifier = Modifier.height(rDp(8.dp)))
+        Spacer(modifier = Modifier.height(rDp(6.dp)))
 
-        // Advanced filters toggle button
+        // Category filter (only show for GGUF or All)
+        if (selectedModelType == null || selectedModelType == ModelType.GGUF) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = rDp(16.dp)),
+                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            ) {
+                FilterChip(
+                    selected = selectedCategory == null,
+                    onClick = { viewModel.filterByCategory(null) },
+                    label = { Text("All") }
+                )
+                ModelCategory.values().forEach { category ->
+                    FilterChip(
+                        selected = selectedCategory == category,
+                        onClick = { viewModel.filterByCategory(category) },
+                        label = { Text(category.displayName) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(rDp(6.dp)))
+        }
+
+        // Advanced filters toggle
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1220,48 +1230,50 @@ fun ModelFiltersSection(
                     .padding(horizontal = rDp(16.dp), vertical = rDp(8.dp)),
                 verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
             ) {
-                // Parameter count filter
-                Column(verticalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
-                    Text(
-                        text = "Parameters",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
-                    ) {
-                        listOf("0.5B", "1B", "3B", "6.7B", "8B", "32B", "70B").forEach { param ->
-                            FilterChip(
-                                selected = param in selectedParameters,
-                                onClick = { viewModel.toggleParameterFilter(param) },
-                                label = { Text(param) }
-                            )
+                // Parameter count filter (GGUF only)
+                if (selectedModelType == null || selectedModelType == ModelType.GGUF) {
+                    Column(verticalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
+                        Text(
+                            text = "Parameters",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                        ) {
+                            listOf("0.5B", "1B", "3B", "6.7B", "8B", "32B", "70B").forEach { param ->
+                                FilterChip(
+                                    selected = param in selectedParameters,
+                                    onClick = { viewModel.toggleParameterFilter(param) },
+                                    label = { Text(param) }
+                                )
+                            }
                         }
                     }
-                }
 
-                // Quantization filter
-                Column(verticalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
-                    Text(
-                        text = "Quantization",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
-                    ) {
-                        listOf("Q4_0", "Q5_0", "Q8_0", "Q4_K_M", "Q5_K_M", "Q6_K").forEach { quant ->
-                            FilterChip(
-                                selected = quant in selectedQuantizations,
-                                onClick = { viewModel.toggleQuantizationFilter(quant) },
-                                label = { Text(quant) }
-                            )
+                    // Quantization filter (GGUF only)
+                    Column(verticalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
+                        Text(
+                            text = "Quantization",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                        ) {
+                            listOf("Q4_0", "Q5_0", "Q8_0", "Q4_K_M", "Q5_K_M", "Q6_K").forEach { quant ->
+                                FilterChip(
+                                    selected = quant in selectedQuantizations,
+                                    onClick = { viewModel.toggleQuantizationFilter(quant) },
+                                    label = { Text(quant) }
+                                )
+                            }
                         }
                     }
                 }
@@ -1330,6 +1342,24 @@ fun ModelFiltersSection(
 }
 
 @Composable
+private fun ModelTypeBadge(modelType: ModelType) {
+    val (label, color) = when (modelType) {
+        ModelType.GGUF -> "LLM" to MaterialTheme.colorScheme.primary
+        ModelType.SD -> "Image" to MaterialTheme.colorScheme.tertiary
+        ModelType.TTS -> "TTS" to MaterialTheme.colorScheme.secondary
+    }
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelSmall,
+        color = color,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .background(color.copy(alpha = 0.12f), RoundedCornerShape(rDp(4.dp)))
+            .padding(horizontal = rDp(6.dp), vertical = rDp(2.dp))
+    )
+}
+
+@Composable
 fun ModelCard(
     model: HuggingFaceModel,
     isInstalled: Boolean,
@@ -1361,11 +1391,20 @@ fun ModelCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = model.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        ModelTypeBadge(model.modelType)
+                        Text(
+                            text = model.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                    }
                     Spacer(modifier = Modifier.height(rDp(4.dp)))
                     Text(
                         text = model.description,
@@ -1409,9 +1448,9 @@ fun ModelCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(rDp(12.dp)))
+            Spacer(modifier = Modifier.height(rDp(10.dp)))
 
-            // Tags
+            // Tags row with size chip
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
@@ -1430,7 +1469,7 @@ fun ModelCard(
                     )
                 })
 
-                model.tags.take(2).forEach { tag ->
+                model.tags.take(3).forEach { tag ->
                     AssistChip(onClick = {}, label = {
                         Text(
                             text = tag, style = MaterialTheme.typography.labelSmall
@@ -1463,12 +1502,22 @@ fun ModelCard(
                         isProcessing -> "Processing model..."
                         isExtracting -> "Extracting files..."
                         isDownloading -> {
-                            val downloaded =
-                                (downloadState as ModelDownloadService.DownloadState.Downloading).downloadedBytes / 1_000_000
-                            val total = downloadState.totalBytes / 1_000_000
-                            "${downloaded}MB / ${total}MB (${(progress * 100).toInt()}%)"
+                            val ds = downloadState as ModelDownloadService.DownloadState.Downloading
+                            val downloadedMB = ds.downloadedBytes / 1_000_000
+                            val totalMB = ds.totalBytes / 1_000_000
+                            val pct = (progress * 100).toInt()
+                            val speedText = if (ds.speedBytesPerSec > 0) {
+                                val speedMB = ds.speedBytesPerSec / 1_000_000.0
+                                " · %.1f MB/s".format(speedMB)
+                            } else ""
+                            val etaText = if (ds.etaSeconds > 0) {
+                                val mins = ds.etaSeconds / 60
+                                val secs = ds.etaSeconds % 60
+                                if (mins > 0) " · ${mins}m ${secs}s left"
+                                else " · ${secs}s left"
+                            } else ""
+                            "${downloadedMB}MB / ${totalMB}MB ($pct%)$speedText$etaText"
                         }
-
                         else -> ""
                     }
 

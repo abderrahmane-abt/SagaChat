@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -77,7 +78,10 @@ import com.dark.tool_neuron.ui.components.ModeToggleSwitch
 import com.dark.tool_neuron.ui.components.ModelListItem
 import com.dark.tool_neuron.ui.components.PluginOverlayBottomSheet
 import com.dark.tool_neuron.ui.components.RagOverlayBottomSheet
+import com.dark.tool_neuron.ui.components.TTSSettingsBottomSheet
 import com.dark.tool_neuron.ui.theme.rDp
+import com.dark.tool_neuron.tts.TTSDataStore
+import com.dark.tool_neuron.tts.TTSSettings
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
 import com.dark.tool_neuron.viewmodel.PluginViewModel
@@ -232,6 +236,16 @@ fun BottomBar(
     val registeredPlugins by pluginViewModel.registeredPlugins.collectAsStateWithLifecycle()
     val enabledPluginNames by pluginViewModel.enabledPluginNames.collectAsStateWithLifecycle()
     val expandedPluginIds by pluginViewModel.expandedPluginIds.collectAsStateWithLifecycle()
+    val grammarMode by pluginViewModel.grammarMode.collectAsStateWithLifecycle()
+    val multiTurnEnabled by pluginViewModel.multiTurnEnabled.collectAsStateWithLifecycle()
+    val toolCallingConfig by pluginViewModel.toolCallingConfig.collectAsStateWithLifecycle()
+
+    // TTS State
+    val showTtsSettings by chatViewModel.showTtsSettings.collectAsStateWithLifecycle()
+    val ttsModelLoaded by chatViewModel.ttsModelLoaded.collectAsStateWithLifecycle()
+    val ttsAvailableVoices by chatViewModel.ttsAvailableVoices.collectAsStateWithLifecycle()
+    val ttsDataStore = remember { TTSDataStore(context) }
+    val ttsSettings by ttsDataStore.settings.collectAsStateWithLifecycle(initialValue = TTSSettings())
 
     // Coroutine scope for RAG queries
     val scope = rememberCoroutineScope()
@@ -308,13 +322,40 @@ fun BottomBar(
         plugins = registeredPlugins,
         enabledPluginNames = enabledPluginNames,
         expandedPluginIds = expandedPluginIds,
+        grammarMode = grammarMode,
+        multiTurnEnabled = multiTurnEnabled,
+        toolCallingConfig = toolCallingConfig,
         onDismiss = { pluginViewModel.hidePluginOverlay() },
         onPluginToggle = { name, enabled ->
             pluginViewModel.togglePluginEnabled(name, enabled)
         },
         onPluginExpand = { name ->
             pluginViewModel.togglePluginExpanded(name)
-        }
+        },
+        onGrammarModeChange = { pluginViewModel.setGrammarMode(it) },
+        onMultiTurnToggle = { pluginViewModel.setMultiTurnEnabled(it) },
+        onMaxRoundsChange = { pluginViewModel.setMaxRounds(it) },
+        onMaxTokensPerTurnChange = { pluginViewModel.setMaxTokensPerTurn(it) }
+    )
+
+    // Sync TTS settings to ChatViewModel for use in speak
+    LaunchedEffect(ttsSettings) {
+        chatViewModel.updateTtsSettings(ttsSettings)
+    }
+
+    // TTS Settings Overlay
+    TTSSettingsBottomSheet(
+        show = showTtsSettings,
+        settings = ttsSettings,
+        isModelLoaded = ttsModelLoaded,
+        availableVoices = ttsAvailableVoices,
+        onDismiss = { chatViewModel.hideTtsSettings() },
+        onVoiceChange = { scope.launch { ttsDataStore.updateVoice(it) } },
+        onSpeedChange = { scope.launch { ttsDataStore.updateSpeed(it) } },
+        onStepsChange = { scope.launch { ttsDataStore.updateSteps(it) } },
+        onLanguageChange = { scope.launch { ttsDataStore.updateLanguage(it) } },
+        onAutoSpeakToggle = { scope.launch { ttsDataStore.updateAutoSpeak(it) } },
+        onUseNNAPIToggle = { scope.launch { ttsDataStore.updateUseNNAPI(it) } }
     )
 
     Column {
@@ -380,6 +421,7 @@ fun BottomBar(
                                 text = when (currentGenerationType) {
                                     GenerationManager.ModelType.TEXT_GENERATION -> "Say Anything…"
                                     GenerationManager.ModelType.IMAGE_GENERATION -> "Describe the image you want…"
+                                    GenerationManager.ModelType.AUDIO_GENERATION -> "Say Anything…"
                                 }
                             )
                         },
@@ -458,6 +500,19 @@ fun BottomBar(
                         icon = R.drawable.tools // Using settings icon as placeholder
                     )
 
+                    // TTS Button
+                    ActionToggleButton(
+                        onCheckedChange = {
+                            if (showTtsSettings) {
+                                chatViewModel.hideTtsSettings()
+                            } else {
+                                chatViewModel.showTtsSettings()
+                            }
+                        },
+                        checked = showTtsSettings,
+                        icon = Icons.AutoMirrored.Filled.VolumeUp
+                    )
+
                     Spacer(Modifier.weight(1f))
 
                     when (isGenerating) {
@@ -515,6 +570,9 @@ fun BottomBar(
                                             GenerationManager.ModelType.IMAGE_GENERATION -> {
                                                 chatViewModel.sendImageRequest(value)
                                                 value = ""
+                                            }
+                                            GenerationManager.ModelType.AUDIO_GENERATION -> {
+                                                // TTS handled via settings overlay, not text input
                                             }
                                         }
                                     }

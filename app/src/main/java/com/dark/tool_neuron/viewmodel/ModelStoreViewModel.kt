@@ -66,6 +66,9 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
     val downloadStates = ModelDownloadService.downloadStates
 
     // Filter states
+    private val _selectedModelType = MutableStateFlow<ModelType?>(null)
+    val selectedModelType: StateFlow<ModelType?> = _selectedModelType
+
     private val _selectedCategory = MutableStateFlow<ModelCategory?>(null)
     val selectedCategory: StateFlow<ModelCategory?> = _selectedCategory
 
@@ -141,7 +144,12 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             var filtered = _models.value
 
-            // Category filter (repository level)
+            // Model type filter (GGUF, SD, TTS)
+            _selectedModelType.value?.let { type ->
+                filtered = filtered.filter { it.modelType == type }
+            }
+
+            // Category filter (repository level) - only applies to GGUF
             _selectedCategory.value?.let { category ->
                 val repos = repositories.first()
                 val enabledRepos = repos
@@ -149,23 +157,31 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
                     .map { it.id }
                     .toSet()
                 filtered = filtered.filter { model ->
-                    enabledRepos.any { model.id.startsWith(it) }
+                    // Category filter only applies to GGUF models
+                    model.modelType != ModelType.GGUF ||
+                            enabledRepos.any { model.id.startsWith(it) }
                 }
             }
 
-            // Parameter count filter
+            // Parameter count filter (GGUF only)
             if (_selectedParameters.value.isNotEmpty()) {
                 filtered = filtered.filter { model ->
-                    val params = ModelMetadataExtractor.extractParameterCount(model.name)
-                    params != null && params in _selectedParameters.value
+                    if (model.modelType != ModelType.GGUF) true
+                    else {
+                        val params = ModelMetadataExtractor.extractParameterCount(model.name)
+                        params != null && params in _selectedParameters.value
+                    }
                 }
             }
 
-            // Quantization filter
+            // Quantization filter (GGUF only)
             if (_selectedQuantizations.value.isNotEmpty()) {
                 filtered = filtered.filter { model ->
-                    val quant = ModelMetadataExtractor.extractQuantization(model.name)
-                    quant != null && quant in _selectedQuantizations.value
+                    if (model.modelType != ModelType.GGUF) true
+                    else {
+                        val quant = ModelMetadataExtractor.extractQuantization(model.name)
+                        quant != null && quant in _selectedQuantizations.value
+                    }
                 }
             }
 
@@ -188,9 +204,9 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
 
             // Apply sorting
             filtered = when (_sortBy.value) {
-                SortOption.NAME -> filtered.sortedBy { it.name }
+                SortOption.NAME -> filtered.sortedBy { it.name.lowercase() }
                 SortOption.SIZE -> filtered.sortedBy { ModelMetadataExtractor.parseSizeToBytes(it.approximateSize) }
-                SortOption.RECENTLY_ADDED -> filtered
+                SortOption.RECENTLY_ADDED -> filtered.reversed()
             }
 
             _filteredModels.value = filtered
@@ -202,12 +218,9 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
         applyAllFilters()
     }
 
-    fun filterByType(modelType: ModelType?) {
-        _filteredModels.value = if (modelType == null) {
-            _models.value
-        } else {
-            _models.value.filter { it.modelType == modelType }
-        }
+    fun filterByModelType(modelType: ModelType?) {
+        _selectedModelType.value = modelType
+        applyAllFilters()
     }
 
     fun filterByCategory(category: ModelCategory?) {
@@ -244,6 +257,7 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun clearAllFilters() {
+        _selectedModelType.value = null
         _selectedCategory.value = null
         _selectedParameters.value = emptySet()
         _selectedQuantizations.value = emptySet()
