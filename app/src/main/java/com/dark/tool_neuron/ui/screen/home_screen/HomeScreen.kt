@@ -94,7 +94,6 @@ fun HomeScreen(
     onModelEditor: () -> Unit,
     onSettingsClick: () -> Unit,
     onVaultManagerClick: () -> Unit,
-    onNAppClick: () -> Unit = {},
     chatViewModel: ChatViewModel,
     llmModelViewModel: LLMModelViewModel
 ) {
@@ -113,9 +112,6 @@ fun HomeScreen(
                         scope.launch {
                             drawerState.close()
                         }
-                    },
-                    onNAppClick = {
-                        onNAppClick()
                     },
                     chatViewModel = chatViewModel
                 )

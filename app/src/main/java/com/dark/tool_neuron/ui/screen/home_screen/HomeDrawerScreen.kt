@@ -65,7 +65,6 @@ import java.util.Locale
 fun HomeDrawerScreen(
     onChatSelected: (String) -> Unit,
     onVaultManagerClick: () -> Unit,
-    onNAppClick: () -> Unit = {},
     chatViewModel: com.dark.tool_neuron.viewmodel.ChatViewModel,
     viewModel: ChatListViewModel = hiltViewModel()
 ) {
@@ -110,11 +109,6 @@ fun HomeDrawerScreen(
                                 }
                             },
                             icon = Icons.Filled.Add,
-                            modifier = Modifier.padding(end = rDp(6.dp))
-                        )
-                        ActionButton(
-                            onClickListener = onNAppClick,
-                            icon = Icons.Filled.Psychology,
                             modifier = Modifier.padding(end = rDp(6.dp))
                         )
                     }
