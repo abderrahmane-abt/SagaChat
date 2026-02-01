@@ -424,17 +424,19 @@ class ChatViewModel @Inject constructor(
         for (round in 1..maxRounds) {
             // Generate next tool call
             PluginManager.restoreGrammar()
-            val systemPrompt = buildString {
-                appendLine("Tools: $toolSignatures")
-                appendLine("Plan: $truncatedPlan")
-                if (steps.isNotEmpty()) {
-                    appendLine("Done so far:")
-                    steps.forEach { s ->
-                        appendLine("- ${s.toolName}: ${s.result.take(150)}")
-                    }
-                    appendLine("Call the NEXT tool, or stop if done.")
-                } else {
+            // Round 1: include tool signatures + plan (model needs to know params)
+            // Round 2+: minimal prompt — grammar already constrains which tools to call,
+            // just provide context about what's done + what the user wants
+            val systemPrompt = if (steps.isEmpty()) {
+                buildString {
+                    appendLine("Tools: $toolSignatures")
+                    appendLine("Plan: $truncatedPlan")
                     appendLine("Call the first tool with ALL required arguments.")
+                }
+            } else {
+                buildString {
+                    appendLine("Done: ${steps.joinToString("; ") { "${it.toolName}=${it.result.take(100)}" }}")
+                    appendLine("Call the NEXT tool needed, or stop if the plan is complete.")
                 }
             }
             val messages = listOf(

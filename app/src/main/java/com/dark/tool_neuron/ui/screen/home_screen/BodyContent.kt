@@ -288,9 +288,12 @@ private fun StreamingView(
             )
         }
 
-        // Show tool results from plugin execution
-        messages.filter { it.content.contentType == ContentType.PluginResult }.forEach { msg ->
-            PluginResultCard(message = msg)
+        // Show tool results from plugin execution (only when NOT in agent mode,
+        // since AgentExecutionView already displays step results)
+        if (agentPhase == AgentPhase.Idle) {
+            messages.filter { it.content.contentType == ContentType.PluginResult }.forEach { msg ->
+                PluginResultCard(message = msg)
+            }
         }
 
         when {
