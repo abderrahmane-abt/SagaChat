@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.tool_neuron.global.Standards
+import com.dark.tool_neuron.plugins.PluginManager
 import com.dark.tool_neuron.service.ModelDownloadService
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionTextButton
@@ -69,9 +70,14 @@ fun SettingsScreen(
     val toolCallingEnabled by viewModel.toolCallingEnabled.collectAsStateWithLifecycle()
     val imageBlurEnabled by viewModel.imageBlurEnabled.collectAsStateWithLifecycle()
     val loadTTSOnStart by viewModel.loadTTSOnStart.collectAsStateWithLifecycle()
-
     // Installed models
     val installedModels by viewModel.installedModels.collectAsStateWithLifecycle(initialValue = emptyList())
+
+    // Tool calling model state
+    val hasToolCallingModel by viewModel.hasToolCallingModel.collectAsStateWithLifecycle()
+    val toolCallingDownloadStates by viewModel.toolCallingModelDownloadState.collectAsStateWithLifecycle()
+    val toolCallingDownloadState = toolCallingDownloadStates[PluginManager.TOOL_CALLING_MODEL_ID]
+
 
     // TTS settings
     val ttsSettings by viewModel.ttsSettings.collectAsStateWithLifecycle()
@@ -127,10 +133,96 @@ fun SettingsScreen(
             item {
                 SwitchRow(
                     title = "Tool Calling",
-                    description = "Enable tool/plugin calling for supported models",
-                    checked = toolCallingEnabled,
-                    onCheckedChange = { viewModel.setToolCallingEnabled(it) }
+                    description = if (hasToolCallingModel) "Enable tool/plugin calling for supported models"
+                        else "Tool calling model required — download below",
+                    checked = toolCallingEnabled && hasToolCallingModel,
+                    onCheckedChange = { viewModel.setToolCallingEnabled(it) },
+                    enabled = hasToolCallingModel
                 )
+            }
+
+            // Download tool calling model card — only visible when no tool calling model is installed
+            if (!hasToolCallingModel) {
+                item {
+                    StandardCard(title = "Tool Calling Model Required") {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .animateContentSize(spring()),
+                            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                        ) {
+                            CaptionText(text = "Ruvltra Claude Code 0.5B · ~400 MB")
+                            CaptionText(text = "Compact model optimized for tool calling")
+
+                            when (toolCallingDownloadState) {
+                                is ModelDownloadService.DownloadState.Downloading -> {
+                                    val progress = toolCallingDownloadState.progress
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        LinearProgressIndicator(
+                                            progress = { progress },
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(rDp(6.dp))
+                                                .clip(RoundedCornerShape(rDp(3.dp))),
+                                            color = MaterialTheme.colorScheme.tertiary,
+                                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                                        )
+                                        Spacer(Modifier.width(rDp(12.dp)))
+                                        Text(
+                                            "${(progress * 100).toInt()}%",
+                                            style = MaterialTheme.typography.labelMedium.copy(
+                                                fontWeight = FontWeight.SemiBold
+                                            ),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                is ModelDownloadService.DownloadState.Extracting,
+                                is ModelDownloadService.DownloadState.Processing -> {
+                                    LinearProgressIndicator(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(rDp(6.dp))
+                                            .clip(RoundedCornerShape(rDp(3.dp))),
+                                        color = MaterialTheme.colorScheme.tertiary,
+                                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                                    )
+                                }
+
+                                is ModelDownloadService.DownloadState.Success -> {
+                                    CaptionText(text = "Downloaded successfully")
+                                }
+
+                                is ModelDownloadService.DownloadState.Error -> {
+                                    Text(
+                                        text = toolCallingDownloadState.message,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                    FilledTonalButton(onClick = { viewModel.downloadToolCallingModel() }) {
+                                        Text("Retry")
+                                    }
+                                }
+
+                                else -> {
+                                    FilledTonalButton(onClick = { viewModel.downloadToolCallingModel() }) {
+                                        Icon(
+                                            Icons.Default.Download,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(rDp(18.dp))
+                                        )
+                                        Spacer(Modifier.width(rDp(8.dp)))
+                                        Text("Download")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // ==================== LLM ====================

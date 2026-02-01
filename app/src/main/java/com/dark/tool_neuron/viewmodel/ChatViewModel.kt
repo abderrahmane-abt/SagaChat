@@ -3,6 +3,7 @@ package com.dark.tool_neuron.viewmodel
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import android.widget.Toast
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.lifecycle.ViewModel
@@ -16,6 +17,7 @@ import com.dark.tool_neuron.models.messages.MessageContent
 import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.models.messages.RagResultItem
 import com.dark.tool_neuron.models.messages.Role
+import com.dark.tool_neuron.models.messages.ToolChainStepData
 import com.dark.tool_neuron.models.plugins.PluginExecutionMetrics
 import com.dark.tool_neuron.models.plugins.PluginResultData
 import com.dark.tool_neuron.plugins.PluginExecutionResult
@@ -30,6 +32,7 @@ import com.dark.tool_neuron.tts.TTSSettings
 import com.dark.tool_neuron.worker.LlmModelWorker
 import com.mp.ai_gguf.models.DecodingMetrics
 import com.mp.ai_gguf.toolcalling.ToolCall
+import com.mp.ai_gguf.toolcalling.ToolCallingConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import jakarta.inject.Inject
@@ -38,12 +41,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+
+enum class AgentPhase { Idle, Planning, Executing, Summarizing, Complete }
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
@@ -52,6 +58,7 @@ class ChatViewModel @Inject constructor(
     private val generationManager: GenerationManager
 ) : ViewModel() {
 
+    private val appContext = context
     private val appSettings = AppSettingsDataStore(context)
     private val ttsDataStore = com.dark.tool_neuron.tts.TTSDataStore(context)
 
@@ -95,6 +102,26 @@ class ChatViewModel @Inject constructor(
     // Tool calling state
     private val _currentToolName = MutableStateFlow<String?>(null)
     val currentToolName: StateFlow<String?> = _currentToolName
+
+    // Tool chain steps (used by both streaming UI and persistence)
+    private val _toolChainSteps = MutableStateFlow<List<ToolChainStepData>>(emptyList())
+    val toolChainSteps: StateFlow<List<ToolChainStepData>> = _toolChainSteps
+
+    private val _currentToolChainRound = MutableStateFlow(0)
+    val currentToolChainRound: StateFlow<Int> = _currentToolChainRound
+
+    private val _maxToolChainRounds = MutableStateFlow(5)
+    val maxToolChainRounds: StateFlow<Int> = _maxToolChainRounds
+
+    // Agent phase state (Plan → Execute → Summarize)
+    private val _agentPhase = MutableStateFlow(AgentPhase.Idle)
+    val agentPhase: StateFlow<AgentPhase> = _agentPhase.asStateFlow()
+
+    private val _agentPlan = MutableStateFlow<String?>(null)
+    val agentPlan: StateFlow<String?> = _agentPlan.asStateFlow()
+
+    private val _agentSummary = MutableStateFlow<String?>(null)
+    val agentSummary: StateFlow<String?> = _agentSummary.asStateFlow()
 
     // Track generation job for proper cancellation
     private var generationJob: Job? = null
@@ -202,6 +229,11 @@ class ChatViewModel @Inject constructor(
         userMessageAdded = false
         _error.value = null
         _currentToolName.value = null
+        _toolChainSteps.value = emptyList()
+        _currentToolChainRound.value = 0
+        _agentPhase.value = AgentPhase.Idle
+        _agentPlan.value = null
+        _agentSummary.value = null
         AppStateManager.setHasMessages(false)
     }
 
@@ -239,295 +271,408 @@ class ChatViewModel @Inject constructor(
         generationManager.setCurrentModelType(GenerationManager.ModelType.IMAGE_GENERATION)
     }
 
-    // ==================== Text Generation ====================
+    // ==================== Unified Text Generation Entry Point ====================
 
-    fun sendTextMessage(prompt: String, maxTokens: Int = 512) {
+    fun sendChat(prompt: String, maxTokens: Int = 512) {
         if (!generationManager.isTextModelLoaded()) {
             _error.value = "Please load a text generation model first"
             AppStateManager.setError("Please load a text generation model first")
             return
         }
-
         if (_isGenerating.value) return
 
+        _isGenerating.value = true
         _streamingUserMessage.value = prompt
+        _streamingAssistantMessage.value = ""
         userMessageAdded = false
+        currentGeneratedContent = ""
+        currentMetrics = null
+        _error.value = null
 
-        viewModelScope.launch {
-            if (isNewConversation) {
-                currentUserMessage = Messages(
-                    msgId = "",
-                    role = Role.User,
-                    content = MessageContent(
-                        contentType = ContentType.Text,
-                        content = prompt
-                    ),
-                    decodingMetrics = null
-                )
-                AppStateManager.setHasMessages(true)
+        currentUserMessage = Messages(
+            msgId = "",
+            role = Role.User,
+            content = MessageContent(contentType = ContentType.Text, content = prompt),
+            decodingMetrics = null
+        )
+        AppStateManager.setHasMessages(true)
 
-                if (PluginManager.hasEnabledTools()) {
-                    generateTextWithToolsNewChat(prompt, maxTokens)
-                } else {
-                    generateTextForNewChat(prompt, maxTokens)
-                }
-            } else {
-                val chatId = _currentChatId.value
-                if (chatId == null) {
-                    _error.value = "No chat selected"
-                    AppStateManager.setError("No chat selected")
-                    return@launch
-                }
+        generationJob = viewModelScope.launch {
+            try {
+                val isNewChat = isNewConversation
+                val hasTools = PluginManager.hasEnabledTools()
+                        && PluginManager.isToolCallingModelLoaded.value
+                val ragContext = if (_isRagEnabled.value) _currentRagContext.value else null
 
-                chatManager.addUserMessage(chatId, prompt).onSuccess { userMessage ->
-                    currentUserMessage = userMessage
-                    AppStateManager.setHasMessages(true)
-
-                    if (PluginManager.hasEnabledTools()) {
-                        generateTextWithToolsExisting(chatId, userMessage, maxTokens)
-                    } else {
-                        generateText(chatId, userMessage, maxTokens)
+                // For existing chats, save user message upfront
+                if (!isNewChat) {
+                    val chatId = _currentChatId.value ?: run {
+                        _error.value = "No chat selected"
+                        resetStreamingState()
+                        return@launch
                     }
-                }.onFailure { e ->
-                    _error.value = "Failed to save message: ${e.message}"
-                    _streamingUserMessage.value = null
-                    currentUserMessage = null
-                    AppStateManager.setError("Failed to save message: ${e.message}")
+                    chatManager.addUserMessage(chatId, prompt).onSuccess { userMsg ->
+                        currentUserMessage = userMsg
+                    }.onFailure { e ->
+                        _error.value = "Failed to save message: ${e.message}"
+                        resetStreamingState()
+                        return@launch
+                    }
                 }
+
+                when {
+                    hasTools -> agentFlow(prompt, ragContext, maxTokens, isNewChat)
+                    else -> simpleFlow(prompt, ragContext, maxTokens, isNewChat)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in sendChat", e)
+                _error.value = e.message
+                AppStateManager.setError(e.message ?: "Unknown error")
+                resetStreamingState()
             }
         }
     }
 
-    // ==================== Tool-Calling Generation (single tool call) ====================
+    // Keep old name as alias for backward compatibility with callers
+    fun sendTextMessage(prompt: String, maxTokens: Int = 512) = sendChat(prompt, maxTokens)
 
-    /**
-     * Generate text with tool calling support for new chats.
-     * Single pass: generate → if tool call detected → execute → done.
-     */
-    private fun generateTextWithToolsNewChat(prompt: String, maxTokens: Int) {
-        generationJob = viewModelScope.launch {
-            _isGenerating.value = true
-            _error.value = null
-            _streamingAssistantMessage.value = ""
-            currentGeneratedContent = ""
-            currentMetrics = null
+    // ==================== Agent Flow (Plan → Execute → Summarize) ====================
 
-            AppStateManager.setGeneratingText()
+    private suspend fun agentFlow(
+        prompt: String,
+        ragContext: String?,
+        maxTokens: Int,
+        isNewChat: Boolean
+    ) {
+        val fullPrompt = ragContext?.let { "$it\n\n$prompt" } ?: prompt
 
-            val isStreaming = streamingEnabled.value
-            val hasMemory = chatMemoryEnabled.value
-            val config = PluginManager.getToolCallingConfig()
+        // Phase 1: Plan
+        _agentPhase.value = AgentPhase.Planning
+        AppStateManager.setGeneratingText()
+        Log.d(TAG, "Agent Phase 1: Generating plan")
+        val plan = generatePlan(fullPrompt)
+        _agentPlan.value = plan
+        Log.d(TAG, "Agent plan: $plan")
 
-            // Build conversation messages
-            val conversationMessages = mutableListOf<JSONObject>()
-            if (hasMemory) {
-                _messages.forEach { msg ->
-                    when (msg.role) {
-                        Role.User -> conversationMessages.add(
-                            JSONObject().put("role", "user").put("content", msg.content.content)
-                        )
-                        Role.Assistant -> {
-                            if (msg.content.contentType == ContentType.Text) {
-                                conversationMessages.add(
-                                    JSONObject().put("role", "assistant").put("content", msg.content.content)
-                                )
-                            }
-                        }
-                    }
-                }
+        // Phase 2: Tool Selection + Execution
+        // Always proceed — grammar-constrained generation is the reliable gate
+        _agentPhase.value = AgentPhase.Executing
+        _streamingAssistantMessage.value = ""
+        Log.d(TAG, "Agent Phase 2: Generating tool calls")
+        val toolCalls = generateToolCalls(fullPrompt, plan)
+        Log.d(TAG, "Agent tool calls: ${toolCalls.size} calls")
+
+        // If grammar produced zero tool calls, the model has nothing to execute.
+        // Fall back to simple text generation instead of an empty summary.
+        if (toolCalls.isEmpty()) {
+            Log.d(TAG, "No tool calls generated, falling back to simple flow")
+            _agentPhase.value = AgentPhase.Idle
+            _agentPlan.value = null
+            PluginManager.clearGrammar()
+            simpleFlow(prompt, ragContext, maxTokens, isNewChat)
+            return
+        }
+
+        val steps = executePlanSteps(toolCalls)
+        Log.d(TAG, "Agent execution complete: ${steps.size} steps executed")
+
+        // Phase 3: Summary
+        _agentPhase.value = AgentPhase.Summarizing
+        _streamingAssistantMessage.value = ""
+        AppStateManager.setGeneratingText()
+        Log.d(TAG, "Agent Phase 3: Generating summary")
+        val summary = generateSummary(fullPrompt, steps)
+        _agentSummary.value = summary
+        _streamingAssistantMessage.value = summary
+        _agentPhase.value = AgentPhase.Complete
+        Log.d(TAG, "Agent flow complete")
+
+        // Persist
+        persistAgentChat(prompt, isNewChat, plan, steps, summary)
+    }
+
+    /** Phase 1: Generate a brief plan describing which tools to use. */
+    private suspend fun generatePlan(prompt: String): String {
+        PluginManager.clearGrammar()
+        val toolDescriptions = PluginManager.getToolDescriptionsText()
+        val systemPrompt = buildString {
+            appendLine("You have these tools:")
+            appendLine(toolDescriptions)
+            appendLine()
+            appendLine("Write a brief 1-2 sentence plan: which tools to call and in what order to fulfill the user's request.")
+        }
+        val messages = listOf(
+            JSONObject().put("role", "system").put("content", systemPrompt),
+            JSONObject().put("role", "user").put("content", prompt)
+        )
+        return generatePlainText(messages, maxTokens = 150)
+    }
+
+    /** Phase 2a: Generate all tool calls in a single LLM call (with grammar). */
+    private suspend fun generateToolCalls(prompt: String, plan: String): List<Pair<String, String>> {
+        PluginManager.restoreGrammar()
+        val systemPrompt = "Plan: $plan\nCall the tools needed to execute this plan."
+        val messages = listOf(
+            JSONObject().put("role", "system").put("content", systemPrompt),
+            JSONObject().put("role", "user").put("content", prompt)
+        )
+        return generateAndCollectToolCalls(messages, maxTokens = 300)
+    }
+
+    /** Phase 2b: Execute each tool call deterministically. */
+    private suspend fun executePlanSteps(
+        toolCalls: List<Pair<String, String>>
+    ): List<ToolChainStepData> {
+        val steps = mutableListOf<ToolChainStepData>()
+        val seenCalls = mutableSetOf<String>()
+        _toolChainSteps.value = emptyList()
+        _maxToolChainRounds.value = toolCalls.size
+
+        for ((index, tc) in toolCalls.withIndex()) {
+            val (rawName, rawArgs) = tc
+            val callKey = "${rawName.lowercase()}:${rawArgs.hashCode()}"
+            if (callKey in seenCalls) {
+                Log.w(TAG, "Duplicate tool call detected, skipping: $rawName")
+                continue
+            }
+            seenCalls.add(callKey)
+
+            _currentToolChainRound.value = index + 1
+
+            // Parse and execute
+            val parsed = extractToolCallFromArgs(rawName, rawArgs)
+            if (parsed == null) {
+                Log.e(TAG, "Failed to parse tool call: $rawName")
+                steps.add(ToolChainStepData(
+                    round = index + 1,
+                    toolName = rawName,
+                    pluginName = "Unknown",
+                    args = rawArgs.take(500),
+                    result = "Failed to parse arguments",
+                    executionTimeMs = 0,
+                    success = false
+                ))
+                _toolChainSteps.value = steps.toList()
+                continue
             }
 
-            val finalPrompt = _currentRagContext.value?.let { "$it\n\n### User Query:\n$prompt" } ?: prompt
-            conversationMessages.add(JSONObject().put("role", "user").put("content", finalPrompt))
+            val (toolName, argsObj) = parsed
+            val normalizedName = normalizeToolName(toolName)
+            _currentToolName.value = normalizedName
+            AppStateManager.setExecutingPlugin("", normalizedName)
 
-            var toolCallDetected = false
-            var toolCallName = ""
-            var toolCallArgs = ""
+            val toolCall = ToolCall(name = normalizedName, arguments = argsObj)
+            val result = PluginManager.executeToolForMultiTurn(toolCall)
 
-            try {
-                generationManager.generateMultiTurnStreaming(
-                    JSONArray(conversationMessages).toString(), config.maxTokensPerTurn
-                ).collect { event ->
-                    when (event) {
-                        is GenerationEvent.Token -> {
-                            currentGeneratedContent += event.text
-                            if (isStreaming) {
-                                _streamingAssistantMessage.value = currentGeneratedContent
-                            }
-                        }
-                        is GenerationEvent.ToolCall -> {
-                            toolCallDetected = true
-                            toolCallName = event.name
-                            toolCallArgs = event.args
-                        }
-                        is GenerationEvent.Done -> { /* handled after collect */ }
-                        is GenerationEvent.Metrics -> { currentMetrics = event.metrics }
-                        is GenerationEvent.Error -> { _error.value = event.message }
-                    }
-                }
-            } catch (e: Exception) {
-                handleTextGenerationException(prompt, e)
-                return@launch
+            val isSuccess = !result.isError
+            if (isSuccess) {
+                AppStateManager.setPluginExecutionComplete(
+                    pluginName = result.pluginName,
+                    toolName = normalizedName,
+                    success = true,
+                    executionTimeMs = result.executionTimeMs
+                )
+            } else {
+                AppStateManager.setPluginExecutionComplete(
+                    pluginName = result.pluginName,
+                    toolName = normalizedName,
+                    success = false,
+                    executionTimeMs = result.executionTimeMs,
+                    errorMessage = result.resultJson
+                )
             }
 
-            // Fallback: try parsing tool call from content
-            if (!toolCallDetected && currentGeneratedContent.isNotBlank()) {
-                tryParseToolCallFromContent(currentGeneratedContent)?.let { (name, args) ->
-                    toolCallDetected = true
-                    toolCallName = name
-                    toolCallArgs = args
-                    Log.d("ChatViewModel", "Fallback tool call detection: $name")
+            steps.add(ToolChainStepData(
+                round = index + 1,
+                toolName = normalizedName,
+                pluginName = result.pluginName,
+                args = rawArgs.take(500),
+                result = result.resultJson.take(500),
+                executionTimeMs = result.executionTimeMs,
+                success = isSuccess
+            ))
+            _toolChainSteps.value = steps.toList()
+
+            // Add plugin result message for in-memory UI display
+            if (result.rawData != null) {
+                val resultData = PluginResultData(
+                    pluginName = result.pluginName,
+                    toolName = normalizedName,
+                    inputParams = argsObj.toString(),
+                    resultData = result.resultJson,
+                    success = isSuccess
+                )
+                val pluginMessage = Messages(
+                    role = Role.Assistant,
+                    content = MessageContent(
+                        contentType = ContentType.PluginResult,
+                        content = "Plugin '${result.pluginName}' executed tool '$normalizedName'",
+                        pluginResultData = resultData
+                    ),
+                    pluginMetrics = PluginExecutionMetrics(
+                        pluginName = result.pluginName,
+                        toolName = normalizedName,
+                        executionTimeMs = result.executionTimeMs,
+                        success = isSuccess
+                    )
+                )
+                if (!userMessageAdded && currentUserMessage != null) {
+                    _messages.add(currentUserMessage!!)
+                    userMessageAdded = true
                 }
+                _messages.add(pluginMessage)
             }
 
-            // Execute tool if detected, then push AI to interpret the result
-            if (toolCallDetected) {
-                _streamingAssistantMessage.value = ""
-                currentGeneratedContent = ""
-                handlePluginToolCall(toolCallName, toolCallArgs)
+            // Brief pause to show step in UI
+            kotlinx.coroutines.delay(300)
+        }
 
-                // Get the tool result data from the last plugin result message
-                val lastPluginResult = _messages.lastOrNull {
-                    it.content.contentType == ContentType.PluginResult
+        _currentToolName.value = null
+        return steps
+    }
+
+    /** Phase 3: Generate a natural language summary from all tool results. */
+    private suspend fun generateSummary(
+        prompt: String,
+        steps: List<ToolChainStepData>
+    ): String {
+        PluginManager.clearGrammar()
+        val resultsText = steps.mapIndexed { i, step ->
+            "${i + 1}. ${step.pluginName} (${step.toolName}): ${step.result}"
+        }.joinToString("\n")
+
+        val systemPrompt = "You are a helpful assistant. Summarize the tool execution results concisely for the user."
+        val userContent = "My request: $prompt\n\nTool Results:\n$resultsText\n\nProvide a helpful summary."
+
+        val messages = listOf(
+            JSONObject().put("role", "system").put("content", systemPrompt),
+            JSONObject().put("role", "user").put("content", userContent)
+        )
+        val summary = generatePlainText(messages, maxTokens = 512)
+        PluginManager.restoreGrammar()  // Re-enable grammar for next message
+        return summary
+    }
+
+    /** Persist agent chat results to vault. */
+    private suspend fun persistAgentChat(
+        prompt: String,
+        isNewChat: Boolean,
+        plan: String,
+        steps: List<ToolChainStepData>,
+        summary: String
+    ) {
+        val ragResultItems = _currentRagResults.value.takeIf { it.isNotEmpty() }?.map { result ->
+            RagResultItem(
+                ragName = result.ragName,
+                content = result.content,
+                score = result.score,
+                nodeId = result.nodeId
+            )
+        }
+
+        if (isNewChat) {
+            chatManager.createNewChat().onSuccess { newChatId ->
+                _currentChatId.value = newChatId
+                chatManager.addUserMessage(newChatId, prompt)
+
+                // Save plugin result messages
+                _messages.filter { it.content.contentType == ContentType.PluginResult }
+                    .forEach { chatManager.addMessage(newChatId, it) }
+
+                // Save assistant message with full agent data
+                chatManager.addAssistantMessage(
+                    chatId = newChatId,
+                    content = summary,
+                    decodingMetrics = currentMetrics,
+                    ragResults = ragResultItems,
+                    toolChainSteps = steps,
+                    agentPlan = plan,
+                    agentSummary = summary
+                )
+
+                // Reload to get proper IDs
+                chatManager.getChatMessages(newChatId).onSuccess { loadedMessages ->
+                    _messages.clear()
+                    _messages.addAll(loadedMessages)
                 }
-                val toolResultData = lastPluginResult?.content?.pluginResultData?.resultData
 
-                if (toolResultData != null) {
-                    // Push AI to generate interpretation of the tool result
-                    generateResponseFromToolResult(conversationMessages, toolResultData, toolCallName)
-                }
-            }
-
-            _currentToolName.value = null
-            val filteredContent = filterToolCallSyntax(currentGeneratedContent)
-            _streamingAssistantMessage.value = filteredContent
-
-            if (filteredContent.isNotBlank()) {
-                createChatWithMessages(prompt, filteredContent, currentMetrics)
-            } else if (_messages.any { it.content.contentType == ContentType.PluginResult }) {
-                // Tool executed but no text — persist chat silently
-                chatManager.createNewChat().onSuccess { newChatId ->
-                    _currentChatId.value = newChatId
-                    chatManager.addUserMessage(newChatId, prompt)
-                    _messages.filter { it.content.contentType == ContentType.PluginResult }
-                        .forEach { chatManager.addMessage(newChatId, it) }
-                }
                 AppStateManager.setGenerationComplete()
                 AppStateManager.chatRefreshed()
+                val spokenMsgId = _messages.lastOrNull { it.role == Role.Assistant }?.msgId
                 resetStreamingState()
-            } else {
-                AppStateManager.setGenerationComplete()
+                viewModelScope.launch { autoSpeakIfEnabled(summary, spokenMsgId) }
+            }.onFailure { e ->
+                _error.value = "Failed to create chat: ${e.message}"
+                AppStateManager.setError("Failed to create chat: ${e.message}")
                 resetStreamingState()
             }
+        } else {
+            val chatId = _currentChatId.value ?: return
+
+            // Add user message to in-memory list if not already added
+            if (!userMessageAdded && currentUserMessage != null) {
+                _messages.add(currentUserMessage!!)
+                userMessageAdded = true
+            }
+
+            val assistantMessage = Messages(
+                role = Role.Assistant,
+                content = MessageContent(contentType = ContentType.Text, content = summary),
+                decodingMetrics = currentMetrics,
+                ragResults = ragResultItems,
+                toolChainSteps = steps,
+                agentPlan = plan,
+                agentSummary = summary
+            )
+            _messages.add(assistantMessage)
+
+            chatManager.addAssistantMessage(
+                chatId = chatId,
+                content = summary,
+                decodingMetrics = currentMetrics,
+                ragResults = ragResultItems,
+                toolChainSteps = steps,
+                agentPlan = plan,
+                agentSummary = summary
+            )
+
+            AppStateManager.setGenerationComplete()
+            AppStateManager.chatRefreshed()
+            val spokenMsgId = assistantMessage.msgId
+            resetStreamingState()
+            viewModelScope.launch { autoSpeakIfEnabled(summary, spokenMsgId) }
         }
     }
 
-    /**
-     * Generate text with tool calling support for existing chats.
-     * Single pass: generate → if tool call detected → execute → done.
-     */
-    private fun generateTextWithToolsExisting(chatId: String, userMessage: Messages, maxTokens: Int) {
-        generationJob = viewModelScope.launch {
-            _isGenerating.value = true
-            _error.value = null
-            _streamingAssistantMessage.value = ""
-            currentGeneratedContent = ""
-            currentMetrics = null
+    // ==================== Simple Flow (no tools) ====================
 
-            AppStateManager.setGeneratingText()
+    private suspend fun simpleFlow(
+        prompt: String,
+        ragContext: String?,
+        maxTokens: Int,
+        isNewChat: Boolean
+    ) {
+        AppStateManager.setGeneratingText()
+        val fullPrompt = ragContext?.let { "$it\n\n$prompt" } ?: prompt
 
-            val isStreaming = streamingEnabled.value
-            val hasMemory = chatMemoryEnabled.value
-            val config = PluginManager.getToolCallingConfig()
+        if (isNewChat) {
+            // Build conversation messages with memory
+            val conversationMessages = buildConversationMessages(fullPrompt)
+            val response = generatePlainText(conversationMessages, maxTokens)
+            val filteredResponse = filterToolCallSyntax(response)
+            _streamingAssistantMessage.value = filteredResponse
+            createChatWithMessages(prompt, filteredResponse, currentMetrics)
+        } else {
+            val chatId = _currentChatId.value ?: return
 
-            // Build conversation messages
-            val conversationMessages = mutableListOf<JSONObject>()
-            if (hasMemory) {
-                _messages.forEach { msg ->
-                    when (msg.role) {
-                        Role.User -> conversationMessages.add(
-                            JSONObject().put("role", "user").put("content", msg.content.content)
-                        )
-                        Role.Assistant -> {
-                            if (msg.content.contentType == ContentType.Text) {
-                                conversationMessages.add(
-                                    JSONObject().put("role", "assistant").put("content", msg.content.content)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            // Build existing conversation messages
+            val conversationMessages = buildExistingConversationMessages(fullPrompt)
+            val response = generatePlainText(conversationMessages, maxTokens)
+            val filteredResponse = filterToolCallSyntax(response)
+            _streamingAssistantMessage.value = filteredResponse
 
-            var userPrompt = userMessage.content.content
-            _currentRagContext.value?.let { userPrompt = "$it\n\n$userPrompt" }
-            conversationMessages.add(JSONObject().put("role", "user").put("content", userPrompt))
-
-            var toolCallDetected = false
-            var toolCallName = ""
-            var toolCallArgs = ""
-
-            try {
-                generationManager.generateMultiTurnStreaming(
-                    JSONArray(conversationMessages).toString(), config.maxTokensPerTurn
-                ).collect { event ->
-                    when (event) {
-                        is GenerationEvent.Token -> {
-                            currentGeneratedContent += event.text
-                            if (isStreaming) {
-                                _streamingAssistantMessage.value = currentGeneratedContent
-                            }
-                        }
-                        is GenerationEvent.ToolCall -> {
-                            toolCallDetected = true
-                            toolCallName = event.name
-                            toolCallArgs = event.args
-                        }
-                        is GenerationEvent.Done -> { /* handled after collect */ }
-                        is GenerationEvent.Metrics -> { currentMetrics = event.metrics }
-                        is GenerationEvent.Error -> { _error.value = event.message }
-                    }
-                }
-            } catch (e: Exception) {
-                handleTextGenerationExceptionExisting(chatId, userMessage, e)
-                return@launch
-            }
-
-            // Fallback: try parsing tool call from content
-            if (!toolCallDetected && currentGeneratedContent.isNotBlank()) {
-                tryParseToolCallFromContent(currentGeneratedContent)?.let { (name, args) ->
-                    toolCallDetected = true
-                    toolCallName = name
-                    toolCallArgs = args
-                    Log.d("ChatViewModel", "Fallback tool call detection: $name")
-                }
-            }
-
-            // Execute tool if detected, then push AI to interpret the result
-            if (toolCallDetected) {
-                _streamingAssistantMessage.value = ""
-                currentGeneratedContent = ""
-                handlePluginToolCall(toolCallName, toolCallArgs)
-
-                // Get the tool result data from the last plugin result message
-                val lastPluginResult = _messages.lastOrNull {
-                    it.content.contentType == ContentType.PluginResult
-                }
-                val toolResultData = lastPluginResult?.content?.pluginResultData?.resultData
-
-                if (toolResultData != null) {
-                    // Push AI to generate interpretation of the tool result
-                    generateResponseFromToolResult(conversationMessages, toolResultData, toolCallName)
-                }
-            }
-
-            _currentToolName.value = null
-            val filteredContent = filterToolCallSyntax(currentGeneratedContent)
-            _streamingAssistantMessage.value = filteredContent
-
-            // Add user message
-            if (!userMessageAdded) {
-                _messages.add(userMessage)
+            if (!userMessageAdded && currentUserMessage != null) {
+                _messages.add(currentUserMessage!!)
                 userMessageAdded = true
             }
 
@@ -540,226 +685,344 @@ class ChatViewModel @Inject constructor(
                 )
             }
 
-            if (filteredContent.isNotBlank()) {
+            if (filteredResponse.isNotBlank()) {
                 val assistantMessage = Messages(
                     role = Role.Assistant,
-                    content = MessageContent(
-                        contentType = ContentType.Text,
-                        content = filteredContent
-                    ),
+                    content = MessageContent(contentType = ContentType.Text, content = filteredResponse),
                     decodingMetrics = currentMetrics,
                     ragResults = ragResultItems
                 )
                 _messages.add(assistantMessage)
-                chatManager.addAssistantMessage(chatId, filteredContent, currentMetrics, ragResultItems)
+                chatManager.addAssistantMessage(chatId, filteredResponse, currentMetrics, ragResultItems)
                 AppStateManager.setGenerationComplete()
                 AppStateManager.chatRefreshed()
                 val spokenMsgId = assistantMessage.msgId
                 resetStreamingState()
-                viewModelScope.launch { autoSpeakIfEnabled(filteredContent, spokenMsgId) }
+                viewModelScope.launch { autoSpeakIfEnabled(filteredResponse, spokenMsgId) }
             } else {
                 AppStateManager.setGenerationComplete()
-                AppStateManager.chatRefreshed()
                 resetStreamingState()
             }
         }
     }
 
-    // ==================== Single-Turn Generation (backward compatible) ====================
+    // ==================== LLM Generation Helpers ====================
 
-    private fun generateTextForNewChat(prompt: String, maxTokens: Int) {
-        generationJob = viewModelScope.launch {
-            _isGenerating.value = true
-            _error.value = null
-            _streamingAssistantMessage.value = ""
-            currentGeneratedContent = ""
-            currentMetrics = null
+    /** Generate plain text (no grammar/tool detection). Streams to UI. */
+    private suspend fun generatePlainText(
+        messages: List<JSONObject>,
+        maxTokens: Int
+    ): String {
+        val jsonArray = JSONArray(messages)
+        var result = ""
+        currentMetrics = null
 
-            AppStateManager.setGeneratingText()
-
-            val isStreaming = streamingEnabled.value
-            var tokenBuffer = StringBuilder()
-            var tokenCount = 0
-            var lastUpdateTime = System.currentTimeMillis()
-            val updateIntervalMs = 50L
-            val tokenBatchSize = 3
-
-            try {
-                // Prepend RAG context if available
-                val finalPrompt = _currentRagContext.value?.let { ragContext ->
-                    "$ragContext\n\n### User Query:\n$prompt"
-                } ?: prompt
-
-                generationManager.generateTextStreaming(finalPrompt, maxTokens).collect { event ->
-                    when (event) {
-                        is GenerationEvent.Token -> {
-                            currentGeneratedContent += event.text
-                            tokenBuffer.append(event.text)
-                            tokenCount++
-
-                            if (isStreaming) {
-                                val currentTime = System.currentTimeMillis()
-                                val shouldUpdate = tokenCount >= tokenBatchSize ||
-                                        (currentTime - lastUpdateTime) >= updateIntervalMs
-
-                                if (shouldUpdate) {
-                                    _streamingAssistantMessage.value = currentGeneratedContent
-                                    tokenBuffer.clear()
-                                    tokenCount = 0
-                                    lastUpdateTime = currentTime
-                                }
-                            }
-                        }
-
-                        is GenerationEvent.Done -> {
-                            _streamingAssistantMessage.value = currentGeneratedContent
-                            createChatWithMessages(prompt, currentGeneratedContent, currentMetrics)
-                        }
-
-                        is GenerationEvent.Error -> {
-                            handleTextGenerationError(prompt, event.message)
-                        }
-
-                        is GenerationEvent.Metrics -> {
-                            currentMetrics = event.metrics
-                        }
-
-                        is GenerationEvent.ToolCall -> {
-                            Log.e("ChatViewModel", "Tool call received in single-turn (new chat): ${event.name}")
-                        }
-                    }
+        generationManager.generateMultiTurnStreaming(
+            jsonArray.toString(), maxTokens
+        ).collect { event ->
+            when (event) {
+                is GenerationEvent.Token -> {
+                    result += event.text
+                    _streamingAssistantMessage.value = result
                 }
-            } catch (e: Exception) {
-                handleTextGenerationException(prompt, e)
+                is GenerationEvent.Done -> { /* complete */ }
+                is GenerationEvent.Metrics -> { currentMetrics = event.metrics }
+                is GenerationEvent.Error -> {
+                    Log.e(TAG, "Generation error: ${event.message}")
+                    throw Exception(event.message)
+                }
+                is GenerationEvent.ToolCall -> {
+                    // Ignore tool calls during plain text generation
+                    Log.d(TAG, "Ignoring tool call during plain text: ${event.name}")
+                }
             }
         }
+        return result.trim()
     }
 
-    private fun generateText(chatId: String, userMessage: Messages, maxTokens: Int) {
-        generationJob = viewModelScope.launch {
-            _isGenerating.value = true
-            _error.value = null
-            _streamingAssistantMessage.value = ""
-            currentGeneratedContent = ""
-            currentMetrics = null
+    /** Generate with grammar and collect all tool calls from a single generation. */
+    private suspend fun generateAndCollectToolCalls(
+        messages: List<JSONObject>,
+        maxTokens: Int
+    ): List<Pair<String, String>> {
+        val toolCalls = mutableListOf<Pair<String, String>>()
+        var text = ""
+        val jsonArray = JSONArray(messages)
 
-            AppStateManager.setGeneratingText()
+        generationManager.generateMultiTurnStreaming(
+            jsonArray.toString(), maxTokens
+        ).collect { event ->
+            when (event) {
+                is GenerationEvent.Token -> {
+                    text += event.text
+                }
+                is GenerationEvent.ToolCall -> {
+                    toolCalls.add(Pair(event.name, event.args))
+                    Log.d(TAG, "Collected tool call: ${event.name}")
+                }
+                is GenerationEvent.Done -> {}
+                is GenerationEvent.Metrics -> { currentMetrics = event.metrics }
+                is GenerationEvent.Error -> {
+                    Log.e(TAG, "Generation error during tool call collection: ${event.message}")
+                }
+            }
+        }
 
-            val isStreaming = streamingEnabled.value
-            val hasMemory = chatMemoryEnabled.value
-            val tokenBuffer = StringBuilder()
-            var tokenCount = 0
-            var lastUpdateTime = System.currentTimeMillis()
-            val updateIntervalMs = 50L
-            val tokenBatchSize = 3
+        // Fallback: parse text if no ToolCall events were received
+        if (toolCalls.isEmpty() && text.isNotBlank()) {
+            Log.d(TAG, "No ToolCall events, trying text parsing fallback")
+            parseToolCallsFromText(text)?.let { parsed ->
+                toolCalls.addAll(parsed)
+                Log.d(TAG, "Fallback parsed ${parsed.size} tool calls from text")
+            }
+        }
 
+        return toolCalls
+    }
+
+    /** Parse multiple tool calls from text output (handles various formats). */
+    private fun parseToolCallsFromText(text: String): List<Pair<String, String>>? {
+        val results = mutableListOf<Pair<String, String>>()
+
+        // Try: single tool call via existing parser
+        tryParseToolCallFromContent(text)?.let { (name, args) ->
+            results.add(Pair(name, args))
+        }
+
+        // Try: JSON array with tool_calls containing multiple entries
+        if (results.isEmpty()) {
             try {
-                var conversationPrompt = if (hasMemory) {
-                    generationManager.buildConversationPrompt(
-                        _messages, userMessage.content.content
-                    )
-                } else {
-                    generationManager.buildConversationPrompt(
-                        emptyList(), userMessage.content.content
-                    )
+                val json = JSONObject(text.trim())
+                val toolCallsArray = json.optJSONArray("tool_calls")
+                if (toolCallsArray != null) {
+                    for (i in 0 until toolCallsArray.length()) {
+                        val call = toolCallsArray.getJSONObject(i)
+                        val name = call.getString("name")
+                        val args = call.getJSONObject("arguments").toString()
+                        results.add(Pair(name, JSONObject().apply {
+                            put("tool_calls", JSONArray().apply {
+                                put(JSONObject().apply {
+                                    put("name", name)
+                                    put("arguments", JSONObject(args))
+                                })
+                            })
+                        }.toString()))
+                    }
                 }
+            } catch (e: Exception) {
+                Log.d(TAG, "Multi-tool JSON parse failed: ${e.message}")
+            }
+        }
 
-                // Prepend RAG context if available
-                _currentRagContext.value?.let { ragContext ->
-                    conversationPrompt = "$ragContext\n\n$conversationPrompt"
+        return results.takeIf { it.isNotEmpty() }
+    }
+
+    /** Build conversation messages for new chat (with optional memory). */
+    private fun buildConversationMessages(userPrompt: String): List<JSONObject> {
+        val messages = mutableListOf<JSONObject>()
+        if (chatMemoryEnabled.value) {
+            _messages.forEach { msg ->
+                when (msg.role) {
+                    Role.User -> messages.add(
+                        JSONObject().put("role", "user").put("content", msg.content.content)
+                    )
+                    Role.Assistant -> {
+                        if (msg.content.contentType == ContentType.Text) {
+                            messages.add(
+                                JSONObject().put("role", "assistant").put("content", msg.content.content)
+                            )
+                        }
+                    }
                 }
+            }
+        }
+        messages.add(JSONObject().put("role", "user").put("content", userPrompt))
+        return messages
+    }
 
-                generationManager.generateTextStreaming(conversationPrompt, maxTokens)
-                    .collect { event ->
-                        when (event) {
-                            is GenerationEvent.Token -> {
-                                currentGeneratedContent += event.text
-                                tokenBuffer.append(event.text)
-                                tokenCount++
+    /** Build conversation messages for existing chat. */
+    private fun buildExistingConversationMessages(userPrompt: String): List<JSONObject> {
+        val messages = mutableListOf<JSONObject>()
+        if (chatMemoryEnabled.value) {
+            _messages.forEach { msg ->
+                when (msg.role) {
+                    Role.User -> messages.add(
+                        JSONObject().put("role", "user").put("content", msg.content.content)
+                    )
+                    Role.Assistant -> {
+                        if (msg.content.contentType == ContentType.Text) {
+                            messages.add(
+                                JSONObject().put("role", "assistant").put("content", msg.content.content)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        messages.add(JSONObject().put("role", "user").put("content", userPrompt))
+        return messages
+    }
 
-                                if (isStreaming) {
-                                    val currentTime = System.currentTimeMillis()
-                                    val shouldUpdate = tokenCount >= tokenBatchSize ||
-                                            (currentTime - lastUpdateTime) >= updateIntervalMs
+    // ==================== Tool Call Parsing Utilities ====================
 
-                                    if (shouldUpdate) {
-                                        _streamingAssistantMessage.value = currentGeneratedContent
-                                        tokenBuffer.clear()
-                                        tokenCount = 0
-                                        lastUpdateTime = currentTime
-                                    }
+    /**
+     * Try to extract tool name and arguments from potentially malformed JSON.
+     * Returns Pair(toolName, arguments JSONObject) or null if extraction fails.
+     */
+    private fun extractToolCallFromArgs(toolCallName: String, toolCallArgs: String): Pair<String, JSONObject>? {
+        // Strategy 1: Parse as valid JSON with tool_calls array
+        try {
+            val argsObject = JSONObject(toolCallArgs)
+            val toolCallsArray = argsObject.optJSONArray("tool_calls")
+            if (toolCallsArray != null && toolCallsArray.length() > 0) {
+                val firstCall = toolCallsArray.getJSONObject(0)
+                return Pair(firstCall.getString("name"), firstCall.getJSONObject("arguments"))
+            }
+            // Maybe it's a direct {"name":"...","arguments":{...}} object
+            if (argsObject.has("name") && argsObject.has("arguments")) {
+                return Pair(argsObject.getString("name"), argsObject.getJSONObject("arguments"))
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Strategy 1 (full JSON) failed: ${e.message}")
+        }
+
+        // Strategy 2: Regex extract the first {"name":"...","arguments":{...}} from the text
+        try {
+            val nameArgRegex = Regex(
+                """\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"arguments"\s*:\s*(\{[^}]*\})""",
+                RegexOption.DOT_MATCHES_ALL
+            )
+            val match = nameArgRegex.find(toolCallArgs)
+            if (match != null) {
+                val name = match.groupValues[1]
+                val argsStr = match.groupValues[2]
+                return Pair(name, JSONObject(argsStr))
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Strategy 2 (regex name+args) failed: ${e.message}")
+        }
+
+        // Strategy 3: Extract arguments with nested braces (handles deeper JSON)
+        try {
+            val nameIdx = toolCallArgs.indexOf("\"name\"")
+            val argsIdx = toolCallArgs.indexOf("\"arguments\"")
+            if (nameIdx >= 0 && argsIdx >= 0) {
+                val nameValRegex = Regex(""""name"\s*:\s*"([^"]+)"""")
+                val nameMatch = nameValRegex.find(toolCallArgs)
+                val name = nameMatch?.groupValues?.get(1) ?: toolCallName
+
+                val argsStart = toolCallArgs.indexOf('{', argsIdx)
+                if (argsStart >= 0) {
+                    var depth = 0
+                    var argsEnd = argsStart
+                    for (i in argsStart until toolCallArgs.length) {
+                        when (toolCallArgs[i]) {
+                            '{' -> depth++
+                            '}' -> {
+                                depth--
+                                if (depth == 0) {
+                                    argsEnd = i
+                                    break
                                 }
-                            }
-
-                            is GenerationEvent.Done -> {
-                                _streamingAssistantMessage.value = currentGeneratedContent
-
-                                // Add user message first if not already added
-                                if (!userMessageAdded) {
-                                    _messages.add(userMessage)
-                                    userMessageAdded = true
-                                }
-
-                                // Convert current RAG results to serializable format
-                                val ragResultItems = _currentRagResults.value.takeIf { it.isNotEmpty() }?.map { result ->
-                                    RagResultItem(
-                                        ragName = result.ragName,
-                                        content = result.content,
-                                        score = result.score,
-                                        nodeId = result.nodeId
-                                    )
-                                }
-
-                                // Filter out tool call syntax from the generated content
-                                val filteredContent = filterToolCallSyntax(currentGeneratedContent)
-
-                                // Only add assistant message if there's actual content
-                                if (filteredContent.isNotBlank()) {
-                                    val assistantMessage = Messages(
-                                        role = Role.Assistant,
-                                        content = MessageContent(
-                                            contentType = ContentType.Text,
-                                            content = filteredContent
-                                        ),
-                                        decodingMetrics = currentMetrics,
-                                        ragResults = ragResultItems
-                                    )
-                                    _messages.add(assistantMessage)
-
-                                    // Save to vault
-                                    chatManager.addAssistantMessage(
-                                        chatId, filteredContent, currentMetrics, ragResultItems
-                                    )
-                                    AppStateManager.setGenerationComplete()
-                                    AppStateManager.chatRefreshed()
-                                    val spokenMsgId = assistantMessage.msgId
-                                    resetStreamingState()
-                                    viewModelScope.launch { autoSpeakIfEnabled(filteredContent, spokenMsgId) }
-                                } else {
-                                    Log.d("ChatViewModel", "Skipped empty assistant message (was only tool call syntax)")
-                                    AppStateManager.setGenerationComplete()
-                                    AppStateManager.chatRefreshed()
-                                    resetStreamingState()
-                                }
-                            }
-
-                            is GenerationEvent.Error -> {
-                                handleTextGenerationErrorExisting(chatId, userMessage, event.message)
-                            }
-
-                            is GenerationEvent.Metrics -> {
-                                currentMetrics = event.metrics
-                            }
-
-                            is GenerationEvent.ToolCall -> {
-                                Log.e("ChatViewModel", "Tool call received in single-turn (existing chat): ${event.name}")
                             }
                         }
                     }
-            } catch (e: Exception) {
-                handleTextGenerationExceptionExisting(chatId, userMessage, e)
+                    val argsStr = toolCallArgs.substring(argsStart, argsEnd + 1)
+                    return Pair(name, JSONObject(argsStr))
+                }
             }
+        } catch (e: Exception) {
+            Log.d(TAG, "Strategy 3 (balanced braces) failed: ${e.message}")
         }
+
+        Log.e(TAG, "All JSON extraction strategies failed for: ${toolCallArgs.take(200)}")
+        return null
+    }
+
+    /**
+     * Try to parse a tool call from generated token content.
+     * Handles Qwen XML format, JSON tool_calls array, and direct JSON objects.
+     */
+    private fun tryParseToolCallFromContent(content: String): Pair<String, String>? {
+        try {
+            // Format 1: Qwen <tool_call> XML tags
+            val toolCallXmlRegex = Regex(
+                "<tool_call>\\s*(\\{.*?\\})\\s*</tool_call>",
+                RegexOption.DOT_MATCHES_ALL
+            )
+            val xmlMatch = toolCallXmlRegex.find(content)
+            if (xmlMatch != null) {
+                val jsonStr = xmlMatch.groupValues[1]
+                val json = JSONObject(jsonStr)
+                val name = json.getString("name")
+                val argsJson = JSONObject().apply {
+                    put("tool_calls", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("name", name)
+                            put("arguments", json.getJSONObject("arguments"))
+                        })
+                    })
+                }.toString()
+                return Pair(name, argsJson)
+            }
+
+            // Format 2: JSON with tool_calls array
+            val toolCallsJsonRegex = Regex(
+                "\\{\\s*\"tool_calls\"\\s*:\\s*\\[.*?\\]\\s*\\}",
+                RegexOption.DOT_MATCHES_ALL
+            )
+            val jsonMatch = toolCallsJsonRegex.find(content)
+            if (jsonMatch != null) {
+                val jsonStr = jsonMatch.value
+                val json = JSONObject(jsonStr)
+                val toolCallsArray = json.getJSONArray("tool_calls")
+                if (toolCallsArray.length() > 0) {
+                    val firstCall = toolCallsArray.getJSONObject(0)
+                    val name = firstCall.getString("name")
+                    return Pair(name, jsonStr)
+                }
+            }
+
+            // Format 3: Direct JSON object with name and arguments
+            val directJsonRegex = Regex(
+                "\\{\\s*\"name\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"arguments\"\\s*:\\s*(\\{.*?\\})\\s*\\}",
+                RegexOption.DOT_MATCHES_ALL
+            )
+            val directMatch = directJsonRegex.find(content)
+            if (directMatch != null) {
+                val name = directMatch.groupValues[1]
+                val argsJson = JSONObject().apply {
+                    put("tool_calls", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("name", name)
+                            put("arguments", JSONObject(directMatch.groupValues[2]))
+                        })
+                    })
+                }.toString()
+                return Pair(name, argsJson)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse tool call from content: ${e.message}")
+        }
+        return null
+    }
+
+    /** Normalize tool name: "Web Scraping" → "web_scraping" */
+    private fun normalizeToolName(toolName: String): String {
+        return toolName.lowercase().replace(" ", "_").replace("-", "_")
+    }
+
+    /** Filter out tool call syntax and code blocks from generated text. */
+    private fun filterToolCallSyntax(content: String): String {
+        var filtered = content
+        filtered = filtered.replace(Regex("<tool_call>\\s*\\{.*?\\}\\s*</tool_call>", RegexOption.DOT_MATCHES_ALL), "")
+        filtered = filtered.replace(Regex("```json\\s*\\{[^`]*```", RegexOption.DOT_MATCHES_ALL), "")
+        filtered = filtered.replace(Regex("```\\s*\\{[^`]*```", RegexOption.DOT_MATCHES_ALL), "")
+        filtered = filtered.replace(Regex("\\{\\s*\"tool_calls\"\\s*:[^}]*\\}\\s*", RegexOption.DOT_MATCHES_ALL), "")
+        filtered = filtered.replace(Regex("\\{\\s*\"name\"\\s*:\\s*\"[^\"]+\"\\s*,\\s*\"arguments\"\\s*:\\s*\\{.*?\\}\\s*\\}", RegexOption.DOT_MATCHES_ALL), "")
+        filtered = filtered.trim()
+        filtered = filtered.replace(Regex("\\n{3,}"), "\n\n")
+        return filtered
     }
 
     // ==================== Image Generation ====================
@@ -783,29 +1046,24 @@ class ChatViewModel @Inject constructor(
         if (_isGenerating.value) return
 
         viewModelScope.launch {
-            // Get current diffusion model ID
             val modelId = LlmModelWorker.currentDiffusionModelId.value
             if (modelId == null) {
                 _error.value = "Model configuration not found"
                 return@launch
             }
 
-            // Get config from repository
             val config = getModelConfig(modelId)
-
             val inferenceParams = if (config != null) {
                 DiffusionInferenceParams.fromJson(config.modelInferenceParams)
             } else {
                 DiffusionInferenceParams()
             }
-
             val diffusionConfig = if (config != null) {
                 parseDiffusionConfig(config)
             } else {
                 DiffusionConfig()
             }
 
-            // Use provided values or fall back to stored config
             val finalNegativePrompt = negativePrompt ?: inferenceParams.negativePrompt
             val finalSteps = steps ?: inferenceParams.steps
             val finalCfgScale = cfgScale ?: inferenceParams.cfgScale
@@ -821,44 +1079,20 @@ class ChatViewModel @Inject constructor(
                 currentUserMessage = Messages(
                     msgId = "",
                     role = Role.User,
-                    content = MessageContent(
-                        contentType = ContentType.Text,
-                        content = "Generate image: $prompt"
-                    )
+                    content = MessageContent(contentType = ContentType.Text, content = "Generate image: $prompt")
                 )
                 AppStateManager.setHasMessages(true)
-                generateImageForNewChat(
-                    prompt,
-                    finalNegativePrompt,
-                    finalSteps,
-                    finalCfgScale,
-                    seed,
-                    finalWidth,
-                    finalHeight,
-                    finalScheduler
-                )
+                generateImageForNewChat(prompt, finalNegativePrompt, finalSteps, finalCfgScale, seed, finalWidth, finalHeight, finalScheduler)
             } else {
                 val chatId = _currentChatId.value
                 if (chatId == null) {
                     _error.value = "No chat selected"
                     return@launch
                 }
-
                 chatManager.addUserMessage(chatId, "Generate image: $prompt").onSuccess { userMessage ->
                     currentUserMessage = userMessage
                     AppStateManager.setHasMessages(true)
-                    generateImage(
-                        chatId,
-                        userMessage,
-                        prompt,
-                        finalNegativePrompt,
-                        finalSteps,
-                        finalCfgScale,
-                        seed,
-                        finalWidth,
-                        finalHeight,
-                        finalScheduler
-                    )
+                    generateImage(chatId, userMessage, prompt, finalNegativePrompt, finalSteps, finalCfgScale, seed, finalWidth, finalHeight, finalScheduler)
                 }.onFailure { e ->
                     _error.value = "Failed to save message: ${e.message}"
                     resetStreamingState()
@@ -867,16 +1101,12 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    // Also add this helper if you don't have it
     suspend fun getModelConfig(modelId: String): com.dark.tool_neuron.models.table_schema.ModelConfig? {
         return AppContainer.getModelRepository().getConfigByModelId(modelId)
     }
 
     private fun parseDiffusionConfig(config: com.dark.tool_neuron.models.table_schema.ModelConfig): DiffusionConfig {
-        if (config.modelLoadingParams == null) {
-            return DiffusionConfig()
-        }
-
+        if (config.modelLoadingParams == null) return DiffusionConfig()
         return try {
             val json = org.json.JSONObject(config.modelLoadingParams)
             DiffusionConfig(
@@ -895,14 +1125,8 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun generateImageForNewChat(
-        prompt: String,
-        negativePrompt: String,
-        steps: Int,
-        cfgScale: Float,
-        seed: Long,
-        width: Int,
-        height: Int,
-        scheduler: String
+        prompt: String, negativePrompt: String, steps: Int, cfgScale: Float,
+        seed: Long, width: Int, height: Int, scheduler: String
     ) {
         generationJob = viewModelScope.launch {
             _isGenerating.value = true
@@ -910,50 +1134,26 @@ class ChatViewModel @Inject constructor(
             _streamingImage.value = null
             _imageGenerationProgress.value = 0f
             currentGeneratedImage = null
-
             AppStateManager.setGeneratingImage()
 
             try {
-                generationManager.generateImageStreaming(
-                    prompt, negativePrompt, steps, cfgScale, seed, width, height, scheduler
-                ).collect { event ->
+                generationManager.generateImageStreaming(prompt, negativePrompt, steps, cfgScale, seed, width, height, scheduler).collect { event ->
                     when (event) {
                         is LlmModelWorker.DiffusionGenerationEvent.Progress -> {
                             _imageGenerationProgress.value = event.progress
                             _imageGenerationStep.value = "Step ${event.currentStep}/${event.totalSteps}"
-                            event.intermediateImage?.let {
-                                _streamingImage.value = it
-                            }
+                            event.intermediateImage?.let { _streamingImage.value = it }
                         }
-
                         is LlmModelWorker.DiffusionGenerationEvent.Complete -> {
                             _imageGenerationProgress.value = 1f
                             _streamingImage.value = event.image
                             currentGeneratedImage = event.image
-
                             val generationTime = System.currentTimeMillis() - imageGenerationStartTime
-                            currentImageMetrics = ImageGenerationMetrics(
-                                steps = steps,
-                                cfgScale = cfgScale,
-                                seed = event.seed,
-                                width = event.width,
-                                height = event.height,
-                                scheduler = scheduler,
-                                generationTimeMs = generationTime
-                            )
-
+                            currentImageMetrics = ImageGenerationMetrics(steps = steps, cfgScale = cfgScale, seed = event.seed, width = event.width, height = event.height, scheduler = scheduler, generationTimeMs = generationTime)
                             _isGenerating.value = false
-
-                            // Convert image to base64
                             val imageBase64 = generationManager.bitmapToBase64(event.image)
-                            createChatWithImageMessage(
-                                "Generate image: $prompt",
-                                imageBase64,
-                                prompt,
-                                event.seed
-                            )
+                            createChatWithImageMessage("Generate image: $prompt", imageBase64, prompt, event.seed)
                         }
-
                         is LlmModelWorker.DiffusionGenerationEvent.Error -> {
                             handleImageGenerationError(prompt, event.message)
                         }
@@ -966,81 +1166,43 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun generateImage(
-        chatId: String,
-        userMessage: Messages,
-        prompt: String,
-        negativePrompt: String,
-        steps: Int,
-        cfgScale: Float,
-        seed: Long,
-        width: Int,
-        height: Int,
-        scheduler: String
+        chatId: String, userMessage: Messages, prompt: String, negativePrompt: String,
+        steps: Int, cfgScale: Float, seed: Long, width: Int, height: Int, scheduler: String
     ) {
         generationJob = viewModelScope.launch {
             _isGenerating.value = true
             _error.value = null
             _streamingImage.value = null
             _imageGenerationProgress.value = 0f
-
             AppStateManager.setGeneratingImage()
 
             try {
-                generationManager.generateImageStreaming(
-                    prompt, negativePrompt, steps, cfgScale, seed, width, height, scheduler
-                ).collect { event ->
+                generationManager.generateImageStreaming(prompt, negativePrompt, steps, cfgScale, seed, width, height, scheduler).collect { event ->
                     when (event) {
                         is LlmModelWorker.DiffusionGenerationEvent.Progress -> {
                             _imageGenerationProgress.value = event.progress
                             _imageGenerationStep.value = "Step ${event.currentStep}/${event.totalSteps}"
-                            event.intermediateImage?.let {
-                                _streamingImage.value = it
-                            }
+                            event.intermediateImage?.let { _streamingImage.value = it }
                         }
-
                         is LlmModelWorker.DiffusionGenerationEvent.Complete -> {
                             _imageGenerationProgress.value = 1f
                             _streamingImage.value = event.image
                             _isGenerating.value = false
-
                             val generationTime = System.currentTimeMillis() - imageGenerationStartTime
-                            currentImageMetrics = ImageGenerationMetrics(
-                                steps = steps,
-                                cfgScale = cfgScale,
-                                seed = event.seed,
-                                width = event.width,
-                                height = event.height,
-                                scheduler = scheduler,
-                                generationTimeMs = generationTime
-                            )
-
-                            if (!userMessageAdded) {
-                                _messages.add(userMessage)
-                                userMessageAdded = true
-                            }
-
+                            currentImageMetrics = ImageGenerationMetrics(steps = steps, cfgScale = cfgScale, seed = event.seed, width = event.width, height = event.height, scheduler = scheduler, generationTimeMs = generationTime)
+                            if (!userMessageAdded) { _messages.add(userMessage); userMessageAdded = true }
                             val imageBase64 = generationManager.bitmapToBase64(event.image)
                             val imageMessage = Messages(
                                 role = Role.Assistant,
-                                content = MessageContent(
-                                    contentType = ContentType.Image,
-                                    content = "Generated image for: $prompt",
-                                    imageData = imageBase64,
-                                    imagePrompt = prompt,
-                                    imageSeed = event.seed
-                                ),
+                                content = MessageContent(contentType = ContentType.Image, content = "Generated image for: $prompt", imageData = imageBase64, imagePrompt = prompt, imageSeed = event.seed),
                                 imageMetrics = currentImageMetrics
                             )
                             _messages.add(imageMessage)
-
-                            // Save to vault
                             chatManager.addImageMessage(chatId, imageBase64, prompt, event.seed, currentImageMetrics)
-
                             AppStateManager.setGenerationComplete()
                             AppStateManager.chatRefreshed()
                             resetStreamingState()
                         }
-
                         is LlmModelWorker.DiffusionGenerationEvent.Error -> {
                             handleImageGenerationErrorExisting(chatId, userMessage, prompt, event.message)
                         }
@@ -1057,51 +1219,25 @@ class ChatViewModel @Inject constructor(
     private suspend fun createChatWithMessages(
         userPrompt: String,
         assistantResponse: String,
-        metrics: DecodingMetrics?
+        metrics: DecodingMetrics?,
+        toolChainSteps: List<ToolChainStepData>? = null
     ) {
-        // Filter out tool call syntax
         val filteredResponse = filterToolCallSyntax(assistantResponse)
-
-        // Convert current RAG results to serializable format before clearing
         val ragResultItems = _currentRagResults.value.takeIf { it.isNotEmpty() }?.map { result ->
-            RagResultItem(
-                ragName = result.ragName,
-                content = result.content,
-                score = result.score,
-                nodeId = result.nodeId
-            )
+            RagResultItem(ragName = result.ragName, content = result.content, score = result.score, nodeId = result.nodeId)
         }
-
-        // Get any plugin results that were added during generation
         val pluginResults = _messages.filter { it.content.contentType == ContentType.PluginResult }
-        Log.d("ChatViewModel", "Creating new chat with ${pluginResults.size} plugin results, filtered response: '${filteredResponse.take(50)}'")
 
         chatManager.createNewChat().onSuccess { newChatId ->
             _currentChatId.value = newChatId
-            Log.d("ChatViewModel", "Created chat: $newChatId")
-
-            chatManager.addUserMessage(newChatId, userPrompt).onSuccess { userMessage ->
-                Log.d("ChatViewModel", "Saved user message")
-
-                // Save plugin results first
+            chatManager.addUserMessage(newChatId, userPrompt).onSuccess {
                 pluginResults.forEachIndexed { index, pluginMsg ->
-                    chatManager.addMessage(newChatId, pluginMsg).onSuccess {
-                        Log.d("ChatViewModel", "Saved plugin result ${index + 1}/${pluginResults.size}")
-                    }
+                    chatManager.addMessage(newChatId, pluginMsg)
                 }
-
-                // Save assistant message if there's actual content
                 if (filteredResponse.isNotBlank()) {
-                    chatManager.addAssistantMessage(
-                        newChatId, filteredResponse, metrics, ragResultItems
-                    ).onSuccess {
-                        Log.d("ChatViewModel", "Saved assistant message")
-                    }
+                    chatManager.addAssistantMessage(newChatId, filteredResponse, metrics, ragResultItems, toolChainSteps)
                 }
-
-                // Now reload the chat to get all messages with proper IDs
                 chatManager.getChatMessages(newChatId).onSuccess { loadedMessages ->
-                    Log.d("ChatViewModel", "Reloaded ${loadedMessages.size} messages from vault")
                     _messages.clear()
                     _messages.addAll(loadedMessages)
                     AppStateManager.setGenerationComplete()
@@ -1109,8 +1245,7 @@ class ChatViewModel @Inject constructor(
                     val spokenMsgId = loadedMessages.lastOrNull { it.role == Role.Assistant }?.msgId
                     resetStreamingState()
                     viewModelScope.launch { autoSpeakIfEnabled(filteredResponse, spokenMsgId) }
-                }.onFailure { e ->
-                    Log.e("ChatViewModel", "Failed to reload chat: ${e.message}")
+                }.onFailure {
                     AppStateManager.setGenerationComplete()
                     resetStreamingState()
                 }
@@ -1125,21 +1260,14 @@ class ChatViewModel @Inject constructor(
     }
 
     private suspend fun createChatWithImageMessage(
-        userPrompt: String,
-        imageBase64: String,
-        imagePrompt: String,
-        seed: Long
+        userPrompt: String, imageBase64: String, imagePrompt: String, seed: Long
     ) {
         chatManager.createNewChat().onSuccess { newChatId ->
             _currentChatId.value = newChatId
-
             chatManager.addUserMessage(newChatId, userPrompt).onSuccess { userMessage ->
                 _messages.add(userMessage)
                 userMessageAdded = true
-
-                chatManager.addImageMessage(
-                    newChatId, imageBase64, imagePrompt, seed, currentImageMetrics
-                ).onSuccess { imageMessage ->
+                chatManager.addImageMessage(newChatId, imageBase64, imagePrompt, seed, currentImageMetrics).onSuccess { imageMessage ->
                     _messages.add(imageMessage)
                     AppStateManager.setGenerationComplete()
                     AppStateManager.chatRefreshed()
@@ -1153,81 +1281,7 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private fun handleTextGenerationError(prompt: String, errorMessage: String) {
-        _streamingAssistantMessage.value = currentGeneratedContent
-        _isGenerating.value = false
-        _error.value = errorMessage
-        AppStateManager.setError(errorMessage)
-
-        if (currentGeneratedContent.isNotEmpty()) {
-            viewModelScope.launch {
-                createChatWithMessages(prompt, "Error: $errorMessage", null)
-            }
-        }
-        resetStreamingState()
-    }
-
-    private fun handleTextGenerationException(prompt: String, exception: Exception) {
-        _isGenerating.value = false
-        _error.value = exception.message
-        AppStateManager.setError(exception.message ?: "Unknown error")
-
-        if (currentGeneratedContent.isNotEmpty()) {
-            viewModelScope.launch {
-                createChatWithMessages(prompt, "$currentGeneratedContent [incomplete]", currentMetrics)
-            }
-        }
-        resetStreamingState()
-    }
-
-    private fun handleTextGenerationErrorExisting(chatId: String, userMessage: Messages, errorMessage: String) {
-        _streamingAssistantMessage.value = currentGeneratedContent
-        _isGenerating.value = false
-        _error.value = errorMessage
-        AppStateManager.setError(errorMessage)
-
-        if (!userMessageAdded) {
-            _messages.add(userMessage)
-            userMessageAdded = true
-        }
-
-        val errorMsg = Messages(
-            role = Role.Assistant,
-            content = MessageContent(
-                contentType = ContentType.Text,
-                content = "Error: $errorMessage"
-            )
-        )
-        _messages.add(errorMsg)
-        resetStreamingState()
-    }
-
-    private fun handleTextGenerationExceptionExisting(chatId: String, userMessage: Messages, exception: Exception) {
-        _isGenerating.value = false
-        _error.value = exception.message
-        AppStateManager.setError(exception.message ?: "Unknown error")
-
-        if (currentGeneratedContent.isNotEmpty() && currentUserMessage != null) {
-            if (!userMessageAdded) {
-                _messages.add(currentUserMessage!!)
-                userMessageAdded = true
-            }
-
-            val partialMessage = Messages(
-                role = Role.Assistant,
-                content = MessageContent(
-                    contentType = ContentType.Text,
-                    content = "$currentGeneratedContent [incomplete]"
-                )
-            )
-            _messages.add(partialMessage)
-
-            viewModelScope.launch {
-                chatManager.addAssistantMessage(chatId, "$currentGeneratedContent [incomplete]", null)
-            }
-        }
-        resetStreamingState()
-    }
+    // ==================== Error Handlers ====================
 
     private fun handleImageGenerationError(prompt: String, errorMessage: String) {
         _isGenerating.value = false
@@ -1247,20 +1301,8 @@ class ChatViewModel @Inject constructor(
         _isGenerating.value = false
         _error.value = errorMessage
         AppStateManager.setError(errorMessage)
-
-        if (!userMessageAdded) {
-            _messages.add(userMessage)
-            userMessageAdded = true
-        }
-
-        val errorMsg = Messages(
-            role = Role.Assistant,
-            content = MessageContent(
-                contentType = ContentType.Text,
-                content = "Error generating image: $errorMessage"
-            )
-        )
-        _messages.add(errorMsg)
+        if (!userMessageAdded) { _messages.add(userMessage); userMessageAdded = true }
+        _messages.add(Messages(role = Role.Assistant, content = MessageContent(contentType = ContentType.Text, content = "Error generating image: $errorMessage")))
         resetStreamingState()
     }
 
@@ -1268,12 +1310,7 @@ class ChatViewModel @Inject constructor(
         _isGenerating.value = false
         _error.value = exception.message
         AppStateManager.setError(exception.message ?: "Unknown error")
-
-        if (!userMessageAdded) {
-            _messages.add(userMessage)
-            userMessageAdded = true
-        }
-
+        if (!userMessageAdded) { _messages.add(userMessage); userMessageAdded = true }
         resetStreamingState()
     }
 
@@ -1292,7 +1329,11 @@ class ChatViewModel @Inject constructor(
         userMessageAdded = false
         _currentToolName.value = null
         _currentProcessingPhase.value = null
-        // Clear RAG context and results after message is saved
+        _toolChainSteps.value = emptyList()
+        _currentToolChainRound.value = 0
+        _agentPhase.value = AgentPhase.Idle
+        _agentPlan.value = null
+        _agentSummary.value = null
         _currentRagContext.value = null
         _currentRagResults.value = emptyList()
     }
@@ -1326,30 +1367,22 @@ class ChatViewModel @Inject constructor(
 
         if (chatId != null && currentUserMessage != null && currentGeneratedContent.isNotEmpty()) {
             viewModelScope.launch {
-                if (!userMessageAdded) {
-                    _messages.add(currentUserMessage!!)
-                    userMessageAdded = true
-                }
-
+                if (!userMessageAdded) { _messages.add(currentUserMessage!!); userMessageAdded = true }
                 val assistantMessage = Messages(
                     role = Role.Assistant,
-                    content = MessageContent(
-                        contentType = ContentType.Text,
-                        content = "$currentGeneratedContent [stopped]"
-                    ),
+                    content = MessageContent(contentType = ContentType.Text, content = "$currentGeneratedContent [stopped]"),
                     decodingMetrics = currentMetrics
                 )
                 _messages.add(assistantMessage)
-
-                chatManager.addAssistantMessage(
-                    chatId, "$currentGeneratedContent [stopped]", currentMetrics
-                )
+                chatManager.addAssistantMessage(chatId, "$currentGeneratedContent [stopped]", currentMetrics)
             }
         } else if (currentUserMessage != null && !userMessageAdded) {
             _messages.add(currentUserMessage!!)
             userMessageAdded = true
         }
 
+        // Restore grammar in case we stopped mid-agent-flow
+        try { PluginManager.restoreGrammar() } catch (_: Exception) {}
         resetStreamingState()
     }
 
@@ -1358,24 +1391,14 @@ class ChatViewModel @Inject constructor(
 
         if (chatId != null && currentUserMessage != null && currentGeneratedImage != null) {
             viewModelScope.launch {
-                // Only add user message if it hasn't been added yet
-                if (!userMessageAdded) {
-                    _messages.add(currentUserMessage!!)
-                    userMessageAdded = true
-                }
-
+                if (!userMessageAdded) { _messages.add(currentUserMessage!!); userMessageAdded = true }
                 val imageBase64 = generationManager.bitmapToBase64(currentGeneratedImage!!)
                 val imageMessage = Messages(
                     role = Role.Assistant,
-                    content = MessageContent(
-                        contentType = ContentType.Image,
-                        content = "Image generation stopped",
-                        imageData = imageBase64
-                    ),
+                    content = MessageContent(contentType = ContentType.Image, content = "Image generation stopped", imageData = imageBase64),
                     imageMetrics = currentImageMetrics
                 )
                 _messages.add(imageMessage)
-
                 chatManager.addImageMessage(chatId, imageBase64, "", -1L, currentImageMetrics)
             }
         } else if (currentUserMessage != null && !userMessageAdded) {
@@ -1410,22 +1433,20 @@ class ChatViewModel @Inject constructor(
         if (text.isBlank()) return
 
         viewModelScope.launch {
-            // Auto-load TTS model if not loaded
             if (!TTSManager.isLoaded()) {
-                val modelDir = TTSManager.getModelDirectory() ?: return@launch
-                val settings = ttsDataStore.settings.first()
-                withContext(Dispatchers.IO) {
-                    TTSManager.loadModel(modelDir, settings.useNNAPI)
+                val modelDir = TTSManager.getModelDirectory()
+                if (modelDir == null) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(appContext, "Install the TTS model from Settings", Toast.LENGTH_SHORT).show()
+                    }
+                    return@launch
                 }
+                val settings = ttsDataStore.settings.first()
+                withContext(Dispatchers.IO) { TTSManager.loadModel(modelDir, settings.useNNAPI) }
                 if (!TTSManager.isLoaded()) return@launch
             }
-
             val settings = ttsDataStore.settings.first()
-            TTSManager.speak(
-                text = text,
-                settings = settings,
-                msgId = message.msgId
-            )
+            TTSManager.speak(text = text, settings = settings, msgId = message.msgId)
         }
     }
 
@@ -1473,365 +1494,7 @@ class ChatViewModel @Inject constructor(
         _showModelList.value = false
     }
 
-    // ==================== Plugin Tool Call Handling (Legacy single-turn) ====================
-
-    private suspend fun handlePluginToolCall(toolName: String, argsJson: String) {
-        Log.d("ChatViewModel", "Tool call intercepted! Tool: $toolName, Args: $argsJson")
-
-        var pluginName = "Unknown Plugin"
-        var actualToolName = toolName
-
-        try {
-            // Parse the JSON properly - it comes wrapped in a tool_calls array
-            val argsObject = JSONObject(argsJson)
-            val toolCallsArray = argsObject.optJSONArray("tool_calls")
-
-            if (toolCallsArray == null || toolCallsArray.length() == 0) {
-                Log.e("ChatViewModel", "No tool_calls found in args: $argsJson")
-                AppStateManager.setError("Invalid tool call format")
-                return
-            }
-
-            // Get the first tool call
-            val firstToolCall = toolCallsArray.getJSONObject(0)
-            val rawToolName = firstToolCall.getString("name")
-            val arguments = firstToolCall.getJSONObject("arguments")
-
-            Log.d("ChatViewModel", "Parsed tool: $rawToolName, arguments: $arguments")
-
-            // Normalize tool name (handle cases like "Web Scraping" -> "web_scraping")
-            actualToolName = normalizeToolName(rawToolName)
-            Log.d("ChatViewModel", "Normalized tool name: $rawToolName -> $actualToolName")
-
-            // Get plugin name
-            val plugin = PluginManager.getPlugin(
-                PluginManager.registeredPlugins.value.firstOrNull { pluginInfo ->
-                    pluginInfo.toolDefinitionBuilder.any {
-                        it.name.equals(actualToolName, ignoreCase = true)
-                    }
-                }?.name ?: ""
-            )
-            pluginName = plugin?.getPluginInfo()?.name ?: "Unknown Plugin"
-
-            // Set ExecutingPlugin state
-            AppStateManager.setExecutingPlugin(pluginName, actualToolName)
-
-            // Create ToolCall object
-            val toolCall = ToolCall(name = actualToolName, arguments = arguments)
-
-            // Execute via PluginManager
-            val result = PluginManager.executeTool(toolCall)
-
-            // Add result message to chat (or queue it for new conversations)
-            when (result) {
-                is PluginExecutionResult.Success -> {
-                    Log.d("ChatViewModel", "Tool executed successfully")
-
-                    // Set completion state with success
-                    AppStateManager.setPluginExecutionComplete(
-                        pluginName = pluginName,
-                        toolName = actualToolName,
-                        success = true,
-                        executionTimeMs = result.metrics.executionTimeMs
-                    )
-
-                    // Wait a bit to show the success state
-                    kotlinx.coroutines.delay(800)
-
-                    addPluginResultMessage(result)
-
-                    // Return to GeneratingText state since we're still in text generation
-                    AppStateManager.setGeneratingText()
-                }
-                is PluginExecutionResult.Failure -> {
-                    Log.e("ChatViewModel", "Tool execution failed: ${result.metrics.errorMessage}")
-
-                    // Set completion state with error
-                    AppStateManager.setPluginExecutionComplete(
-                        pluginName = pluginName,
-                        toolName = actualToolName,
-                        success = false,
-                        executionTimeMs = result.metrics.executionTimeMs,
-                        errorMessage = result.metrics.errorMessage
-                    )
-
-                    // Wait a bit to show the error state
-                    kotlinx.coroutines.delay(1500)
-
-                    // Add error result to messages as a plugin result with failure status
-                    addPluginErrorMessage(
-                        pluginName = pluginName,
-                        toolName = actualToolName,
-                        errorMessage = result.metrics.errorMessage ?: "Unknown error",
-                        executionTimeMs = result.metrics.executionTimeMs
-                    )
-
-                    // Return to GeneratingText state
-                    AppStateManager.setGeneratingText()
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("ChatViewModel", "Exception in handlePluginToolCall", e)
-
-            // Set completion state with error
-            AppStateManager.setPluginExecutionComplete(
-                pluginName = pluginName,
-                toolName = actualToolName,
-                success = false,
-                executionTimeMs = 0,
-                errorMessage = e.message ?: "Unknown error"
-            )
-
-            kotlinx.coroutines.delay(1500)
-
-            _error.value = "Error executing plugin tool: ${e.message}"
-            AppStateManager.setError("Error executing plugin tool: ${e.message}")
-        }
-    }
-
-    /**
-     * Normalize tool name to match the actual tool definition
-     * Converts "Web Scraping" -> "web_scraping", "DuckDuckGo Search" -> "duckduckgo_search"
-     */
-    private fun normalizeToolName(toolName: String): String {
-        return toolName
-            .lowercase()
-            .replace(" ", "_")
-            .replace("-", "_")
-    }
-
-    /**
-     * After a tool executes, feed the result back to the LLM so it generates
-     * a natural-language interpretation for the user.
-     */
-    private suspend fun generateResponseFromToolResult(
-        conversationMessages: MutableList<JSONObject>,
-        toolResultData: String,
-        toolName: String
-    ) {
-        // Append the tool result as an assistant context message
-        conversationMessages.add(
-            JSONObject()
-                .put("role", "assistant")
-                .put("content", "Tool '$toolName' returned the following result:\n$toolResultData\n\nPlease summarize and explain this result to the user.")
-        )
-
-        val isStreaming = streamingEnabled.value
-        val config = PluginManager.getToolCallingConfig()
-
-        _streamingAssistantMessage.value = ""
-        currentGeneratedContent = ""
-        currentMetrics = null
-
-        AppStateManager.setGeneratingText()
-
-        try {
-            generationManager.generateMultiTurnStreaming(
-                JSONArray(conversationMessages).toString(), config.maxTokensPerTurn
-            ).collect { event ->
-                when (event) {
-                    is GenerationEvent.Token -> {
-                        currentGeneratedContent += event.text
-                        if (isStreaming) {
-                            _streamingAssistantMessage.value = currentGeneratedContent
-                        }
-                    }
-                    is GenerationEvent.ToolCall -> { /* ignore nested tool calls from interpretation */ }
-                    is GenerationEvent.Done -> { /* handled after collect */ }
-                    is GenerationEvent.Metrics -> { currentMetrics = event.metrics }
-                    is GenerationEvent.Error -> { _error.value = event.message }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("ChatViewModel", "Error generating response from tool result", e)
-        }
-
-        val filteredContent = filterToolCallSyntax(currentGeneratedContent)
-        _streamingAssistantMessage.value = filteredContent
-    }
-
-    /**
-     * Try to parse a tool call from generated token content.
-     * The native engine may not emit onToolCall; instead tool call syntax
-     * arrives as regular tokens. This parses Qwen's <tool_call> XML format
-     * and the JSON tool_calls array format.
-     *
-     * @return Pair(toolName, argsJson) or null if no tool call found
-     */
-    private fun tryParseToolCallFromContent(content: String): Pair<String, String>? {
-        try {
-            // Format 1: Qwen <tool_call> XML tags
-            // <tool_call>\n{"name": "...", "arguments": {...}}\n</tool_call>
-            val toolCallXmlRegex = Regex(
-                "<tool_call>\\s*(\\{.*?\\})\\s*</tool_call>",
-                RegexOption.DOT_MATCHES_ALL
-            )
-            val xmlMatch = toolCallXmlRegex.find(content)
-            if (xmlMatch != null) {
-                val jsonStr = xmlMatch.groupValues[1]
-                val json = JSONObject(jsonStr)
-                val name = json.getString("name")
-                // Wrap in tool_calls array format for executeMultiTurnToolCall compatibility
-                val argsJson = JSONObject().apply {
-                    put("tool_calls", JSONArray().apply {
-                        put(JSONObject().apply {
-                            put("name", name)
-                            put("arguments", json.getJSONObject("arguments"))
-                        })
-                    })
-                }.toString()
-                Log.d("ChatViewModel", "Parsed tool call from <tool_call> XML: $name")
-                return Pair(name, argsJson)
-            }
-
-            // Format 2: JSON with tool_calls array
-            // {"tool_calls": [{"name": "...", "arguments": {...}}]}
-            val toolCallsJsonRegex = Regex(
-                "\\{\\s*\"tool_calls\"\\s*:\\s*\\[.*?\\]\\s*\\}",
-                RegexOption.DOT_MATCHES_ALL
-            )
-            val jsonMatch = toolCallsJsonRegex.find(content)
-            if (jsonMatch != null) {
-                val jsonStr = jsonMatch.value
-                val json = JSONObject(jsonStr)
-                val toolCallsArray = json.getJSONArray("tool_calls")
-                if (toolCallsArray.length() > 0) {
-                    val firstCall = toolCallsArray.getJSONObject(0)
-                    val name = firstCall.getString("name")
-                    Log.d("ChatViewModel", "Parsed tool call from JSON array: $name")
-                    return Pair(name, jsonStr)
-                }
-            }
-
-            // Format 3: Direct JSON object with name and arguments
-            // {"name": "...", "arguments": {...}}
-            val directJsonRegex = Regex(
-                "\\{\\s*\"name\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"arguments\"\\s*:\\s*(\\{.*?\\})\\s*\\}",
-                RegexOption.DOT_MATCHES_ALL
-            )
-            val directMatch = directJsonRegex.find(content)
-            if (directMatch != null) {
-                val name = directMatch.groupValues[1]
-                val argsJson = JSONObject().apply {
-                    put("tool_calls", JSONArray().apply {
-                        put(JSONObject().apply {
-                            put("name", name)
-                            put("arguments", JSONObject(directMatch.groupValues[2]))
-                        })
-                    })
-                }.toString()
-                Log.d("ChatViewModel", "Parsed tool call from direct JSON: $name")
-                return Pair(name, argsJson)
-            }
-        } catch (e: Exception) {
-            Log.w("ChatViewModel", "Failed to parse tool call from content: ${e.message}")
-        }
-        return null
-    }
-
-    /**
-     * Filter out tool call syntax and code blocks from generated text
-     */
-    private fun filterToolCallSyntax(content: String): String {
-        var filtered = content
-
-        // Remove Qwen <tool_call>...</tool_call> XML tags
-        filtered = filtered.replace(Regex("<tool_call>\\s*\\{.*?\\}\\s*</tool_call>", RegexOption.DOT_MATCHES_ALL), "")
-
-        // Remove ```json code blocks
-        filtered = filtered.replace(Regex("```json\\s*\\{[^`]*```", RegexOption.DOT_MATCHES_ALL), "")
-        filtered = filtered.replace(Regex("```\\s*\\{[^`]*```", RegexOption.DOT_MATCHES_ALL), "")
-
-        // Remove standalone JSON objects that look like tool calls
-        filtered = filtered.replace(Regex("\\{\\s*\"tool_calls\"\\s*:[^}]*\\}\\s*", RegexOption.DOT_MATCHES_ALL), "")
-
-        // Remove direct tool call JSON objects
-        filtered = filtered.replace(Regex("\\{\\s*\"name\"\\s*:\\s*\"[^\"]+\"\\s*,\\s*\"arguments\"\\s*:\\s*\\{.*?\\}\\s*\\}", RegexOption.DOT_MATCHES_ALL), "")
-
-        // Clean up excessive whitespace
-        filtered = filtered.trim()
-        filtered = filtered.replace(Regex("\\n{3,}"), "\n\n")
-
-        return filtered
-    }
-
-    private suspend fun addPluginResultMessage(result: PluginExecutionResult.Success) {
-        try {
-            if (!userMessageAdded && currentUserMessage != null) {
-                _messages.add(currentUserMessage!!)
-                userMessageAdded = true
-            }
-
-            val message = Messages(
-                role = Role.Assistant,
-                content = MessageContent(
-                    contentType = ContentType.PluginResult,
-                    content = formatPluginResult(result),
-                    pluginResultData = result.resultData
-                ),
-                pluginMetrics = result.metrics
-            )
-
-            _messages.add(message)
-
-            val chatId = _currentChatId.value
-            if (chatId != null) {
-                chatManager.addMessage(chatId, message).onFailure { e ->
-                    Log.e("ChatViewModel", "Failed to save plugin result to vault: ${e.message}")
-                    _error.value = "Failed to save plugin result: ${e.message}"
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("ChatViewModel", "Error adding plugin result", e)
-            _error.value = "Error adding plugin result: ${e.message}"
-        }
-    }
-
-    private fun formatPluginResult(result: PluginExecutionResult.Success): String {
-        return "Plugin '${result.metrics.pluginName}' executed tool '${result.metrics.toolName}' " +
-                "in ${result.metrics.executionTimeMs}ms"
-    }
-
-    private suspend fun addPluginErrorMessage(
-        pluginName: String,
-        toolName: String,
-        errorMessage: String,
-        executionTimeMs: Long
-    ) {
-        try {
-            if (!userMessageAdded && currentUserMessage != null) {
-                _messages.add(currentUserMessage!!)
-                userMessageAdded = true
-            }
-
-            val message = Messages(
-                role = Role.Assistant,
-                content = MessageContent(
-                    contentType = ContentType.PluginResult,
-                    content = "Plugin '$pluginName' tool '$toolName' failed: $errorMessage (${executionTimeMs}ms)",
-                    pluginResultData = PluginResultData(
-                        success = false,
-                        pluginName = pluginName,
-                        toolName = toolName,
-                        resultData = errorMessage,
-                        inputParams = "{}"
-                    )
-                ),
-                pluginMetrics = null
-            )
-
-            _messages.add(message)
-
-            val chatId = _currentChatId.value
-            if (chatId != null) {
-                chatManager.addMessage(chatId, message).onFailure { e ->
-                    Log.e("ChatViewModel", "Failed to save plugin error to vault: ${e.message}")
-                    _error.value = "Failed to save plugin error: ${e.message}"
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("ChatViewModel", "Error adding plugin error message", e)
-            _error.value = "Error adding plugin error message: ${e.message}"
-        }
+    companion object {
+        private const val TAG = "ChatViewModel"
     }
 }

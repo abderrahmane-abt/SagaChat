@@ -4,6 +4,8 @@ import android.app.Application
 import android.util.Log
 import com.dark.tool_neuron.data.AppSettingsDataStore
 import com.dark.tool_neuron.di.AppContainer
+import com.dark.tool_neuron.plugins.DeviceInfoPlugin
+import com.dark.tool_neuron.plugins.FileManagerPlugin
 import com.dark.tool_neuron.plugins.PluginManager
 import com.dark.tool_neuron.plugins.WebSearchPlugin
 import com.dark.tool_neuron.tts.TTSManager
@@ -29,9 +31,11 @@ class NVApplication : Application() {
         // Initialize app container first
         AppContainer.init(applicationContext, this)
 
-        // Register plugins (only WebSearch for now - tool calling requires Qwen/ChatML models)
+        // Register plugins
         PluginManager.registerPlugin(WebSearchPlugin())
-        Log.d(TAG, "Plugins registered: WebSearch")
+        PluginManager.registerPlugin(DeviceInfoPlugin(applicationContext))
+        PluginManager.registerPlugin(FileManagerPlugin(applicationContext))
+        Log.d(TAG, "Plugins registered: ${PluginManager.registeredPlugins.value.size} plugins")
 
         // Initialize TTS Manager without auto-loading (loading controlled by settings)
         TTSManager.init(applicationContext, autoLoad = false)

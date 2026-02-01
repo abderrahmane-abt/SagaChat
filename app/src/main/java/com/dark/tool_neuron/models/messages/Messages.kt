@@ -20,7 +20,21 @@ data class Messages(
     val imageMetrics: ImageGenerationMetrics? = null,
     val memoryMetrics: MemoryMetrics? = null,
     val ragResults: List<RagResultItem>? = null,
-    val pluginMetrics: PluginExecutionMetrics? = null
+    val pluginMetrics: PluginExecutionMetrics? = null,
+    val toolChainSteps: List<ToolChainStepData>? = null,
+    val agentPlan: String? = null,
+    val agentSummary: String? = null
+)
+
+@Serializable
+data class ToolChainStepData(
+    val round: Int,
+    val toolName: String,
+    val pluginName: String,
+    val args: String,
+    val result: String,
+    val executionTimeMs: Long,
+    val success: Boolean
 )
 
 /**

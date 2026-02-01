@@ -41,6 +41,7 @@ class AppSettingsDataStore(private val context: Context) {
         prefs[LOAD_TTS_ON_START] ?: true
     }
 
+
     suspend fun updateStreamingEnabled(enabled: Boolean) {
         context.appSettingsDataStore.edit { it[STREAMING_ENABLED] = enabled }
     }
@@ -60,4 +61,5 @@ class AppSettingsDataStore(private val context: Context) {
     suspend fun updateLoadTTSOnStart(enabled: Boolean) {
         context.appSettingsDataStore.edit { it[LOAD_TTS_ON_START] = enabled }
     }
+
 }

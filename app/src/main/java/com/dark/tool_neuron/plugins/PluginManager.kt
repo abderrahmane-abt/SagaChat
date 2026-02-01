@@ -13,12 +13,33 @@ import com.mp.ai_gguf.toolcalling.ToolDefinitionBuilder
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.dark.tool_neuron.models.data.HuggingFaceModel
+import com.dark.tool_neuron.models.data.ModelType
 import org.json.JSONArray
 import org.json.JSONObject
 
 object PluginManager {
 
     private const val TAG = "PluginManager"
+
+    // Known tool-calling model IDs
+    private val TOOL_CALLING_MODEL_IDS = setOf(
+        "ruvltra-claude-code-0.5b"
+    )
+
+    const val TOOL_CALLING_MODEL_ID = "ruvltra-claude-code-0.5b"
+    val TOOL_CALLING_MODEL = HuggingFaceModel(
+        id = "ruvltra-claude-code-0.5b",
+        name = "Ruvltra Claude Code 0.5B",
+        description = "Compact text generation model optimized for tool calling",
+        fileUri = "ruv/ruvltra-claude-code/resolve/main/ruvltra-claude-code-0.5b-q4_k_m.gguf",
+        approximateSize = "400 MB",
+        modelType = ModelType.GGUF,
+        isZip = false,
+        tags = listOf("GGUF", "Q4_K_M", "Tool Calling"),
+        requiresNPU = false,
+        repositoryUrl = "ruv/ruvltra-claude-code"
+    )
 
     // Registry of all plugins
     private val _plugins = mutableMapOf<String, SuperPlugin>()
@@ -41,8 +62,8 @@ object PluginManager {
     private val _toolCallingConfig = MutableStateFlow(ToolCallingConfig())
     val toolCallingConfig: StateFlow<ToolCallingConfig> = _toolCallingConfig.asStateFlow()
 
-    // Grammar mode
-    private val _grammarMode = MutableStateFlow(GrammarMode.LAZY)
+    // Grammar mode — always STRICT
+    private val _grammarMode = MutableStateFlow(GrammarMode.STRICT)
     val grammarMode: StateFlow<GrammarMode> = _grammarMode.asStateFlow()
 
     // Whether multi-turn is active
@@ -58,8 +79,12 @@ object PluginManager {
      * Should be called when a model is loaded or unloaded.
      */
     fun setToolCallingModelLoaded(modelName: String?) {
-        _isToolCallingModelLoaded.value = modelName != null &&
+        _isToolCallingModelLoaded.value = modelName != null && (
+                TOOL_CALLING_MODEL_IDS.any { modelName.contains(it, ignoreCase = true) } ||
+                modelName.contains("Code", ignoreCase = true) ||
+                modelName.contains("tool", ignoreCase = true) ||
                 modelName.contains("qwen", ignoreCase = true)
+        )
     }
 
     /**
@@ -84,7 +109,7 @@ object PluginManager {
     fun enablePlugin(pluginName: String) {
         if (!_plugins.containsKey(pluginName)) return
         if (_enabledPluginNames.value.contains(pluginName)) return
-        _enabledPluginNames.value = _enabledPluginNames.value + pluginName
+        _enabledPluginNames.value += pluginName
         _cachedEnabledToolDefs = null
         syncToolsWithLLM()
     }
@@ -94,7 +119,7 @@ object PluginManager {
      */
     fun disablePlugin(pluginName: String) {
         if (!_enabledPluginNames.value.contains(pluginName)) return
-        _enabledPluginNames.value = _enabledPluginNames.value - pluginName
+        _enabledPluginNames.value -= pluginName
         _cachedEnabledToolDefs = null
         syncToolsWithLLM()
     }
@@ -140,6 +165,35 @@ object PluginManager {
      * Get current tool calling config
      */
     fun getToolCallingConfig(): ToolCallingConfig = _toolCallingConfig.value
+
+    /**
+     * Clear grammar constraints (for plan/summary generation phases)
+     */
+    fun clearGrammar() {
+        LlmModelWorker.clearToolsGguf()
+        Log.d(TAG, "Grammar cleared for plain text generation")
+    }
+
+    /**
+     * Restore grammar constraints (for tool call generation phase)
+     */
+    fun restoreGrammar() {
+        syncToolsWithLLM()
+        Log.d(TAG, "Grammar restored for tool calling")
+    }
+
+    /**
+     * Get human-readable tool descriptions for plan generation prompt
+     */
+    fun getToolDescriptionsText(): String {
+        return getEnabledToolDefinitions().joinToString("\n") { toolDef ->
+            "- ${toolDef.name}: ${toolDef.build().description}"
+        }
+    }
+
+    fun getEnabledToolNames(): List<String> {
+        return getEnabledToolDefinitions().map { it.name }
+    }
 
     /**
      * Manually sync enabled plugin tools with the LLM.
@@ -449,38 +503,21 @@ object PluginManager {
                         put("metadata", metadataObj)
                     }.toString()
                 }
-                is CalculatorResponse -> {
+                is DeviceInfoResponse -> {
                     JSONObject().apply {
-                        put("expression", data.expression)
-                        put("result", data.result)
-                        put("formattedResult", data.formattedResult)
+                        put("infoType", data.infoType)
+                        val infoObj = JSONObject()
+                        data.info.forEach { (key, value) -> infoObj.put(key, value) }
+                        put("info", infoObj)
                     }.toString()
                 }
-                is UnitConversionResponse -> {
-                    JSONObject().apply {
-                        put("value", data.value)
-                        put("from_unit", data.fromUnit)
-                        put("to_unit", data.toUnit)
-                        put("result", data.result)
-                        put("formattedResult", data.formattedResult)
-                    }.toString()
-                }
-                is DevUtilsResponse -> {
+                is FileManagerResponse -> {
                     JSONObject().apply {
                         put("tool", data.tool)
-                        put("operation", data.operation)
-                        put("input", data.input)
-                        put("output", data.output)
-                    }.toString()
-                }
-                is TextStatsResponse -> {
-                    JSONObject().apply {
-                        put("charCount", data.charCount)
-                        put("charCountNoSpaces", data.charCountNoSpaces)
-                        put("wordCount", data.wordCount)
-                        put("lineCount", data.lineCount)
-                        put("sentenceCount", data.sentenceCount)
-                        put("summary", data.summary)
+                        put("path", data.path)
+                        put("content", data.content)
+                        put("fileCount", data.fileCount)
+                        put("success", data.success)
                     }.toString()
                 }
                 else -> {

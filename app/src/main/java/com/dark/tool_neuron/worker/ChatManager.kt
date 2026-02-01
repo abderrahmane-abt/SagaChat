@@ -6,6 +6,7 @@ import com.dark.tool_neuron.models.messages.MessageContent
 import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.models.messages.RagResultItem
 import com.dark.tool_neuron.models.messages.Role
+import com.dark.tool_neuron.models.messages.ToolChainStepData
 import com.dark.tool_neuron.models.vault.ChatExport
 import com.dark.tool_neuron.models.vault.ChatInfo
 import com.dark.tool_neuron.models.vault.MessageSearchResult
@@ -69,7 +70,10 @@ class ChatManager {
         chatId: String,
         content: String,
         decodingMetrics: DecodingMetrics? = null,
-        ragResults: List<RagResultItem>? = null
+        ragResults: List<RagResultItem>? = null,
+        toolChainSteps: List<ToolChainStepData>? = null,
+        agentPlan: String? = null,
+        agentSummary: String? = null
     ): Result<Messages> = withContext(Dispatchers.IO) {
         try {
             val message = Messages(
@@ -79,7 +83,10 @@ class ChatManager {
                     content = content
                 ),
                 decodingMetrics = decodingMetrics,
-                ragResults = ragResults
+                ragResults = ragResults,
+                toolChainSteps = toolChainSteps,
+                agentPlan = agentPlan,
+                agentSummary = agentSummary
             )
             VaultHelper.addMessage(chatId, message)
             Result.success(message)

@@ -8,6 +8,7 @@ import com.dark.tool_neuron.data.AppSettingsDataStore
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.models.table_schema.Model
+import com.dark.tool_neuron.plugins.PluginManager
 import com.dark.tool_neuron.service.ModelDownloadService
 import com.dark.tool_neuron.tts.TTSDataStore
 import com.dark.tool_neuron.tts.TTSManager
@@ -36,7 +37,25 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         .map { models -> models.any { it.providerType == ProviderType.TTS } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    // Tool calling model install state - check if a GGUF model with "Code" in name is installed
+    val hasToolCallingModel: StateFlow<Boolean> = modelRepository.getAllModels()
+        .map { models ->
+            models.any { model ->
+                model.providerType == ProviderType.GGUF && (
+                    model.modelName.contains("Code", ignoreCase = true) ||
+                    model.modelName.contains("tool", ignoreCase = true) ||
+                    model.modelName.contains("qwen", ignoreCase = true) ||
+                    model.id.contains(PluginManager.TOOL_CALLING_MODEL_ID, ignoreCase = true)
+                )
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val ttsDownloadStates: StateFlow<Map<String, ModelDownloadService.DownloadState>> =
+        ModelDownloadService.downloadStates
+
+    // Tool calling model download state
+    val toolCallingModelDownloadState: StateFlow<Map<String, ModelDownloadService.DownloadState>> =
         ModelDownloadService.downloadStates
 
     // App settings
@@ -116,7 +135,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch { ttsDataStore.updateUseNNAPI(enabled) }
     }
 
-    // TTS download
+    // Downloads
     companion object {
         private const val TTS_MODEL_ID = "supertonic-v2-tts"
     }
@@ -132,6 +151,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             putExtra(ModelDownloadService.EXTRA_MODEL_TYPE, "TTS")
             putExtra(ModelDownloadService.EXTRA_RUN_ON_CPU, true)
             putExtra(ModelDownloadService.EXTRA_TEXT_EMBEDDING_SIZE, 0)
+        }
+        context.startForegroundService(intent)
+    }
+
+    fun downloadToolCallingModel() {
+        val context = getApplication<Application>()
+        val model = PluginManager.TOOL_CALLING_MODEL
+        val intent = Intent(context, ModelDownloadService::class.java).apply {
+            action = ModelDownloadService.ACTION_START_DOWNLOAD
+            putExtra(ModelDownloadService.EXTRA_MODEL_ID, model.id)
+            putExtra(ModelDownloadService.EXTRA_MODEL_NAME, model.name)
+            putExtra(ModelDownloadService.EXTRA_FILE_URL, "https://huggingface.co/${model.fileUri}")
+            putExtra(ModelDownloadService.EXTRA_IS_ZIP, model.isZip)
+            putExtra(ModelDownloadService.EXTRA_MODEL_TYPE, "GGUF")
+            putExtra(ModelDownloadService.EXTRA_RUN_ON_CPU, model.runOnCpu)
+            putExtra(ModelDownloadService.EXTRA_TEXT_EMBEDDING_SIZE, model.textEmbeddingSize)
         }
         context.startForegroundService(intent)
     }
