@@ -29,6 +29,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private val modelRepository = AppContainer.getModelRepository()
 
+    init {
+        // Sync bypass setting with PluginManager on startup
+        viewModelScope.launch {
+            appSettingsDataStore.toolCallingBypassEnabled.collect { enabled ->
+                PluginManager.setToolCallingBypassEnabled(enabled)
+            }
+        }
+    }
+
     // Installed models
     val installedModels: Flow<List<Model>> = modelRepository.getAllModels()
 
@@ -68,6 +77,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val toolCallingEnabled: StateFlow<Boolean> = appSettingsDataStore.toolCallingEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val toolCallingBypassEnabled: StateFlow<Boolean> = appSettingsDataStore.toolCallingBypassEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val imageBlurEnabled: StateFlow<Boolean> = appSettingsDataStore.imageBlurEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
@@ -100,6 +112,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setToolCallingEnabled(enabled: Boolean) {
         viewModelScope.launch { appSettingsDataStore.updateToolCallingEnabled(enabled) }
+    }
+
+    fun setToolCallingBypassEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            appSettingsDataStore.updateToolCallingBypassEnabled(enabled)
+            // Sync with PluginManager
+            PluginManager.setToolCallingBypassEnabled(enabled)
+        }
     }
 
     fun setImageBlurEnabled(enabled: Boolean) {

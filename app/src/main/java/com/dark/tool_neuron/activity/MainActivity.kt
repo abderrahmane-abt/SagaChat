@@ -240,7 +240,7 @@ fun AppNavigation(
         }
 
         composable(Screen.VaultManager.route) {
-            VaultDashboard()
+            VaultDashboard(onNavigateBack = { navController.popBackStack() })
         }
     }
 }

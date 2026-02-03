@@ -17,6 +17,7 @@ class AppSettingsDataStore(private val context: Context) {
         private val STREAMING_ENABLED = booleanPreferencesKey("streaming_enabled")
         private val CHAT_MEMORY_ENABLED = booleanPreferencesKey("chat_memory_enabled")
         private val TOOL_CALLING_ENABLED = booleanPreferencesKey("tool_calling_enabled")
+        private val TOOL_CALLING_BYPASS_ENABLED = booleanPreferencesKey("tool_calling_bypass_enabled")
         private val IMAGE_BLUR_ENABLED = booleanPreferencesKey("image_blur_enabled")
         private val LOAD_TTS_ON_START = booleanPreferencesKey("load_tts_on_start")
     }
@@ -31,6 +32,10 @@ class AppSettingsDataStore(private val context: Context) {
 
     val toolCallingEnabled: Flow<Boolean> = context.appSettingsDataStore.data.map { prefs ->
         prefs[TOOL_CALLING_ENABLED] ?: true
+    }
+
+    val toolCallingBypassEnabled: Flow<Boolean> = context.appSettingsDataStore.data.map { prefs ->
+        prefs[TOOL_CALLING_BYPASS_ENABLED] ?: false
     }
 
     val imageBlurEnabled: Flow<Boolean> = context.appSettingsDataStore.data.map { prefs ->
@@ -52,6 +57,10 @@ class AppSettingsDataStore(private val context: Context) {
 
     suspend fun updateToolCallingEnabled(enabled: Boolean) {
         context.appSettingsDataStore.edit { it[TOOL_CALLING_ENABLED] = enabled }
+    }
+
+    suspend fun updateToolCallingBypassEnabled(enabled: Boolean) {
+        context.appSettingsDataStore.edit { it[TOOL_CALLING_BYPASS_ENABLED] = enabled }
     }
 
     suspend fun updateImageBlurEnabled(enabled: Boolean) {

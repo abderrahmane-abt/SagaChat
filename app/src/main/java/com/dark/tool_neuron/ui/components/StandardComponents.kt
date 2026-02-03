@@ -116,7 +116,8 @@ fun SwitchRow(
     description: String? = null,
     icon: ImageVector? = null,
     iconRes: Int? = null,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    titleColor: androidx.compose.ui.graphics.Color? = null
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -153,7 +154,7 @@ fun SwitchRow(
                     text = title,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
-                    color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    color = titleColor ?: if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                 )
                 if (description != null) {
                     Text(

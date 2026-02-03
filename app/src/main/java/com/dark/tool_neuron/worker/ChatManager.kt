@@ -20,38 +20,48 @@ import kotlinx.coroutines.withContext
 
 class ChatManager {
 
-    suspend fun createNewChat(): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            val chatId = VaultHelper.createChat()
-            AppStateManager.chatRefreshed()
-            Result.success(chatId)
+    /**
+     * Ensures vault is ready before executing an operation.
+     * Waits up to 10 seconds for vault initialization.
+     */
+    private suspend fun <T> withVaultReady(block: suspend () -> T): Result<T> {
+        return try {
+            if (!VaultHelper.isInitialized()) {
+                val ready = VaultHelper.awaitReady(timeoutMs = 10000)
+                if (!ready) {
+                    return Result.failure(IllegalStateException("Vault initialization timed out"))
+                }
+            }
+            Result.success(block())
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
+    suspend fun createNewChat(): Result<String> = withContext(Dispatchers.IO) {
+        withVaultReady {
+            val chatId = VaultHelper.createChat()
+            AppStateManager.chatRefreshed()
+            chatId
+        }
+    }
+
     suspend fun getAllChats(): Result<List<ChatInfo>> = withContext(Dispatchers.IO) {
-        try {
-            val chats = VaultHelper.getAllChats()
-            Result.success(chats)
-        } catch (e: Exception) {
-            Result.failure(e)
+        withVaultReady {
+            VaultHelper.getAllChats()
         }
     }
 
     suspend fun getChatMessages(chatId: String): Result<List<Messages>> =
         withContext(Dispatchers.IO) {
-            try {
-                val messages = VaultHelper.getMessagesForChat(chatId)
-                Result.success(messages)
-            } catch (e: Exception) {
-                Result.failure(e)
+            withVaultReady {
+                VaultHelper.getMessagesForChat(chatId)
             }
         }
 
     suspend fun addUserMessage(chatId: String, content: String): Result<Messages> =
         withContext(Dispatchers.IO) {
-            try {
+            withVaultReady {
                 val message = Messages(
                     role = Role.User,
                     content = MessageContent(
@@ -60,9 +70,7 @@ class ChatManager {
                     )
                 )
                 VaultHelper.addMessage(chatId, message)
-                Result.success(message)
-            } catch (e: Exception) {
-                Result.failure(e)
+                message
             }
         }
 
@@ -75,7 +83,7 @@ class ChatManager {
         agentPlan: String? = null,
         agentSummary: String? = null
     ): Result<Messages> = withContext(Dispatchers.IO) {
-        try {
+        withVaultReady {
             val message = Messages(
                 role = Role.Assistant,
                 content = MessageContent(
@@ -89,9 +97,7 @@ class ChatManager {
                 agentSummary = agentSummary
             )
             VaultHelper.addMessage(chatId, message)
-            Result.success(message)
-        } catch (e: Exception) {
-            Result.failure(e)
+            message
         }
     }
 
@@ -102,7 +108,7 @@ class ChatManager {
         seed: Long,
         imageMetrics: ImageGenerationMetrics?
     ): Result<Messages> = withContext(Dispatchers.IO) {
-        try {
+        withVaultReady {
             val message = Messages(
                 role = Role.Assistant,
                 content = MessageContent(
@@ -115,101 +121,91 @@ class ChatManager {
                 imageMetrics = imageMetrics
             )
             VaultHelper.addMessage(chatId, message)
-            Result.success(message)
-        } catch (e: Exception) {
-            Result.failure(e)
+            message
         }
     }
 
     suspend fun addMessage(chatId: String, message: Messages): Result<Messages> =
         withContext(Dispatchers.IO) {
-            try {
+            withVaultReady {
                 VaultHelper.addMessage(chatId, message)
-                Result.success(message)
-            } catch (e: Exception) {
-                Result.failure(e)
+                message
             }
         }
 
     suspend fun updateMessage(chatId: String, message: Messages): Result<Unit> =
         withContext(Dispatchers.IO) {
-            try {
+            withVaultReady {
                 VaultHelper.updateMessage(chatId, message)
-                Result.success(Unit)
-            } catch (e: Exception) {
-                Result.failure(e)
+                Unit
             }
         }
 
     suspend fun deleteMessage(messageId: String): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
+        withVaultReady {
             VaultHelper.deleteMessage(messageId)
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
         }
     }
 
     suspend fun deleteChat(chatId: String): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
+        withVaultReady {
             VaultHelper.deleteChat(chatId)
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
         }
     }
 
     suspend fun searchMessages(query: String): Result<List<Messages>> =
         withContext(Dispatchers.IO) {
-            try {
+            withVaultReady {
                 val results = VaultHelper.searchMessages(query)
-                Result.success(results.map { it.message })
-            } catch (e: Exception) {
-                Result.failure(e)
+                results.map { it.message }
             }
         }
 
     suspend fun exportChat(chatId: String, exportPath: String): Result<Unit> =
         withContext(Dispatchers.IO) {
-            try {
+            withVaultReady {
                 val export = VaultHelper.exportChat(chatId)
                 val jsonString = kotlinx.serialization.json.Json.encodeToString(
                     ChatExport.serializer(), export
                 )
                 java.io.File(exportPath).writeText(jsonString)
-                Result.success(Unit)
-            } catch (e: Exception) {
-                Result.failure(e)
             }
         }
 
     suspend fun importChat(importPath: String): Result<String> = withContext(Dispatchers.IO) {
-        try {
+        withVaultReady {
             val jsonString = java.io.File(importPath).readText()
             val export = kotlinx.serialization.json.Json.decodeFromString(
                 ChatExport.serializer(), jsonString
             )
-            val chatId = VaultHelper.importChat(export)
-            Result.success(chatId)
-        } catch (e: Exception) {
-            Result.failure(e)
+            VaultHelper.importChat(export)
         }
     }
 
     fun getMessagesFlow(chatId: String): Flow<List<Messages>> = flow {
-        try {
-            val messages = VaultHelper.getMessagesForChat(chatId)
-            emit(messages)
-        } catch (e: Exception) {
+        // Wait for vault to be ready before emitting
+        if (VaultHelper.awaitReady(timeoutMs = 10000)) {
+            try {
+                val messages = VaultHelper.getMessagesForChat(chatId)
+                emit(messages)
+            } catch (e: Exception) {
+                emit(emptyList())
+            }
+        } else {
             emit(emptyList())
         }
     }
 
     fun getChatsFlow(): Flow<List<ChatInfo>> = flow {
-        try {
-            val chats = VaultHelper.getAllChats()
-            emit(chats)
-        } catch (e: Exception) {
+        // Wait for vault to be ready before emitting
+        if (VaultHelper.awaitReady(timeoutMs = 10000)) {
+            try {
+                val chats = VaultHelper.getAllChats()
+                emit(chats)
+            } catch (e: Exception) {
+                emit(emptyList())
+            }
+        } else {
             emit(emptyList())
         }
     }

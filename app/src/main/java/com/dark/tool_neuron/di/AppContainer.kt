@@ -28,9 +28,12 @@ object AppContainer {
     private val appScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val chatManager = ChatManager()
     private var generationManager = GenerationManager()
-    private var vaultInitialized = false
+
+    // Keep track of context for re-initialization if needed
+    private lateinit var appContext: Context
 
     fun init(context: Context, application: Application) {
+        appContext = context.applicationContext
         database = AppDatabase.getDatabase(context)
 
         modelRepository = ModelRepository(
@@ -50,22 +53,35 @@ object AppContainer {
         appScope.launch {
             try {
                 VaultHelper.initialize(context)
-                vaultInitialized = true
             } catch (e: Exception) {
                 e.printStackTrace()
+                // Retry once after a short delay
+                kotlinx.coroutines.delay(500)
+                try {
+                    VaultHelper.initialize(context)
+                } catch (retryException: Exception) {
+                    retryException.printStackTrace()
+                }
             }
         }
     }
 
+    /**
+     * Re-initialize vault if needed (e.g., after configuration change or process death)
+     * This can be called from Activities/Fragments to ensure vault is ready
+     */
+    fun ensureVaultInitialized() {
+        if (!VaultHelper.isInitialized() && ::appContext.isInitialized) {
+            initVault(appContext)
+        }
+    }
+
     fun shutdown() {
-        if (vaultInitialized) {
-            appScope.launch {
-                try {
-                    VaultHelper.close()
-                    vaultInitialized = false
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+        appScope.launch {
+            try {
+                VaultHelper.close()
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
@@ -83,5 +99,10 @@ object AppContainer {
     fun getChatViewModelFactory(): ChatViewModelFactory = chatViewModelFactory
 
 
-    fun isVaultReady(): Boolean = vaultInitialized
+    fun isVaultReady(): Boolean = VaultHelper.isInitialized()
+
+    /**
+     * Exposes the vault readiness StateFlow for UI observation
+     */
+    val vaultReadyState = VaultHelper.isReady
 }

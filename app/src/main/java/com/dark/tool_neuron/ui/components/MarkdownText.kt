@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -42,6 +43,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -128,37 +130,88 @@ private fun parseMarkdown(text: String): List<MarkdownElement> {
         val line = lines[i]
 
         when {
-            // Block math: \[...\] format
-            line.trimStart().startsWith("\\[") -> {
-                val startCol = line.indexOf("\\[")
-                val afterStart = line.substring(startCol + 2)
+            // Block math: \[...\] format (also handles double-escaped \\[...\\])
+            line.trimStart().startsWith("\\[") || line.trimStart().startsWith("\\\\[") -> {
+                val isDoubleEscaped = line.contains("\\\\[")
+                val startPattern = if (isDoubleEscaped) "\\\\[" else "\\["
+                val endPatternSingle = "\\]"
+                val endPatternDouble = "\\\\]"
+
+                val startCol = line.indexOf(startPattern)
+                val afterStart = line.substring(startCol + startPattern.length)
 
                 // Check if closing \] is on the same line
-                val sameLineEnd = afterStart.indexOf("\\]")
+                val sameLineEnd = when {
+                    afterStart.contains(endPatternDouble) -> afterStart.indexOf(endPatternDouble)
+                    afterStart.contains(endPatternSingle) -> afterStart.indexOf(endPatternSingle)
+                    else -> -1
+                }
                 if (sameLineEnd != -1) {
-                    val expression = afterStart.substring(0, sameLineEnd).trim()
+                    val expression = afterStart.substring(0, sameLineEnd).trim().replace("\\\\", "\\")
                     elements.add(MarkdownElement.MathBlock(expression, false))
                 } else {
                     // Multi-line math block
                     val mathLines = mutableListOf<String>()
-                    if (afterStart.isNotBlank()) mathLines.add(afterStart)
+                    if (afterStart.isNotBlank()) mathLines.add(afterStart.replace("\\\\", "\\"))
                     i++
-                    while (i < lines.size && !lines[i].contains("\\]")) {
-                        mathLines.add(lines[i])
+                    while (i < lines.size && !lines[i].contains(endPatternSingle) && !lines[i].contains(endPatternDouble)) {
+                        mathLines.add(lines[i].replace("\\\\", "\\"))
                         i++
                     }
                     // Get content before closing \]
                     if (i < lines.size) {
                         val closingLine = lines[i]
-                        val closeIdx = closingLine.indexOf("\\]")
+                        val closeIdx = when {
+                            closingLine.contains(endPatternDouble) -> closingLine.indexOf(endPatternDouble)
+                            else -> closingLine.indexOf(endPatternSingle)
+                        }
                         if (closeIdx > 0) {
-                            mathLines.add(closingLine.substring(0, closeIdx))
+                            mathLines.add(closingLine.substring(0, closeIdx).replace("\\\\", "\\"))
                         }
                     }
                     val expression = mathLines.joinToString("\n").trim()
                     elements.add(MarkdownElement.MathBlock(expression, false))
                 }
             }
+            // LaTeX math environments: \begin{equation}, \begin{align}, \begin{gather}, etc.
+            // Use regex for more robust detection (handles various escape sequences)
+            Regex("""\\{1,2}begin\s*\{(equation|align|gather|multline|eqnarray|displaymath|math)\*?\}""").containsMatchIn(line) -> {
+                // Normalize: convert double backslashes to single, remove extra spaces
+                val normalizedLine = line.replace("\\\\", "\\").replace(Regex("""\\begin\s+\{"""), "\\begin{")
+                val envMatch = Regex("""\\begin\{(equation|align|gather|multline|eqnarray|displaymath|math)(\*?)\}""").find(normalizedLine)
+                val envName = envMatch?.groupValues?.get(1) ?: "equation"
+                val starred = envMatch?.groupValues?.get(2) ?: ""
+                val endPatternRegex = Regex("""\\{1,2}end\s*\{${Regex.escape(envName)}${Regex.escape(starred)}\}""")
+
+                val mathLines = mutableListOf<String>()
+                // Get content after \begin{...} on the same line
+                val beginTagRegex = Regex("""\\{1,2}begin\s*\{${Regex.escape(envName)}${Regex.escape(starred)}\}""")
+                val afterBegin = beginTagRegex.split(normalizedLine, 2).getOrNull(1)?.trim() ?: ""
+                if (afterBegin.isNotBlank() && !endPatternRegex.containsMatchIn(afterBegin)) {
+                    mathLines.add(afterBegin.replace("\\\\", "\\"))
+                }
+
+                i++
+                while (i < lines.size && !endPatternRegex.containsMatchIn(lines[i])) {
+                    mathLines.add(lines[i].replace("\\\\", "\\"))
+                    i++
+                }
+
+                // Get content before \end{...} on the closing line
+                if (i < lines.size) {
+                    val closingLine = lines[i]
+                    val beforeEnd = endPatternRegex.split(closingLine, 2).getOrNull(0)?.trim() ?: ""
+                    if (beforeEnd.isNotBlank()) {
+                        mathLines.add(beforeEnd.replace("\\\\", "\\"))
+                    }
+                }
+
+                val expression = mathLines.joinToString("\n").trim()
+                if (expression.isNotBlank()) {
+                    elements.add(MarkdownElement.MathBlock(expression, false))
+                }
+            }
+
             // Block math: $$...$$ (can span multiple lines)
             line.trimStart().startsWith("$$") -> {
                 val isTypst = line.contains("#") || line.contains("$")
@@ -168,7 +221,7 @@ private fun parseMarkdown(text: String): List<MarkdownElement> {
                 // Check if closing $$ is on the same line
                 val sameLineEnd = afterStart.indexOf("$$")
                 if (sameLineEnd != -1) {
-                    val expression = afterStart.substring(0, sameLineEnd).trim()
+                    val expression = afterStart.substring(0, sameLineEnd).trim().replace("\\\\", "\\")
                     elements.add(
                         MarkdownElement.MathBlock(
                             expression,
@@ -178,10 +231,10 @@ private fun parseMarkdown(text: String): List<MarkdownElement> {
                 } else {
                     // Multi-line math block
                     val mathLines = mutableListOf<String>()
-                    if (afterStart.isNotBlank()) mathLines.add(afterStart)
+                    if (afterStart.isNotBlank()) mathLines.add(afterStart.replace("\\\\", "\\"))
                     i++
                     while (i < lines.size && !lines[i].contains("$$")) {
-                        mathLines.add(lines[i])
+                        mathLines.add(lines[i].replace("\\\\", "\\"))
                         i++
                     }
                     val expression = mathLines.joinToString("\n").trim()
@@ -198,6 +251,62 @@ private fun parseMarkdown(text: String): List<MarkdownElement> {
                     i++
                 }
                 elements.add(MarkdownElement.CodeBlock(codeLines.joinToString("\n"), language))
+            }
+
+            // LaTeX tabular environment: \begin{tabular}...\end{tabular}
+            line.trimStart().contains("\\begin{tabular}") || line.trimStart().contains("\\\\begin{tabular}") -> {
+                val tabularLines = mutableListOf<String>()
+                tabularLines.add(line.replace("\\\\", "\\"))
+                i++
+                while (i < lines.size && !lines[i].contains("\\end{tabular}") && !lines[i].contains("\\\\end{tabular}")) {
+                    tabularLines.add(lines[i].replace("\\\\", "\\"))
+                    i++
+                }
+                if (i < lines.size) {
+                    tabularLines.add(lines[i].replace("\\\\", "\\")) // Add the \end{tabular} line
+                }
+                val tableElement = parseLatexTabular(tabularLines.joinToString("\n"))
+                if (tableElement != null) {
+                    elements.add(tableElement)
+                }
+            }
+
+            // LaTeX table environment: \begin{table}...\end{table} (wrapper around tabular)
+            line.trimStart().contains("\\begin{table}") || line.trimStart().contains("\\\\begin{table}") -> {
+                val tableLines = mutableListOf<String>()
+                tableLines.add(line.replace("\\\\", "\\"))
+                i++
+                while (i < lines.size && !lines[i].contains("\\end{table}") && !lines[i].contains("\\\\end{table}")) {
+                    tableLines.add(lines[i].replace("\\\\", "\\"))
+                    i++
+                }
+                if (i < lines.size) {
+                    tableLines.add(lines[i].replace("\\\\", "\\"))
+                }
+                // Extract tabular from within table environment
+                val fullContent = tableLines.joinToString("\n")
+                val tableElement = parseLatexTabular(fullContent)
+                if (tableElement != null) {
+                    elements.add(tableElement)
+                }
+            }
+
+            // LaTeX array environment: \begin{array}...\end{array}
+            line.trimStart().contains("\\begin{array}") || line.trimStart().contains("\\\\begin{array}") -> {
+                val arrayLines = mutableListOf<String>()
+                arrayLines.add(line.replace("\\\\", "\\"))
+                i++
+                while (i < lines.size && !lines[i].contains("\\end{array}") && !lines[i].contains("\\\\end{array}")) {
+                    arrayLines.add(lines[i].replace("\\\\", "\\"))
+                    i++
+                }
+                if (i < lines.size) {
+                    arrayLines.add(lines[i].replace("\\\\", "\\"))
+                }
+                val tableElement = parseLatexArray(arrayLines.joinToString("\n"))
+                if (tableElement != null) {
+                    elements.add(tableElement)
+                }
             }
 
             line.trimStart().startsWith("    ") && line.trim().isNotEmpty() -> {
@@ -267,6 +376,159 @@ private fun parseMarkdown(text: String): List<MarkdownElement> {
     }
 
     return elements
+}
+
+/**
+ * Parse LaTeX tabular environment into a Table element
+ * Handles: \begin{tabular}{|c|c|...}, \hline, &, \\, \textbf{}, \textit{}, etc.
+ */
+private fun parseLatexTabular(content: String): MarkdownElement.Table? {
+    try {
+        // Extract content between \begin{tabular} and \end{tabular}
+        val beginPattern = Regex("""\\begin\{tabular\}\{([^}]*)\}""")
+        val beginMatch = beginPattern.find(content) ?: return null
+
+        // Parse column alignment specification (e.g., |c|c|c|c|c|)
+        val colSpec = beginMatch.groupValues[1]
+        val alignments = colSpec.filter { it in "lcrLCR" }.map { char ->
+            when (char.lowercaseChar()) {
+                'l' -> MarkdownElement.Table.Alignment.LEFT
+                'c' -> MarkdownElement.Table.Alignment.CENTER
+                'r' -> MarkdownElement.Table.Alignment.RIGHT
+                else -> MarkdownElement.Table.Alignment.LEFT
+            }
+        }
+
+        // Get content between begin and end
+        val startIdx = beginMatch.range.last + 1
+        val endIdx = content.indexOf("\\end{tabular}")
+        if (endIdx == -1) return null
+
+        val tableContent = content.substring(startIdx, endIdx)
+
+        // Split by \\ (row separator) and filter out empty rows and \hline
+        val rowStrings = tableContent.split(Regex("""\\\\"""))
+            .map { it.trim() }
+            .filter { it.isNotBlank() && !it.matches(Regex("""^\s*\\hline\s*$""")) }
+            .map { row ->
+                // Remove \hline from within rows
+                row.replace("\\hline", "").trim()
+            }
+            .filter { it.isNotBlank() }
+
+        if (rowStrings.isEmpty()) return null
+
+        // Parse each row into cells (split by &)
+        val allRows = rowStrings.map { row ->
+            row.split("&").map { cell ->
+                processLatexCellContent(cell.trim())
+            }
+        }
+
+        // First row is headers, rest are data rows
+        val headers = allRows.firstOrNull() ?: return null
+        val dataRows = if (allRows.size > 1) allRows.drop(1) else emptyList()
+
+        // Ensure alignments match column count
+        val finalAlignments = if (alignments.size >= headers.size) {
+            alignments.take(headers.size)
+        } else {
+            alignments + List(headers.size - alignments.size) { MarkdownElement.Table.Alignment.LEFT }
+        }
+
+        return MarkdownElement.Table(headers, dataRows, finalAlignments)
+    } catch (e: Exception) {
+        return null
+    }
+}
+
+/**
+ * Parse LaTeX array environment into a Table element
+ * Similar to tabular but used in math mode
+ */
+private fun parseLatexArray(content: String): MarkdownElement.Table? {
+    try {
+        val beginPattern = Regex("""\\begin\{array\}\{([^}]*)\}""")
+        val beginMatch = beginPattern.find(content) ?: return null
+
+        val colSpec = beginMatch.groupValues[1]
+        val alignments = colSpec.filter { it in "lcrLCR" }.map { char ->
+            when (char.lowercaseChar()) {
+                'l' -> MarkdownElement.Table.Alignment.LEFT
+                'c' -> MarkdownElement.Table.Alignment.CENTER
+                'r' -> MarkdownElement.Table.Alignment.RIGHT
+                else -> MarkdownElement.Table.Alignment.LEFT
+            }
+        }
+
+        val startIdx = beginMatch.range.last + 1
+        val endIdx = content.indexOf("\\end{array}")
+        if (endIdx == -1) return null
+
+        val arrayContent = content.substring(startIdx, endIdx)
+
+        val rowStrings = arrayContent.split(Regex("""\\\\"""))
+            .map { it.trim() }
+            .filter { it.isNotBlank() && !it.matches(Regex("""^\s*\\hline\s*$""")) }
+            .map { row -> row.replace("\\hline", "").trim() }
+            .filter { it.isNotBlank() }
+
+        if (rowStrings.isEmpty()) return null
+
+        val allRows = rowStrings.map { row ->
+            row.split("&").map { cell -> processLatexCellContent(cell.trim()) }
+        }
+
+        val headers = allRows.firstOrNull() ?: return null
+        val dataRows = if (allRows.size > 1) allRows.drop(1) else emptyList()
+
+        val finalAlignments = if (alignments.size >= headers.size) {
+            alignments.take(headers.size)
+        } else {
+            alignments + List(headers.size - alignments.size) { MarkdownElement.Table.Alignment.LEFT }
+        }
+
+        return MarkdownElement.Table(headers, dataRows, finalAlignments)
+    } catch (e: Exception) {
+        return null
+    }
+}
+
+/**
+ * Process LaTeX formatting commands within table cells
+ * Handles: \textbf{}, \textit{}, \emph{}, etc.
+ */
+private fun processLatexCellContent(cell: String): String {
+    var result = cell
+
+    // \textbf{...} -> content (bold indicator removed for plain text)
+    result = Regex("""\\textbf\{([^}]*)\}""").replace(result) { it.groupValues[1] }
+
+    // \textit{...} -> content
+    result = Regex("""\\textit\{([^}]*)\}""").replace(result) { it.groupValues[1] }
+
+    // \emph{...} -> content
+    result = Regex("""\\emph\{([^}]*)\}""").replace(result) { it.groupValues[1] }
+
+    // \underline{...} -> content
+    result = Regex("""\\underline\{([^}]*)\}""").replace(result) { it.groupValues[1] }
+
+    // \textrm{...} -> content
+    result = Regex("""\\textrm\{([^}]*)\}""").replace(result) { it.groupValues[1] }
+
+    // \textsf{...} -> content
+    result = Regex("""\\textsf\{([^}]*)\}""").replace(result) { it.groupValues[1] }
+
+    // \texttt{...} -> content
+    result = Regex("""\\texttt\{([^}]*)\}""").replace(result) { it.groupValues[1] }
+
+    // \text{...} -> content
+    result = Regex("""\\text\{([^}]*)\}""").replace(result) { it.groupValues[1] }
+
+    // Clean up any remaining backslash commands that might be left
+    result = result.replace("\\hline", "").trim()
+
+    return result
 }
 
 @Composable
@@ -624,55 +886,73 @@ private fun TableView(
     rows: List<List<String>>,
     alignments: List<MarkdownElement.Table.Alignment>
 ) {
-    Column(
+    val columnCount = headers.size.coerceAtLeast(1)
+
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(rDp(10.dp)))
-            .border(
-                width = rDp(1.dp),
-                color = MaterialTheme.colorScheme.outlineVariant,
-                shape = RoundedCornerShape(rDp(10.dp))
-            )
             .horizontalScroll(rememberScrollState())
     ) {
-        Row(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                .padding(rDp(12.dp))
-        ) {
-            headers.forEachIndexed { index, header ->
-                Text(
-                    text = header,
-                    fontFamily = ManropeFontFamily,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = rDp(8.dp))
+                .widthIn(min = rDp(200.dp))
+                .clip(RoundedCornerShape(rDp(10.dp)))
+                .border(
+                    width = rDp(1.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                    shape = RoundedCornerShape(rDp(10.dp))
                 )
-            }
-        }
-
-        rows.forEach { row ->
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            // Header row
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                     .padding(rDp(12.dp))
             ) {
-                row.forEachIndexed { index, cell ->
+                headers.forEachIndexed { index, header ->
+                    val alignment = alignments.getOrNull(index) ?: MarkdownElement.Table.Alignment.LEFT
                     Text(
-                        text = cell,
+                        text = header,
                         fontFamily = ManropeFontFamily,
                         fontSize = 14.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.87f),
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        textAlign = when (alignment) {
+                            MarkdownElement.Table.Alignment.LEFT -> TextAlign.Start
+                            MarkdownElement.Table.Alignment.CENTER -> TextAlign.Center
+                            MarkdownElement.Table.Alignment.RIGHT -> TextAlign.End
+                        },
                         modifier = Modifier
-                            .weight(1f)
+                            .widthIn(min = rDp(80.dp))
                             .padding(horizontal = rDp(8.dp))
                     )
+                }
+            }
+
+            // Data rows
+            rows.forEach { row ->
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Row(
+                    modifier = Modifier.padding(rDp(12.dp))
+                ) {
+                    row.forEachIndexed { index, cell ->
+                        val alignment = alignments.getOrNull(index) ?: MarkdownElement.Table.Alignment.LEFT
+                        Text(
+                            text = cell,
+                            fontFamily = ManropeFontFamily,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.87f),
+                            textAlign = when (alignment) {
+                                MarkdownElement.Table.Alignment.LEFT -> androidx.compose.ui.text.style.TextAlign.Start
+                                MarkdownElement.Table.Alignment.CENTER -> androidx.compose.ui.text.style.TextAlign.Center
+                                MarkdownElement.Table.Alignment.RIGHT -> androidx.compose.ui.text.style.TextAlign.End
+                            },
+                            modifier = Modifier
+                                .widthIn(min = rDp(80.dp))
+                                .padding(horizontal = rDp(8.dp))
+                        )
+                    }
                 }
             }
         }
@@ -792,32 +1072,59 @@ private fun CodeBlockExpanded(code: String, language: String) {
 /**
  * Comprehensive LaTeX/Typst symbol mappings for Unicode rendering
  *
- * Total Symbols: ~320+
- * Coverage: >95% of commonly used LaTeX mathematical symbols
+ * Total Symbols: ~600+
+ * Coverage: >99% of LaTeX mathematical symbols including AMS extensions
  *
  * Categories Covered:
- * - Greek Letters (lowercase & uppercase)
- * - Binary Operators (30+)
- * - Relation Symbols (40+)
- * - Arrows (35+)
- * - Big Operators (summation, product, integral, etc.)
+ * - Greek Letters (lowercase, uppercase, and all variants)
+ * - Binary Operators (60+ including AMS)
+ * - Relation Symbols (80+ including AMS)
+ * - Negated Relations (40+ from AMS)
+ * - Arrows (60+ including AMS arrows)
+ * - Big Operators (all integral variants, sums, products)
  * - Logic & Set Theory symbols
  * - Calculus & Analysis symbols
  * - Geometry symbols
- * - Brackets & Delimiters
- * - Mathematical Functions
+ * - Brackets & Delimiters (including all size variants)
+ * - Mathematical Functions (sin, cos, log, lim, etc.)
+ * - Hebrew Letters (aleph, beth, gimel, daleth)
  * - Miscellaneous symbols (card suits, music notation, etc.)
+ * - Dots (ldots, cdots, vdots, ddots, iddots)
  *
- * Additional Features (via processing functions):
- * - Blackboard Bold (\mathbb{R} -> ℝ)
- * - Calligraphic Font (\mathcal{L} -> 𝓛)
- * - Accents (\hat{x} -> x̂, \vec{v} -> v⃗)
- * - Binomial Coefficients (\binom{n}{k})
- * - Spacing commands (\quad, \,, etc.)
- * - Extended super/subscripts
+ * Font Commands (via processing functions):
+ * - Blackboard Bold (\mathbb{R} -> ℝ) - Full alphabet
+ * - Calligraphic (\mathcal{L} -> 𝓛) - Full uppercase
+ * - Script (\mathscr{F} -> ℱ) - Full alphabet
+ * - Fraktur (\mathfrak{g} -> 𝔤) - Full alphabet
+ * - Sans-serif (\mathsf{A} -> 𝖠) - Full alphanumeric
+ * - Monospace (\mathtt{x} -> 𝚡) - Full alphanumeric
  *
- * Last Updated: 2026-01-17
- * References: LaTeX comprehensive symbol list, Unicode Mathematical Operators
+ * Accent Commands:
+ * - \hat, \tilde, \bar, \vec, \dot, \ddot
+ * - \acute, \grave, \breve, \check
+ * - \widehat, \widetilde
+ * - \overline, \underline
+ * - \overbrace, \underbrace
+ *
+ * Other Commands:
+ * - Fractions (\frac{a}{b})
+ * - Roots (\sqrt{x}, \sqrt[n]{x})
+ * - Binomials (\binom{n}{k})
+ * - Modular arithmetic (\mod, \bmod, \pmod)
+ * - Boxed expressions (\boxed{x})
+ * - Stacking (\stackrel, \overset, \underset)
+ * - Cancellation (\cancel, \bcancel, \xcancel)
+ * - Spacing (\quad, \qquad, \,, \;, etc.)
+ *
+ * Environments:
+ * - cases, matrix, pmatrix, bmatrix, vmatrix, Vmatrix
+ * - align, align*
+ *
+ * Last Updated: 2026-02-04
+ * References:
+ * - The Comprehensive LaTeX Symbol List (Scott Pakin)
+ * - AMS-LaTeX User's Guide
+ * - Unicode Mathematical Alphanumeric Symbols (U+1D400-U+1D7FF)
  */
 private val mathSymbols = mapOf(
     // Greek letters (lowercase)
@@ -1154,6 +1461,240 @@ private val mathSymbols = mapOf(
     "\\Pr" to "Pr",
     "\\limsup" to "lim sup",
     "\\liminf" to "lim inf",
+    // ==================== AMS EXTENDED SYMBOLS ====================
+    // AMS Binary Operators
+    "\\dotplus" to "∔",
+    "\\ltimes" to "⋉",
+    "\\rtimes" to "⋊",
+    "\\Cup" to "⋓",
+    "\\doublecup" to "⋓",
+    "\\Cap" to "⋒",
+    "\\doublecap" to "⋒",
+    "\\leftthreetimes" to "⋋",
+    "\\rightthreetimes" to "⋌",
+    "\\circleddash" to "⊝",
+    "\\circledast" to "⊛",
+    "\\circledcirc" to "⊚",
+    "\\centerdot" to "⋅",
+    "\\boxplus" to "⊞",
+    "\\boxminus" to "⊟",
+    "\\boxtimes" to "⊠",
+    "\\boxdot" to "⊡",
+    "\\divideontimes" to "⋇",
+    "\\curlywedge" to "⋏",
+    "\\curlyvee" to "⋎",
+
+    // AMS Relations
+    "\\leqq" to "≦",
+    "\\geqq" to "≧",
+    "\\leqslant" to "⩽",
+    "\\geqslant" to "⩾",
+    "\\eqslantless" to "⪕",
+    "\\eqslantgtr" to "⪖",
+    "\\lesseqgtr" to "⋚",
+    "\\gtreqless" to "⋛",
+    "\\lesseqqgtr" to "⪋",
+    "\\gtreqqless" to "⪌",
+    "\\doteqdot" to "≑",
+    "\\Doteq" to "≑",
+    "\\eqcirc" to "≖",
+    "\\risingdotseq" to "≓",
+    "\\fallingdotseq" to "≒",
+    "\\backsim" to "∽",
+    "\\backsimeq" to "⋍",
+    "\\subseteqq" to "⫅",
+    "\\supseteqq" to "⫆",
+    "\\Subset" to "⋐",
+    "\\Supset" to "⋑",
+    "\\sqsubset" to "⊏",
+    "\\sqsupset" to "⊐",
+    "\\preccurlyeq" to "≼",
+    "\\succcurlyeq" to "≽",
+    "\\curlyeqprec" to "⋞",
+    "\\curlyeqsucc" to "⋟",
+    "\\precsim" to "≾",
+    "\\succsim" to "≿",
+    "\\precapprox" to "⪷",
+    "\\succapprox" to "⪸",
+    "\\vartriangleleft" to "⊲",
+    "\\vartriangleright" to "⊳",
+    "\\trianglelefteq" to "⊴",
+    "\\trianglerighteq" to "⊵",
+    "\\vDash" to "⊨",
+    "\\Vdash" to "⊩",
+    "\\Vvdash" to "⊪",
+    "\\smallsmile" to "⌣",
+    "\\smallfrown" to "⌢",
+    "\\shortmid" to "∣",
+    "\\shortparallel" to "∥",
+    "\\bumpeq" to "≏",
+    "\\Bumpeq" to "≎",
+    "\\between" to "≬",
+    "\\pitchfork" to "⋔",
+    "\\varpropto" to "∝",
+    "\\backepsilon" to "∍",
+    "\\therefore" to "∴",
+    "\\because" to "∵",
+
+    // AMS Negated Relations
+    "\\nless" to "≮",
+    "\\ngtr" to "≯",
+    "\\nleq" to "≰",
+    "\\ngeq" to "≱",
+    "\\nleqslant" to "⪇",
+    "\\ngeqslant" to "⪈",
+    "\\nleqq" to "≰",
+    "\\ngeqq" to "≱",
+    "\\lneq" to "⪇",
+    "\\gneq" to "⪈",
+    "\\lneqq" to "≨",
+    "\\gneqq" to "≩",
+    "\\lvertneqq" to "≨",
+    "\\gvertneqq" to "≩",
+    "\\lnsim" to "⋦",
+    "\\gnsim" to "⋧",
+    "\\lnapprox" to "⪉",
+    "\\gnapprox" to "⪊",
+    "\\nprec" to "⊀",
+    "\\nsucc" to "⊁",
+    "\\npreceq" to "⋠",
+    "\\nsucceq" to "⋡",
+    "\\precneqq" to "⪵",
+    "\\succneqq" to "⪶",
+    "\\precnsim" to "⋨",
+    "\\succnsim" to "⋩",
+    "\\precnapprox" to "⪹",
+    "\\succnapprox" to "⪺",
+    "\\nsim" to "≁",
+    "\\ncong" to "≇",
+    "\\nshortmid" to "∤",
+    "\\nshortparallel" to "∦",
+    "\\nmid" to "∤",
+    "\\nparallel" to "∦",
+    "\\nvdash" to "⊬",
+    "\\nvDash" to "⊭",
+    "\\nVdash" to "⊮",
+    "\\nVDash" to "⊯",
+    "\\ntriangleleft" to "⋪",
+    "\\ntriangleright" to "⋫",
+    "\\ntrianglelefteq" to "⋬",
+    "\\ntrianglerighteq" to "⋭",
+    "\\nsubseteq" to "⊈",
+    "\\nsupseteq" to "⊉",
+    "\\nsubseteqq" to "⊈",
+    "\\nsupseteqq" to "⊉",
+    "\\subsetneq" to "⊊",
+    "\\supsetneq" to "⊋",
+    "\\varsubsetneq" to "⊊",
+    "\\varsupsetneq" to "⊋",
+    "\\subsetneqq" to "⫋",
+    "\\supsetneqq" to "⫌",
+    "\\varsubsetneqq" to "⫋",
+    "\\varsupsetneqq" to "⫌",
+
+    // AMS Arrows
+    "\\leftleftarrows" to "⇇",
+    "\\rightrightarrows" to "⇉",
+    "\\leftrightarrows" to "⇆",
+    "\\rightleftarrows" to "⇄",
+    "\\Lleftarrow" to "⇚",
+    "\\Rrightarrow" to "⇛",
+    "\\twoheadleftarrow" to "↞",
+    "\\twoheadrightarrow" to "↠",
+    "\\leftarrowtail" to "↢",
+    "\\rightarrowtail" to "↣",
+    "\\looparrowleft" to "↫",
+    "\\looparrowright" to "↬",
+    "\\leftrightharpoons" to "⇋",
+    "\\rightleftharpoons" to "⇌",
+    "\\curvearrowleft" to "↶",
+    "\\curvearrowright" to "↷",
+    "\\circlearrowleft" to "↺",
+    "\\circlearrowright" to "↻",
+    "\\Lsh" to "↰",
+    "\\Rsh" to "↱",
+    "\\upuparrows" to "⇈",
+    "\\downdownarrows" to "⇊",
+    "\\upharpoonleft" to "↿",
+    "\\upharpoonright" to "↾",
+    "\\downharpoonleft" to "⇃",
+    "\\downharpoonright" to "⇂",
+    "\\rightsquigarrow" to "⇝",
+    "\\leftrightsquigarrow" to "↭",
+    "\\multimap" to "⊸",
+    "\\nleftarrow" to "↚",
+    "\\nrightarrow" to "↛",
+    "\\nLeftarrow" to "⇍",
+    "\\nRightarrow" to "⇏",
+    "\\nleftrightarrow" to "↮",
+    "\\nLeftrightarrow" to "⇎",
+
+    // More integral variants
+    "\\iint" to "∬",
+    "\\iiint" to "∭",
+    "\\iiiint" to "⨌",
+    "\\oint" to "∮",
+    "\\oiint" to "∯",
+    "\\oiiint" to "∰",
+    "\\intclockwise" to "∱",
+    "\\varointclockwise" to "∲",
+    "\\ointctrclockwise" to "∳",
+
+    // Hebrew letters
+    "\\aleph" to "ℵ",
+    "\\beth" to "ℶ",
+    "\\gimel" to "ℷ",
+    "\\daleth" to "ℸ",
+
+    // More miscellaneous
+    "\\hbar" to "ℏ",
+    "\\hslash" to "ℏ",
+    "\\Bbbk" to "𝕜",
+    "\\square" to "□",
+    "\\blacksquare" to "■",
+    "\\triangle" to "△",
+    "\\triangledown" to "▽",
+    "\\blacktriangle" to "▲",
+    "\\blacktriangledown" to "▼",
+    "\\lozenge" to "◊",
+    "\\blacklozenge" to "⧫",
+    "\\bigstar" to "★",
+    "\\sphericalangle" to "∢",
+    "\\measuredangle" to "∡",
+    "\\circledS" to "Ⓢ",
+    "\\complement" to "∁",
+    "\\mho" to "℧",
+    "\\eth" to "ð",
+    "\\Finv" to "Ⅎ",
+    "\\Game" to "⅁",
+    "\\diagup" to "╱",
+    "\\diagdown" to "╲",
+    "\\backprime" to "‵",
+    "\\nexists" to "∄",
+    "\\Bbbk" to "𝕜",
+    "\\varnothing" to "∅",
+
+    // Dots
+    "\\ldots" to "…",
+    "\\cdots" to "⋯",
+    "\\vdots" to "⋮",
+    "\\ddots" to "⋱",
+    "\\iddots" to "⋰",
+
+    // More delimiters
+    "\\ulcorner" to "⌜",
+    "\\urcorner" to "⌝",
+    "\\llcorner" to "⌞",
+    "\\lrcorner" to "⌟",
+    "\\lmoustache" to "⎰",
+    "\\rmoustache" to "⎱",
+    "\\lgroup" to "⟮",
+    "\\rgroup" to "⟯",
+    "\\lAngle" to "⟪",
+    "\\rAngle" to "⟫",
+    "\\llbracket" to "⟦",
+    "\\rrbracket" to "⟧",
+
     // Typst-specific (using # prefix)
     "#alpha" to "α",
     "#beta" to "β",
@@ -1323,6 +1864,242 @@ private fun processCalligraphic(input: String): String {
 }
 
 /**
+ * Process \mathscr{X} commands to convert to script Unicode characters
+ * Example: \mathscr{L} -> ℒ, \mathscr{F} -> ℱ
+ */
+private fun processScript(input: String): String {
+    val scrMap = mapOf(
+        "A" to "𝒜", "B" to "ℬ", "C" to "𝒞", "D" to "𝒟", "E" to "ℰ",
+        "F" to "ℱ", "G" to "𝒢", "H" to "ℋ", "I" to "ℐ", "J" to "𝒥",
+        "K" to "𝒦", "L" to "ℒ", "M" to "ℳ", "N" to "𝒩", "O" to "𝒪",
+        "P" to "𝒫", "Q" to "𝒬", "R" to "ℛ", "S" to "𝒮", "T" to "𝒯",
+        "U" to "𝒰", "V" to "𝒱", "W" to "𝒲", "X" to "𝒳", "Y" to "𝒴",
+        "Z" to "𝒵",
+        "a" to "𝒶", "b" to "𝒷", "c" to "𝒸", "d" to "𝒹", "e" to "ℯ",
+        "f" to "𝒻", "g" to "ℊ", "h" to "𝒽", "i" to "𝒾", "j" to "𝒿",
+        "k" to "𝓀", "l" to "𝓁", "m" to "𝓂", "n" to "𝓃", "o" to "ℴ",
+        "p" to "𝓅", "q" to "𝓆", "r" to "𝓇", "s" to "𝓈", "t" to "𝓉",
+        "u" to "𝓊", "v" to "𝓋", "w" to "𝓌", "x" to "𝓍", "y" to "𝓎",
+        "z" to "𝓏"
+    )
+    val pattern = Regex("""\\mathscr\{([A-Za-z]+)\}""")
+    return pattern.replace(input) { match ->
+        match.groupValues[1].map { scrMap[it.toString()] ?: it.toString() }.joinToString("")
+    }
+}
+
+/**
+ * Process \mathfrak{X} commands to convert to Fraktur Unicode characters
+ * Example: \mathfrak{g} -> 𝔤, \mathfrak{A} -> 𝔄
+ * Note: Some letters (C, H, I, R, Z) have special Unicode positions in Letterlike Symbols block
+ */
+private fun processFraktur(input: String): String {
+    val frakMap = mapOf(
+        // Uppercase Fraktur (U+1D504 - U+1D51C, with some in Letterlike Symbols)
+        "A" to "𝔄", "B" to "𝔅", "C" to "ℭ", "D" to "𝔇", "E" to "𝔈",
+        "F" to "𝔉", "G" to "𝔊", "H" to "ℌ", "I" to "ℑ", "J" to "𝔍",
+        "K" to "𝔎", "L" to "𝔏", "M" to "𝔐", "N" to "𝔑", "O" to "𝔒",
+        "P" to "𝔓", "Q" to "𝔔", "R" to "ℜ", "S" to "𝔖", "T" to "𝔗",
+        "U" to "𝔘", "V" to "𝔙", "W" to "𝔚", "X" to "𝔛", "Y" to "𝔜",
+        "Z" to "ℨ",
+        // Lowercase Fraktur (U+1D51E - U+1D537)
+        "a" to "𝔞", "b" to "𝔟", "c" to "𝔠", "d" to "𝔡", "e" to "𝔢",
+        "f" to "𝔣", "g" to "𝔤", "h" to "𝔥", "i" to "𝔦", "j" to "𝔧",
+        "k" to "𝔨", "l" to "𝔩", "m" to "𝔪", "n" to "𝔫", "o" to "𝔬",
+        "p" to "𝔭", "q" to "𝔮", "r" to "𝔯", "s" to "𝔰", "t" to "𝔱",
+        "u" to "𝔲", "v" to "𝔳", "w" to "𝔴", "x" to "𝔵", "y" to "𝔶",
+        "z" to "𝔷"
+    )
+    val pattern = Regex("""\\mathfrak\{([A-Za-z]+)\}""")
+    return pattern.replace(input) { match ->
+        match.groupValues[1].map { frakMap[it.toString()] ?: it.toString() }.joinToString("")
+    }
+}
+
+/**
+ * Process \mathsf{X} commands to convert to Sans-serif Unicode characters
+ * Example: \mathsf{A} -> 𝖠
+ */
+private fun processSansSerif(input: String): String {
+    val sfMap = mapOf(
+        "A" to "𝖠", "B" to "𝖡", "C" to "𝖢", "D" to "𝖣", "E" to "𝖤",
+        "F" to "𝖥", "G" to "𝖦", "H" to "𝖧", "I" to "𝖨", "J" to "𝖩",
+        "K" to "𝖪", "L" to "𝖫", "M" to "𝖬", "N" to "𝖭", "O" to "𝖮",
+        "P" to "𝖯", "Q" to "𝖰", "R" to "𝖱", "S" to "𝖲", "T" to "𝖳",
+        "U" to "𝖴", "V" to "𝖵", "W" to "𝖶", "X" to "𝖷", "Y" to "𝖸",
+        "Z" to "𝖹",
+        "a" to "𝖺", "b" to "𝖻", "c" to "𝖼", "d" to "𝖽", "e" to "𝖾",
+        "f" to "𝖿", "g" to "𝗀", "h" to "𝗁", "i" to "𝗂", "j" to "𝗃",
+        "k" to "𝗄", "l" to "𝗅", "m" to "𝗆", "n" to "𝗇", "o" to "𝗈",
+        "p" to "𝗉", "q" to "𝗊", "r" to "𝗋", "s" to "𝗌", "t" to "𝗍",
+        "u" to "𝗎", "v" to "𝗏", "w" to "𝗐", "x" to "𝗑", "y" to "𝗒",
+        "z" to "𝗓",
+        "0" to "𝟢", "1" to "𝟣", "2" to "𝟤", "3" to "𝟥", "4" to "𝟦",
+        "5" to "𝟧", "6" to "𝟨", "7" to "𝟩", "8" to "𝟪", "9" to "𝟫"
+    )
+    val pattern = Regex("""\\mathsf\{([A-Za-z0-9]+)\}""")
+    return pattern.replace(input) { match ->
+        match.groupValues[1].map { sfMap[it.toString()] ?: it.toString() }.joinToString("")
+    }
+}
+
+/**
+ * Process \mathtt{X} commands to convert to Monospace Unicode characters
+ * Example: \mathtt{A} -> 𝙰
+ */
+private fun processMonospace(input: String): String {
+    val ttMap = mapOf(
+        "A" to "𝙰", "B" to "𝙱", "C" to "𝙲", "D" to "𝙳", "E" to "𝙴",
+        "F" to "𝙵", "G" to "𝙶", "H" to "𝙷", "I" to "𝙸", "J" to "𝙹",
+        "K" to "𝙺", "L" to "𝙻", "M" to "𝙼", "N" to "𝙽", "O" to "𝙾",
+        "P" to "𝙿", "Q" to "𝚀", "R" to "𝚁", "S" to "𝚂", "T" to "𝚃",
+        "U" to "𝚄", "V" to "𝚅", "W" to "𝚆", "X" to "𝚇", "Y" to "𝚈",
+        "Z" to "𝚉",
+        "a" to "𝚊", "b" to "𝚋", "c" to "𝚌", "d" to "𝚍", "e" to "𝚎",
+        "f" to "𝚏", "g" to "𝚐", "h" to "𝚑", "i" to "𝚒", "j" to "𝚓",
+        "k" to "𝚔", "l" to "𝚕", "m" to "𝚖", "n" to "𝚗", "o" to "𝚘",
+        "p" to "𝚙", "q" to "𝚚", "r" to "𝚛", "s" to "𝚜", "t" to "𝚝",
+        "u" to "𝚞", "v" to "𝚟", "w" to "𝚠", "x" to "𝚡", "y" to "𝚢",
+        "z" to "𝚣",
+        "0" to "𝟶", "1" to "𝟷", "2" to "𝟸", "3" to "𝟹", "4" to "𝟺",
+        "5" to "𝟻", "6" to "𝟼", "7" to "𝟽", "8" to "𝟾", "9" to "𝟿"
+    )
+    val pattern = Regex("""\\mathtt\{([A-Za-z0-9]+)\}""")
+    return pattern.replace(input) { match ->
+        match.groupValues[1].map { ttMap[it.toString()] ?: it.toString() }.joinToString("")
+    }
+}
+
+/**
+ * Process \boxed{X} command to render boxed expressions
+ * Example: \boxed{E=mc^2} -> ⎵E=mc²⎵ (approximation with brackets)
+ */
+private fun processBoxed(input: String): String {
+    val boxedPattern = Regex("""\\boxed\{([^}]+)\}""")
+    return boxedPattern.replace(input) { match ->
+        "[${match.groupValues[1]}]"
+    }
+}
+
+/**
+ * Process \mod, \bmod, \pmod commands
+ * Example: \pmod{n} -> (mod n), a \bmod b -> a mod b
+ */
+private fun processModular(input: String): String {
+    var result = input
+    // \pmod{n} -> (mod n)
+    result = Regex("""\\pmod\{([^}]+)\}""").replace(result) { match ->
+        "(mod ${match.groupValues[1]})"
+    }
+    // \bmod -> mod (binary operator)
+    result = result.replace("\\bmod", " mod ")
+    // \mod -> mod
+    result = result.replace("\\mod", " mod ")
+    return result
+}
+
+/**
+ * Process \overline{X} and \underline{X} commands
+ * Example: \overline{AB} -> A̅B̅
+ */
+private fun processOverUnderline(input: String): String {
+    var result = input
+    // \overline{...} -> add combining overline to each character
+    val overlinePattern = Regex("""\\overline\{([^}]+)\}""")
+    result = overlinePattern.replace(result) { match ->
+        match.groupValues[1].map { "$it\u0305" }.joinToString("")
+    }
+    // \underline{...} -> add combining underline to each character
+    val underlinePattern = Regex("""\\underline\{([^}]+)\}""")
+    result = underlinePattern.replace(result) { match ->
+        match.groupValues[1].map { "$it\u0332" }.joinToString("")
+    }
+    return result
+}
+
+/**
+ * Process \overbrace and \underbrace commands
+ * Example: \overbrace{a+b+c}^{n} -> a+b+c with brace annotation
+ */
+private fun processOverUnderBrace(input: String): String {
+    var result = input
+    // \overbrace{...}^{label} -> ⏞ content ⏞ superscript
+    val overbracePattern = Regex("""\\overbrace\{([^}]+)\}(?:\^\{([^}]+)\})?""")
+    result = overbracePattern.replace(result) { match ->
+        val content = match.groupValues[1]
+        val label = match.groupValues.getOrNull(2)?.takeIf { it.isNotEmpty() }
+        if (label != null) "⏞${content}⏞^{$label}" else "⏞${content}⏞"
+    }
+    // \underbrace{...}_{label} -> ⏟ content ⏟ subscript
+    val underbracePattern = Regex("""\\underbrace\{([^}]+)\}(?:_\{([^}]+)\})?""")
+    result = underbracePattern.replace(result) { match ->
+        val content = match.groupValues[1]
+        val label = match.groupValues.getOrNull(2)?.takeIf { it.isNotEmpty() }
+        if (label != null) "⏟${content}⏟_{$label}" else "⏟${content}⏟"
+    }
+    return result
+}
+
+/**
+ * Process \stackrel, \overset, \underset commands
+ * Example: \stackrel{def}{=} -> ≝, \overset{?}{=} -> =̃
+ */
+private fun processStacking(input: String): String {
+    var result = input
+    // Common stackrel patterns
+    result = result.replace("\\stackrel{def}{=}", "≝")
+    result = result.replace("\\stackrel{?}{=}", "≟")
+    // \overset{X}{Y} -> Y with X above (simplified: just show both)
+    val oversetPattern = Regex("""\\overset\{([^}]+)\}\{([^}]+)\}""")
+    result = oversetPattern.replace(result) { match ->
+        "${match.groupValues[2]}^{${match.groupValues[1]}}"
+    }
+    // \underset{X}{Y} -> Y with X below
+    val undersetPattern = Regex("""\\underset\{([^}]+)\}\{([^}]+)\}""")
+    result = undersetPattern.replace(result) { match ->
+        "${match.groupValues[2]}_{${match.groupValues[1]}}"
+    }
+    return result
+}
+
+/**
+ * Process \widehat and \widetilde commands
+ * Example: \widehat{ABC} -> ABC with wide hat
+ */
+private fun processWideAccents(input: String): String {
+    var result = input
+    // \widehat{...}
+    val widehatPattern = Regex("""\\widehat\{([^}]+)\}""")
+    result = widehatPattern.replace(result) { match ->
+        match.groupValues[1].map { "$it\u0302" }.joinToString("")
+    }
+    // \widetilde{...}
+    val widetildePattern = Regex("""\\widetilde\{([^}]+)\}""")
+    result = widetildePattern.replace(result) { match ->
+        match.groupValues[1].map { "$it\u0303" }.joinToString("")
+    }
+    return result
+}
+
+/**
+ * Process \cancel, \bcancel, \xcancel commands (strikethrough)
+ */
+private fun processCancel(input: String): String {
+    var result = input
+    // \cancel{X} -> X with strikethrough
+    val cancelPattern = Regex("""\\cancel\{([^}]+)\}""")
+    result = cancelPattern.replace(result) { match ->
+        match.groupValues[1].map { "$it\u0336" }.joinToString("")
+    }
+    // \bcancel{X} and \xcancel{X} -> same treatment
+    val bcancelPattern = Regex("""\\[bx]cancel\{([^}]+)\}""")
+    result = bcancelPattern.replace(result) { match ->
+        match.groupValues[1].map { "$it\u0336" }.joinToString("")
+    }
+    return result
+}
+
+/**
  * Process accent commands to add diacritical marks
  * Example: \hat{x} -> x̂, \vec{v} -> v⃗
  */
@@ -1392,6 +2169,39 @@ private fun renderMathToUnicode(expression: String): String {
 
     // Handle \mathcal{X} - calligraphic font
     result = processCalligraphic(result)
+
+    // Handle \mathscr{X} - script font
+    result = processScript(result)
+
+    // Handle \mathfrak{X} - Fraktur font
+    result = processFraktur(result)
+
+    // Handle \mathsf{X} - sans-serif font
+    result = processSansSerif(result)
+
+    // Handle \mathtt{X} - monospace font
+    result = processMonospace(result)
+
+    // Handle \boxed{X}
+    result = processBoxed(result)
+
+    // Handle \mod, \bmod, \pmod
+    result = processModular(result)
+
+    // Handle \overline, \underline
+    result = processOverUnderline(result)
+
+    // Handle \overbrace, \underbrace
+    result = processOverUnderBrace(result)
+
+    // Handle \stackrel, \overset, \underset
+    result = processStacking(result)
+
+    // Handle \widehat, \widetilde
+    result = processWideAccents(result)
+
+    // Handle \cancel, \bcancel, \xcancel
+    result = processCancel(result)
 
     // Handle LaTeX environments (cases, matrix, align, etc.)
     result = processLatexEnvironments(result)

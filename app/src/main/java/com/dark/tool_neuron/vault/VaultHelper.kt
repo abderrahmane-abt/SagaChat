@@ -15,9 +15,13 @@ import com.memoryvault.MemoryVault
 import com.memoryvault.MessageItem
 import com.memoryvault.MigrationListener
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import java.util.UUID
 
@@ -26,13 +30,35 @@ object VaultHelper {
     private val mutex = Mutex()
     private var initialized = false
 
+    // StateFlow to observe vault readiness
+    private val _isReady = MutableStateFlow(false)
+    val isReady: StateFlow<Boolean> = _isReady
+
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
     }
 
-    fun getVault(): MemoryVault{
+    fun isInitialized(): Boolean = initialized
+
+    fun getVault(): MemoryVault {
+        if (!initialized) {
+            throw IllegalStateException("VaultHelper is not initialized. Call initialize() first.")
+        }
         return vault
+    }
+
+    /**
+     * Waits for vault to be ready with a timeout.
+     * Returns true if ready, false if timeout reached.
+     */
+    suspend fun awaitReady(timeoutMs: Long = 10000): Boolean {
+        if (initialized) return true
+
+        return kotlinx.coroutines.withTimeoutOrNull(timeoutMs) {
+            _isReady.first { it }
+            true
+        } ?: false
     }
 
     private inline fun <T> logOperation(
@@ -107,6 +133,7 @@ object VaultHelper {
                     VaultLogger.log(LogLevel.DEBUG, "CRYPTO", "✓ Vault index decrypted and loaded (${initDuration}ms)")
 
                     initialized = true
+                    _isReady.value = true
                     VaultLogger.log(LogLevel.INFO, "INIT", "✓ Memory Vault initialized successfully")
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -121,8 +148,12 @@ object VaultHelper {
                     )
                     vault.initialize()
                     initialized = true
+                    _isReady.value = true
                     VaultLogger.log(LogLevel.WARNING, "INIT", "✓ Vault recovered with fresh start")
                 }
+            } else {
+                // Already initialized, ensure isReady reflects this
+                _isReady.value = true
             }
         }
     }
@@ -132,6 +163,7 @@ object VaultHelper {
             if (initialized) {
                 vault.close()
                 initialized = false
+                _isReady.value = false
             }
         }
     }

@@ -81,17 +81,32 @@ object PluginManager {
     private val _isToolCallingModelLoaded = MutableStateFlow(false)
     val isToolCallingModelLoaded: StateFlow<Boolean> = _isToolCallingModelLoaded.asStateFlow()
 
+    // Bypass model check for tool calling
+    private val _toolCallingBypassEnabled = MutableStateFlow(false)
+    val toolCallingBypassEnabled: StateFlow<Boolean> = _toolCallingBypassEnabled.asStateFlow()
+
+    /**
+     * Set whether to bypass the tool calling model check.
+     * When enabled, tool calling is available for any loaded model.
+     */
+    fun setToolCallingBypassEnabled(enabled: Boolean) {
+        _toolCallingBypassEnabled.value = enabled
+        Log.d(TAG, "Tool calling bypass: ${if (enabled) "enabled" else "disabled"}")
+    }
+
     /**
      * Update whether the loaded model supports tool calling.
      * Should be called when a model is loaded or unloaded.
      */
     fun setToolCallingModelLoaded(modelName: String?) {
-        _isToolCallingModelLoaded.value = modelName != null && (
+        val modelSupportsToolCalling = modelName != null && (
                 TOOL_CALLING_MODEL_IDS.any { modelName.contains(it, ignoreCase = true) } ||
                 modelName.contains("Code", ignoreCase = true) ||
                 modelName.contains("tool", ignoreCase = true) ||
                 modelName.contains("qwen", ignoreCase = true)
         )
+        // If bypass is enabled, always report as loaded when any model is present
+        _isToolCallingModelLoaded.value = modelSupportsToolCalling || (_toolCallingBypassEnabled.value && modelName != null)
     }
 
     /**

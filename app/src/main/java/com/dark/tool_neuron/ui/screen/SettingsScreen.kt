@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -68,6 +69,7 @@ fun SettingsScreen(
     val streamingEnabled by viewModel.streamingEnabled.collectAsStateWithLifecycle()
     val chatMemoryEnabled by viewModel.chatMemoryEnabled.collectAsStateWithLifecycle()
     val toolCallingEnabled by viewModel.toolCallingEnabled.collectAsStateWithLifecycle()
+    val toolCallingBypassEnabled by viewModel.toolCallingBypassEnabled.collectAsStateWithLifecycle()
     val imageBlurEnabled by viewModel.imageBlurEnabled.collectAsStateWithLifecycle()
     val loadTTSOnStart by viewModel.loadTTSOnStart.collectAsStateWithLifecycle()
     // Installed models
@@ -131,18 +133,22 @@ fun SettingsScreen(
             item { SectionHeader(title = "General") }
 
             item {
+                val canEnableToolCalling = hasToolCallingModel || toolCallingBypassEnabled
                 SwitchRow(
                     title = "Tool Calling",
-                    description = if (hasToolCallingModel) "Enable tool/plugin calling for supported models"
-                        else "Tool calling model required — download below",
-                    checked = toolCallingEnabled && hasToolCallingModel,
+                    description = when {
+                        toolCallingBypassEnabled -> "Bypass enabled — tool calling available for all models"
+                        hasToolCallingModel -> "Enable tool/plugin calling for supported models"
+                        else -> "Tool calling model required — download below or enable bypass"
+                    },
+                    checked = toolCallingEnabled && canEnableToolCalling,
                     onCheckedChange = { viewModel.setToolCallingEnabled(it) },
-                    enabled = hasToolCallingModel
+                    enabled = canEnableToolCalling
                 )
             }
 
             // Download tool calling model card — only visible when no tool calling model is installed
-            if (!hasToolCallingModel) {
+            if (!hasToolCallingModel && !toolCallingBypassEnabled) {
                 item {
                     StandardCard(title = "Tool Calling Model Required") {
                         Column(
@@ -221,6 +227,56 @@ fun SettingsScreen(
                                 }
                             }
                         }
+                    }
+                }
+            }
+
+            // Bypass tool calling model check — red warning card
+            item {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(rDp(Standards.CardCornerRadius)),
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        width = rDp(1.dp),
+                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(rDp(Standards.SpacingMd)),
+                        verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                        ) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(rDp(20.dp))
+                            )
+                            Text(
+                                text = "Bypass Model Check",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                        Text(
+                            text = "Allow tool calling with any model. This may cause errors or unexpected behavior if the model doesn't support tool calling format.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        SwitchRow(
+                            title = "Enable Bypass",
+                            description = if (toolCallingBypassEnabled) "Tool calling enabled for all models" else "Only supported models can use tools",
+                            checked = toolCallingBypassEnabled,
+                            onCheckedChange = { viewModel.setToolCallingBypassEnabled(it) },
+                            titleColor = MaterialTheme.colorScheme.error
+                        )
                     }
                 }
             }
