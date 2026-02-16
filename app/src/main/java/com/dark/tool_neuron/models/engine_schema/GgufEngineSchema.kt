@@ -66,7 +66,7 @@ data class GgufInferenceParams(
     val mirostatTau: Float = 5.0f,
     val mirostatEta: Float = 0.1f,
     val seed: Int = -1,
-    val maxTokens: Int = 512,
+    val maxTokens: Int = 2048,
     val systemPrompt: String = "",
     val chatTemplate: String = "",
     val toolsJson: String = ""  // JSON array of tool definitions

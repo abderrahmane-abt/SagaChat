@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -20,6 +21,8 @@ class AppSettingsDataStore(private val context: Context) {
         private val TOOL_CALLING_BYPASS_ENABLED = booleanPreferencesKey("tool_calling_bypass_enabled")
         private val IMAGE_BLUR_ENABLED = booleanPreferencesKey("image_blur_enabled")
         private val LOAD_TTS_ON_START = booleanPreferencesKey("load_tts_on_start")
+        private val LAST_CHAT_ID = stringPreferencesKey("last_chat_id")
+        private val LAST_MODEL_ID = stringPreferencesKey("last_model_id")
     }
 
     val streamingEnabled: Flow<Boolean> = context.appSettingsDataStore.data.map { prefs ->
@@ -69,6 +72,34 @@ class AppSettingsDataStore(private val context: Context) {
 
     suspend fun updateLoadTTSOnStart(enabled: Boolean) {
         context.appSettingsDataStore.edit { it[LOAD_TTS_ON_START] = enabled }
+    }
+
+    val lastChatId: Flow<String?> = context.appSettingsDataStore.data.map { prefs ->
+        prefs[LAST_CHAT_ID]
+    }
+
+    suspend fun saveLastChatId(chatId: String?) {
+        context.appSettingsDataStore.edit { prefs ->
+            if (chatId != null) {
+                prefs[LAST_CHAT_ID] = chatId
+            } else {
+                prefs.remove(LAST_CHAT_ID)
+            }
+        }
+    }
+
+    val lastModelId: Flow<String?> = context.appSettingsDataStore.data.map { prefs ->
+        prefs[LAST_MODEL_ID]
+    }
+
+    suspend fun saveLastModelId(modelId: String?) {
+        context.appSettingsDataStore.edit { prefs ->
+            if (modelId != null) {
+                prefs[LAST_MODEL_ID] = modelId
+            } else {
+                prefs.remove(LAST_MODEL_ID)
+            }
+        }
     }
 
 }

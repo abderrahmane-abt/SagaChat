@@ -253,6 +253,29 @@ private fun StreamingView(
 ) {
     val scrollState = rememberScrollState()
 
+    // Track whether user has manually scrolled up (disables auto-scroll)
+    var userScrolledUp by remember { mutableStateOf(false) }
+    val isAtBottom = remember {
+        derivedStateOf {
+            val maxScroll = scrollState.maxValue
+            maxScroll == 0 || scrollState.value >= maxScroll - 100
+        }
+    }
+
+    // Detect user scroll gestures - if user scrolls away from bottom, pause auto-scroll
+    LaunchedEffect(scrollState.isScrollInProgress) {
+        if (scrollState.isScrollInProgress && !isAtBottom.value) {
+            userScrolledUp = true
+        }
+    }
+
+    // Reset userScrolledUp when user scrolls back to bottom
+    LaunchedEffect(isAtBottom.value) {
+        if (isAtBottom.value) {
+            userScrolledUp = false
+        }
+    }
+
     @OptIn(FlowPreview::class)
     LaunchedEffect(Unit) {
         snapshotFlow {
@@ -261,7 +284,9 @@ private fun StreamingView(
         }
         .debounce(150)
         .collect {
-            scrollState.animateScrollTo(scrollState.maxValue)
+            if (!userScrolledUp) {
+                scrollState.animateScrollTo(scrollState.maxValue)
+            }
         }
     }
 

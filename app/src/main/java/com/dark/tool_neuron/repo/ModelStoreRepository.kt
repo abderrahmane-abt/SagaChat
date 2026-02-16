@@ -122,7 +122,7 @@ class ModelStoreRepository(private val context: Context) {
         val suffix = getChipsetSuffix(soc) ?: "min"
         val isQualcomm = isQualcommDevice()
 
-        // NPU models - only for Qualcomm devices
+        // 4 NPU models - only for Qualcomm devices
         if (isQualcomm) {
             models.add(
                 HuggingFaceModel(
@@ -130,7 +130,7 @@ class ModelStoreRepository(private val context: Context) {
                     name = "Anything V5.0",
                     description = "Anime-style image generation optimized for Qualcomm NPU",
                     fileUri = "xororz/sd-qnn/resolve/main/AnythingV5_qnn2.28_${suffix}.zip",
-                    approximateSize = "1.1GB",
+                    approximateSize = "1.1 GB",
                     modelType = ModelType.SD,
                     isZip = true,
                     chipsetSuffix = suffix,
@@ -148,7 +148,7 @@ class ModelStoreRepository(private val context: Context) {
                     name = "QteaMix",
                     description = "Chibi-style image generation for Qualcomm NPU",
                     fileUri = "xororz/sd-qnn/resolve/main/QteaMix_qnn2.28_${suffix}.zip",
-                    approximateSize = "1.1GB",
+                    approximateSize = "1.1 GB",
                     modelType = ModelType.SD,
                     isZip = true,
                     chipsetSuffix = suffix,
@@ -162,29 +162,11 @@ class ModelStoreRepository(private val context: Context) {
 
             models.add(
                 HuggingFaceModel(
-                    id = "cuteyukimix-npu",
-                    name = "CuteYukiMix",
-                    description = "Cute anime characters for Qualcomm NPU",
-                    fileUri = "xororz/sd-qnn/resolve/main/CuteYukiMix_qnn2.28_${suffix}.zip",
-                    approximateSize = "1.1GB",
-                    modelType = ModelType.SD,
-                    isZip = true,
-                    chipsetSuffix = suffix,
-                    runOnCpu = false,
-                    textEmbeddingSize = 768,
-                    tags = listOf("NPU", "Anime", "Cute"),
-                    requiresNPU = true,
-                    repositoryUrl = "xororz/sd-qnn"
-                )
-            )
-
-            models.add(
-                HuggingFaceModel(
                     id = "absolutereality-npu",
                     name = "Absolute Reality",
                     description = "Photorealistic image generation for Qualcomm NPU",
                     fileUri = "xororz/sd-qnn/resolve/main/AbsoluteReality_qnn2.28_${suffix}.zip",
-                    approximateSize = "1.1GB",
+                    approximateSize = "1.1 GB",
                     modelType = ModelType.SD,
                     isZip = true,
                     chipsetSuffix = suffix,
@@ -202,7 +184,7 @@ class ModelStoreRepository(private val context: Context) {
                     name = "ChilloutMix",
                     description = "Realistic portraits for Qualcomm NPU",
                     fileUri = "xororz/sd-qnn/resolve/main/ChilloutMix_qnn2.28_${suffix}.zip",
-                    approximateSize = "1.1GB",
+                    approximateSize = "1.1 GB",
                     modelType = ModelType.SD,
                     isZip = true,
                     chipsetSuffix = suffix,
@@ -215,14 +197,14 @@ class ModelStoreRepository(private val context: Context) {
             )
         }
 
-        // CPU models - available for all devices
+        // 4 CPU models - available for all devices
         models.add(
             HuggingFaceModel(
                 id = "anythingv5-cpu",
                 name = "Anything V5.0",
                 description = "Anime-style image generation for CPU",
                 fileUri = "xororz/sd-mnn/resolve/main/AnythingV5.zip",
-                approximateSize = "1.2GB",
+                approximateSize = "1.2 GB",
                 modelType = ModelType.SD,
                 isZip = true,
                 runOnCpu = true,
@@ -239,7 +221,7 @@ class ModelStoreRepository(private val context: Context) {
                 name = "QteaMix",
                 description = "Chibi-style image generation for CPU",
                 fileUri = "xororz/sd-mnn/resolve/main/QteaMix.zip",
-                approximateSize = "1.2GB",
+                approximateSize = "1.2 GB",
                 modelType = ModelType.SD,
                 isZip = true,
                 runOnCpu = true,
@@ -252,28 +234,11 @@ class ModelStoreRepository(private val context: Context) {
 
         models.add(
             HuggingFaceModel(
-                id = "cuteyukimix-cpu",
-                name = "CuteYukiMix",
-                description = "Cute anime characters for CPU",
-                fileUri = "xororz/sd-mnn/resolve/main/CuteYukiMix.zip",
-                approximateSize = "1.2GB",
-                modelType = ModelType.SD,
-                isZip = true,
-                runOnCpu = true,
-                textEmbeddingSize = 768,
-                tags = listOf("CPU", "Anime", "Cute"),
-                requiresNPU = false,
-                repositoryUrl = "xororz/sd-mnn"
-            )
-        )
-
-        models.add(
-            HuggingFaceModel(
                 id = "absolutereality-cpu",
                 name = "Absolute Reality",
                 description = "Photorealistic image generation for CPU",
                 fileUri = "xororz/sd-mnn/resolve/main/AbsoluteReality.zip",
-                approximateSize = "1.2GB",
+                approximateSize = "1.2 GB",
                 modelType = ModelType.SD,
                 isZip = true,
                 runOnCpu = true,
@@ -290,7 +255,7 @@ class ModelStoreRepository(private val context: Context) {
                 name = "ChilloutMix",
                 description = "Realistic portraits for CPU",
                 fileUri = "xororz/sd-mnn/resolve/main/ChilloutMix.zip",
-                approximateSize = "1.2GB",
+                approximateSize = "1.2 GB",
                 modelType = ModelType.SD,
                 isZip = true,
                 runOnCpu = true,
@@ -338,7 +303,13 @@ class ModelStoreRepository(private val context: Context) {
                             repo.repoPath.contains("Qwen", ignoreCase = false) ||
                             repo.name.contains("qwen", ignoreCase = true)
 
-                    files.filter { it.path.endsWith(".gguf") }.forEach { file ->
+                    files.filter { file ->
+                        file.path.endsWith(".gguf") &&
+                                // Filter out mmproj/vision projection files - these are not standalone models
+                                !file.path.contains("mmproj", ignoreCase = true) &&
+                                !file.path.contains("vision-adapter", ignoreCase = true) &&
+                                !file.path.contains("projector", ignoreCase = true)
+                    }.forEach { file ->
                             val fileName = file.path.substringAfterLast("/")
                             val sizeStr = formatFileSize(file.size ?: 0)
 

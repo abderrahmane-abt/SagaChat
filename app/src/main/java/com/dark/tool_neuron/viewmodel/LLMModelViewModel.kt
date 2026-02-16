@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.dark.tool_neuron.data.AppSettingsDataStore
 import com.dark.tool_neuron.models.enums.PathType
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.models.table_schema.Model
@@ -31,6 +32,8 @@ class LLMModelViewModel @Inject constructor(
     application: Application,
     private val repository: ModelRepository
 ) : AndroidViewModel(application) {
+
+    private val appSettings = AppSettingsDataStore(application)
 
     val installedModels: Flow<List<Model>> = repository.getAllModels()
         .map { models -> models.filter { it.providerType != ProviderType.TTS } }
@@ -96,6 +99,7 @@ class LLMModelViewModel @Inject constructor(
             _currentModelID.value = model.id
             _currentModelType.value = ProviderType.GGUF
             AppStateManager.setModelLoaded(model.modelName)
+            appSettings.saveLastModelId(model.id)
 
             // Update tool calling model state and sync tools
             com.dark.tool_neuron.plugins.PluginManager.setToolCallingModelLoaded(model.modelName)
@@ -122,10 +126,11 @@ class LLMModelViewModel @Inject constructor(
         )
 
         if (success) {
-            LlmModelWorker._currentDiffusionModelId.value = model.id // ADD THIS
+            LlmModelWorker._currentDiffusionModelId.value = model.id
             _currentModelID.value = model.id
             _currentModelType.value = ProviderType.DIFFUSION
             AppStateManager.setModelLoaded(model.modelName)
+            appSettings.saveLastModelId(model.id)
         } else {
             AppStateManager.setError("Failed to load Diffusion model")
         }

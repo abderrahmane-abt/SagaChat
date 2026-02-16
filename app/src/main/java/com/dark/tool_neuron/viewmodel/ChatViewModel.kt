@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.data.AppSettingsDataStore
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.engine.GenerationEvent
+import com.dark.tool_neuron.models.engine_schema.GgufEngineSchema
 import com.dark.tool_neuron.models.messages.ContentType
 import com.dark.tool_neuron.models.messages.ImageGenerationMetrics
 import com.dark.tool_neuron.models.messages.MessageContent
@@ -183,6 +184,35 @@ class ChatViewModel @Inject constructor(
     private val _currentMemoryResults = MutableStateFlow<List<com.dark.tool_neuron.worker.ScoredVaultContent>>(emptyList())
     val currentMemoryResults: StateFlow<List<com.dark.tool_neuron.worker.ScoredVaultContent>> = _currentMemoryResults
 
+    // ==================== Auto-restore last chat ====================
+
+    init {
+        viewModelScope.launch {
+            try {
+                val lastChatId = appSettings.lastChatId.first()
+                if (lastChatId != null) {
+                    chatManager.getChatMessages(lastChatId).onSuccess { loadedMessages ->
+                        if (loadedMessages.isNotEmpty()) {
+                            _currentChatId.value = lastChatId
+                            _messages.clear()
+                            _messages.addAll(loadedMessages)
+                            AppStateManager.setHasMessages(true)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.d(TAG, "Could not restore last chat: ${e.message}")
+            }
+        }
+
+        // Persist chat ID whenever it changes
+        viewModelScope.launch {
+            _currentChatId.collect { chatId ->
+                appSettings.saveLastChatId(chatId)
+            }
+        }
+    }
+
     // ==================== RAG Controls ====================
 
     fun setRagEnabled(enabled: Boolean) {
@@ -273,7 +303,7 @@ class ChatViewModel @Inject constructor(
 
     // ==================== Unified Text Generation Entry Point ====================
 
-    fun sendChat(prompt: String, maxTokens: Int = 512) {
+    fun sendChat(prompt: String) {
         if (!generationManager.isTextModelLoaded()) {
             _error.value = "Please load a text generation model first"
             AppStateManager.setError("Please load a text generation model first")
@@ -299,6 +329,9 @@ class ChatViewModel @Inject constructor(
 
         generationJob = viewModelScope.launch {
             try {
+                // Read maxTokens from the current model's config
+                val maxTokens = getCurrentModelMaxTokens()
+
                 val isNewChat = isNewConversation
                 val hasTools = PluginManager.hasEnabledTools()
                         && PluginManager.isToolCallingModelLoaded.value
@@ -334,7 +367,21 @@ class ChatViewModel @Inject constructor(
     }
 
     // Keep old name as alias for backward compatibility with callers
-    fun sendTextMessage(prompt: String, maxTokens: Int = 512) = sendChat(prompt, maxTokens)
+    fun sendTextMessage(prompt: String) = sendChat(prompt)
+
+    /**
+     * Read the maxTokens setting from the currently loaded model's config.
+     * Falls back to 2048 if config is unavailable.
+     */
+    private suspend fun getCurrentModelMaxTokens(): Int {
+        val modelId = LlmModelWorker.currentGgufModelId.value ?: return 2048
+        val config = AppContainer.getModelRepository().getConfigByModelId(modelId)
+        if (config?.modelInferenceParams != null) {
+            val schema = GgufEngineSchema.fromJson(null, config.modelInferenceParams)
+            return schema.inferenceParams.maxTokens
+        }
+        return 2048
+    }
 
     // ==================== Agent Flow (Plan → Execute → Summarize) ====================
 
@@ -854,9 +901,28 @@ class ChatViewModel @Inject constructor(
         return results.takeIf { it.isNotEmpty() }
     }
 
+    /**
+     * Read the system prompt from the currently loaded model's config.
+     * Returns empty string if no system prompt is configured.
+     */
+    private suspend fun getCurrentModelSystemPrompt(): String {
+        val modelId = LlmModelWorker.currentGgufModelId.value ?: return ""
+        val config = AppContainer.getModelRepository().getConfigByModelId(modelId)
+        if (config?.modelInferenceParams != null) {
+            val schema = GgufEngineSchema.fromJson(null, config.modelInferenceParams)
+            return schema.inferenceParams.systemPrompt
+        }
+        return ""
+    }
+
     /** Build conversation messages for new chat (with optional memory). */
-    private fun buildConversationMessages(userPrompt: String): List<JSONObject> {
+    private suspend fun buildConversationMessages(userPrompt: String): List<JSONObject> {
         val messages = mutableListOf<JSONObject>()
+        // Prepend system prompt from model config if configured
+        val systemPrompt = getCurrentModelSystemPrompt()
+        if (systemPrompt.isNotEmpty()) {
+            messages.add(JSONObject().put("role", "system").put("content", systemPrompt))
+        }
         if (chatMemoryEnabled.value) {
             _messages.forEach { msg ->
                 when (msg.role) {
@@ -878,8 +944,13 @@ class ChatViewModel @Inject constructor(
     }
 
     /** Build conversation messages for existing chat. */
-    private fun buildExistingConversationMessages(userPrompt: String): List<JSONObject> {
+    private suspend fun buildExistingConversationMessages(userPrompt: String): List<JSONObject> {
         val messages = mutableListOf<JSONObject>()
+        // Prepend system prompt from model config if configured
+        val systemPrompt = getCurrentModelSystemPrompt()
+        if (systemPrompt.isNotEmpty()) {
+            messages.add(JSONObject().put("role", "system").put("content", systemPrompt))
+        }
         if (chatMemoryEnabled.value) {
             _messages.forEach { msg ->
                 when (msg.role) {
@@ -1382,7 +1453,16 @@ class ChatViewModel @Inject constructor(
         when (_currentGenerationType.value) {
             GenerationManager.ModelType.TEXT_GENERATION -> {
                 generationManager.stopTextGeneration()
-                handleTextStop()
+                // Delay job cancel briefly so the flow can receive final Metrics event from native
+                viewModelScope.launch {
+                    kotlinx.coroutines.delay(200)
+                    generationJob?.cancel()
+                    generationJob = null
+                    handleTextStop()
+                    _isGenerating.value = false
+                    AppStateManager.setGenerationComplete()
+                }
+                return
             }
             GenerationManager.ModelType.IMAGE_GENERATION -> {
                 generationManager.stopImageGeneration()

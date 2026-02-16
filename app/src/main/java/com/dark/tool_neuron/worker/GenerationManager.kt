@@ -39,7 +39,7 @@ class GenerationManager {
 
     // ==================== Text Generation ====================
 
-    fun generateTextStreaming(prompt: String, maxTokens: Int = 512): Flow<GenerationEvent> {
+    fun generateTextStreaming(prompt: String, maxTokens: Int = 2048): Flow<GenerationEvent> {
         return LlmModelWorker.ggufGenerateStreaming(prompt, maxTokens)
     }
 
@@ -50,7 +50,7 @@ class GenerationManager {
      * @param messagesJson JSON array of {role, content} message objects
      * @param maxTokens Maximum tokens per turn
      */
-    fun generateMultiTurnStreaming(messagesJson: String, maxTokens: Int = 256): Flow<GenerationEvent> {
+    fun generateMultiTurnStreaming(messagesJson: String, maxTokens: Int = 2048): Flow<GenerationEvent> {
         return LlmModelWorker.ggufGenerateMultiTurnStreaming(messagesJson, maxTokens)
     }
 

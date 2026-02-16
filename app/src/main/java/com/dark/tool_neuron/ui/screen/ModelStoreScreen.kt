@@ -215,7 +215,7 @@ fun ModelStoreScreen(
                         isLoading = isLoading,
                         error = error,
                         downloadStates = downloadStates,
-                        installedModels = installedModels.map { it.modelName }.toSet(),
+                        installedModelNames = installedModels.map { it.modelName }.toSet(),
                         viewModel = viewModel,
                         onDownload = { viewModel.downloadModel(it) },
                         onCancelDownload = { modelId -> viewModel.cancelDownload(modelId) },
@@ -243,7 +243,7 @@ private fun ModelsTab(
     isLoading: Boolean,
     error: String?,
     downloadStates: Map<String, ModelDownloadService.DownloadState>,
-    installedModels: Set<String>,
+    installedModelNames: Set<String>,
     viewModel: ModelStoreViewModel,
     onDownload: (HuggingFaceModel) -> Unit,
     onCancelDownload: (String) -> Unit,
@@ -253,7 +253,7 @@ private fun ModelsTab(
         ModelFiltersSection(viewModel = viewModel)
 
         when {
-            isLoading -> {
+            isLoading && models.isEmpty() -> {
                 Box(
                     modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
                 ) {
@@ -261,7 +261,7 @@ private fun ModelsTab(
                 }
             }
 
-            error != null -> {
+            error != null && models.isEmpty() -> {
                 Box(
                     modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
                 ) {
@@ -272,7 +272,7 @@ private fun ModelsTab(
                         Icon(
                             painter = painterResource(R.drawable.error),
                             contentDescription = null,
-                            modifier = Modifier.size(rDp(64.dp)),
+                            modifier = Modifier.size(rDp(48.dp)),
                             tint = MaterialTheme.colorScheme.error
                         )
                         Text(
@@ -298,17 +298,17 @@ private fun ModelsTab(
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
+                        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
                     ) {
                         Icon(
                             imageVector = Icons.Default.SearchOff,
                             contentDescription = null,
-                            modifier = Modifier.size(rDp(64.dp)),
+                            modifier = Modifier.size(rDp(48.dp)),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
                             text = "No models found",
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -316,24 +316,54 @@ private fun ModelsTab(
             }
 
             else -> {
+                // Group models by repository for organized display
+                val groupedModels = remember(models) {
+                    models.groupBy { model ->
+                        when (model.modelType) {
+                            ModelType.GGUF -> model.repositoryUrl.ifEmpty { "Unknown" }
+                            ModelType.SD -> if (model.runOnCpu) "CPU Image Models" else "NPU Image Models"
+                            ModelType.TTS -> "Text-to-Speech"
+                        }
+                    }
+                }
+
                 Box(modifier = Modifier.fillMaxSize()) {
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
-                            .then(if (isLoading) Modifier.blur(rDp(6.dp)) else Modifier),
-                        contentPadding = PaddingValues(rDp(16.dp)),
-                        verticalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                            .then(if (isLoading) Modifier.blur(rDp(4.dp)) else Modifier),
+                        contentPadding = PaddingValues(horizontal = rDp(12.dp), vertical = rDp(8.dp)),
+                        verticalArrangement = Arrangement.spacedBy(rDp(6.dp)),
                         flingBehavior = ScrollableDefaults.flingBehavior()
                     ) {
-                        items(
-                            items = models, key = { model -> model.id }) { model ->
-                            ModelCard(
-                                model = model,
-                                isInstalled = installedModels.contains(model.name),
-                                downloadState = downloadStates[model.id],
-                                onDownload = { onDownload(model) },
-                                onCancelDownload = { onCancelDownload(model.id) }
-                            )
+                        groupedModels.forEach { (group, groupModels) ->
+                            // Group header
+                            item(key = "header-$group") {
+                                Text(
+                                    text = group,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(
+                                        top = rDp(8.dp),
+                                        bottom = rDp(2.dp),
+                                        start = rDp(4.dp)
+                                    )
+                                )
+                            }
+
+                            items(
+                                items = groupModels,
+                                key = { model -> model.id }
+                            ) { model ->
+                                ModelCard(
+                                    model = model,
+                                    isInstalled = installedModelNames.contains(model.name),
+                                    downloadState = downloadStates[model.id],
+                                    onDownload = { onDownload(model) },
+                                    onCancelDownload = { onCancelDownload(model.id) }
+                                )
+                            }
                         }
                     }
 
@@ -1411,54 +1441,40 @@ fun ModelCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = rDp(2.dp)),
-        shape = RoundedCornerShape(rDp(12.dp))
+        elevation = CardDefaults.cardElevation(defaultElevation = rDp(1.dp)),
+        shape = RoundedCornerShape(rDp(10.dp))
     ) {
         Column(
-            modifier = Modifier.padding(rDp(16.dp))
+            modifier = Modifier.padding(rDp(12.dp))
         ) {
+            // Top: Type badge + Name + Action button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        ModelTypeBadge(model.modelType)
-                        Text(
-                            text = model.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(rDp(4.dp)))
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ModelTypeBadge(model.modelType)
                     Text(
-                        text = model.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
+                        text = model.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                Spacer(modifier = Modifier.width(rDp(12.dp)))
-
                 when {
                     isInstalled -> {
-                        ActionButton(
-                            onClickListener = {},
-                            icon = Icons.Default.CheckCircle,
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
                             contentDescription = "Installed",
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(rDp(24.dp))
                         )
                     }
 
@@ -1480,37 +1496,61 @@ fun ModelCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(rDp(10.dp)))
+            Spacer(modifier = Modifier.height(rDp(4.dp)))
 
-            // Tags row with size chip
+            // Size + repo source + key tags in a compact row
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                AssistChip(onClick = {}, label = {
-                    Text(
-                        text = model.approximateSize,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }, leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Storage,
-                        contentDescription = null,
-                        modifier = Modifier.size(rDp(16.dp))
-                    )
-                })
-
-                model.tags.take(3).forEach { tag ->
-                    AssistChip(onClick = {}, label = {
-                        Text(
-                            text = tag, style = MaterialTheme.typography.labelSmall
+                // Size chip
+                Text(
+                    text = model.approximateSize,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .background(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                            RoundedCornerShape(rDp(4.dp))
                         )
-                    })
+                        .padding(horizontal = rDp(6.dp), vertical = rDp(2.dp))
+                )
+
+                // Repo source
+                if (model.repositoryUrl.isNotEmpty()) {
+                    val repoName = model.repositoryUrl.substringBefore("/")
+                    Text(
+                        text = repoName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                RoundedCornerShape(rDp(4.dp))
+                            )
+                            .padding(horizontal = rDp(6.dp), vertical = rDp(2.dp))
+                    )
+                }
+
+                // Key tags (max 2)
+                model.tags.take(2).forEach { tag ->
+                    Text(
+                        text = tag,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                RoundedCornerShape(rDp(4.dp))
+                            )
+                            .padding(horizontal = rDp(5.dp), vertical = rDp(2.dp))
+                    )
                 }
             }
 
-            // Download progress
+            // Download progress (animated)
             AnimatedVisibility(
                 visible = isDownloading || isExtracting || isProcessing, enter = expandVertically(
                     animationSpec = spring(
@@ -1524,15 +1564,15 @@ fun ModelCard(
                     )
                 ) + fadeOut()
             ) {
-                Column(modifier = Modifier.padding(top = rDp(12.dp))) {
+                Column(modifier = Modifier.padding(top = rDp(8.dp))) {
                     val progress =
                         if (downloadState is ModelDownloadService.DownloadState.Downloading) {
                             downloadState.progress
                         } else 0f
 
                     val statusText = when {
-                        isProcessing -> "Processing model..."
-                        isExtracting -> "Extracting files..."
+                        isProcessing -> "Processing..."
+                        isExtracting -> "Extracting..."
                         isDownloading -> {
                             val ds = downloadState as ModelDownloadService.DownloadState.Downloading
                             val downloadedMB = ds.downloadedBytes / 1_000_000
@@ -1548,43 +1588,38 @@ fun ModelCard(
                                 if (mins > 0) " · ${mins}m ${secs}s left"
                                 else " · ${secs}s left"
                             } else ""
-                            "${downloadedMB}MB / ${totalMB}MB ($pct%)$speedText$etaText"
+                            "${downloadedMB}/${totalMB}MB ($pct%)$speedText$etaText"
                         }
                         else -> ""
                     }
 
                     Text(
                         text = statusText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Medium
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
                     )
 
-                    Spacer(modifier = Modifier.height(rDp(8.dp)))
+                    Spacer(modifier = Modifier.height(rDp(4.dp)))
 
-                    when (isExtracting || isProcessing) {
-                        true -> {
-                            LinearProgressIndicator(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(rDp(6.dp))
-                                    .clip(RoundedCornerShape(rDp(3.dp))),
-                                color = MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        }
-
-                        false -> {
-                            LinearProgressIndicator(
-                                progress = { progress },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(rDp(6.dp))
-                                    .clip(RoundedCornerShape(rDp(3.dp))),
-                                color = MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        }
+                    if (isExtracting || isProcessing) {
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(rDp(4.dp))
+                                .clip(RoundedCornerShape(rDp(2.dp))),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    } else {
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(rDp(4.dp))
+                                .clip(RoundedCornerShape(rDp(2.dp))),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
                     }
                 }
             }
