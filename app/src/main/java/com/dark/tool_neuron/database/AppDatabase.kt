@@ -154,8 +154,8 @@ abstract class AppDatabase : RoomDatabase() {
                 // Index on ai_memories.category
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_ai_memories_category ON ai_memories (category)")
 
-                // Seed default personas
-                seedDefaultPersonas(db)
+                // Seed default personas (v5 schema — no character-card columns yet)
+                seedDefaultPersonasV5(db)
             }
         }
 
@@ -175,6 +175,48 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v5 schema seed — only the 7 original columns. Used by MIGRATION_4_5
+         * where the v6 character-card columns don't exist yet.
+         */
+        private fun seedDefaultPersonasV5(db: SupportSQLiteDatabase) {
+            val now = System.currentTimeMillis()
+            val cols = "id, name, avatar, system_prompt, greeting, is_default, created_at"
+
+            db.execSQL(
+                "INSERT INTO personas ($cols) VALUES (?, ?, ?, ?, ?, 1, ?)",
+                arrayOf<Any>(UUID.randomUUID().toString(), "Assistant", "", "", "", now)
+            )
+            db.execSQL(
+                "INSERT INTO personas ($cols) VALUES (?, ?, ?, ?, ?, 1, ?)",
+                arrayOf<Any>(
+                    UUID.randomUUID().toString(), "Luna", "\uD83C\uDF19",
+                    "You are Luna, a warm and curious companion. You speak with gentle enthusiasm, use expressive language, and genuinely care about the user's feelings. You ask thoughtful follow-up questions, celebrate their wins, and offer comfort when they're down. You're playful but never dismissive, and you remember what matters to them.",
+                    "Hey there! I'm Luna. What's on your mind today?", now + 1
+                )
+            )
+            db.execSQL(
+                "INSERT INTO personas ($cols) VALUES (?, ?, ?, ?, ?, 1, ?)",
+                arrayOf<Any>(
+                    UUID.randomUUID().toString(), "CodeBuddy", "\uD83D\uDCBB",
+                    "You are CodeBuddy, a focused and efficient programming assistant. You give concise, practical answers with code examples. You prefer showing over telling. When debugging, you think step-by-step. You know multiple languages but always match the user's tech stack. You avoid unnecessary pleasantries and get straight to the solution.",
+                    "What are we building?", now + 2
+                )
+            )
+            db.execSQL(
+                "INSERT INTO personas ($cols) VALUES (?, ?, ?, ?, ?, 1, ?)",
+                arrayOf<Any>(
+                    UUID.randomUUID().toString(), "Sage", "\uD83D\uDCDA",
+                    "You are Sage, a thoughtful advisor who gives balanced, well-considered perspectives. You explore multiple angles before offering guidance. You ask clarifying questions to understand the full picture. You draw from diverse knowledge to give nuanced advice. You're honest about uncertainty and never pretend to know something you don't.",
+                    "I'm here to help you think things through. What's the situation?", now + 3
+                )
+            )
+        }
+
+        /**
+         * Full v6 schema seed — includes character-card columns. Used by onCreate
+         * where Room creates the complete schema (all NOT NULL columns present).
+         */
         private fun seedDefaultPersonas(db: SupportSQLiteDatabase) {
             val now = System.currentTimeMillis()
             val cols = "id, name, avatar, system_prompt, greeting, is_default, created_at, description, personality, scenario, example_messages, alternate_greetings, tags, creator_notes"
@@ -187,34 +229,25 @@ abstract class AppDatabase : RoomDatabase() {
             db.execSQL(
                 "INSERT INTO personas ($cols) VALUES ($placeholders)",
                 arrayOf<Any>(
-                    UUID.randomUUID().toString(),
-                    "Luna",
-                    "\uD83C\uDF19",
+                    UUID.randomUUID().toString(), "Luna", "\uD83C\uDF19",
                     "You are Luna, a warm and curious companion. You speak with gentle enthusiasm, use expressive language, and genuinely care about the user's feelings. You ask thoughtful follow-up questions, celebrate their wins, and offer comfort when they're down. You're playful but never dismissive, and you remember what matters to them.",
-                    "Hey there! I'm Luna. What's on your mind today?",
-                    now + 1
+                    "Hey there! I'm Luna. What's on your mind today?", now + 1
                 )
             )
             db.execSQL(
                 "INSERT INTO personas ($cols) VALUES ($placeholders)",
                 arrayOf<Any>(
-                    UUID.randomUUID().toString(),
-                    "CodeBuddy",
-                    "\uD83D\uDCBB",
+                    UUID.randomUUID().toString(), "CodeBuddy", "\uD83D\uDCBB",
                     "You are CodeBuddy, a focused and efficient programming assistant. You give concise, practical answers with code examples. You prefer showing over telling. When debugging, you think step-by-step. You know multiple languages but always match the user's tech stack. You avoid unnecessary pleasantries and get straight to the solution.",
-                    "What are we building?",
-                    now + 2
+                    "What are we building?", now + 2
                 )
             )
             db.execSQL(
                 "INSERT INTO personas ($cols) VALUES ($placeholders)",
                 arrayOf<Any>(
-                    UUID.randomUUID().toString(),
-                    "Sage",
-                    "\uD83D\uDCDA",
+                    UUID.randomUUID().toString(), "Sage", "\uD83D\uDCDA",
                     "You are Sage, a thoughtful advisor who gives balanced, well-considered perspectives. You explore multiple angles before offering guidance. You ask clarifying questions to understand the full picture. You draw from diverse knowledge to give nuanced advice. You're honest about uncertainty and never pretend to know something you don't.",
-                    "I'm here to help you think things through. What's the situation?",
-                    now + 3
+                    "I'm here to help you think things through. What's the situation?", now + 3
                 )
             )
         }

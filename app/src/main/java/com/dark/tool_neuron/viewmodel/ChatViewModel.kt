@@ -1219,7 +1219,9 @@ class ChatViewModel @Inject constructor(
     }
 
     /** Build conversation messages for existing chat.
-     *  @param isRegeneration when true, the user prompt is already in _messages so skip appending it again.
+     *  @param isRegeneration when true, the last user message in _messages is the one being
+     *         regenerated. We exclude it from history and re-append userPrompt (which may
+     *         include RAG context) at the end — identical to normal send ordering.
      */
     private suspend fun buildExistingConversationMessages(
         userPrompt: String,
@@ -1232,7 +1234,14 @@ class ChatViewModel @Inject constructor(
             messages.add(JSONObject().put("role", "system").put("content", systemPrompt))
         }
         if (chatMemoryEnabled.value) {
+            // During regeneration: skip the last user message (we re-append it below
+            // with RAG context, in the correct position after post-history).
+            val lastUserMsgId = if (isRegeneration) {
+                _messages.lastOrNull { it.role == Role.User }?.msgId
+            } else null
+
             _messages.forEach { msg ->
+                if (isRegeneration && msg.msgId == lastUserMsgId) return@forEach
                 when (msg.role) {
                     Role.User -> messages.add(
                         JSONObject().put("role", "user").put("content", msg.content.content)
@@ -1249,9 +1258,8 @@ class ChatViewModel @Inject constructor(
         }
         // Post-history character reinforcement (most influential position for small models)
         injectPostHistoryInstruction(messages)
-        if (!isRegeneration) {
-            messages.add(JSONObject().put("role", "user").put("content", userPrompt))
-        }
+        // Always append the user prompt at the end (includes RAG context if present)
+        messages.add(JSONObject().put("role", "user").put("content", userPrompt))
         return sanitizeRoleAlternation(messages)
     }
 
