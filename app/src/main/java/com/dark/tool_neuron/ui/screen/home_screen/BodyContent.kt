@@ -30,10 +30,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlin.random.Random
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -436,22 +439,140 @@ private fun ImageGenerationStreamingBubble(
         }
 
         streamingImage?.let { bitmap ->
-            Surface(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(1f),
-                shape = RoundedCornerShape(rDp(12.dp)),
-                color = MaterialTheme.colorScheme.surfaceVariant
+                    .aspectRatio(bitmap.width.toFloat() / bitmap.height.coerceAtLeast(1))
+                    .clip(RoundedCornerShape(rDp(12.dp)))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                Image(
-                    bitmap = bitmap.asImageBitmap(),
-                    contentDescription = "Generating image preview",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+                MorphingImagePreview(
+                    bitmap = bitmap,
+                    progress = progress,
+                    modifier = Modifier.fillMaxSize()
                 )
             }
         }
     }
+}
+
+
+/**
+ * ChatGPT-style morphing color preview.
+ *
+ * Each chunk bitmap is pre-processed with a radial alpha mask so its edges
+ * fade from opaque (center) to fully transparent (border). When overlapping
+ * blurred chunks are drawn together, they blend seamlessly with no hard edges.
+ */
+@Composable
+private fun MorphingImagePreview(
+    bitmap: Bitmap,
+    progress: Float,
+    modifier: Modifier = Modifier
+) {
+    val cols = 2
+    val rows = 3
+
+    // Create feathered chunks: opaque center → transparent edges
+    val chunks = remember(bitmap) {
+        val cw = bitmap.width / cols
+        val ch = bitmap.height / rows
+        List(cols * rows) { i ->
+            val src = Bitmap.createBitmap(bitmap, (i % cols) * cw, (i / cols) * ch, cw, ch)
+            createFeatheredChunk(src, cw, ch)
+        }
+    }
+
+    // Eased progress curve: stays abstract longer, resolves in last 30%
+    val easedProgress = if (progress < 0.7f) {
+        progress / 0.7f * 0.4f
+    } else {
+        0.4f + (progress - 0.7f) / 0.3f * 0.6f
+    }
+    val drift = (1f - easedProgress).coerceIn(0f, 1f)
+    val blurAmount = (55f * drift).coerceAtLeast(0f)
+
+    val infiniteTransition = rememberInfiniteTransition(label = "morph")
+
+    BoxWithConstraints(modifier = modifier) {
+        val cellW = maxWidth / cols
+        val cellH = maxHeight / rows
+
+        chunks.forEachIndexed { index, chunk ->
+            key(index) {
+                val rng = remember { Random(index * 37 + 7) }
+                val ampX = remember { 25f + rng.nextFloat() * 35f }
+                val ampY = remember { 20f + rng.nextFloat() * 30f }
+                val durX = remember { 3500 + rng.nextInt(2000) }
+                val durY = remember { 3000 + rng.nextInt(2000) }
+                val delayX = remember { rng.nextInt(700) }
+                val delayY = remember { rng.nextInt(700) }
+                val scatterX = remember { (rng.nextFloat() - 0.5f) * 50f }
+                val scatterY = remember { (rng.nextFloat() - 0.5f) * 40f }
+
+                val driftX by infiniteTransition.animateFloat(
+                    initialValue = -ampX, targetValue = ampX,
+                    animationSpec = infiniteRepeatable(
+                        tween(durX, delayMillis = delayX, easing = LinearOutSlowInEasing),
+                        RepeatMode.Reverse
+                    ), label = "dx$index"
+                )
+                val driftY by infiniteTransition.animateFloat(
+                    initialValue = -ampY, targetValue = ampY,
+                    animationSpec = infiniteRepeatable(
+                        tween(durY, delayMillis = delayY, easing = LinearOutSlowInEasing),
+                        RepeatMode.Reverse
+                    ), label = "dy$index"
+                )
+
+                val col = index % cols
+                val row = index / cols
+                val ox = cellW * col + ((driftX + scatterX) * drift).dp
+                val oy = cellH * row + ((driftY + scatterY) * drift).dp
+                val blobScale = 1f + 0.6f * drift
+
+                Image(
+                    bitmap = chunk.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.FillBounds,
+                    modifier = Modifier
+                        .size(cellW, cellH)
+                        .offset(x = ox, y = oy)
+                        .graphicsLayer {
+                            scaleX = blobScale
+                            scaleY = blobScale
+                        }
+                        .blur(blurAmount.dp, BlurredEdgeTreatment.Unbounded)
+                )
+            }
+        }
+    }
+}
+
+/** Create a bitmap with radial alpha fade: opaque center → transparent edges. */
+private fun createFeatheredChunk(src: Bitmap, w: Int, h: Int): Bitmap {
+    val result = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(result)
+
+    // Draw original chunk
+    canvas.drawBitmap(src, 0f, 0f, null)
+
+    // Punch out edges with radial gradient alpha mask (DST_IN keeps center, fades edges)
+    val maskPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    maskPaint.xfermode = android.graphics.PorterDuffXfermode(
+        android.graphics.PorterDuff.Mode.DST_IN
+    )
+    val radius = maxOf(w, h) * 0.75f
+    maskPaint.shader = android.graphics.RadialGradient(
+        w / 2f, h / 2f, radius,
+        intArrayOf(0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt(), 0x00FFFFFF),
+        floatArrayOf(0f, 0.45f, 1f),
+        android.graphics.Shader.TileMode.CLAMP
+    )
+    canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), maskPaint)
+
+    src.recycle()
+    return result
 }
 
 
