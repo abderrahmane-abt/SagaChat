@@ -71,7 +71,9 @@ class GenerationManager {
         scheduler: String = "dpm",
         inputImage: String? = null,
         mask: String? = null,
-        denoiseStrength: Float = 0.6f
+        denoiseStrength: Float = 0.6f,
+        showDiffusionProcess: Boolean = true,
+        showDiffusionStride: Int = 1
     ): Flow<DiffusionGenerationEvent> {
         return LlmModelWorker.generateDiffusionImage(
             prompt = prompt,
@@ -85,8 +87,8 @@ class GenerationManager {
             inputImage = inputImage,
             mask = mask,
             denoiseStrength = denoiseStrength,
-            showDiffusionProcess = true,
-            showDiffusionStride = 5
+            showDiffusionProcess = showDiffusionProcess,
+            showDiffusionStride = showDiffusionStride
         )
     }
 

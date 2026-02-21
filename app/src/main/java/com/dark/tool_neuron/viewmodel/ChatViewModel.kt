@@ -1515,7 +1515,7 @@ class ChatViewModel @Inject constructor(
                     content = MessageContent(contentType = ContentType.Text, content = "Generate image: $prompt")
                 )
                 AppStateManager.setHasMessages(true)
-                generateImageForNewChat(prompt, finalNegativePrompt, finalSteps, finalCfgScale, seed, finalWidth, finalHeight, finalScheduler)
+                generateImageForNewChat(prompt, finalNegativePrompt, finalSteps, finalCfgScale, seed, finalWidth, finalHeight, finalScheduler, inferenceParams.showDiffusionProcess, inferenceParams.showDiffusionStride)
             } else {
                 val chatId = _currentChatId.value
                 if (chatId == null) {
@@ -1525,7 +1525,7 @@ class ChatViewModel @Inject constructor(
                 chatManager.addUserMessage(chatId, "Generate image: $prompt").onSuccess { userMessage ->
                     currentUserMessage = userMessage
                     AppStateManager.setHasMessages(true)
-                    generateImage(chatId, userMessage, prompt, finalNegativePrompt, finalSteps, finalCfgScale, seed, finalWidth, finalHeight, finalScheduler)
+                    generateImage(chatId, userMessage, prompt, finalNegativePrompt, finalSteps, finalCfgScale, seed, finalWidth, finalHeight, finalScheduler, inferenceParams.showDiffusionProcess, inferenceParams.showDiffusionStride)
                 }.onFailure { e ->
                     _error.value = "Failed to save message: ${e.message}"
                     resetStreamingState()
@@ -1559,7 +1559,8 @@ class ChatViewModel @Inject constructor(
 
     private fun generateImageForNewChat(
         prompt: String, negativePrompt: String, steps: Int, cfgScale: Float,
-        seed: Long, width: Int, height: Int, scheduler: String
+        seed: Long, width: Int, height: Int, scheduler: String,
+        showDiffusionProcess: Boolean = true, showDiffusionStride: Int = 1
     ) {
         generationJob = viewModelScope.launch {
             _isGenerating.value = true
@@ -1570,7 +1571,7 @@ class ChatViewModel @Inject constructor(
             AppStateManager.setGeneratingImage()
 
             try {
-                generationManager.generateImageStreaming(prompt, negativePrompt, steps, cfgScale, seed, width, height, scheduler).collect { event ->
+                generationManager.generateImageStreaming(prompt, negativePrompt, steps, cfgScale, seed, width, height, scheduler, showDiffusionProcess = showDiffusionProcess, showDiffusionStride = showDiffusionStride).collect { event ->
                     when (event) {
                         is LlmModelWorker.DiffusionGenerationEvent.Progress -> {
                             _imageGenerationProgress.value = event.progress
@@ -1600,7 +1601,8 @@ class ChatViewModel @Inject constructor(
 
     private fun generateImage(
         chatId: String, userMessage: Messages, prompt: String, negativePrompt: String,
-        steps: Int, cfgScale: Float, seed: Long, width: Int, height: Int, scheduler: String
+        steps: Int, cfgScale: Float, seed: Long, width: Int, height: Int, scheduler: String,
+        showDiffusionProcess: Boolean = true, showDiffusionStride: Int = 1
     ) {
         generationJob = viewModelScope.launch {
             _isGenerating.value = true
@@ -1610,7 +1612,7 @@ class ChatViewModel @Inject constructor(
             AppStateManager.setGeneratingImage()
 
             try {
-                generationManager.generateImageStreaming(prompt, negativePrompt, steps, cfgScale, seed, width, height, scheduler).collect { event ->
+                generationManager.generateImageStreaming(prompt, negativePrompt, steps, cfgScale, seed, width, height, scheduler, showDiffusionProcess = showDiffusionProcess, showDiffusionStride = showDiffusionStride).collect { event ->
                     when (event) {
                         is LlmModelWorker.DiffusionGenerationEvent.Progress -> {
                             _imageGenerationProgress.value = event.progress
