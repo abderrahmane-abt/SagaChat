@@ -779,16 +779,18 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
         }
     }
 
-    // Restart activity after successful restore
+    // Restart process after successful restore — Hilt singletons hold stale DB/DAO refs
     LaunchedEffect(backupProgress) {
         if (backupProgress is SystemBackupManager.BackupProgress.Complete && showRestoreDialog) {
             kotlinx.coroutines.delay(500)
             showRestoreDialog = false
             val activity = context as? Activity
             activity?.let {
-                val intent = it.intent
-                it.finish()
-                it.startActivity(intent)
+                val intent = it.packageManager.getLaunchIntentForPackage(it.packageName)
+                    ?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                it.finishAffinity()
+                if (intent != null) it.startActivity(intent)
+                Runtime.getRuntime().exit(0)
             }
         }
     }

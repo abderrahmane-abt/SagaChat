@@ -52,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -272,6 +273,22 @@ private fun RestoreFromBackupCard(viewModel: SetupViewModel) {
     var showRestoreDialog by remember { mutableStateOf(false) }
     var restorePassword by remember { mutableStateOf("") }
     val restoreProgress by viewModel.restoreProgress.collectAsState()
+    val context = LocalContext.current
+
+    // Restart process after successful restore — Hilt singletons hold stale DB/DAO refs
+    LaunchedEffect(restoreProgress) {
+        if (restoreProgress is SystemBackupManager.BackupProgress.Complete) {
+            kotlinx.coroutines.delay(1000)
+            val activity = context as? android.app.Activity
+            activity?.let {
+                val intent = it.packageManager.getLaunchIntentForPackage(it.packageName)
+                    ?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                it.finishAffinity()
+                if (intent != null) it.startActivity(intent)
+                Runtime.getRuntime().exit(0)
+            }
+        }
+    }
 
     val restoreLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()

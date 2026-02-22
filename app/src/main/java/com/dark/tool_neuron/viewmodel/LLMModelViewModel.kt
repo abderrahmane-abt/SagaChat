@@ -55,6 +55,13 @@ class LLMModelViewModel @Inject constructor(
             if (_currentModelID.value.isNotEmpty()) return@launch
             val model = repository.getModelById(savedId) ?: return@launch
             if (!model.isActive) return@launch
+            // Wait for the LLM service to be ready before showing the dialog,
+            // so clicking "Load" starts instantly instead of blocking on service bind
+            try {
+                LlmModelWorker.ensureServiceReady()
+            } catch (_: Exception) {
+                return@launch
+            }
             _lastModelOffer.value = model
         }
     }

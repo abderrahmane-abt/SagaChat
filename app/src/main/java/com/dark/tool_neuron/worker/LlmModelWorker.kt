@@ -147,6 +147,11 @@ object LlmModelWorker {
         }
     }
 
+    /** Wait for the LLM service to be bound (no return value). */
+    suspend fun ensureServiceReady() {
+        withTimeout(10000) { serviceBound.await() }
+    }
+
     // ==================== GGUF Methods ====================
 
     suspend fun loadGgufModel(model: Model, modelConfig: ModelConfig): Boolean {

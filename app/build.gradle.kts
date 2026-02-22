@@ -1,11 +1,8 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 import java.io.FileInputStream
 import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.kotlin.ksp)
@@ -43,12 +40,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    tasks.withType<KotlinJvmCompile>().configureEach {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
     }
 
     buildFeatures {
@@ -121,9 +112,9 @@ dependencies {
     implementation(libs.retrofit.converter.gson)
 
     // Local Projects & AI Libraries
-    implementation(":ai_gguf-release@aar")
-    implementation(":ai_sd-release@aar")
-    implementation(":ai_supertonic_tts-release@aar")
+    implementation(files("../libs/ai_gguf-release.aar"))
+    implementation(files("../libs/ai_sd-release.aar"))
+    implementation(files("../libs/ai_supertonic_tts-release.aar"))
     //implementation(":runanywhere-core-onnx-release@aar")
     //implementation(":runanywhere-kotlin-release@aar")
     implementation(project(":memory-vault"))

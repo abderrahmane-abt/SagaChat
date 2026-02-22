@@ -10,9 +10,6 @@ pluginManagement {
         mavenCentral()
         gradlePluginPortal()
         maven(url = "https://jitpack.io")
-        flatDir {
-            dir("${rootDir.path}/libs")
-        }
     }
 }
 
@@ -23,9 +20,6 @@ dependencyResolutionManagement {
         mavenCentral()
         mavenLocal()
         maven(url = "https://jitpack.io")
-        flatDir {
-            dir("${rootDir.path}/libs")
-        }
     }
 }
 
