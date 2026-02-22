@@ -20,6 +20,7 @@ class ModelRepositoryDataStore(private val context: Context) {
 
     companion object {
         private val MODEL_REPOS_KEY = stringPreferencesKey("model_repositories")
+        private val DELETED_DEFAULTS_KEY = stringPreferencesKey("deleted_default_repo_ids")
 
         val DEFAULT_REPOSITORIES = listOf(
             // === GENERAL ===
@@ -71,6 +72,48 @@ class ModelRepositoryDataStore(private val context: Context) {
                 modelType = ModelType.GGUF,
                 isEnabled = true,
                 category = ModelCategory.UNCENSORED
+            ),
+            // === IMAGE GENERATION (SD) ===
+            HFModelRepository(
+                id = "sd-qnn",
+                name = "Stable Diffusion (NPU)",
+                repoPath = "xororz/sd-qnn",
+                modelType = ModelType.SD,
+                isEnabled = true,
+                category = ModelCategory.GENERAL
+            ),
+            HFModelRepository(
+                id = "sd-mnn",
+                name = "Stable Diffusion (CPU)",
+                repoPath = "xororz/sd-mnn",
+                modelType = ModelType.SD,
+                isEnabled = true,
+                category = ModelCategory.GENERAL
+            ),
+            // === NSFW IMAGE GENERATION (SD) ===
+            HFModelRepository(
+                id = "sd-mistoonanime-qnn",
+                name = "MistoonAnime v3.0 (NPU)",
+                repoPath = "Mr-J-369/mistoonAnime_v30-SD1.5-qnn2.28",
+                modelType = ModelType.SD,
+                isEnabled = true,
+                category = ModelCategory.UNCENSORED
+            ),
+            HFModelRepository(
+                id = "sd-cyberrealistic-qnn",
+                name = "CyberRealistic Classic (NPU)",
+                repoPath = "Mr-J-369/cyberrealistic-classic-SD1.5-qnn2.28",
+                modelType = ModelType.SD,
+                isEnabled = true,
+                category = ModelCategory.UNCENSORED
+            ),
+            HFModelRepository(
+                id = "sd-realhotspice-qnn",
+                name = "RealHotSpice (NPU)",
+                repoPath = "Mr-J-369/RealHotSpice-SD1.5-qnn2.28",
+                modelType = ModelType.SD,
+                isEnabled = true,
+                category = ModelCategory.UNCENSORED
             )
         )
     }
@@ -78,12 +121,18 @@ class ModelRepositoryDataStore(private val context: Context) {
     val repositories: Flow<List<HFModelRepository>> =
         context.modelRepoDataStore.data.map { preferences ->
             val json = preferences[MODEL_REPOS_KEY]
+            val deletedJson = preferences[DELETED_DEFAULTS_KEY]
+            val deletedIds = deletedJson?.let {
+                try { Json.decodeFromString<Set<String>>(it) } catch (_: Exception) { emptySet() }
+            } ?: emptySet()
+
             if (json != null) {
                 try {
                     val saved = Json.decodeFromString<List<HFModelRepository>>(json)
-                    // Merge any new default repos not yet in saved data
                     val savedIds = saved.map { it.id }.toSet()
-                    val newDefaults = DEFAULT_REPOSITORIES.filter { it.id !in savedIds }
+                    val newDefaults = DEFAULT_REPOSITORIES.filter {
+                        it.id !in savedIds && it.id !in deletedIds
+                    }
                     if (newDefaults.isNotEmpty()) saved + newDefaults else saved
                 } catch (e: Exception) {
                     DEFAULT_REPOSITORIES
@@ -107,6 +156,14 @@ class ModelRepositoryDataStore(private val context: Context) {
     suspend fun removeRepository(repoId: String) {
         val current = repositories.first()
         saveRepositories(current.filterNot { it.id == repoId })
+        if (DEFAULT_REPOSITORIES.any { it.id == repoId }) {
+            context.modelRepoDataStore.edit { preferences ->
+                val existing = preferences[DELETED_DEFAULTS_KEY]?.let {
+                    try { Json.decodeFromString<Set<String>>(it) } catch (_: Exception) { emptySet() }
+                } ?: emptySet()
+                preferences[DELETED_DEFAULTS_KEY] = Json.encodeToString(existing + repoId)
+            }
+        }
     }
 
     suspend fun toggleRepository(repoId: String) {

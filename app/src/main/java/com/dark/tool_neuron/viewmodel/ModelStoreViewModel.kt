@@ -16,6 +16,7 @@ import com.dark.tool_neuron.repo.ModelStoreRepository
 import com.dark.tool_neuron.repo.RepositoryValidator
 import com.dark.tool_neuron.repo.ValidationResult
 import com.dark.tool_neuron.service.ModelDownloadService
+import com.dark.tool_neuron.models.table_schema.ModelConfig
 import com.dark.tool_neuron.utils.ModelMetadataExtractor
 import com.dark.tool_neuron.utils.SizeCategory
 import com.dark.tool_neuron.ui.screen.StoreTab
@@ -30,6 +31,13 @@ enum class SortOption {
     SIZE,
     RECENTLY_ADDED
 }
+
+data class RepoGroupInfo(
+    val displayName: String,
+    val author: String,
+    val modelType: ModelType,
+    val modelCount: Int
+)
 
 class ModelStoreViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -65,6 +73,9 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
     val repositories = repoDataStore.repositories
     val downloadStates = ModelDownloadService.downloadStates
 
+    // Cached repos for synchronous lookup in getGroupedRepos
+    private var cachedRepos: List<HFModelRepository> = emptyList()
+
     // Filter states
     private val _selectedModelType = MutableStateFlow<ModelType?>(null)
     val selectedModelType: StateFlow<ModelType?> = _selectedModelType
@@ -81,11 +92,24 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
     private val _selectedSizeCategory = MutableStateFlow<SizeCategory?>(null)
     val selectedSizeCategory: StateFlow<SizeCategory?> = _selectedSizeCategory
 
+    private val _selectedTags = MutableStateFlow<Set<String>>(emptySet())
+    val selectedTags: StateFlow<Set<String>> = _selectedTags
+
+    private val _showNsfw = MutableStateFlow(true)
+    val showNsfw: StateFlow<Boolean> = _showNsfw
+
+    private val _executionTarget = MutableStateFlow<String?>(null)
+    val executionTarget: StateFlow<String?> = _executionTarget
+
     private val _sortBy = MutableStateFlow(SortOption.NAME)
     val sortBy: StateFlow<SortOption> = _sortBy
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
+
+    // Repo card navigation: null = show repo list, non-null = show models inside that repo
+    private val _selectedRepository = MutableStateFlow<String?>(null)
+    val selectedRepository: StateFlow<String?> = _selectedRepository
 
     // Validation results
     private val _validationResults = MutableStateFlow<Map<String, ValidationResult>>(emptyMap())
@@ -109,8 +133,25 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun refreshModels() {
-        repository.invalidateCache()
-        loadModels()
+        viewModelScope.launch {
+            _isLoading.value = true
+            _error.value = null
+
+            try {
+                val repos = repositories.first()
+                cachedRepos = repos
+                repository.refreshModels(repos).onSuccess { modelsList ->
+                    _models.value = modelsList
+                    applyAllFilters()
+                }.onFailure { exception ->
+                    _error.value = exception.message
+                }
+            } catch (e: Exception) {
+                _error.value = e.message
+            } finally {
+                _isLoading.value = false
+            }
+        }
     }
 
     fun loadModels() {
@@ -120,6 +161,7 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
 
             try {
                 val repos = repositories.first()
+                cachedRepos = repos
                 repository.getAvailableModels(repos).onSuccess { modelsList ->
                     _models.value = modelsList
                     applyAllFilters()
@@ -197,6 +239,27 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
                 }
             }
 
+            // Tag filter
+            if (_selectedTags.value.isNotEmpty()) {
+                filtered = filtered.filter { model ->
+                    _selectedTags.value.all { tag -> tag in model.tags }
+                }
+            }
+
+            // NSFW filter
+            if (!_showNsfw.value) {
+                filtered = filtered.filter { model ->
+                    "NSFW" !in model.tags
+                }
+            }
+
+            // Execution target filter
+            _executionTarget.value?.let { target ->
+                filtered = filtered.filter { model ->
+                    target in model.tags
+                }
+            }
+
             // Search query filter
             if (_searchQuery.value.isNotBlank()) {
                 val query = _searchQuery.value
@@ -261,15 +324,86 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
         applyAllFilters()
     }
 
+    fun toggleTagFilter(tag: String) {
+        _selectedTags.value = if (tag in _selectedTags.value) {
+            _selectedTags.value - tag
+        } else {
+            _selectedTags.value + tag
+        }
+        applyAllFilters()
+    }
+
+    fun setShowNsfw(show: Boolean) {
+        _showNsfw.value = show
+        applyAllFilters()
+    }
+
+    fun setExecutionTarget(target: String?) {
+        _executionTarget.value = target
+        applyAllFilters()
+    }
+
+    fun getAvailableTags(): List<String> {
+        return _models.value
+            .flatMap { it.tags }
+            .distinct()
+            .filter { tag ->
+                tag !in listOf("GGUF") && !tag.matches(Regex("Q\\d.*"))
+            }
+            .sorted()
+    }
+
     fun clearAllFilters() {
         _selectedModelType.value = null
         _selectedCategory.value = null
         _selectedParameters.value = emptySet()
         _selectedQuantizations.value = emptySet()
         _selectedSizeCategory.value = null
+        _selectedTags.value = emptySet()
+        _showNsfw.value = true
+        _executionTarget.value = null
         _sortBy.value = SortOption.NAME
         _searchQuery.value = ""
         applyAllFilters()
+    }
+
+    fun selectRepository(repoKey: String?) {
+        _selectedRepository.value = repoKey
+    }
+
+    fun getGroupedRepos(): Map<String, RepoGroupInfo> {
+        val models = _filteredModels.value
+        val grouped = mutableMapOf<String, RepoGroupInfo>()
+
+        val repoNameLookup = cachedRepos.associate { it.repoPath to it.name }
+
+        models.groupBy { model ->
+            when (model.modelType) {
+                ModelType.GGUF -> model.repositoryUrl.ifEmpty { "Unknown" }
+                ModelType.SD -> model.repositoryUrl.ifEmpty { "SD Models" }
+                ModelType.TTS -> "tts-models"
+            }
+        }.forEach { (key, groupModels) ->
+            val first = groupModels.first()
+            val displayName = when (first.modelType) {
+                ModelType.TTS -> first.name
+                else -> repoNameLookup[key] ?: key.substringAfterLast("/")
+            }
+            val author = if (key.contains("/")) key.substringBefore("/") else ""
+            grouped[key] = RepoGroupInfo(displayName, author, first.modelType, groupModels.size)
+        }
+
+        return grouped
+    }
+
+    fun getModelsForRepo(repoKey: String): List<HuggingFaceModel> {
+        return _filteredModels.value.filter { model ->
+            when (model.modelType) {
+                ModelType.GGUF -> (model.repositoryUrl.ifEmpty { "Unknown" }) == repoKey
+                ModelType.SD -> (model.repositoryUrl.ifEmpty { "SD Models" }) == repoKey
+                ModelType.TTS -> repoKey == "tts-models"
+            }
+        }
     }
 
     fun downloadModel(model: HuggingFaceModel) {
@@ -375,5 +509,9 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
 
     fun getValidationResult(repoId: String): ValidationResult? {
         return _validationResults.value[repoId]
+    }
+
+    suspend fun getModelConfig(modelId: String): ModelConfig? {
+        return systemRepo.getConfigByModelId(modelId)
     }
 }

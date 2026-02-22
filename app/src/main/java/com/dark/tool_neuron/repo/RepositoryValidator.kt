@@ -1,12 +1,13 @@
 package com.dark.tool_neuron.repo
 
 import com.dark.tool_neuron.models.data.HFModelRepository
+import com.dark.tool_neuron.models.data.ModelType
 import com.dark.tool_neuron.network.HuggingFaceClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 sealed class ValidationResult {
-    data class Valid(val ggufFileCount: Int) : ValidationResult()
+    data class Valid(val ggufFileCount: Int, val label: String = "GGUF") : ValidationResult()
     data class Invalid(val reason: String) : ValidationResult()
     object Checking : ValidationResult()
 }
@@ -44,7 +45,7 @@ class RepositoryValidator {
                 }
             }
 
-            // Step 2: Check for GGUF files
+            // Step 2: Check for model files based on repo type
             val filesResponse = api.getRepoFiles(repo.repoPath)
 
             if (!filesResponse.isSuccessful) {
@@ -54,18 +55,24 @@ class RepositoryValidator {
             }
 
             val files = filesResponse.body() ?: emptyList()
-            val ggufFiles = files.filter { file ->
-                file.path.endsWith(".gguf", ignoreCase = true)
+
+            val (matchingFiles, fileLabel) = when (repo.modelType) {
+                ModelType.SD -> {
+                    files.filter { it.path.endsWith(".zip", ignoreCase = true) } to "ZIP"
+                }
+                else -> {
+                    files.filter { it.path.endsWith(".gguf", ignoreCase = true) } to "GGUF"
+                }
             }
 
-            if (ggufFiles.isEmpty()) {
-                return@withContext ValidationResult.Invalid("No GGUF files found").also {
+            if (matchingFiles.isEmpty()) {
+                return@withContext ValidationResult.Invalid("No $fileLabel files found").also {
                     validationCache[repo.id] = it
                 }
             }
 
             // Success
-            ValidationResult.Valid(ggufFiles.size).also {
+            ValidationResult.Valid(matchingFiles.size, fileLabel).also {
                 validationCache[repo.id] = it
             }
 

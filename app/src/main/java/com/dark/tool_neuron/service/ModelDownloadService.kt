@@ -72,7 +72,12 @@ class ModelDownloadService : Service() {
             val etaSeconds: Long = -1
         ) : DownloadState()
 
-        data class Extracting(val modelId: String) : DownloadState()
+        data class Extracting(
+            val modelId: String,
+            val currentFile: String = "",
+            val extractedCount: Int = 0,
+            val totalFiles: Int = 0
+        ) : DownloadState()
         data class Processing(val modelId: String) : DownloadState()
         data class Success(val modelId: String) : DownloadState()
         data class Error(val modelId: String, val message: String) : DownloadState()
@@ -391,6 +396,25 @@ class ModelDownloadService : Service() {
     }
 
     private suspend fun unzipFile(zipFile: File, destDir: File, modelId: String) = withContext(Dispatchers.IO) {
+        // First pass: count valid entries
+        val totalFiles = ZipInputStream(zipFile.inputStream().buffered()).use { zis ->
+            var count = 0
+            var entry = zis.nextEntry
+            while (entry != null) {
+                if (!entry.isDirectory) {
+                    val name = entry.name.substringAfterLast('/')
+                    if (name.isNotEmpty() && !name.startsWith(".") && !entry.name.contains("__MACOSX")) {
+                        count++
+                    }
+                }
+                zis.closeEntry()
+                entry = zis.nextEntry
+            }
+            count
+        }
+
+        // Second pass: extract with per-file progress
+        var extractedCount = 0
         ZipInputStream(zipFile.inputStream().buffered()).use { zis ->
             var entry = zis.nextEntry
 
@@ -402,12 +426,19 @@ class ModelDownloadService : Service() {
 
                 if (!entry.isDirectory) {
                     val fileName = entry.name.substringAfterLast('/')
-                    if (fileName.isNotEmpty() && !fileName.startsWith(".") && !fileName.startsWith("__MACOSX")) {
-                        val file = File(destDir, fileName)
+                    if (fileName.isNotEmpty() && !fileName.startsWith(".") && !entry.name.contains("__MACOSX")) {
+                        updateDownloadState(modelId, DownloadState.Extracting(
+                            modelId = modelId,
+                            currentFile = fileName,
+                            extractedCount = extractedCount,
+                            totalFiles = totalFiles
+                        ))
 
+                        val file = File(destDir, fileName)
                         FileOutputStream(file).buffered().use { output ->
                             zis.copyTo(output)
                         }
+                        extractedCount++
                     }
                 }
                 zis.closeEntry()

@@ -29,9 +29,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.CheckCircle
@@ -69,7 +71,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -109,6 +113,7 @@ import com.dark.tool_neuron.ui.theme.maple
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.utils.SizeCategory
 import com.dark.tool_neuron.viewmodel.ModelStoreViewModel
+import com.dark.tool_neuron.viewmodel.RepoGroupInfo
 import com.dark.tool_neuron.viewmodel.SortOption
 import java.io.File
 import java.util.Locale
@@ -231,7 +236,8 @@ fun ModelStoreScreen(
                     StoreTab.INSTALLED -> InstalledModelsTab(
                         models = installedModels,
                         deleteInProgress = deleteInProgress,
-                        onDelete = { viewModel.deleteModel(it) }
+                        onDelete = { viewModel.deleteModel(it) },
+                        viewModel = viewModel
                     )
 
                     StoreTab.SETTINGS -> SettingsTab(
@@ -256,6 +262,8 @@ private fun ModelsTab(
     onCancelDownload: (String) -> Unit,
     onRetry: () -> Unit
 ) {
+    val selectedRepo by viewModel.selectedRepository.collectAsState()
+
     Column(modifier = Modifier.fillMaxSize()) {
         ModelFiltersSection(viewModel = viewModel)
 
@@ -323,63 +331,231 @@ private fun ModelsTab(
             }
 
             else -> {
-                // Group models by repository for organized display
-                val groupedModels = remember(models) {
-                    models.groupBy { model ->
-                        when (model.modelType) {
-                            ModelType.GGUF -> model.repositoryUrl.ifEmpty { "Unknown" }
-                            ModelType.SD -> if (model.runOnCpu) "CPU Image Models" else "NPU Image Models"
-                            ModelType.TTS -> "Text-to-Speech"
-                        }
-                    }
-                }
-
-                Box(modifier = Modifier.fillMaxSize()) {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .then(if (isLoading) Modifier.blur(rDp(4.dp)) else Modifier),
-                        contentPadding = PaddingValues(horizontal = rDp(12.dp), vertical = rDp(8.dp)),
-                        verticalArrangement = Arrangement.spacedBy(rDp(6.dp)),
-                        flingBehavior = ScrollableDefaults.flingBehavior()
-                    ) {
-                        groupedModels.forEach { (group, groupModels) ->
-                            // Group header
-                            item(key = "header-$group") {
-                                Text(
-                                    text = group,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.padding(
-                                        top = rDp(8.dp),
-                                        bottom = rDp(2.dp),
-                                        start = rDp(4.dp)
-                                    )
-                                )
-                            }
-
-                            items(
-                                items = groupModels,
-                                key = { model -> model.id }
-                            ) { model ->
-                                ModelCard(
-                                    model = model,
-                                    isInstalled = installedModelNames.contains(model.name),
-                                    downloadState = downloadStates[model.id],
-                                    onDownload = { onDownload(model) },
-                                    onCancelDownload = { onCancelDownload(model.id) }
-                                )
-                            }
-                        }
-                    }
-
-                    if (isLoading) {
-                        LoadingIndicator(
-                            modifier = Modifier.align(Alignment.Center)
+                AnimatedContent(
+                    targetState = selectedRepo,
+                    transitionSpec = {
+                        fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMedium)) togetherWith
+                                fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMedium))
+                    },
+                    label = "repo_nav"
+                ) { repoKey ->
+                    if (repoKey == null) {
+                        // Repo card list view
+                        RepoCardListView(
+                            viewModel = viewModel,
+                            isLoading = isLoading,
+                            downloadStates = downloadStates
+                        )
+                    } else {
+                        // Model detail view inside a repo
+                        RepoDetailView(
+                            repoKey = repoKey,
+                            viewModel = viewModel,
+                            isLoading = isLoading,
+                            downloadStates = downloadStates,
+                            installedModelNames = installedModelNames,
+                            onDownload = onDownload,
+                            onCancelDownload = onCancelDownload
                         )
                     }
                 }
+            }
+        }
+    }
+
+    // Handle back press to return from detail to repo list
+    if (selectedRepo != null) {
+        androidx.activity.compose.BackHandler {
+            viewModel.selectRepository(null)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun RepoCardListView(
+    viewModel: ModelStoreViewModel,
+    isLoading: Boolean,
+    downloadStates: Map<String, ModelDownloadService.DownloadState>
+) {
+    val groupedRepos = remember(viewModel.filteredModels.collectAsState().value) {
+        viewModel.getGroupedRepos()
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (isLoading) Modifier.blur(rDp(4.dp)) else Modifier),
+            contentPadding = PaddingValues(horizontal = rDp(12.dp), vertical = rDp(8.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+            flingBehavior = ScrollableDefaults.flingBehavior()
+        ) {
+            items(
+                items = groupedRepos.entries.toList(),
+                key = { it.key }
+            ) { (repoKey, info) ->
+                val repoModels = viewModel.getModelsForRepo(repoKey)
+                val hasActiveDownload = repoModels.any { model ->
+                    val state = downloadStates[model.id]
+                    state is ModelDownloadService.DownloadState.Downloading ||
+                            state is ModelDownloadService.DownloadState.Extracting ||
+                            state is ModelDownloadService.DownloadState.Processing
+                }
+
+                StoreRepoCard(
+                    info = info,
+                    hasActiveDownload = hasActiveDownload,
+                    onClick = { viewModel.selectRepository(repoKey) }
+                )
+            }
+        }
+
+        if (isLoading) {
+            LoadingIndicator(modifier = Modifier.align(Alignment.Center))
+        }
+    }
+}
+
+@Composable
+private fun StoreRepoCard(
+    info: RepoGroupInfo,
+    hasActiveDownload: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(rDp(Standards.CardSmallCornerRadius)),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier.padding(rDp(Standards.CardPadding)),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+        ) {
+            ModelTypeBadge(info.modelType)
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = info.displayName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (info.author.isNotEmpty()) {
+                        CaptionText(text = info.author)
+                        CaptionText(text = "·")
+                    }
+                    CaptionText(
+                        text = "${info.modelCount} ${if (info.modelCount == 1) "model" else "models"}"
+                    )
+                    if (hasActiveDownload) {
+                        CaptionText(text = "·")
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(rDp(10.dp)),
+                            strokeWidth = rDp(1.5.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = "View models",
+                modifier = Modifier.size(rDp(20.dp)),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun RepoDetailView(
+    repoKey: String,
+    viewModel: ModelStoreViewModel,
+    isLoading: Boolean,
+    downloadStates: Map<String, ModelDownloadService.DownloadState>,
+    installedModelNames: Set<String>,
+    onDownload: (HuggingFaceModel) -> Unit,
+    onCancelDownload: (String) -> Unit
+) {
+    val repoModels = remember(viewModel.filteredModels.collectAsState().value, repoKey) {
+        viewModel.getModelsForRepo(repoKey)
+    }
+    val groupedRepos = remember(viewModel.filteredModels.collectAsState().value) {
+        viewModel.getGroupedRepos()
+    }
+    val repoInfo = groupedRepos[repoKey]
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Back header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = rDp(8.dp), vertical = rDp(4.dp)),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(rDp(4.dp))
+        ) {
+            ActionButton(
+                onClickListener = { viewModel.selectRepository(null) },
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back to repos"
+            )
+            repoInfo?.let { info ->
+                ModelTypeBadge(info.modelType)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = info.displayName,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (info.author.isNotEmpty()) {
+                        CaptionText(text = info.author)
+                    }
+                }
+                CaptionText(text = "${info.modelCount} models")
+            }
+        }
+
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+        )
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(if (isLoading) Modifier.blur(rDp(4.dp)) else Modifier),
+                contentPadding = PaddingValues(horizontal = rDp(12.dp), vertical = rDp(8.dp)),
+                verticalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+                flingBehavior = ScrollableDefaults.flingBehavior()
+            ) {
+                items(
+                    items = repoModels,
+                    key = { model -> model.id }
+                ) { model ->
+                    ModelCard(
+                        model = model,
+                        isInstalled = installedModelNames.contains(model.name),
+                        downloadState = downloadStates[model.id],
+                        onDownload = { onDownload(model) },
+                        onCancelDownload = { onCancelDownload(model.id) }
+                    )
+                }
+            }
+
+            if (isLoading) {
+                LoadingIndicator(modifier = Modifier.align(Alignment.Center))
             }
         }
     }
@@ -389,7 +565,8 @@ private fun ModelsTab(
 private fun InstalledModelsTab(
     models: List<Model>,
     deleteInProgress: String?,
-    onDelete: (Model) -> Unit
+    onDelete: (Model) -> Unit,
+    viewModel: ModelStoreViewModel
 ) {
     var selectedModel by remember { mutableStateOf<Model?>(null) }
     var showDeleteDialog by remember { mutableStateOf<Model?>(null) }
@@ -433,15 +610,14 @@ private fun InstalledModelsTab(
         }
     }
 
-    // Model Details Dialog
     selectedModel?.let { model ->
         ModelDetailsDialog(
             model = model,
+            viewModel = viewModel,
             onDismiss = { selectedModel = null }
         )
     }
 
-    // Delete Confirmation Dialog
     showDeleteDialog?.let { model ->
         AlertDialog(
             onDismissRequest = { showDeleteDialog = null },
@@ -499,7 +675,6 @@ private fun InstalledModelCard(
                        else MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            // Name + subtitle
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = model.modelName,
@@ -510,8 +685,18 @@ private fun InstalledModelCard(
                 )
                 val modelFile = File(model.modelPath)
                 val sizeText = if (modelFile.exists()) {
-                    val sizeInMB = modelFile.length() / (1024 * 1024)
-                    "${model.providerType.name}  ·  ${sizeInMB} MB"
+                    val sizeBytes = if (modelFile.isDirectory) {
+                        modelFile.walkTopDown().sumOf { it.length() }
+                    } else {
+                        modelFile.length()
+                    }
+                    val sizeFormatted = formatInstalledSize(sizeBytes)
+                    val typeLabel = when (model.providerType) {
+                        ProviderType.DIFFUSION -> "SD"
+                        else -> model.providerType.name
+                    }
+                    val storageLabel = if (modelFile.isDirectory) "Folder" else "File"
+                    "$typeLabel  ·  $storageLabel  ·  $sizeFormatted"
                 } else {
                     model.providerType.name
                 }
@@ -559,8 +744,17 @@ private fun InstalledModelCard(
 @Composable
 private fun ModelDetailsDialog(
     model: Model,
+    viewModel: ModelStoreViewModel,
     onDismiss: () -> Unit
 ) {
+    var config by remember { mutableStateOf<com.dark.tool_neuron.models.table_schema.ModelConfig?>(null) }
+    var configLoaded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(model.id) {
+        config = viewModel.getModelConfig(model.id)
+        configLoaded = true
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -571,17 +765,116 @@ private fun ModelDetailsDialog(
         },
         text = {
             Column(
-                verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+                verticalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                modifier = Modifier.verticalScroll(rememberScrollState())
             ) {
-                DetailRow("ID", model.id)
-                DetailRow("Provider", model.providerType.name)
+                val typeLabel = when (model.providerType) {
+                    ProviderType.DIFFUSION -> "Stable Diffusion"
+                    ProviderType.GGUF -> "GGUF (LLM)"
+                    ProviderType.TTS -> "Text-to-Speech"
+                }
+                DetailRow("Type", typeLabel)
                 DetailRow("Status", if (model.isActive) "Active" else "Inactive")
-                DetailRow("Path", model.modelPath)
 
                 val modelFile = File(model.modelPath)
                 if (modelFile.exists()) {
-                    val sizeInMB = modelFile.length() / (1024 * 1024)
-                    DetailRow("Size", "${sizeInMB} MB")
+                    if (modelFile.isDirectory) {
+                        DetailRow("Storage", "Folder")
+                        val folderSize = modelFile.walkTopDown().sumOf { it.length() }
+                        DetailRow("Size", formatInstalledSize(folderSize))
+                        val fileCount = modelFile.walkTopDown().count { it.isFile }
+                        DetailRow("Files", "$fileCount")
+                    } else {
+                        DetailRow("Storage", "File")
+                        DetailRow("Size", formatInstalledSize(modelFile.length()))
+                    }
+                }
+
+                DetailRow("Path", model.modelPath)
+
+                if (configLoaded && config != null) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = rDp(4.dp)),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+
+                    when (model.providerType) {
+                        ProviderType.GGUF -> {
+                            val schema = com.dark.tool_neuron.models.engine_schema.GgufEngineSchema.fromJson(
+                                config!!.modelLoadingParams,
+                                config!!.modelInferenceParams
+                            )
+                            Text(
+                                text = "Loading Config",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            DetailRow("Context Size", "${schema.loadingParams.ctxSize}")
+                            DetailRow("Batch Size", "${schema.loadingParams.batchSize}")
+                            DetailRow("Threads", if (schema.loadingParams.threads == 0) "Auto" else "${schema.loadingParams.threads}")
+                            DetailRow("Memory Map", if (schema.loadingParams.useMmap) "Enabled" else "Disabled")
+
+                            Spacer(modifier = Modifier.height(rDp(4.dp)))
+                            Text(
+                                text = "Inference Config",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            DetailRow("Temperature", "${schema.inferenceParams.temperature}")
+                            DetailRow("Top K", "${schema.inferenceParams.topK}")
+                            DetailRow("Top P", "${schema.inferenceParams.topP}")
+                            DetailRow("Max Tokens", "${schema.inferenceParams.maxTokens}")
+                        }
+
+                        ProviderType.DIFFUSION -> {
+                            val loadingObj = config!!.modelLoadingParams?.let { json ->
+                                try { org.json.JSONObject(json) } catch (_: Exception) { null }
+                            }
+                            val inferenceObj = config!!.modelInferenceParams?.let { json ->
+                                try { org.json.JSONObject(json) } catch (_: Exception) { null }
+                            }
+
+                            Text(
+                                text = "Model Config",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            if (loadingObj != null) {
+                                DetailRow("Resolution", "${loadingObj.optInt("width", 512)} x ${loadingObj.optInt("height", 512)}")
+                                DetailRow("Execution", if (loadingObj.optBoolean("run_on_cpu", false)) "CPU" else "NPU")
+                                DetailRow("Text Embedding", "${loadingObj.optInt("text_embedding_size", 768)}")
+                                DetailRow("Safety Mode", if (loadingObj.optBoolean("safety_mode", false)) "On" else "Off")
+                            }
+
+                            if (inferenceObj != null) {
+                                Spacer(modifier = Modifier.height(rDp(4.dp)))
+                                Text(
+                                    text = "Inference Config",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                DetailRow("Steps", "${inferenceObj.optInt("steps", 28)}")
+                                DetailRow("CFG Scale", "${inferenceObj.optDouble("cfg_scale", 7.0)}")
+                                DetailRow("Scheduler", inferenceObj.optString("scheduler", "dpm"))
+                            }
+                        }
+
+                        ProviderType.TTS -> {
+                            val ttsObj = config!!.modelInferenceParams?.let { json ->
+                                try { org.json.JSONObject(json) } catch (_: Exception) { null }
+                            }
+                            Text(
+                                text = "TTS Config",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            if (ttsObj != null) {
+                                DetailRow("Voice", ttsObj.optString("voice", "F1"))
+                                DetailRow("Speed", "${ttsObj.optDouble("speed", 1.05)}")
+                                DetailRow("Language", ttsObj.optString("language", "en"))
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -591,6 +884,15 @@ private fun ModelDetailsDialog(
             }
         }
     )
+}
+
+private fun formatInstalledSize(bytes: Long): String {
+    return when {
+        bytes >= 1_073_741_824 -> String.format("%.2f GB", bytes / 1_073_741_824.0)
+        bytes >= 1_048_576 -> String.format("%.1f MB", bytes / 1_048_576.0)
+        bytes >= 1_024 -> String.format("%.1f KB", bytes / 1_024.0)
+        else -> "$bytes B"
+    }
 }
 
 @Composable
@@ -844,7 +1146,7 @@ private fun RepositoryCard(
                 if (validationResult is ValidationResult.Valid) {
                     CaptionText(text = "·")
                     CaptionText(
-                        text = "${validationResult.ggufFileCount} GGUF",
+                        text = "${validationResult.ggufFileCount} ${validationResult.label}",
                         color = MaterialTheme.colorScheme.primary
                     )
                 } else if (validationResult is ValidationResult.Invalid) {
@@ -1112,6 +1414,9 @@ fun ModelFiltersSection(
     val selectedParameters by viewModel.selectedParameters.collectAsState()
     val selectedQuantizations by viewModel.selectedQuantizations.collectAsState()
     val selectedSizeCategory by viewModel.selectedSizeCategory.collectAsState()
+    val selectedTags by viewModel.selectedTags.collectAsState()
+    val showNsfw by viewModel.showNsfw.collectAsState()
+    val executionTarget by viewModel.executionTarget.collectAsState()
     val sortBy by viewModel.sortBy.collectAsState()
 
     var showAdvancedFilters by remember { mutableStateOf(false) }
@@ -1121,7 +1426,10 @@ fun ModelFiltersSection(
         selectedCategory != null,
         selectedParameters.isNotEmpty(),
         selectedQuantizations.isNotEmpty(),
-        selectedSizeCategory != null
+        selectedSizeCategory != null,
+        selectedTags.isNotEmpty(),
+        !showNsfw,
+        executionTarget != null
     ).count { it }
 
     Column(
@@ -1129,7 +1437,6 @@ fun ModelFiltersSection(
             .fillMaxWidth()
             .padding(vertical = rDp(8.dp))
     ) {
-        // Model type filter (always visible, top-level)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1161,7 +1468,6 @@ fun ModelFiltersSection(
 
         Spacer(modifier = Modifier.height(rDp(6.dp)))
 
-        // Category filter (only show for GGUF or All)
         if (selectedModelType == null || selectedModelType == ModelType.GGUF) {
             Row(
                 modifier = Modifier
@@ -1187,7 +1493,30 @@ fun ModelFiltersSection(
             Spacer(modifier = Modifier.height(rDp(6.dp)))
         }
 
-        // Advanced filters toggle
+        // Tag chips
+        val availableTags = remember(viewModel.models.collectAsState().value) {
+            viewModel.getAvailableTags()
+        }
+        if (availableTags.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = rDp(16.dp)),
+                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            ) {
+                availableTags.forEach { tag ->
+                    FilterChip(
+                        selected = tag in selectedTags,
+                        onClick = { viewModel.toggleTagFilter(tag) },
+                        label = { Text(tag) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(rDp(6.dp)))
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1222,7 +1551,6 @@ fun ModelFiltersSection(
             }
         }
 
-        // Advanced filters section
         AnimatedVisibility(
             visible = showAdvancedFilters,
             enter = expandVertically() + fadeIn(),
@@ -1234,7 +1562,51 @@ fun ModelFiltersSection(
                     .padding(horizontal = rDp(16.dp), vertical = rDp(8.dp)),
                 verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
             ) {
-                // Parameter count filter (GGUF only)
+                // NSFW toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Show NSFW Content",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    ActionSwitch(
+                        checked = showNsfw,
+                        onCheckedChange = { viewModel.setShowNsfw(it) }
+                    )
+                }
+
+                // Execution target filter
+                Column(verticalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
+                    Text(
+                        text = "Execution",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    ) {
+                        FilterChip(
+                            selected = executionTarget == null,
+                            onClick = { viewModel.setExecutionTarget(null) },
+                            label = { Text("All") }
+                        )
+                        FilterChip(
+                            selected = executionTarget == "CPU",
+                            onClick = { viewModel.setExecutionTarget(if (executionTarget == "CPU") null else "CPU") },
+                            label = { Text("CPU") }
+                        )
+                        FilterChip(
+                            selected = executionTarget == "NPU",
+                            onClick = { viewModel.setExecutionTarget(if (executionTarget == "NPU") null else "NPU") },
+                            label = { Text("NPU") }
+                        )
+                    }
+                }
+
                 if (selectedModelType == null || selectedModelType == ModelType.GGUF) {
                     Column(verticalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
                         Text(
@@ -1258,7 +1630,6 @@ fun ModelFiltersSection(
                         }
                     }
 
-                    // Quantization filter (GGUF only)
                     Column(verticalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
                         Text(
                             text = "Quantization",
@@ -1282,7 +1653,6 @@ fun ModelFiltersSection(
                     }
                 }
 
-                // Size category filter
                 Column(verticalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
                     Text(
                         text = "Size",
@@ -1307,7 +1677,6 @@ fun ModelFiltersSection(
                     }
                 }
 
-                // Sort option
                 Column(verticalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
                     Text(
                         text = "Sort By",
@@ -1514,7 +1883,14 @@ fun ModelCard(
 
                     val statusText = when {
                         isProcessing -> "Processing..."
-                        isExtracting -> "Extracting..."
+                        isExtracting -> {
+                            val es = downloadState as ModelDownloadService.DownloadState.Extracting
+                            if (es.currentFile.isNotEmpty()) {
+                                "Unzipping ${es.currentFile} (${es.extractedCount + 1}/${es.totalFiles})"
+                            } else {
+                                "Extracting..."
+                            }
+                        }
                         isDownloading -> {
                             val ds = downloadState as ModelDownloadService.DownloadState.Downloading
                             val downloadedMB = ds.downloadedBytes / 1_000_000
@@ -1543,7 +1919,29 @@ fun ModelCard(
 
                     Spacer(modifier = Modifier.height(rDp(4.dp)))
 
-                    if (isExtracting || isProcessing) {
+                    if (isExtracting) {
+                        val es = downloadState as ModelDownloadService.DownloadState.Extracting
+                        if (es.totalFiles > 0) {
+                            LinearProgressIndicator(
+                                progress = { es.extractedCount.toFloat() / es.totalFiles },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(rDp(4.dp))
+                                    .clip(RoundedCornerShape(rDp(2.dp))),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        } else {
+                            LinearProgressIndicator(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(rDp(4.dp))
+                                    .clip(RoundedCornerShape(rDp(2.dp))),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        }
+                    } else if (isProcessing) {
                         LinearProgressIndicator(
                             modifier = Modifier
                                 .fillMaxWidth()
