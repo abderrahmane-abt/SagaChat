@@ -97,6 +97,9 @@ import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import java.io.File
+import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material3.AlertDialog
+import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
 import com.dark.tool_neuron.viewmodel.MemoryViewModel
@@ -121,6 +124,17 @@ fun HomeScreen(
     val context = LocalContext.current
     val codeHighlightEnabled by remember { AppSettingsDataStore(context).codeHighlightEnabled }
         .collectAsStateWithLifecycle(initialValue = true)
+
+    // Offer to reload the last loaded model on startup
+    val lastModelOffer by llmModelViewModel.lastModelOffer.collectAsStateWithLifecycle()
+    lastModelOffer?.let { model ->
+        ReloadModelDialog(
+            modelName = model.modelName,
+            modelType = model.providerType,
+            onConfirm = { llmModelViewModel.acceptLastModelOffer() },
+            onDismiss = { llmModelViewModel.dismissLastModelOffer() }
+        )
+    }
 
     CompositionLocalProvider(LocalCodeHighlightEnabled provides codeHighlightEnabled) {
     ModalNavigationDrawer(
@@ -935,4 +949,64 @@ private fun MoreOptionsOverlay(
             }
         }
     }
+}
+
+// ==================== Reload Model Dialog ====================
+
+@Composable
+private fun ReloadModelDialog(
+    modelName: String,
+    modelType: ProviderType,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val typeLabel = when (modelType) {
+        ProviderType.GGUF -> "Text"
+        ProviderType.DIFFUSION -> "Image"
+        ProviderType.TTS -> "TTS"
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                Icons.Outlined.Memory, null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+        },
+        title = {
+            Text("Load Previous Model?", fontWeight = FontWeight.SemiBold)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))) {
+                Text(
+                    "You previously had a model loaded. Would you like to load it again?",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    modelName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    typeLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Load")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Skip")
+            }
+        },
+        shape = RoundedCornerShape(rDp(16.dp))
+    )
 }

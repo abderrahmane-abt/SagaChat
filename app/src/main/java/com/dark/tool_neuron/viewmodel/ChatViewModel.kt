@@ -1563,11 +1563,11 @@ class ChatViewModel @Inject constructor(
         showDiffusionProcess: Boolean = true, showDiffusionStride: Int = 1
     ) {
         generationJob = viewModelScope.launch {
-            _isGenerating.value = true
             _error.value = null
             _streamingImage.value = null
             _imageGenerationProgress.value = 0f
             currentGeneratedImage = null
+            _isGenerating.value = true
             AppStateManager.setGeneratingImage()
 
             try {
@@ -1605,10 +1605,10 @@ class ChatViewModel @Inject constructor(
         showDiffusionProcess: Boolean = true, showDiffusionStride: Int = 1
     ) {
         generationJob = viewModelScope.launch {
-            _isGenerating.value = true
             _error.value = null
             _streamingImage.value = null
             _imageGenerationProgress.value = 0f
+            _isGenerating.value = true
             AppStateManager.setGeneratingImage()
 
             try {

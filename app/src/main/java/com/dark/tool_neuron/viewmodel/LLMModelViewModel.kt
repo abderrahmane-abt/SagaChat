@@ -44,6 +44,31 @@ class LLMModelViewModel @Inject constructor(
 
     private val _currentModelType = MutableStateFlow<ProviderType?>(null)
 
+    // Last loaded model — shown once on startup to offer reloading
+    private val _lastModelOffer = MutableStateFlow<Model?>(null)
+    val lastModelOffer: StateFlow<Model?> = _lastModelOffer.asStateFlow()
+
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            val savedId = appSettings.lastModelId.first() ?: return@launch
+            // Only offer if no model is currently loaded
+            if (_currentModelID.value.isNotEmpty()) return@launch
+            val model = repository.getModelById(savedId) ?: return@launch
+            if (!model.isActive) return@launch
+            _lastModelOffer.value = model
+        }
+    }
+
+    fun dismissLastModelOffer() {
+        _lastModelOffer.value = null
+    }
+
+    fun acceptLastModelOffer() {
+        val model = _lastModelOffer.value ?: return
+        _lastModelOffer.value = null
+        loadModel(model)
+    }
+
     // Model loading states
     val isGgufModelLoaded = LlmModelWorker.isGgufModelLoaded
     val isDiffusionModelLoaded = LlmModelWorker.isDiffusionModelLoaded
