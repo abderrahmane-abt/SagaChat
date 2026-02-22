@@ -740,6 +740,8 @@ fun SettingsScreen(
 private fun DataManagementSection(viewModel: SettingsViewModel) {
     val context = LocalContext.current
     val backupProgress by viewModel.backupProgress.collectAsStateWithLifecycle()
+    val backupOptions by viewModel.backupOptions.collectAsStateWithLifecycle()
+    val backupSizeEstimate by viewModel.backupSizeEstimate.collectAsStateWithLifecycle()
 
     var showBackupDialog by remember { mutableStateOf(false) }
     var showRestoreDialog by remember { mutableStateOf(false) }
@@ -813,8 +815,11 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                     Text(
                         text = when (val p = backupProgress) {
                             is SystemBackupManager.BackupProgress.Starting -> "Starting..."
-                            is SystemBackupManager.BackupProgress.Collecting -> p.step
-                            is SystemBackupManager.BackupProgress.Processing -> "Processing ${(p.progress * 100).toInt()}%"
+                            is SystemBackupManager.BackupProgress.Collecting -> p.component
+                            is SystemBackupManager.BackupProgress.Processing -> {
+                                val stage = if (p.stage.isNotEmpty()) "${p.stage} " else ""
+                                "${stage}${(p.progress * 100).toInt()}%"
+                            }
                             else -> ""
                         },
                         style = MaterialTheme.typography.bodySmall,
@@ -962,6 +967,11 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
 
     // Backup Dialog
     if (showBackupDialog) {
+        // Estimate size on dialog open
+        LaunchedEffect(showBackupDialog) {
+            viewModel.estimateBackupSize()
+        }
+
         AlertDialog(
             onDismissRequest = {
                 showBackupDialog = false
@@ -998,6 +1008,74 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                         modifier = Modifier.fillMaxWidth(),
                         isError = backupPasswordConfirm.isNotEmpty() && backupPassword != backupPasswordConfirm
                     )
+
+                    Spacer(modifier = Modifier.height(rDp(4.dp)))
+
+                    // Include RAG files checkbox
+                    SwitchRow(
+                        title = "Include RAG files",
+                        checked = backupOptions.includeRagFiles,
+                        onCheckedChange = { checked ->
+                            viewModel.updateBackupOptions(backupOptions.copy(includeRagFiles = checked))
+                        }
+                    )
+
+                    // Include AI Models checkbox
+                    SwitchRow(
+                        title = "Include AI Models",
+                        checked = backupOptions.includeModelFiles,
+                        onCheckedChange = { checked ->
+                            viewModel.updateBackupOptions(backupOptions.copy(includeModelFiles = checked))
+                        }
+                    )
+
+                    // Model list when models are included
+                    if (backupOptions.includeModelFiles && backupSizeEstimate != null) {
+                        val models = backupSizeEstimate!!.modelBreakdown
+                        if (models.isNotEmpty()) {
+                            Column(
+                                modifier = Modifier.padding(start = rDp(8.dp)),
+                                verticalArrangement = Arrangement.spacedBy(rDp(2.dp))
+                            ) {
+                                models.forEach { model ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            model.modelName,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (model.canBackup)
+                                                MaterialTheme.colorScheme.onSurface
+                                            else
+                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Text(
+                                            if (model.canBackup) formatFileSize(model.sizeBytes)
+                                            else model.reason,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (model.canBackup)
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            else
+                                                MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Size estimate
+                    backupSizeEstimate?.let { estimate ->
+                        Text(
+                            "Estimated size: ${formatFileSize(estimate.totalSize)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -1126,5 +1204,14 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
             },
             shape = RoundedCornerShape(rDp(16.dp))
         )
+    }
+}
+
+private fun formatFileSize(bytes: Long): String {
+    return when {
+        bytes < 1024 -> "${bytes} B"
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        bytes < 1024L * 1024 * 1024 -> String.format("%.1f MB", bytes / (1024.0 * 1024.0))
+        else -> String.format("%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
     }
 }

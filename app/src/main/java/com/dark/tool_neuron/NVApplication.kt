@@ -8,7 +8,10 @@ import com.dark.tool_neuron.plugins.DeviceInfoPlugin
 import com.dark.tool_neuron.plugins.FileManagerPlugin
 import com.dark.tool_neuron.plugins.PluginManager
 import com.dark.tool_neuron.plugins.WebSearchPlugin
+import com.dark.tool_neuron.repo.RagRepository
 import com.dark.tool_neuron.tts.TTSManager
+import com.dark.tool_neuron.vault.VaultHelper
+import com.dark.tool_neuron.worker.DataIntegrityManager
 import com.dark.tool_neuron.worker.LlmModelWorker
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -41,8 +44,39 @@ class NVApplication : Application() {
         TTSManager.init(applicationContext, autoLoad = false)
         Log.d(TAG, "TTSManager initialized")
 
-        // Conditionally load TTS model based on user setting
         val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+        // Run data integrity check after vault is ready
+        appScope.launch {
+            try {
+                // Wait for vault to be ready (15s timeout)
+                val vaultReady = VaultHelper.awaitReady(15_000)
+                if (!vaultReady) {
+                    Log.w(TAG, "Vault not ready after 15s, running integrity check without chat validation")
+                }
+
+                val db = AppContainer.getDatabase()
+                val ragRepository = RagRepository(
+                    ragDao = db.ragDao(),
+                    context = applicationContext
+                )
+                val manager = DataIntegrityManager(
+                    context = applicationContext,
+                    modelDao = db.modelDao(),
+                    personaDao = db.personaDao(),
+                    ragDao = db.ragDao(),
+                    aiMemoryDao = db.aiMemoryDao(),
+                    ragRepository = ragRepository,
+                    appSettings = AppSettingsDataStore(applicationContext)
+                )
+                val report = manager.runFullCheck()
+                Log.i(TAG, "Integrity check: ${report.totalFixes} fixes applied")
+            } catch (e: Exception) {
+                Log.e(TAG, "Data integrity check failed", e)
+            }
+        }
+
+        // Conditionally load TTS model based on user setting
         appScope.launch {
             try {
                 val settings = AppSettingsDataStore(applicationContext)

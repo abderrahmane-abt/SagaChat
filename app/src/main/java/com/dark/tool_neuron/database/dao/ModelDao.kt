@@ -35,6 +35,9 @@ interface ModelDao {
     
     @Query("SELECT * FROM models")
     fun getAll(): Flow<List<Model>>
+
+    @Query("SELECT * FROM models")
+    suspend fun getAllOnce(): List<Model>
     
     @Query("SELECT * FROM models WHERE provider_type = :providerType")
     fun getByProvider(providerType: ProviderType): Flow<List<Model>>

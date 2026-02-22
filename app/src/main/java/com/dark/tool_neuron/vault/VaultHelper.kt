@@ -400,12 +400,24 @@ object VaultHelper {
 
     suspend fun updateMessage(chatId: String, message: Messages): Boolean = withContext(Dispatchers.IO) {
         withVaultRecovery("UPDATE_MESSAGE") {
-            try {
+            logOperation("UPDATE_MESSAGE chat=${chatId.take(8)}... msg=${message.msgId.take(8)}...") {
+                // Read original first so we can rollback if add fails
+                val original = getMessage(message.msgId)
                 deleteMessage(message.msgId)
-                addMessage(chatId, message)
+                try {
+                    addMessage(chatId, message)
+                } catch (e: Exception) {
+                    // Rollback: re-add the original message
+                    if (original != null) {
+                        try {
+                            addMessage(chatId, original)
+                        } catch (rollbackEx: Exception) {
+                            Log.e(TAG, "UPDATE_MESSAGE rollback also failed", rollbackEx)
+                        }
+                    }
+                    throw e
+                }
                 true
-            } catch (e: Exception) {
-                false
             }
         }
     }

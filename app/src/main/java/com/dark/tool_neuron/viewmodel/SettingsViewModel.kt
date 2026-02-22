@@ -216,10 +216,32 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _backupProgress = MutableStateFlow<SystemBackupManager.BackupProgress?>(null)
     val backupProgress: StateFlow<SystemBackupManager.BackupProgress?> = _backupProgress
 
+    private val _backupOptions = MutableStateFlow(SystemBackupManager.BackupOptions())
+    val backupOptions: StateFlow<SystemBackupManager.BackupOptions> = _backupOptions
+
+    private val _backupSizeEstimate = MutableStateFlow<SystemBackupManager.BackupSizeEstimate?>(null)
+    val backupSizeEstimate: StateFlow<SystemBackupManager.BackupSizeEstimate?> = _backupSizeEstimate
+
+    fun updateBackupOptions(options: SystemBackupManager.BackupOptions) {
+        _backupOptions.value = options
+        estimateBackupSize(options)
+    }
+
+    fun estimateBackupSize(options: SystemBackupManager.BackupOptions = _backupOptions.value) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val manager = SystemBackupManager(getApplication())
+                _backupSizeEstimate.value = manager.estimateBackupSize(options)
+            } catch (e: Exception) {
+                _backupSizeEstimate.value = null
+            }
+        }
+    }
+
     fun createBackup(uri: Uri, password: String) {
         viewModelScope.launch(Dispatchers.IO) {
             val manager = SystemBackupManager(getApplication())
-            manager.createBackup(uri, password) { progress ->
+            manager.createBackup(uri, password, _backupOptions.value) { progress ->
                 _backupProgress.value = progress
             }
         }

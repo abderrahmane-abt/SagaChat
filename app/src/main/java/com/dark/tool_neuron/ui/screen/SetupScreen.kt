@@ -300,7 +300,7 @@ private fun RestoreFromBackupCard(viewModel: SetupViewModel) {
                 Text(
                     text = when (progress) {
                         is SystemBackupManager.BackupProgress.Starting -> "Restoring..."
-                        is SystemBackupManager.BackupProgress.Collecting -> progress.step
+                        is SystemBackupManager.BackupProgress.Collecting -> progress.component
                         is SystemBackupManager.BackupProgress.Processing -> "Restoring ${(progress.progress * 100).toInt()}%"
                         is SystemBackupManager.BackupProgress.Complete -> "Restore complete!"
                         else -> "Restoring..."

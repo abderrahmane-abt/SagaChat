@@ -12,12 +12,19 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import java.io.File
 import com.dark.tool_neuron.network.HuggingFaceClient
+import com.dark.tool_neuron.network.HuggingFaceFileResponse
 
 @Serializable
 data class ModelStoreCache(
     val models: List<HuggingFaceModel>,
-    val timestamp: Long
-)
+    val timestamp: Long,
+    val cacheVersion: Int = 0
+) {
+    companion object {
+        // Bump this when filtering logic changes to auto-invalidate stale caches
+        const val CURRENT_VERSION = 2
+    }
+}
 
 class ModelStoreRepository(private val context: Context) {
 
@@ -82,17 +89,22 @@ class ModelStoreRepository(private val context: Context) {
         )
     }
 
-    private enum class QualcommTier { HIGH, MID, LOW, NONE }
-
-    private fun getQualcommTier(): QualcommTier {
+    /**
+     * Build the ordered list of QNN zip suffixes this device should try.
+     * - 8gen1+: prefer exact chipset, fall back through older gens, then "min"
+     * - SM7* / unknown SM8*: "min" only (NPU too weak for gen-specific builds)
+     * - Non-Qualcomm: null (skip NPU repos entirely)
+     */
+    private fun getNpuSuffixChain(): List<String>? {
         val soc = getDeviceSoc()
-        if (!isQualcommDevice()) return QualcommTier.NONE
+        if (!isQualcommDevice()) return null
+
         val suffix = getChipsetSuffix(soc)
-        return when {
-            suffix in listOf("8gen1", "8gen2", "8gen3", "8elite") -> QualcommTier.HIGH
-            soc.startsWith("SM8") || soc.startsWith("SM7") -> QualcommTier.MID
-            else -> QualcommTier.LOW
-        }
+        val genChain = listOf("8elite", "8gen3", "8gen2", "8gen1", "min")
+        val idx = genChain.indexOf(suffix)
+
+        // Known 8gen* suffix → slice from that point to include all compatible older builds
+        return if (idx >= 0) genChain.subList(idx, genChain.size) else listOf("min")
     }
 
     suspend fun getAvailableModels(
@@ -150,6 +162,11 @@ class ModelStoreRepository(private val context: Context) {
         return try {
             if (!cacheFile.exists()) return null
             val cache = json.decodeFromString<ModelStoreCache>(cacheFile.readText())
+            // Invalidate cache if filtering logic has changed
+            if (cache.cacheVersion < ModelStoreCache.CURRENT_VERSION) {
+                cacheFile.delete()
+                return null
+            }
             cache.models.ifEmpty { null }
         } catch (e: Exception) {
             Log.e("ModelStoreRepository", "Failed to load disk cache", e)
@@ -161,7 +178,8 @@ class ModelStoreRepository(private val context: Context) {
         try {
             val cache = ModelStoreCache(
                 models = models,
-                timestamp = System.currentTimeMillis()
+                timestamp = System.currentTimeMillis(),
+                cacheVersion = ModelStoreCache.CURRENT_VERSION
             )
             cacheFile.writeText(json.encodeToString(cache))
         } catch (e: Exception) {
@@ -175,15 +193,13 @@ class ModelStoreRepository(private val context: Context) {
 
     private suspend fun getSDModels(repositories: List<HFModelRepository>): List<HuggingFaceModel> {
         val models = mutableListOf<HuggingFaceModel>()
-        val soc = getDeviceSoc()
-        val chipsetSuffix = getChipsetSuffix(soc)
-        val tier = getQualcommTier()
+        val npuSuffixChain = getNpuSuffixChain() // null = non-Qualcomm
 
         repositories.forEach { repo ->
             try {
-                // Skip NPU repos if device has no Qualcomm SoC
                 val isNpuRepo = repo.repoPath.contains("qnn", ignoreCase = true)
-                if (isNpuRepo && tier == QualcommTier.NONE) return@forEach
+                // Skip NPU repos on non-Qualcomm devices
+                if (isNpuRepo && npuSuffixChain == null) return@forEach
 
                 val response = HuggingFaceClient.api.getRepoFiles(repo.repoPath)
                 if (!response.isSuccessful) {
@@ -195,28 +211,35 @@ class ModelStoreRepository(private val context: Context) {
                 val zipFiles = files.filter { it.path.endsWith(".zip", ignoreCase = true) }
 
                 if (isNpuRepo) {
-                    // NPU repo: filter by chipset suffix
-                    val targetSuffix = when (tier) {
-                        QualcommTier.HIGH -> chipsetSuffix ?: "min"
-                        QualcommTier.MID, QualcommTier.LOW -> "min"
-                        QualcommTier.NONE -> return@forEach
-                    }
+                    val suffixChain = npuSuffixChain ?: return@forEach
+                    val isMinOnly = suffixChain.size == 1 && suffixChain[0] == "min"
 
-                    val suffixPattern = Regex("[_-]${Regex.escape(targetSuffix)}\\.zip$", RegexOption.IGNORE_CASE)
-                    val matchingFiles = zipFiles.filter { file ->
-                        val fileName = file.path.substringAfterLast("/")
-                        suffixPattern.containsMatchIn(fileName)
+                    // Find the best available suffix from the fallback chain
+                    var matchingFiles = emptyList<HuggingFaceFileResponse>()
+                    var matchedSuffix = suffixChain.last()
+                    var matchedPattern = Regex("[_-]${Regex.escape(matchedSuffix)}\\.zip$", RegexOption.IGNORE_CASE)
+
+                    for (suffix in suffixChain) {
+                        val pattern = Regex("[_-]${Regex.escape(suffix)}\\.zip$", RegexOption.IGNORE_CASE)
+                        val matches = zipFiles.filter { file ->
+                            pattern.containsMatchIn(file.path.substringAfterLast("/"))
+                        }
+                        if (matches.isNotEmpty()) {
+                            matchingFiles = matches
+                            matchedSuffix = suffix
+                            matchedPattern = pattern
+                            break
+                        }
                     }
 
                     matchingFiles.forEach { file ->
                         val fileName = file.path.substringAfterLast("/")
                         val baseName = fileName
-                            .replace(suffixPattern, "")
+                            .replace(matchedPattern, "")
                             .replace(Regex("[_-]qnn[\\d.]*$", RegexOption.IGNORE_CASE), "")
                         val sizeStr = formatFileSize(file.size ?: 0)
 
                         val tags = mutableListOf("NPU", repo.name)
-                        if (tier == QualcommTier.LOW) tags.add(0, "CPU")
                         if (repo.category == ModelCategory.UNCENSORED) tags.add("NSFW")
 
                         models.add(
@@ -228,11 +251,11 @@ class ModelStoreRepository(private val context: Context) {
                                 approximateSize = sizeStr,
                                 modelType = ModelType.SD,
                                 isZip = true,
-                                chipsetSuffix = targetSuffix,
-                                runOnCpu = tier == QualcommTier.LOW,
+                                chipsetSuffix = matchedSuffix,
+                                runOnCpu = isMinOnly,
                                 textEmbeddingSize = 768,
                                 tags = tags,
-                                requiresNPU = tier != QualcommTier.LOW,
+                                requiresNPU = !isMinOnly,
                                 repositoryUrl = repo.repoPath
                             )
                         )

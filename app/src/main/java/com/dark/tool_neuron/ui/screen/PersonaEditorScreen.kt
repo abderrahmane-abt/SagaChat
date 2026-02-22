@@ -66,6 +66,7 @@ import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.models.table_schema.Persona
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.worker.PersonaCardConverter
+import com.dark.tool_neuron.worker.PersonaCleanupHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -541,9 +542,11 @@ fun PersonaEditorScreen(
                 TextButton(onClick = {
                     scope.launch(Dispatchers.IO) {
                         existingPersona?.let { persona ->
-                            personaDao.delete(persona)
-                            // Delete avatar file
-                            persona.avatarUri?.let { File(it).delete() }
+                            PersonaCleanupHelper.deletePersonaWithCascade(
+                                context = context,
+                                persona = persona,
+                                personaDao = personaDao
+                            )
                         }
                         withContext(Dispatchers.Main) {
                             showDeleteDialog = false

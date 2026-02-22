@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import androidx.core.net.toUri
@@ -219,6 +220,16 @@ class LLMModelViewModel @Inject constructor(
                 if (_currentModelID.value == model.id) {
                     unloadCurrentModel()
                     delay(300)
+                }
+
+                // Clear LAST_MODEL_ID if this model is the saved one
+                try {
+                    val lastModelId = appSettings.lastModelId.first()
+                    if (lastModelId == model.id) {
+                        appSettings.saveLastModelId(null)
+                    }
+                } catch (e: Exception) {
+                    Log.e("LLMModelVM", "Failed to clear last model ID: ${e.message}")
                 }
 
                 // Delete associated config

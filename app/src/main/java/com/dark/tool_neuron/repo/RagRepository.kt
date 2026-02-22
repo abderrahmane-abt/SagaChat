@@ -216,7 +216,12 @@ class RagRepository(
                 sizeBytes = destFile.length()
             )
 
-            ragDao.insert(ragInfo)
+            try {
+                ragDao.insert(ragInfo)
+            } catch (e: Exception) {
+                destFile.delete()
+                return@withContext Result.failure(e)
+            }
             loadedGraphs[ragId] = graph
             Result.success(ragInfo)
         } catch (e: Exception) {
@@ -261,7 +266,12 @@ class RagRepository(
                 sizeBytes = destFile.length()
             )
 
-            ragDao.insert(ragInfo)
+            try {
+                ragDao.insert(ragInfo)
+            } catch (e: Exception) {
+                destFile.delete()
+                return@withContext Result.failure(e)
+            }
             loadedGraphs[ragId] = graph
             Result.success(ragInfo)
         } catch (e: Exception) {
@@ -320,7 +330,12 @@ class RagRepository(
                 sizeBytes = destFile.length()
             )
 
-            ragDao.insert(ragInfo)
+            try {
+                ragDao.insert(ragInfo)
+            } catch (e: Exception) {
+                destFile.delete()
+                return@withContext Result.failure(e)
+            }
             loadedGraphs[ragId] = graph
             Result.success(ragInfo)
         } catch (e: Exception) {
@@ -551,7 +566,12 @@ class RagRepository(
                 hasAdminAccess = true
             )
 
-            ragDao.insert(ragInfo)
+            try {
+                ragDao.insert(ragInfo)
+            } catch (e: Exception) {
+                destFile.delete()
+                return@withContext Result.failure(e)
+            }
             onProgress(1.0f, "Complete!")
             Result.success(ragInfo)
         } catch (e: Exception) {
@@ -646,7 +666,12 @@ class RagRepository(
                 hasAdminAccess = true
             )
 
-            ragDao.insert(ragInfo)
+            try {
+                ragDao.insert(ragInfo)
+            } catch (e: Exception) {
+                destFile.delete()
+                return@withContext Result.failure(e)
+            }
             onProgress(1.0f, "Complete!")
             Result.success(ragInfo)
         } catch (e: Exception) {

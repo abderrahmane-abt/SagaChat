@@ -22,7 +22,7 @@ import java.util.UUID
 
 @Database(
     entities = [Model::class, ModelConfig::class, InstalledRag::class, Persona::class, AiMemory::class],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -159,6 +159,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * No-op safety migration. Removes the need for fallbackToDestructiveMigration.
+         * If a future migration is missing, Room will throw an exception instead of
+         * silently destroying all data.
+         */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Safety version bump — no schema changes
+            }
+        }
+
         private val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // Add character card columns to personas table
@@ -259,14 +270,13 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "llm_models_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                     .addCallback(object : Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {
                             super.onCreate(db)
                             seedDefaultPersonas(db)
                         }
                     })
-                    .fallbackToDestructiveMigration(true)
                     .build()
                 INSTANCE = instance
                 instance
