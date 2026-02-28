@@ -22,10 +22,13 @@ import com.dark.tool_neuron.models.table_schema.ModelConfig
 import com.dark.tool_neuron.utils.ModelMetadataExtractor
 import com.dark.tool_neuron.utils.SizeCategory
 import com.dark.tool_neuron.ui.screen.StoreTab
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 enum class SortOption {
@@ -129,6 +132,8 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
 
     private val _explorerError = MutableStateFlow<String?>(null)
     val explorerError: StateFlow<String?> = _explorerError
+
+    private var explorerSearchJob: Job? = null
 
     // App's internal models directory
     private val appModelsDir = File(application.filesDir, "models")
@@ -502,7 +507,8 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun searchExplorerRepositories() {
-        viewModelScope.launch {
+        explorerSearchJob?.cancel()
+        explorerSearchJob = viewModelScope.launch {
             val query = _explorerQuery.value.trim()
             if (query.isBlank()) {
                 _explorerError.value = "Enter a search term"
@@ -513,17 +519,19 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
             _isExplorerLoading.value = true
             _explorerError.value = null
 
-            explorerRepository.searchGgufRepositories(query).onSuccess { repos ->
-                _explorerResults.value = repos
-                if (repos.isEmpty()) {
-                    _explorerError.value = "No repositories found"
+            try {
+                explorerRepository.searchGgufRepositories(query).onSuccess { repos ->
+                    _explorerResults.value = repos
+                    if (repos.isEmpty()) {
+                        _explorerError.value = "No repositories found"
+                    }
+                }.onFailure { exception ->
+                    _explorerResults.value = emptyList()
+                    _explorerError.value = exception.message ?: "Search failed"
                 }
-            }.onFailure { exception ->
-                _explorerResults.value = emptyList()
-                _explorerError.value = exception.message ?: "Search failed"
+            } finally {
+                _isExplorerLoading.value = false
             }
-
-            _isExplorerLoading.value = false
         }
     }
 

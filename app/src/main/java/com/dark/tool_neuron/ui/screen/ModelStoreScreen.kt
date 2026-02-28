@@ -1152,7 +1152,8 @@ private fun ExplorerRepositoriesCard(
                 }
 
                 // Results list with staggered entry animation
-                results.take(8).forEachIndexed { index, repo ->
+                val displayedResults = results.take(8)
+                displayedResults.forEachIndexed { index, repo ->
                     val isAdded = existingRepoPaths.contains(repo.id.lowercase())
 
                     var visible by remember(repo.id) { mutableStateOf(false) }
@@ -1177,7 +1178,7 @@ private fun ExplorerRepositoriesCard(
                                 isAdded = isAdded,
                                 onAdd = { onAdd(repo) }
                             )
-                            if (index < results.take(8).lastIndex) {
+                            if (index < displayedResults.lastIndex) {
                                 HorizontalDivider(
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
                                 )
@@ -1229,10 +1230,11 @@ private fun ExplorerResultRow(
             }
 
             if (isAdded) {
-                ActionButton(
-                    onClickListener = {},
-                    icon = Icons.Default.CheckCircle,
-                    contentDescription = "Added"
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = "Added",
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                    modifier = Modifier.size(rDp(Standards.ActionIconSize))
                 )
             } else {
                 ActionButton(

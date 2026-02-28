@@ -1,6 +1,8 @@
 package com.dark.tool_neuron.repo
 
 import com.dark.tool_neuron.network.HuggingFaceClient
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 data class HuggingFaceExplorerRepo(
     val id: String,
@@ -13,8 +15,8 @@ data class HuggingFaceExplorerRepo(
 
 class HuggingFaceExplorerRepository {
 
-    suspend fun searchGgufRepositories(query: String, limit: Int = 20): Result<List<HuggingFaceExplorerRepo>> {
-        return try {
+    suspend fun searchGgufRepositories(query: String, limit: Int = 20): Result<List<HuggingFaceExplorerRepo>> = withContext(Dispatchers.IO) {
+        try {
             val response = HuggingFaceClient.api.searchModels(
                 filter = "gguf",
                 search = query.trim(),
@@ -24,7 +26,7 @@ class HuggingFaceExplorerRepository {
             )
 
             if (!response.isSuccessful) {
-                return Result.failure(Exception("Search failed (${response.code()})"))
+                return@withContext Result.failure(Exception("Search failed (${response.code()})"))
             }
 
             val repositories = response.body().orEmpty()
