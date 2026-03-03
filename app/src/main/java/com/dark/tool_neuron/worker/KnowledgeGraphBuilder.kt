@@ -4,12 +4,11 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.dark.tool_neuron.database.dao.KnowledgeEntityDao
-import com.dark.tool_neuron.database.dao.KnowledgeRelationDao
-import com.dark.tool_neuron.di.AppContainer
+import com.dark.tool_neuron.data.VaultManager
 import com.dark.tool_neuron.models.table_schema.EntityType
 import com.dark.tool_neuron.models.table_schema.KnowledgeEntity
 import com.dark.tool_neuron.models.table_schema.KnowledgeRelation
+import com.dark.tool_neuron.repo.ums.UmsKnowledgeRepository
 
 /**
  * Builds a knowledge graph from memory facts.
@@ -127,33 +126,32 @@ class KnowledgeGraphBuilder(
          * Static so it can be called from MemoryExtractor for real-time extraction.
          */
         suspend fun storeTriple(
-            entityDao: KnowledgeEntityDao,
-            relationDao: KnowledgeRelationDao,
+            knowledgeRepo: UmsKnowledgeRepository,
             triple: ExtractedTriple,
             sourceFactId: String,
             personaId: String? = null
         ) {
             val now = System.currentTimeMillis()
 
-            val subject = entityDao.getByName(triple.subjectName)?.let { existing ->
+            val subject = knowledgeRepo.getEntityByName(triple.subjectName)?.let { existing ->
                 existing.copy(lastSeen = now, mentionCount = existing.mentionCount + 1)
-                    .also { entityDao.update(it) }
+                    .also { knowledgeRepo.updateEntity(it) }
             } ?: KnowledgeEntity(
                 name = triple.subjectName, type = triple.subjectType,
                 firstSeen = now, lastSeen = now
-            ).also { entityDao.insert(it) }
+            ).also { knowledgeRepo.insertEntity(it) }
 
-            val obj = entityDao.getByName(triple.objectName)?.let { existing ->
+            val obj = knowledgeRepo.getEntityByName(triple.objectName)?.let { existing ->
                 existing.copy(lastSeen = now, mentionCount = existing.mentionCount + 1)
-                    .also { entityDao.update(it) }
+                    .also { knowledgeRepo.updateEntity(it) }
             } ?: KnowledgeEntity(
                 name = triple.objectName, type = triple.objectType,
                 firstSeen = now, lastSeen = now
-            ).also { entityDao.insert(it) }
+            ).also { knowledgeRepo.insertEntity(it) }
 
-            val existing = relationDao.findRelationForPersona(subject.id, triple.predicate, obj.id, personaId)
+            val existing = knowledgeRepo.findRelationForPersona(subject.id, triple.predicate, obj.id, personaId)
             if (existing == null) {
-                relationDao.insert(
+                knowledgeRepo.insertRelation(
                     KnowledgeRelation(
                         subjectId = subject.id, predicate = triple.predicate,
                         objectId = obj.id, sourceFactId = sourceFactId, createdAt = now,
@@ -162,7 +160,7 @@ class KnowledgeGraphBuilder(
                 )
                 Log.d(TAG, "New triple: ${triple.subjectName} -[${triple.predicate}]-> ${triple.objectName}")
             } else {
-                relationDao.update(existing.copy(confidence = (existing.confidence + 0.1f).coerceAtMost(1.0f)))
+                knowledgeRepo.updateRelation(existing.copy(confidence = (existing.confidence + 0.1f).coerceAtMost(1.0f)))
             }
         }
 
@@ -174,13 +172,12 @@ class KnowledgeGraphBuilder(
          */
         suspend fun buildContextForQuery(
             query: String,
-            entityDao: KnowledgeEntityDao,
-            relationDao: KnowledgeRelationDao,
+            knowledgeRepo: UmsKnowledgeRepository,
             maxHops: Int = 2,
             personaId: String? = null
         ): String {
             val queryWords = query.lowercase().split(Regex("[\\s\\p{Punct}]+")).filter { it.length >= 3 }
-            val allEntities = entityDao.getAll()
+            val allEntities = knowledgeRepo.getAllEntities()
             val entityById = allEntities.associateBy { it.id }
 
             val seedEntities = allEntities.filter { entity ->
@@ -214,9 +211,9 @@ class KnowledgeGraphBuilder(
                     visited.add(entityId)
 
                     val relations = if (personaId != null) {
-                        relationDao.getRelationsForEntityAndPersona(entityId, personaId)
+                        knowledgeRepo.getRelationsForEntityAndPersona(entityId, personaId)
                     } else {
-                        relationDao.getRelationsForEntity(entityId)
+                        knowledgeRepo.getRelationsForEntity(entityId)
                     }
                     for (rel in relations) {
                         val subjectEntity = entityById[rel.subjectId]
@@ -265,12 +262,11 @@ class KnowledgeGraphBuilder(
          */
         suspend fun expandQueryWithKG(
             query: String,
-            entityDao: KnowledgeEntityDao,
-            relationDao: KnowledgeRelationDao,
+            knowledgeRepo: UmsKnowledgeRepository,
             personaId: String? = null
         ): String {
             val queryWords = query.lowercase().split(Regex("[\\s\\p{Punct}]+")).filter { it.length >= 3 }
-            val allEntities = entityDao.getAll()
+            val allEntities = knowledgeRepo.getAllEntities()
 
             // Find entities matching query words
             val matchedEntities = allEntities.filter { entity ->
@@ -284,9 +280,9 @@ class KnowledgeGraphBuilder(
             val relatedNames = mutableSetOf<String>()
             for (entity in matchedEntities) {
                 val relations = if (personaId != null) {
-                    relationDao.getRelationsForEntityAndPersona(entity.id, personaId)
+                    knowledgeRepo.getRelationsForEntityAndPersona(entity.id, personaId)
                 } else {
-                    relationDao.getRelationsForEntity(entity.id)
+                    knowledgeRepo.getRelationsForEntity(entity.id)
                 }
                 for (rel in relations) {
                     val relatedEntity = allEntities.find {
@@ -349,13 +345,11 @@ class KnowledgeGraphBuilder(
         Log.d(TAG, "Starting knowledge graph build")
 
         return try {
-            val db = AppContainer.getDatabase()
-            val memoryDao = db.aiMemoryDao()
-            val entityDao = db.knowledgeEntityDao()
-            val relationDao = db.knowledgeRelationDao()
+            val memoryRepo = VaultManager.memoryRepo ?: return Result.retry()
+            val knowledgeRepo = VaultManager.knowledgeRepo ?: return Result.retry()
 
-            val allMemories = memoryDao.getAllOnce()
-            val existingRelations = relationDao.getAll()
+            val allMemories = memoryRepo.getAllOnce()
+            val existingRelations = knowledgeRepo.getAllRelations()
             val graphedFactIds = existingRelations.mapNotNull { it.sourceFactId }.toSet()
             val ungraphed = allMemories.filter { it.id !in graphedFactIds }
 
@@ -368,7 +362,7 @@ class KnowledgeGraphBuilder(
             for (memory in ungraphed) {
                 val triples = extractTriplesFromFact(memory.fact)
                 for (triple in triples) {
-                    storeTriple(entityDao, relationDao, triple, memory.id, memory.personaId)
+                    storeTriple(knowledgeRepo, triple, memory.id, memory.personaId)
                     extracted++
                 }
             }

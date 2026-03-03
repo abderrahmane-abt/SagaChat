@@ -3,8 +3,8 @@ package com.dark.tool_neuron.worker
 import android.content.Context
 import android.util.Log
 import com.dark.tool_neuron.data.AppSettingsDataStore
-import com.dark.tool_neuron.database.dao.PersonaDao
 import com.dark.tool_neuron.models.table_schema.Persona
+import com.dark.tool_neuron.repo.ums.UmsPersonaRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -23,7 +23,7 @@ object PersonaCleanupHelper {
     suspend fun deletePersonaWithCascade(
         context: Context,
         persona: Persona,
-        personaDao: PersonaDao
+        personaRepo: UmsPersonaRepository
     ) = withContext(Dispatchers.IO) {
         Log.d(TAG, "Cascade deleting persona: ${persona.name} (${persona.id})")
 
@@ -52,8 +52,8 @@ object PersonaCleanupHelper {
             }
         }
 
-        // 3. Delete DB entry (last, so refs are cleaned first)
-        personaDao.delete(persona)
-        Log.d(TAG, "Persona deleted from DB: ${persona.name}")
+        // 3. Delete from UMS (last, so refs are cleaned first)
+        personaRepo.delete(persona)
+        Log.d(TAG, "Persona deleted from UMS: ${persona.name}")
     }
 }

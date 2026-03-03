@@ -82,7 +82,7 @@ fun PersonaEditorScreen(
     onDeleted: () -> Unit
 ) {
     val context = LocalContext.current
-    val personaDao = remember { AppContainer.getPersonaDao() }
+    val personaRepo = remember { AppContainer.getPersonaRepo() }
     val scope = rememberCoroutineScope()
 
     // Editable state
@@ -121,7 +121,7 @@ fun PersonaEditorScreen(
     LaunchedEffect(personaId) {
         if (personaId != null) {
             withContext(Dispatchers.IO) {
-                personaDao.getById(personaId)?.let { persona ->
+                personaRepo.getById(personaId)?.let { persona ->
                     existingPersona = persona
                     name = persona.name
                     avatar = persona.avatar
@@ -215,7 +215,7 @@ fun PersonaEditorScreen(
                 tags = tags.toList()
             )
             if (existingPersona != null) {
-                personaDao.update(persona)
+                personaRepo.update(persona)
             } else {
                 // If avatar was saved with temp id, rename the file
                 if (avatarUri != null && avatarUri!!.contains("new_")) {
@@ -223,12 +223,12 @@ fun PersonaEditorScreen(
                     if (oldFile.exists()) {
                         val newFile = File(avatarDir, "${persona.id}.png")
                         oldFile.renameTo(newFile)
-                        personaDao.insert(persona.copy(avatarUri = newFile.absolutePath))
+                        personaRepo.insert(persona.copy(avatarUri = newFile.absolutePath))
                     } else {
-                        personaDao.insert(persona)
+                        personaRepo.insert(persona)
                     }
                 } else {
-                    personaDao.insert(persona)
+                    personaRepo.insert(persona)
                 }
             }
             withContext(Dispatchers.Main) { onNavigateBack() }
@@ -612,7 +612,7 @@ fun PersonaEditorScreen(
                             PersonaCleanupHelper.deletePersonaWithCascade(
                                 context = context,
                                 persona = persona,
-                                personaDao = personaDao
+                                personaRepo = personaRepo
                             )
                         }
                         withContext(Dispatchers.Main) {

@@ -3,13 +3,13 @@ package com.dark.tool_neuron.worker
 import android.content.Context
 import android.util.Log
 import com.dark.tool_neuron.data.AppSettingsDataStore
-import com.dark.tool_neuron.database.dao.AiMemoryDao
-import com.dark.tool_neuron.database.dao.ModelDao
-import com.dark.tool_neuron.database.dao.PersonaDao
+import com.dark.tool_neuron.data.VaultManager
 import com.dark.tool_neuron.database.dao.RagDao
 import com.dark.tool_neuron.models.enums.PathType
 import com.dark.tool_neuron.repo.RagRepository
-import com.dark.tool_neuron.vault.VaultHelper
+import com.dark.tool_neuron.repo.ums.UmsMemoryRepository
+import com.dark.tool_neuron.repo.ums.UmsModelRepository
+import com.dark.tool_neuron.repo.ums.UmsPersonaRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -21,10 +21,10 @@ import java.io.File
  */
 class DataIntegrityManager(
     private val context: Context,
-    private val modelDao: ModelDao,
-    private val personaDao: PersonaDao,
+    private val modelRepo: UmsModelRepository,
+    private val personaRepo: UmsPersonaRepository,
     private val ragDao: RagDao,
-    private val aiMemoryDao: AiMemoryDao,
+    private val memoryRepo: UmsMemoryRepository,
     private val ragRepository: RagRepository,
     private val appSettings: AppSettingsDataStore
 ) {
@@ -125,9 +125,8 @@ class DataIntegrityManager(
     private suspend fun checkLastChatId(): Boolean {
         val lastChatId = appSettings.lastChatId.first() ?: return false
 
-        if (!VaultHelper.isInitialized()) return false
-
-        val chats = VaultHelper.getAllChats()
+        val chatRepo = VaultManager.chatRepo ?: return false
+        val chats = chatRepo.getAllChats()
         val chatExists = chats.any { it.chatId == lastChatId }
         if (!chatExists) {
             Log.w(TAG, "LAST_CHAT_ID '$lastChatId' references deleted chat, clearing")
@@ -143,7 +142,7 @@ class DataIntegrityManager(
     private suspend fun checkActivePersonaId(): Boolean {
         val activeId = appSettings.activePersonaId.first() ?: return false
 
-        val persona = personaDao.getById(activeId)
+        val persona = personaRepo.getById(activeId)
         if (persona == null) {
             Log.w(TAG, "ACTIVE_PERSONA_ID '$activeId' references deleted persona, clearing")
             appSettings.saveActivePersonaId(null)
@@ -158,7 +157,7 @@ class DataIntegrityManager(
     private suspend fun checkLastModelId(): Boolean {
         val lastModelId = appSettings.lastModelId.first() ?: return false
 
-        val model = modelDao.getById(lastModelId)
+        val model = modelRepo.getById(lastModelId)
         if (model == null) {
             Log.w(TAG, "LAST_MODEL_ID '$lastModelId' references deleted model, clearing")
             appSettings.saveLastModelId(null)
@@ -168,11 +167,10 @@ class DataIntegrityManager(
     }
 
     /**
-     * Model DB entry -> missing file on disk: deactivate (not delete).
-     * User may have moved the file. Only checks file-path models (not content:// URIs).
+     * Model entry -> missing file on disk: deactivate (not delete).
      */
     private suspend fun checkModelFiles(): Int {
-        val models = modelDao.getAllOnce()
+        val models = modelRepo.getAllOnce()
         var deactivated = 0
 
         for (model in models) {
@@ -182,7 +180,7 @@ class DataIntegrityManager(
             val file = File(model.modelPath)
             if (!file.exists()) {
                 Log.w(TAG, "Model '${model.modelName}' file missing at ${model.modelPath}, deactivating")
-                modelDao.updateActiveStatus(model.id, false)
+                modelRepo.updateActiveStatus(model.id, false)
                 deactivated++
             }
         }
@@ -192,7 +190,6 @@ class DataIntegrityManager(
 
     /**
      * RAG DB entry -> missing .neuron file: delete DB entry.
-     * .neuron files are internal, so missing ones mean orphaned entries.
      */
     private suspend fun checkRagFiles(): Int {
         val rags = ragDao.getAllRagsOnce()
@@ -218,7 +215,7 @@ class DataIntegrityManager(
         val avatarDir = File(context.filesDir, "persona_avatars")
         if (!avatarDir.exists() || !avatarDir.isDirectory) return 0
 
-        val personas = personaDao.getAllOnce()
+        val personas = personaRepo.getAllOnce()
         val referencedPaths = personas.mapNotNull { it.avatarUri }.toSet()
 
         var deleted = 0
@@ -237,15 +234,14 @@ class DataIntegrityManager(
      * AI memories > 500: prune oldest beyond cap.
      */
     private suspend fun pruneExcessMemories(): Int {
-        val count = aiMemoryDao.count()
+        val count = memoryRepo.count()
         if (count <= AI_MEMORY_CAP) return 0
 
-        val allMemories = aiMemoryDao.getAllOnce()
-        // Sorted by updatedAt DESC (newest first), so tail is oldest
+        val allMemories = memoryRepo.getAllOnce()
         val toDelete = allMemories.drop(AI_MEMORY_CAP)
 
         for (memory in toDelete) {
-            aiMemoryDao.delete(memory)
+            memoryRepo.delete(memory)
         }
 
         Log.w(TAG, "Pruned ${toDelete.size} excess AI memories (had $count, cap $AI_MEMORY_CAP)")

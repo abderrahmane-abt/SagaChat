@@ -241,13 +241,11 @@ class ChatViewModel @Inject constructor(
     }
 
     private val memoryExtractor: MemoryExtractor by lazy {
-        val db = AppContainer.getDatabase()
         MemoryExtractor(
-            aiMemoryDao = AppContainer.getAiMemoryDao(),
+            memoryRepo = AppContainer.getMemoryRepo(),
             generationManager = generationManager,
             embeddingEngine = embeddingEngine,
-            knowledgeEntityDao = db.knowledgeEntityDao(),
-            knowledgeRelationDao = db.knowledgeRelationDao()
+            knowledgeRepo = AppContainer.getKnowledgeRepo()
         )
     }
 
@@ -283,7 +281,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             appSettings.activePersonaId.collect { personaId ->
                 val persona = if (personaId != null) {
-                    AppContainer.getPersonaDao().getById(personaId)
+                    AppContainer.getPersonaRepo().getById(personaId)
                 } else null
                 _activePersona.value = persona
                 applyPersonaSamplingProfile(persona)
@@ -1536,9 +1534,8 @@ class ChatViewModel @Inject constructor(
         val personaId = if (rawPersonaPrompt.isNotEmpty()) activePersona?.id else null
         val knowledgeContext = if (aiMemoryEnabled.value && userQuery.isNotBlank()) {
             try {
-                val db = AppContainer.getDatabase()
                 KnowledgeGraphBuilder.buildContextForQuery(
-                    userQuery, db.knowledgeEntityDao(), db.knowledgeRelationDao(),
+                    userQuery, AppContainer.getKnowledgeRepo(),
                     personaId = personaId
                 )
             } catch (e: Exception) {

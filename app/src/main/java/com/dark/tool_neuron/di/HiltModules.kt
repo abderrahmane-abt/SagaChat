@@ -1,6 +1,7 @@
     package com.dark.tool_neuron.di
 
     import android.content.Context
+    import com.dark.tool_neuron.data.VaultManager
     import com.dark.tool_neuron.database.AppDatabase
     import com.dark.tool_neuron.engine.EmbeddingEngine
     import com.dark.tool_neuron.repo.ChatRepository
@@ -41,10 +42,10 @@
 
         @Provides
         @Singleton
-        fun provideModelRepository(database: AppDatabase): ModelRepository {
+        fun provideModelRepository(): ModelRepository {
             return ModelRepository(
-                modelDao = database.modelDao(),
-                configDao = database.modelConfigDao()
+                modelRepo = VaultManager.modelRepo ?: error("VaultManager not initialized"),
+                configRepo = VaultManager.configRepo ?: error("VaultManager not initialized")
             )
         }
 

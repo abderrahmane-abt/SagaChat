@@ -129,7 +129,7 @@ fun VaultDashboard(onNavigateBack: () -> Unit) {
                     )
                     QuickStatChip(
                         label = "Messages",
-                        value = "${stats?.messageCount ?: 0}",
+                        value = "${stats?.totalMessages ?: 0}",
                         modifier = Modifier.weight(1f)
                     )
                     QuickStatChip(

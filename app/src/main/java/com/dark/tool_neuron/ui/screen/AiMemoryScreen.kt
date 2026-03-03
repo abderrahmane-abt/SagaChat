@@ -67,11 +67,11 @@ import kotlin.math.roundToInt
 fun AiMemoryScreen(
     onNavigateBack: () -> Unit
 ) {
-    val aiMemoryDao = remember { AppContainer.getAiMemoryDao() }
+    val memoryRepo = remember { AppContainer.getMemoryRepo() }
     val memoryExtractor = remember {
-        MemoryExtractor(aiMemoryDao, AppContainer.getGenerationManager())
+        MemoryExtractor(memoryRepo, AppContainer.getGenerationManager())
     }
-    val allMemories by aiMemoryDao.getAll().collectAsState(initial = emptyList())
+    val allMemories by memoryRepo.getAll().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
 
     var searchQuery by remember { mutableStateOf("") }
@@ -208,7 +208,7 @@ fun AiMemoryScreen(
                             isStale = memoryExtractor.isStale(memory),
                             strength = memoryExtractor.computeStrength(memory),
                             onDelete = {
-                                scope.launch { aiMemoryDao.delete(memory) }
+                                scope.launch { memoryRepo.delete(memory) }
                             }
                         )
                     }
@@ -244,7 +244,7 @@ fun AiMemoryScreen(
             confirmButton = {
                 TextButton(onClick = {
                     scope.launch {
-                        aiMemoryDao.deleteAll()
+                        memoryRepo.deleteAll()
                         showClearAllDialog = false
                     }
                 }) {

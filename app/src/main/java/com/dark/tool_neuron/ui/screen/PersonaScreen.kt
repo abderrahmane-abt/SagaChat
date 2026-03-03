@@ -72,8 +72,8 @@ fun PersonaScreen(
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val personaDao = remember { AppContainer.getPersonaDao() }
-    val personas by personaDao.getAll().collectAsState(initial = emptyList())
+    val personaRepo = remember { AppContainer.getPersonaRepo() }
+    val personas by personaRepo.getAll().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
 
     // Import launcher
@@ -86,7 +86,7 @@ fun PersonaScreen(
                     val json = context.contentResolver.openInputStream(uri)
                         ?.bufferedReader()?.readText() ?: return@launch
                     val persona = PersonaCardConverter.importFromJson(json)
-                    personaDao.insert(persona)
+                    personaRepo.insert(persona)
                     withContext(Dispatchers.Main) {
                         Toast.makeText(context, "Imported ${persona.name}", Toast.LENGTH_SHORT).show()
                     }

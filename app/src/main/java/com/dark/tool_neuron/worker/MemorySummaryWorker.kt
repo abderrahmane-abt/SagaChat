@@ -4,9 +4,11 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.dark.tool_neuron.data.VaultManager
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.models.table_schema.AiMemory
 import com.dark.tool_neuron.models.table_schema.MemoryCategory
+import com.dark.tool_neuron.repo.ums.UmsMemoryRepository
 import java.util.UUID
 
 /**
@@ -39,8 +41,8 @@ class MemorySummaryWorker(
         Log.d(TAG, "Starting memory summarization")
 
         return try {
-            val dao = AppContainer.getAiMemoryDao()
-            val unsummarized = dao.getUnsummarized()
+            val memoryRepo = VaultManager.memoryRepo ?: return Result.retry()
+            val unsummarized = memoryRepo.getUnsummarized()
 
             if (unsummarized.isEmpty()) {
                 Log.d(TAG, "No unsummarized memories, skipping")
@@ -62,7 +64,7 @@ class MemorySummaryWorker(
                 val summaryText = generateSummary(category, toSummarize)
 
                 if (summaryText != null) {
-                    storeSummary(dao, category, summaryText, toSummarize, personaId)
+                    storeSummary(memoryRepo, category, summaryText, toSummarize, personaId)
                     summaryCount++
                 }
             }
@@ -72,7 +74,7 @@ class MemorySummaryWorker(
             // Auto-cleanup: remove stale memories (strength < 0.2)
             // These are old, never-accessed facts that have decayed past usefulness
             try {
-                val allMemories = dao.getAllOnce()
+                val allMemories = memoryRepo.getAllOnce()
                 val now = System.currentTimeMillis()
                 val dayMs = 86_400_000L
                 var staleCount = 0
@@ -84,7 +86,7 @@ class MemorySummaryWorker(
                     val accessFactor = kotlin.math.min(1f, memory.accessCount / 5f).coerceAtLeast(0.1f)
                     val strength = recencyFactor * accessFactor
                     if (strength < 0.1f) { // Very stale — stricter than manual cleanup
-                        dao.delete(memory)
+                        memoryRepo.delete(memory)
                         staleCount++
                     }
                 }
@@ -203,7 +205,7 @@ Summary:"""
      * Store the summary and mark source facts as summarized.
      */
     private suspend fun storeSummary(
-        dao: com.dark.tool_neuron.database.dao.AiMemoryDao,
+        memoryRepo: UmsMemoryRepository,
         category: MemoryCategory,
         summaryText: String,
         sourceFacts: List<AiMemory>,
@@ -224,11 +226,11 @@ Summary:"""
             summaryGroupId = groupId,
             personaId = personaId
         )
-        dao.insert(summaryMemory)
+        memoryRepo.insert(summaryMemory)
 
         // Mark source facts as summarized
         val sourceIds = sourceFacts.map { it.id }
-        dao.markSummarized(sourceIds, groupId)
+        memoryRepo.markSummarized(sourceIds, groupId)
 
         Log.d(TAG, "Created summary for $category (${sourceFacts.size} facts → group $groupId)")
     }

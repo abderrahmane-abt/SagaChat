@@ -1,13 +1,12 @@
 package com.dark.tool_neuron.worker
 
 import android.util.Log
-import com.dark.tool_neuron.database.dao.AiMemoryDao
-import com.dark.tool_neuron.database.dao.KnowledgeEntityDao
-import com.dark.tool_neuron.database.dao.KnowledgeRelationDao
 import com.dark.tool_neuron.engine.EmbeddingEngine
 import com.dark.tool_neuron.engine.GenerationEvent
 import com.dark.tool_neuron.models.table_schema.AiMemory
 import com.dark.tool_neuron.models.table_schema.MemoryCategory
+import com.dark.tool_neuron.repo.ums.UmsKnowledgeRepository
+import com.dark.tool_neuron.repo.ums.UmsMemoryRepository
 import org.json.JSONArray
 import org.json.JSONObject
 import java.nio.ByteBuffer
@@ -26,11 +25,10 @@ import kotlin.math.sqrt
  * - ChatGPT: Prompt injection for retrieval simplicity
  */
 class MemoryExtractor(
-    private val aiMemoryDao: AiMemoryDao,
+    private val memoryRepo: UmsMemoryRepository,
     private val generationManager: GenerationManager,
     private val embeddingEngine: EmbeddingEngine? = null,
-    private val knowledgeEntityDao: KnowledgeEntityDao? = null,
-    private val knowledgeRelationDao: KnowledgeRelationDao? = null
+    private val knowledgeRepo: UmsKnowledgeRepository? = null
 ) {
     companion object {
         private const val TAG = "MemoryExtractor"
@@ -192,9 +190,9 @@ Facts:"""
      */
     private suspend fun deduplicateAndStore(facts: List<String>, chatId: String?, personaId: String? = null) {
         val existingMemories = if (personaId != null) {
-            aiMemoryDao.getAllForPersonaOnce(personaId)
+            memoryRepo.getAllForPersonaOnce(personaId)
         } else {
-            aiMemoryDao.getAllOnce()
+            memoryRepo.getAllOnce()
         }
         val now = System.currentTimeMillis()
         val effectiveThreshold = if (isEmbeddingAvailable()) COSINE_SIMILARITY_THRESHOLD else SIMILARITY_THRESHOLD
@@ -209,7 +207,7 @@ Facts:"""
                     updatedAt = now,
                     category = categorize(fact)
                 )
-                aiMemoryDao.update(updated)
+                memoryRepo.update(updated)
                 Log.d(TAG, "Updated memory: '${bestMatch.first.fact}' -> '$fact' (sim=${bestMatch.second})")
 
                 // Re-embed the updated fact
@@ -229,7 +227,7 @@ Facts:"""
                     accessCount = 0,
                     personaId = personaId
                 )
-                aiMemoryDao.insert(memory)
+                memoryRepo.insert(memory)
                 Log.d(TAG, "Added new memory: '$fact' [${memory.category}] persona=$personaId")
 
                 // Generate and store embedding for the new fact
@@ -252,7 +250,7 @@ Facts:"""
             val embedding = embeddingEngine!!.embed(text)
             if (embedding != null && embedding.isNotEmpty()) {
                 val bytes = embedding.toByteArray()
-                aiMemoryDao.updateEmbedding(memoryId, bytes)
+                memoryRepo.updateEmbedding(memoryId, bytes)
                 Log.d(TAG, "Stored embedding for memory $memoryId (${embedding.size} dims)")
             } else {
                 Log.w(TAG, "Embedding returned null/empty for: ${text.take(50)}")
@@ -268,13 +266,12 @@ Facts:"""
      * Fails silently if KG DAOs are not available.
      */
     private suspend fun extractToKnowledgeGraph(memoryId: String, fact: String, personaId: String? = null) {
-        val entityDao = knowledgeEntityDao ?: return
-        val relationDao = knowledgeRelationDao ?: return
+        val kgRepo = knowledgeRepo ?: return
 
         try {
             val triples = KnowledgeGraphBuilder.extractTriplesFromFact(fact)
             for (triple in triples) {
-                KnowledgeGraphBuilder.storeTriple(entityDao, relationDao, triple, memoryId, personaId)
+                KnowledgeGraphBuilder.storeTriple(kgRepo, triple, memoryId, personaId)
             }
             if (triples.isNotEmpty()) {
                 Log.d(TAG, "Extracted ${triples.size} KG triples from fact: ${fact.take(50)}")
@@ -400,9 +397,9 @@ Facts:"""
         personaId: String? = null
     ): List<AiMemory> {
         val allMemories = if (personaId != null) {
-            aiMemoryDao.getAllForPersonaOnce(personaId)
+            memoryRepo.getAllForPersonaOnce(personaId)
         } else {
-            aiMemoryDao.getAllOnce()
+            memoryRepo.getAllOnce()
         }
         if (allMemories.isEmpty()) return emptyList()
 
@@ -459,7 +456,7 @@ Facts:"""
                 lastAccessedAt = now,
                 accessCount = memory.accessCount + 1
             )
-            aiMemoryDao.update(updated)
+            memoryRepo.update(updated)
         }
 
         if (useEmbeddings) {
@@ -479,9 +476,9 @@ Facts:"""
      */
     suspend fun buildMemoryBlock(query: String, personaId: String? = null): String {
         // Expand query using KG entities if available
-        val expandedQuery = if (knowledgeEntityDao != null && knowledgeRelationDao != null) {
+        val expandedQuery = if (knowledgeRepo != null) {
             try {
-                KnowledgeGraphBuilder.expandQueryWithKG(query, knowledgeEntityDao, knowledgeRelationDao, personaId)
+                KnowledgeGraphBuilder.expandQueryWithKG(query, knowledgeRepo, personaId)
             } catch (e: Exception) {
                 Log.w(TAG, "KG query expansion failed: ${e.message}")
                 query
@@ -524,10 +521,10 @@ Facts:"""
      * Returns count of deleted memories.
      */
     suspend fun clearStaleMemories(): Int {
-        val allMemories = aiMemoryDao.getAllOnce()
+        val allMemories = memoryRepo.getAllOnce()
         val stale = allMemories.filter { isStale(it) }
         for (memory in stale) {
-            aiMemoryDao.delete(memory)
+            memoryRepo.delete(memory)
         }
         Log.d(TAG, "Cleared ${stale.size} stale memories")
         return stale.size
@@ -544,7 +541,7 @@ Facts:"""
             return 0
         }
 
-        val allMemories = aiMemoryDao.getAllOnce()
+        val allMemories = memoryRepo.getAllOnce()
         var count = 0
         for (memory in allMemories) {
             if (memory.embedding == null) {

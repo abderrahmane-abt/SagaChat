@@ -2,12 +2,14 @@ package com.dark.tool_neuron.di
 
 import android.app.Application
 import android.content.Context
+import android.util.Log
+import com.dark.tool_neuron.data.VaultManager
 import com.dark.tool_neuron.database.AppDatabase
-import com.dark.tool_neuron.database.dao.AiMemoryDao
-import com.dark.tool_neuron.database.dao.PersonaDao
 import com.dark.tool_neuron.repo.ChatRepository
 import com.dark.tool_neuron.repo.ModelRepository
-import com.dark.tool_neuron.vault.VaultHelper
+import com.dark.tool_neuron.repo.ums.UmsKnowledgeRepository
+import com.dark.tool_neuron.repo.ums.UmsMemoryRepository
+import com.dark.tool_neuron.repo.ums.UmsPersonaRepository
 import com.dark.tool_neuron.viewmodel.factory.ChatListViewModelFactory
 import com.dark.tool_neuron.viewmodel.factory.ChatViewModelFactory
 import com.dark.tool_neuron.viewmodel.factory.LLMModelViewModelFactory
@@ -16,10 +18,11 @@ import com.dark.tool_neuron.worker.GenerationManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.StateFlow
 
 object AppContainer {
 
+    // Room database kept for RAG (FTS4) and migration reads only
     private lateinit var database: AppDatabase
     private lateinit var modelRepository: ModelRepository
     private lateinit var chatRepository: ChatRepository
@@ -31,15 +34,25 @@ object AppContainer {
     private val chatManager = ChatManager()
     private var generationManager = GenerationManager()
 
-    // Keep track of context for re-initialization if needed
     private lateinit var appContext: Context
+
+    private const val TAG = "AppContainer"
 
     fun init(context: Context, application: Application) {
         appContext = context.applicationContext
+
+        // Keep Room database for RAG (FTS4) and one-time migration reads
         database = AppDatabase.getDatabase(context)
 
+        // Initialize UMS storage (plaintext by default; VaultGateScreen can switch to encrypted)
+        if (!VaultManager.isReady.value) {
+            val ok = VaultManager.initPlaintext(context)
+            if (!ok) Log.e(TAG, "VaultManager plaintext init failed")
+        }
+
         modelRepository = ModelRepository(
-            modelDao = database.modelDao(), configDao = database.modelConfigDao()
+            modelRepo = VaultManager.modelRepo!!,
+            configRepo = VaultManager.configRepo!!
         )
 
         chatRepository = ChatRepository()
@@ -47,45 +60,17 @@ object AppContainer {
         llmModelViewModelFactory = LLMModelViewModelFactory(application, modelRepository)
         chatListViewModelFactory = ChatListViewModelFactory(chatManager)
         chatViewModelFactory = ChatViewModelFactory(context, chatManager, generationManager)
-
-        initVault(context)
     }
 
-    private fun initVault(context: Context) {
-        appScope.launch {
-            val maxRetries = 3
-            for (attempt in 1..maxRetries) {
-                try {
-                    VaultHelper.initialize(context)
-                    break
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    if (attempt < maxRetries) {
-                        kotlinx.coroutines.delay(500L * attempt)
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Re-initialize vault if needed (e.g., after configuration change or process death)
-     * This can be called from Activities/Fragments to ensure vault is ready
-     */
     fun ensureVaultInitialized() {
-        if (!VaultHelper.isInitialized() && ::appContext.isInitialized) {
-            initVault(appContext)
+        if (!VaultManager.isReady.value && ::appContext.isInitialized) {
+            val ok = VaultManager.initPlaintext(appContext)
+            if (!ok) Log.e(TAG, "VaultManager re-init failed")
         }
     }
 
     fun shutdown() {
-        appScope.launch {
-            try {
-                VaultHelper.close()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+        VaultManager.close()
     }
 
     /**
@@ -96,29 +81,33 @@ object AppContainer {
     }
 
     /**
+     * Close UMS storage for backup/restore operations.
+     */
+    fun closeUms() {
+        VaultManager.close()
+    }
+
+    /**
      * Re-initialize the entire container after a restore operation.
-     * Closes everything and re-creates database + vault connections.
      */
     fun reinitialize(context: Context) {
         val ctx = context.applicationContext
         appContext = ctx
         database = AppDatabase.getDatabase(ctx)
 
+        VaultManager.close()
+        val ok = VaultManager.initPlaintext(ctx)
+        if (!ok) Log.e(TAG, "VaultManager reinit failed")
+
         modelRepository = ModelRepository(
-            modelDao = database.modelDao(), configDao = database.modelConfigDao()
+            modelRepo = VaultManager.modelRepo!!,
+            configRepo = VaultManager.configRepo!!
         )
 
         chatRepository = ChatRepository()
-
-        appScope.launch {
-            try {
-                VaultHelper.initialize(ctx)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
     }
 
+    // Room database — for RAG (FTS4) and migration only
     fun getDatabase(): AppDatabase = database
 
     fun getModelRepository(): ModelRepository = modelRepository
@@ -131,17 +120,18 @@ object AppContainer {
 
     fun getChatViewModelFactory(): ChatViewModelFactory = chatViewModelFactory
 
+    fun isVaultReady(): Boolean = VaultManager.isReady.value
 
-    fun isVaultReady(): Boolean = VaultHelper.isInitialized()
+    val vaultReadyState: StateFlow<Boolean> = VaultManager.isReady
 
-    /**
-     * Exposes the vault readiness StateFlow for UI observation
-     */
-    val vaultReadyState = VaultHelper.isReady
+    fun getPersonaRepo(): UmsPersonaRepository =
+        VaultManager.personaRepo ?: error("VaultManager not initialized")
 
-    fun getPersonaDao(): PersonaDao = database.personaDao()
+    fun getMemoryRepo(): UmsMemoryRepository =
+        VaultManager.memoryRepo ?: error("VaultManager not initialized")
 
-    fun getAiMemoryDao(): AiMemoryDao = database.aiMemoryDao()
+    fun getKnowledgeRepo(): UmsKnowledgeRepository =
+        VaultManager.knowledgeRepo ?: error("VaultManager not initialized")
 
     fun getGenerationManager(): GenerationManager = generationManager
 }

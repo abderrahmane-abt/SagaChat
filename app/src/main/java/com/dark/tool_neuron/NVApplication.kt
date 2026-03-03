@@ -3,6 +3,7 @@ package com.dark.tool_neuron
 import android.app.Application
 import android.util.Log
 import com.dark.tool_neuron.data.AppSettingsDataStore
+import com.dark.tool_neuron.data.VaultManager
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.plugins.DeviceInfoPlugin
 import com.dark.tool_neuron.plugins.FileManagerPlugin
@@ -10,7 +11,6 @@ import com.dark.tool_neuron.plugins.PluginManager
 import com.dark.tool_neuron.plugins.WebSearchPlugin
 import com.dark.tool_neuron.repo.RagRepository
 import com.dark.tool_neuron.tts.TTSManager
-import com.dark.tool_neuron.vault.VaultHelper
 import com.dark.tool_neuron.worker.DataIntegrityManager
 import com.dark.tool_neuron.worker.KnowledgeGraphBuilder
 import com.dark.tool_neuron.worker.LlmModelWorker
@@ -53,31 +53,29 @@ class NVApplication : Application() {
 
         val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-        // Run data integrity check after vault is ready
+        // Run data integrity check after UMS is ready
         appScope.launch {
             try {
-                // Wait for vault to be ready (15s timeout)
-                val vaultReady = VaultHelper.awaitReady(15_000)
-                if (!vaultReady) {
-                    Log.w(TAG, "Vault not ready after 15s, running integrity check without chat validation")
+                if (!VaultManager.isReady.value) {
+                    Log.w(TAG, "UMS not ready, skipping integrity check")
+                } else {
+                    val db = AppContainer.getDatabase()
+                    val ragRepository = RagRepository(
+                        ragDao = db.ragDao(),
+                        context = applicationContext
+                    )
+                    val manager = DataIntegrityManager(
+                        context = applicationContext,
+                        modelRepo = VaultManager.modelRepo!!,
+                        personaRepo = VaultManager.personaRepo!!,
+                        ragDao = db.ragDao(),
+                        memoryRepo = VaultManager.memoryRepo!!,
+                        ragRepository = ragRepository,
+                        appSettings = AppSettingsDataStore(applicationContext)
+                    )
+                    val report = manager.runFullCheck()
+                    Log.i(TAG, "Integrity check: ${report.totalFixes} fixes applied")
                 }
-
-                val db = AppContainer.getDatabase()
-                val ragRepository = RagRepository(
-                    ragDao = db.ragDao(),
-                    context = applicationContext
-                )
-                val manager = DataIntegrityManager(
-                    context = applicationContext,
-                    modelDao = db.modelDao(),
-                    personaDao = db.personaDao(),
-                    ragDao = db.ragDao(),
-                    aiMemoryDao = db.aiMemoryDao(),
-                    ragRepository = ragRepository,
-                    appSettings = AppSettingsDataStore(applicationContext)
-                )
-                val report = manager.runFullCheck()
-                Log.i(TAG, "Integrity check: ${report.totalFixes} fixes applied")
             } catch (e: Exception) {
                 Log.e(TAG, "Data integrity check failed", e)
             }
