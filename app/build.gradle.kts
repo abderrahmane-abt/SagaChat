@@ -119,6 +119,9 @@ dependencies {
     //implementation(":runanywhere-kotlin-release@aar")
     implementation(project(":memory-vault"))
     implementation(project(":neuron-packet"))
+    implementation(project(":system_encryptor"))
+    implementation(project(":file_ops"))
+    implementation(project(":ums"))
     //implementation(project(":character-engine"))
 
     // AndroidX Core & Lifecycle
