@@ -16,6 +16,8 @@ data class Messages(
     val role: Role = Role.Assistant,
     val content: MessageContent = MessageContent(),
     val timestamp: Long? = null, // Nullable for backward compatibility with old messages
+    val modelId: String? = null,
+    val personaId: String? = null,
     val decodingMetrics: DecodingMetrics? = null,
     val imageMetrics: ImageGenerationMetrics? = null,
     val memoryMetrics: MemoryMetrics? = null,

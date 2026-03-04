@@ -239,6 +239,8 @@ class UmsChatRepository(private val ums: UnifiedMemorySystem) {
         if (toolChainSteps != null) b.putString(Tags.Message.TOOL_CHAIN_STEPS, json.encodeToString(toolChainSteps))
         if (agentPlan != null) b.putString(Tags.Message.AGENT_PLAN, agentPlan)
         if (agentSummary != null) b.putString(Tags.Message.AGENT_SUMMARY, agentSummary)
+        if (modelId != null) b.putString(Tags.Message.MODEL_ID, modelId)
+        if (personaId != null) b.putString(Tags.Message.PERSONA_ID, personaId)
         if (content.pluginResultData != null) {
             b.putString(Tags.Message.PLUGIN_RESULT_DATA, json.encodeToString(content.pluginResultData))
         }
@@ -266,6 +268,8 @@ class UmsChatRepository(private val ums: UnifiedMemorySystem) {
                 pluginResultData = pluginData
             ),
             timestamp = getTimestamp(Tags.Message.TIMESTAMP),
+            modelId = getString(Tags.Message.MODEL_ID),
+            personaId = getString(Tags.Message.PERSONA_ID),
             decodingMetrics = getString(Tags.Message.DECODING_METRICS)?.let {
                 runCatching { json.decodeFromString<DecodingMetrics>(it) }.getOrNull()
             },

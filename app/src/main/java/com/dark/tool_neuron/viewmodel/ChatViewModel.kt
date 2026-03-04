@@ -155,6 +155,10 @@ class ChatViewModel @Inject constructor(
     // Track if user message was already added to prevent duplicates
     private var userMessageAdded = false
 
+    // Current model/persona IDs for per-message attribution
+    private val currentModelId: String? get() = LlmModelWorker.currentGgufModelId.value
+    private val currentPersonaId: String? get() = _activePersona.value?.id
+
     // UI state
     private val _showDynamicWindow = MutableStateFlow(false)
     val showDynamicWindow: StateFlow<Boolean> = _showDynamicWindow
@@ -677,7 +681,8 @@ class ChatViewModel @Inject constructor(
             msgId = "",
             role = Role.User,
             content = MessageContent(contentType = ContentType.Text, content = prompt),
-            decodingMetrics = null
+            modelId = currentModelId,
+            personaId = currentPersonaId
         )
         AppStateManager.setHasMessages(true)
 
@@ -1074,6 +1079,8 @@ class ChatViewModel @Inject constructor(
                             content = "Plugin '${result.pluginName}' executed tool '$normalizedName'",
                             pluginResultData = resultData
                         ),
+                        modelId = currentModelId,
+                        personaId = currentPersonaId,
                         pluginMetrics = PluginExecutionMetrics(
                             pluginName = result.pluginName,
                             toolName = normalizedName,
@@ -1199,6 +1206,8 @@ class ChatViewModel @Inject constructor(
             val assistantMessage = Messages(
                 role = Role.Assistant,
                 content = MessageContent(contentType = ContentType.Text, content = summary),
+                modelId = currentModelId,
+                personaId = currentPersonaId,
                 decodingMetrics = currentMetrics,
                 ragResults = ragResultItems,
                 toolChainSteps = steps,
@@ -1207,15 +1216,7 @@ class ChatViewModel @Inject constructor(
             )
             _messages.add(assistantMessage)
 
-            chatManager.addAssistantMessage(
-                chatId = chatId,
-                content = summary,
-                decodingMetrics = currentMetrics,
-                ragResults = ragResultItems,
-                toolChainSteps = steps,
-                agentPlan = plan,
-                agentSummary = summary
-            )
+            chatManager.addMessage(chatId, assistantMessage)
 
             AppStateManager.setGenerationComplete()
             AppStateManager.chatRefreshed()
@@ -1275,11 +1276,13 @@ class ChatViewModel @Inject constructor(
                 val assistantMessage = Messages(
                     role = Role.Assistant,
                     content = MessageContent(contentType = ContentType.Text, content = filteredResponse),
+                    modelId = currentModelId,
+                    personaId = currentPersonaId,
                     decodingMetrics = currentMetrics,
                     ragResults = ragResultItems
                 )
                 _messages.add(assistantMessage)
-                chatManager.addAssistantMessage(chatId, filteredResponse, currentMetrics, ragResultItems)
+                chatManager.addMessage(chatId, assistantMessage)
                 AppStateManager.setGenerationComplete()
                 AppStateManager.chatRefreshed()
                 val spokenMsgId = assistantMessage.msgId
@@ -1427,7 +1430,7 @@ class ChatViewModel @Inject constructor(
         maxTokens: Int
     ): List<Pair<String, String>> {
         val toolCalls = mutableListOf<Pair<String, String>>()
-        var text = ""
+        val textBuilder = StringBuilder()
         val jsonArray = JSONArray(messages)
 
         generationManager.generateMultiTurnStreaming(
@@ -1435,7 +1438,7 @@ class ChatViewModel @Inject constructor(
         ).collect { event ->
             when (event) {
                 is GenerationEvent.Token -> {
-                    text += event.text
+                    textBuilder.append(event.text)
                 }
                 is GenerationEvent.ToolCall -> {
                     toolCalls.add(Pair(event.name, event.args))
@@ -1450,6 +1453,7 @@ class ChatViewModel @Inject constructor(
         }
 
         // Fallback: parse text if no ToolCall events were received
+        val text = textBuilder.toString()
         if (toolCalls.isEmpty() && text.isNotBlank()) {
             Log.d(TAG, "No ToolCall events, trying text parsing fallback")
             val enabledNames = PluginManager.getEnabledToolNames().map { it.lowercase() }
@@ -1905,7 +1909,9 @@ class ChatViewModel @Inject constructor(
                 currentUserMessage = Messages(
                     msgId = "",
                     role = Role.User,
-                    content = MessageContent(contentType = ContentType.Text, content = "Generate image: $prompt")
+                    content = MessageContent(contentType = ContentType.Text, content = "Generate image: $prompt"),
+                    modelId = LlmModelWorker.currentDiffusionModelId.value,
+                    personaId = currentPersonaId
                 )
                 AppStateManager.setHasMessages(true)
                 generateImageForNewChat(prompt, finalNegativePrompt, finalSteps, finalCfgScale, seed, finalWidth, finalHeight, finalScheduler, inferenceParams.showDiffusionProcess, inferenceParams.showDiffusionStride)
@@ -2023,6 +2029,8 @@ class ChatViewModel @Inject constructor(
                             val imageMessage = Messages(
                                 role = Role.Assistant,
                                 content = MessageContent(contentType = ContentType.Image, content = "Generated image for: $prompt", imageData = imageBase64, imagePrompt = prompt, imageSeed = event.seed),
+                                modelId = LlmModelWorker.currentDiffusionModelId.value,
+                                personaId = currentPersonaId,
                                 imageMetrics = currentImageMetrics
                             )
                             _messages.add(imageMessage)
@@ -2058,12 +2066,27 @@ class ChatViewModel @Inject constructor(
 
         chatManager.createNewChat().onSuccess { newChatId ->
             _currentChatId.value = newChatId
-            chatManager.addUserMessage(newChatId, userPrompt).onSuccess {
-                pluginResults.forEachIndexed { index, pluginMsg ->
+            val userMsg = Messages(
+                role = Role.User,
+                content = MessageContent(contentType = ContentType.Text, content = userPrompt),
+                modelId = currentModelId,
+                personaId = currentPersonaId
+            )
+            chatManager.addMessage(newChatId, userMsg).onSuccess {
+                pluginResults.forEach { pluginMsg ->
                     chatManager.addMessage(newChatId, pluginMsg)
                 }
                 if (filteredResponse.isNotBlank()) {
-                    chatManager.addAssistantMessage(newChatId, filteredResponse, metrics, ragResultItems, toolChainSteps)
+                    val assistantMsg = Messages(
+                        role = Role.Assistant,
+                        content = MessageContent(contentType = ContentType.Text, content = filteredResponse),
+                        modelId = currentModelId,
+                        personaId = currentPersonaId,
+                        decodingMetrics = metrics,
+                        ragResults = ragResultItems,
+                        toolChainSteps = toolChainSteps
+                    )
+                    chatManager.addMessage(newChatId, assistantMsg)
                 }
                 chatManager.getChatMessages(newChatId).onSuccess { loadedMessages ->
                     _messages.clear()
@@ -2090,12 +2113,32 @@ class ChatViewModel @Inject constructor(
     private suspend fun createChatWithImageMessage(
         userPrompt: String, imageBase64: String, imagePrompt: String, seed: Long
     ) {
+        val diffusionModelId = LlmModelWorker.currentDiffusionModelId.value
         chatManager.createNewChat().onSuccess { newChatId ->
             _currentChatId.value = newChatId
-            chatManager.addUserMessage(newChatId, userPrompt).onSuccess { userMessage ->
+            val userMsg = Messages(
+                role = Role.User,
+                content = MessageContent(contentType = ContentType.Text, content = userPrompt),
+                modelId = diffusionModelId,
+                personaId = currentPersonaId
+            )
+            chatManager.addMessage(newChatId, userMsg).onSuccess { userMessage ->
                 _messages.add(userMessage)
                 userMessageAdded = true
-                chatManager.addImageMessage(newChatId, imageBase64, imagePrompt, seed, currentImageMetrics).onSuccess { imageMessage ->
+                val imageMsg = Messages(
+                    role = Role.Assistant,
+                    content = MessageContent(
+                        contentType = ContentType.Image,
+                        content = "Generated image for: $imagePrompt",
+                        imageData = imageBase64,
+                        imagePrompt = imagePrompt,
+                        imageSeed = seed
+                    ),
+                    modelId = diffusionModelId,
+                    personaId = currentPersonaId,
+                    imageMetrics = currentImageMetrics
+                )
+                chatManager.addMessage(newChatId, imageMsg).onSuccess { imageMessage ->
                     _messages.add(imageMessage)
                     AppStateManager.setGenerationComplete()
                     AppStateManager.chatRefreshed()
@@ -2208,10 +2251,12 @@ class ChatViewModel @Inject constructor(
                 val assistantMessage = Messages(
                     role = Role.Assistant,
                     content = MessageContent(contentType = ContentType.Text, content = "$currentGeneratedContent [stopped]"),
+                    modelId = currentModelId,
+                    personaId = currentPersonaId,
                     decodingMetrics = currentMetrics
                 )
                 _messages.add(assistantMessage)
-                chatManager.addAssistantMessage(chatId, "$currentGeneratedContent [stopped]", currentMetrics)
+                chatManager.addMessage(chatId, assistantMessage)
             }
         } else if (currentUserMessage != null && !userMessageAdded) {
             _messages.add(currentUserMessage!!)
@@ -2233,10 +2278,12 @@ class ChatViewModel @Inject constructor(
                 val imageMessage = Messages(
                     role = Role.Assistant,
                     content = MessageContent(contentType = ContentType.Image, content = "Image generation stopped", imageData = imageBase64),
+                    modelId = LlmModelWorker.currentDiffusionModelId.value,
+                    personaId = currentPersonaId,
                     imageMetrics = currentImageMetrics
                 )
                 _messages.add(imageMessage)
-                chatManager.addImageMessage(chatId, imageBase64, "", -1L, currentImageMetrics)
+                chatManager.addMessage(chatId, imageMessage)
             }
         } else if (currentUserMessage != null && !userMessageAdded) {
             _messages.add(currentUserMessage!!)
