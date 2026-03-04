@@ -21,8 +21,10 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.dark.tool_neuron.data.AppSettingsDataStore
 import com.dark.tool_neuron.data.SetupDataStore
 import com.dark.tool_neuron.data.TermsDataStore
+import com.dark.tool_neuron.data.VaultManager
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.ui.screen.AiMemoryScreen
@@ -36,6 +38,11 @@ import com.dark.tool_neuron.ui.screen.TermsAndConditionsScreen
 import com.dark.tool_neuron.ui.screen.WelcomeScreen
 import com.dark.tool_neuron.ui.screen.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.screen.memory.VaultDashboard
+import com.dark.tool_neuron.ui.screens.IntroScreen
+import com.dark.tool_neuron.ui.screens.ShowcaseScreen
+import com.dark.tool_neuron.ui.screens.VaultGateScreen
+import com.dark.tool_neuron.viewModel.VaultGateViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
@@ -85,10 +92,13 @@ class MainActivity : ComponentActivity() {
                     withContext(Dispatchers.IO) {
                         val termsDataStore = TermsDataStore(context)
                         val setupDataStore = SetupDataStore(context)
+                        val appSettings = AppSettingsDataStore(context)
                         val modelRepository = AppContainer.getModelRepository()
 
                         val termsAccepted = termsDataStore.hasAcceptedTerms.first()
                         val setupDone = setupDataStore.isSetupDone.first()
+                        val showcaseSeen = appSettings.showcaseSeen.first()
+                        val vaultReady = VaultManager.isReady.value
                         val models = modelRepository.getAllModels().first()
 
                         val hasModel = models.any {
@@ -97,7 +107,13 @@ class MainActivity : ComponentActivity() {
                         hasModelsInstalled = hasModel
 
                         startDestination = when {
-                            // Terms not accepted: returning user (has models) goes to terms directly, new user gets full onboarding
+                            // First launch: show showcase, then vault gate
+                            !showcaseSeen -> Screen.Showcase.route
+
+                            // Vault not initialized: go to vault gate
+                            !vaultReady -> Screen.VaultGate.route
+
+                            // Terms not accepted: returning user goes to terms directly, new user gets full onboarding
                             !termsAccepted && hasModel -> Screen.Terms.route
                             !termsAccepted -> Screen.Welcome.route
 
@@ -131,6 +147,9 @@ class MainActivity : ComponentActivity() {
 
 sealed class Screen(val route: String) {
     // Onboarding (flat routes so any can be used as startDestination)
+    object Intro : Screen("intro")
+    object Showcase : Screen("showcase")
+    object VaultGate : Screen("vault_gate")
     object Welcome : Screen("welcome")
     object Terms : Screen("terms")
     object OnboardingSetup : Screen("setup")
@@ -191,6 +210,38 @@ fun AppNavigation(
     ) {
 
         // ============ ONBOARDING SCREENS ============
+        composable(Screen.Intro.route) {
+            IntroScreen(onFinished = {
+                navController.navigate(Screen.Showcase.route) {
+                    popUpTo(Screen.Intro.route) { inclusive = true }
+                }
+            })
+        }
+
+        composable(Screen.Showcase.route) {
+            val appSettings = remember { AppSettingsDataStore(context) }
+            ShowcaseScreen(onFinished = {
+                scope.launch { appSettings.saveShowcaseSeen(true) }
+                navController.navigate(Screen.VaultGate.route) {
+                    popUpTo(Screen.Showcase.route) { inclusive = true }
+                }
+            })
+        }
+
+        composable(Screen.VaultGate.route) {
+            val vaultGateViewModel: VaultGateViewModel = viewModel()
+            VaultGateScreen(
+                viewModel = vaultGateViewModel,
+                onComplete = {
+                    // After vault is set up, continue onboarding or go to chat
+                    val nextRoute = if (hasModelsInstalled) Screen.Chat.route else Screen.Welcome.route
+                    navController.navigate(nextRoute) {
+                        popUpTo(Screen.VaultGate.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
         composable(Screen.Welcome.route) {
             WelcomeScreen(
                 onContinue = {
