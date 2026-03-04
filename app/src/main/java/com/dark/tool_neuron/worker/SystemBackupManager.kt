@@ -3,6 +3,7 @@ package com.dark.tool_neuron.worker
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import com.dark.tool_neuron.data.VaultManager
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.models.enums.PathType
 import com.dark.tool_neuron.models.enums.ProviderType
@@ -10,7 +11,6 @@ import com.dark.tool_neuron.models.table_schema.AiMemory
 import com.dark.tool_neuron.models.table_schema.KnowledgeRelation
 import com.dark.tool_neuron.models.table_schema.MemoryCategory
 import com.dark.tool_neuron.models.vault.ChatExport
-import com.dark.tool_neuron.vault.VaultHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -39,7 +39,7 @@ class SystemBackupManager(private val context: Context) {
     companion object {
         private const val TAG = "SystemBackupManager"
         private const val MAGIC = 0x544E424B // "TNBK"
-        private const val BACKUP_VERSION = 2
+        private const val BACKUP_VERSION = 3
         private const val PBKDF2_ITERATIONS = 100_000
         private const val KEY_LENGTH = 256
         private const val SALT_LENGTH = 16
@@ -57,18 +57,19 @@ class SystemBackupManager(private val context: Context) {
         data class Error(val message: String) : BackupProgress()
     }
 
-    // Ordinals: 0=DB_FILE, 1=VAULT_FILE, 2=DATASTORE_FILE, 3=RAG_FILE, 4=AVATAR_FILE, 5=CHAT_EXPORT, 6=MODEL_FILE, 7=MANIFEST, 8=MEMORY_EXPORT
-    // v1 backups only used ordinals 0-5. Appending 6-8 maintains backward compatibility.
+    // Ordinals: 0=DB_FILE, 1=VAULT_FILE, 2=DATASTORE_FILE, 3=RAG_FILE, 4=AVATAR_FILE, 5=CHAT_EXPORT, 6=MODEL_FILE, 7=MANIFEST, 8=MEMORY_EXPORT, 9=UMS_DIR_FILE
+    // v1 backups only used ordinals 0-5. Appending 6-9 maintains backward compatibility.
     enum class EntryType {
-        DB_FILE,
+        DB_FILE,          // Legacy — Room DB file (v1/v2 backups)
         VAULT_FILE,       // Legacy — raw vault files (device-bound encryption, not portable)
         DATASTORE_FILE,
         RAG_FILE,
         AVATAR_FILE,
         CHAT_EXPORT,      // Portable — decrypted chat JSON, re-encrypted on restore
-        MODEL_FILE,       // NEW v2 — model GGUF/SD/TTS files (relative path under models/)
-        MANIFEST,         // NEW v2 — SHA-256 checksums for validation
-        MEMORY_EXPORT     // NEW v3 — per-persona memory + KG triples as JSON
+        MODEL_FILE,       // v2 — model GGUF/SD/TTS files (relative path under models/)
+        MANIFEST,         // v2 — SHA-256 checksums for validation
+        MEMORY_EXPORT,    // v3 — per-persona memory + KG triples as JSON
+        UMS_DIR_FILE      // v3 — UMS directory files (replaces DB_FILE + VAULT_FILE)
     }
 
     data class BackupOptions(
@@ -140,11 +141,13 @@ class SystemBackupManager(private val context: Context) {
     // ======================== SIZE ESTIMATION ========================
 
     suspend fun estimateBackupSize(options: BackupOptions = BackupOptions()): BackupSizeEstimate = withContext(Dispatchers.IO) {
-        val dbFile = context.getDatabasePath(DB_NAME)
-        val databaseSize = if (dbFile.exists()) dbFile.length() else 0L
+        // UMS directory replaces both Room DB and VaultHelper vault
+        val umsDir = File(context.filesDir, "ums")
+        val umsSize = if (umsDir.exists()) dirSize(umsDir) else 0L
 
-        val vaultDir = File(context.filesDir, "memory_vault")
-        val chatVaultSize = if (vaultDir.exists()) dirSize(vaultDir) else 0L
+        // Room DB still exists for RAG (and for migration engine reads)
+        val dbFile = context.getDatabasePath(DB_NAME)
+        val ragDbSize = if (dbFile.exists()) dbFile.length() else 0L
 
         val dataStoreDir = File(context.filesDir.parentFile, "datastore")
         val dataStoreSize = if (dataStoreDir.exists()) {
@@ -163,8 +166,8 @@ class SystemBackupManager(private val context: Context) {
         val modelBreakdown = mutableListOf<ModelSizeInfo>()
 
         if (options.includeModelFiles) {
-            val db = AppContainer.getDatabase()
-            val models = db.modelDao().getAllOnce()
+            val modelRepo = VaultManager.modelRepo
+            val models = modelRepo?.getAllOnce() ?: emptyList()
             val modelsDir = File(context.filesDir, "models")
 
             for (model in models) {
@@ -218,8 +221,8 @@ class SystemBackupManager(private val context: Context) {
         }
 
         BackupSizeEstimate(
-            databaseSize = databaseSize,
-            chatVaultSize = chatVaultSize,
+            databaseSize = umsSize + ragDbSize,
+            chatVaultSize = 0L, // chats now in UMS, included in umsSize
             dataStoreSize = dataStoreSize,
             ragFilesSize = ragFilesSize,
             avatarFilesSize = avatarFilesSize,
@@ -246,26 +249,34 @@ class SystemBackupManager(private val context: Context) {
             val entries = mutableListOf<Triple<EntryType, String, ByteArray>>()
             val checksums = mutableMapOf<String, String>() // path -> sha256
 
-            // Room database
-            onProgress(BackupProgress.Collecting("Database", ++componentIndex, componentCount))
+            // UMS directory (replaces Room DB + VaultHelper vault)
+            onProgress(BackupProgress.Collecting("UMS data", ++componentIndex, componentCount))
+            collectUmsDirectoryFiles().forEach { (path, data) ->
+                entries.add(Triple(EntryType.UMS_DIR_FILE, path, data))
+                checksums["ums:$path"] = sha256(data)
+            }
+
+            // Room database (RAG tables only — kept for FTS4 search)
             collectDatabaseFile()?.let {
                 entries.add(Triple(EntryType.DB_FILE, DB_NAME, it))
                 checksums[DB_NAME] = sha256(it)
             }
 
-            // Chat vault — export as decrypted JSON (portable across devices)
-            onProgress(BackupProgress.Collecting("Chat vault", ++componentIndex, componentCount))
+            // Chat exports — portable JSON (redundant with UMS dir, but useful for cross-version restore)
+            onProgress(BackupProgress.Collecting("Chat exports", ++componentIndex, componentCount))
             try {
-                if (!VaultHelper.isInitialized()) VaultHelper.initialize(context)
-                val allChats = VaultHelper.getAllChats()
-                for (chat in allChats) {
-                    val export = VaultHelper.exportChat(chat.chatId)
-                    val exportJson = json.encodeToString(ChatExport.serializer(), export)
-                    val data = exportJson.toByteArray(Charsets.UTF_8)
-                    entries.add(Triple(EntryType.CHAT_EXPORT, chat.chatId, data))
-                    checksums["chat:${chat.chatId}"] = sha256(data)
+                val chatRepo = VaultManager.chatRepo
+                if (chatRepo != null) {
+                    val allChats = chatRepo.getAllChats()
+                    for (chat in allChats) {
+                        val export = chatRepo.exportChat(chat.chatId)
+                        val exportJson = json.encodeToString(ChatExport.serializer(), export)
+                        val data = exportJson.toByteArray(Charsets.UTF_8)
+                        entries.add(Triple(EntryType.CHAT_EXPORT, chat.chatId, data))
+                        checksums["chat:${chat.chatId}"] = sha256(data)
+                    }
+                    Log.i(TAG, "Exported ${allChats.size} chats as portable JSON")
                 }
-                Log.i(TAG, "Exported ${allChats.size} chats as portable JSON")
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to export chats: ${e.message}")
             }
@@ -295,7 +306,7 @@ class SystemBackupManager(private val context: Context) {
                 checksums["avatar:$path"] = sha256(data)
             }
 
-            // Per-persona memory + KG export
+            // Per-persona memory + KG export (portable JSON from UMS repos)
             try {
                 onProgress(BackupProgress.Collecting("Memories", ++componentIndex, componentCount))
                 collectMemoryExports().forEach { (personaKey, data) ->
@@ -306,7 +317,7 @@ class SystemBackupManager(private val context: Context) {
                 Log.w(TAG, "Memory export failed: ${e.message}")
             }
 
-            // Model files (v2)
+            // Model files (v2+)
             if (options.includeModelFiles) {
                 onProgress(BackupProgress.Collecting("AI Models", ++componentIndex, componentCount))
                 collectModelFiles(options).forEach { (path, data) ->
@@ -315,7 +326,7 @@ class SystemBackupManager(private val context: Context) {
                 }
             }
 
-            // Add manifest entry (v2)
+            // Add manifest entry
             val manifestJson = JSONObject()
             for ((key, hash) in checksums) {
                 manifestJson.put(key, hash)
@@ -337,20 +348,15 @@ class SystemBackupManager(private val context: Context) {
             val key = deriveKey(password, salt)
             val encrypted = encrypt(compressed, key, iv)
 
-            // 5. Determine effective backup version
-            // Write v1 header if no v2-only features are used (backward compatible with older app versions)
-            val hasModelEntries = entries.any { it.first == EntryType.MODEL_FILE }
-            val effectiveVersion = if (hasModelEntries) 2 else 1
-
             // 5. Build metadata
             val metadata = JSONObject().apply {
                 put("appVersion", getAppVersion())
-                put("dbVersion", 7)
-                put("backupVersion", effectiveVersion)
+                put("backupVersion", BACKUP_VERSION)
                 put("createdAt", System.currentTimeMillis())
                 put("entryCount", entries.size)
                 put("includesModels", options.includeModelFiles)
                 put("includesRags", options.includeRagFiles)
+                put("storageFormat", "ums")
             }
             val metadataBytes = metadata.toString().toByteArray(Charsets.UTF_8)
 
@@ -359,7 +365,7 @@ class SystemBackupManager(private val context: Context) {
             context.contentResolver.openOutputStream(outputUri)?.use { output ->
                 DataOutputStream(output).apply {
                     writeInt(MAGIC)
-                    writeInt(effectiveVersion)
+                    writeInt(BACKUP_VERSION)
                     writeLong(System.currentTimeMillis())
                     writeInt(metadataBytes.size)
                     write(metadataBytes)
@@ -371,7 +377,7 @@ class SystemBackupManager(private val context: Context) {
             } ?: throw Exception("Failed to open output stream")
 
             onProgress(BackupProgress.Complete)
-            Log.i(TAG, "Backup v$effectiveVersion created: ${entries.size} entries (models=${options.includeModelFiles}, modelEntries=$hasModelEntries)")
+            Log.i(TAG, "Backup v$BACKUP_VERSION created: ${entries.size} entries (models=${options.includeModelFiles})")
             true
         } catch (e: Exception) {
             Log.e(TAG, "Backup failed", e)
@@ -437,7 +443,7 @@ class SystemBackupManager(private val context: Context) {
             // Parse entries
             val entries = parsePayload(payload)
 
-            // Validate manifest checksums (v2 only)
+            // Validate manifest checksums (v2+)
             if (version >= 2) {
                 onProgress(BackupProgress.Processing(0.25f, "Validating checksums"))
                 val manifestEntry = entries.find { it.first == EntryType.MANIFEST }
@@ -447,6 +453,7 @@ class SystemBackupManager(private val context: Context) {
             }
 
             // Separate entries by type
+            val umsEntries = entries.filter { it.first == EntryType.UMS_DIR_FILE }
             val chatExports = entries.filter { it.first == EntryType.CHAT_EXPORT }
             val modelEntries = entries.filter { it.first == EntryType.MODEL_FILE }
             val memoryExports = entries.filter { it.first == EntryType.MEMORY_EXPORT }
@@ -455,7 +462,8 @@ class SystemBackupManager(private val context: Context) {
                 it.first != EntryType.VAULT_FILE &&
                 it.first != EntryType.MODEL_FILE &&
                 it.first != EntryType.MANIFEST &&
-                it.first != EntryType.MEMORY_EXPORT
+                it.first != EntryType.MEMORY_EXPORT &&
+                it.first != EntryType.UMS_DIR_FILE
             }
             // VAULT_FILE entries are skipped — they use device-bound Keystore encryption
 
@@ -466,53 +474,68 @@ class SystemBackupManager(private val context: Context) {
             try {
                 // ========== PHASE 3: RESTORE (destructive) ==========
                 onProgress(BackupProgress.Collecting("Preparing restore"))
-                closeVaultForBackup()
+
+                // Close VaultManager (UMS) before replacing files
+                VaultManager.close()
                 AppContainer.closeDatabase()
 
-                // Clear existing vault (will be rebuilt from chat exports)
-                val vaultDir = File(context.filesDir, "memory_vault")
-                vaultDir.deleteRecursively()
+                // Restore UMS directory files (v3 backups)
+                if (umsEntries.isNotEmpty()) {
+                    val umsDir = File(context.filesDir, "ums")
+                    umsDir.deleteRecursively()
+                    umsDir.mkdirs()
+
+                    onProgress(BackupProgress.Processing(0.4f, "Restoring UMS data"))
+                    for (entry in umsEntries) {
+                        val destFile = File(umsDir, entry.second)
+                        destFile.parentFile?.mkdirs()
+                        destFile.writeBytes(entry.third)
+                    }
+                    Log.i(TAG, "Restored ${umsEntries.size} UMS directory entries")
+                }
 
                 // Restore file entries (DB, DataStore, RAG, Avatars)
-                onProgress(BackupProgress.Processing(0.4f, "Restoring files"))
+                onProgress(BackupProgress.Processing(0.5f, "Restoring files"))
                 for (entry in fileEntries) {
                     restoreEntry(entry.first, entry.second, entry.third)
                 }
 
-                // Restore model files (v2)
+                // Restore model files (v2+)
                 if (modelEntries.isNotEmpty()) {
-                    onProgress(BackupProgress.Processing(0.5f, "Restoring models"))
+                    onProgress(BackupProgress.Processing(0.55f, "Restoring models"))
                     for (entry in modelEntries) {
                         restoreModelEntry(entry.second, entry.third)
                     }
                     Log.i(TAG, "Restored ${modelEntries.size} model file entries")
                 }
 
-                // Re-initialize (vault starts fresh with new Keystore key)
+                // Re-initialize
                 onProgress(BackupProgress.Processing(0.6f, "Reinitializing"))
                 AppContainer.reinitialize(context)
 
-                // Re-import chats into vault (re-encrypts with new device key)
-                if (chatExports.isNotEmpty()) {
-                    onProgress(BackupProgress.Collecting("Restoring chats"))
-                    if (!VaultHelper.isInitialized()) VaultHelper.initialize(context)
-                    for ((index, entry) in chatExports.withIndex()) {
-                        try {
-                            val exportJson = String(entry.third, Charsets.UTF_8)
-                            val chatExport = json.decodeFromString(ChatExport.serializer(), exportJson)
-                            VaultHelper.importChat(chatExport)
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed to import chat ${entry.second}: ${e.message}")
+                // For v1/v2 backups that have no UMS data, import chats from CHAT_EXPORT entries
+                if (umsEntries.isEmpty() && chatExports.isNotEmpty()) {
+                    onProgress(BackupProgress.Collecting("Importing chats"))
+                    val chatRepo = VaultManager.chatRepo
+                    if (chatRepo != null) {
+                        for ((index, entry) in chatExports.withIndex()) {
+                            try {
+                                val exportJson = String(entry.third, Charsets.UTF_8)
+                                val chatExport = json.decodeFromString(ChatExport.serializer(), exportJson)
+                                chatRepo.importChat(chatExport)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to import chat ${entry.second}: ${e.message}")
+                            }
+                            val chatProgress = 0.7f + (0.15f * (index + 1) / chatExports.size)
+                            onProgress(BackupProgress.Processing(chatProgress, "Importing chats"))
                         }
-                        val chatProgress = 0.7f + (0.2f * (index + 1) / chatExports.size)
-                        onProgress(BackupProgress.Processing(chatProgress, "Restoring chats"))
+                        Log.i(TAG, "Imported ${chatExports.size} chats into UMS")
                     }
-                    Log.i(TAG, "Imported ${chatExports.size} chats")
                 }
 
-                // Restore per-persona memory exports (supplement DB restore)
-                if (memoryExports.isNotEmpty()) {
-                    onProgress(BackupProgress.Processing(0.92f, "Restoring memories"))
+                // For v1/v2 backups, restore memory exports into UMS
+                if (umsEntries.isEmpty() && memoryExports.isNotEmpty()) {
+                    onProgress(BackupProgress.Processing(0.88f, "Restoring memories"))
                     restoreMemoryExports(memoryExports)
                 }
 
@@ -520,7 +543,7 @@ class SystemBackupManager(private val context: Context) {
                 safetyDir?.deleteRecursively()
 
                 onProgress(BackupProgress.Complete)
-                Log.i(TAG, "Restore complete: ${entries.size} entries (v$version)")
+                Log.i(TAG, "Restore complete: ${entries.size} entries (v$version, hasUms=${umsEntries.isNotEmpty()})")
                 true
             } catch (e: Exception) {
                 // ========== PHASE 4: ROLLBACK ==========
@@ -551,11 +574,12 @@ class SystemBackupManager(private val context: Context) {
         try {
             onProgress(BackupProgress.Starting)
 
-            // Clear vault
-            onProgress(BackupProgress.Collecting("Clearing chats"))
-            VaultHelper.clearVault(context)
+            // Close and clear UMS
+            onProgress(BackupProgress.Collecting("Clearing UMS data"))
+            VaultManager.close()
+            File(context.filesDir, "ums").deleteRecursively()
 
-            // Clear database
+            // Clear Room database (RAG tables)
             onProgress(BackupProgress.Collecting("Clearing database"))
             AppContainer.getDatabase().clearAllTables()
 
@@ -570,6 +594,9 @@ class SystemBackupManager(private val context: Context) {
             // Clear DataStore preferences
             onProgress(BackupProgress.Collecting("Clearing settings"))
             clearDataStoreFiles()
+
+            // Re-initialize UMS
+            AppContainer.reinitialize(context)
 
             onProgress(BackupProgress.Complete)
             Log.i(TAG, "All data deleted")
@@ -588,7 +615,14 @@ class SystemBackupManager(private val context: Context) {
             val safetyDir = File(context.cacheDir, "restore_safety_${System.currentTimeMillis()}")
             safetyDir.mkdirs()
 
-            // Copy DB file
+            // Copy UMS directory
+            val umsDir = File(context.filesDir, "ums")
+            if (umsDir.exists()) {
+                val umsBackup = File(safetyDir, "ums_backup")
+                umsDir.copyRecursively(umsBackup, overwrite = true)
+            }
+
+            // Copy DB file (for RAG)
             val dbFile = context.getDatabasePath(DB_NAME)
             if (dbFile.exists()) {
                 dbFile.copyTo(File(safetyDir, "db_backup"), overwrite = true)
@@ -616,6 +650,14 @@ class SystemBackupManager(private val context: Context) {
         if (safetyDir == null || !safetyDir.exists()) {
             Log.w(TAG, "No safety snapshot available for rollback")
             return
+        }
+
+        // Restore UMS directory
+        val umsBackup = File(safetyDir, "ums_backup")
+        if (umsBackup.exists()) {
+            val umsDir = File(context.filesDir, "ums")
+            umsDir.deleteRecursively()
+            umsBackup.copyRecursively(umsDir, overwrite = true)
         }
 
         // Restore DB
@@ -658,6 +700,7 @@ class SystemBackupManager(private val context: Context) {
                 EntryType.AVATAR_FILE -> "avatar:${entry.second}"
                 EntryType.MODEL_FILE -> "model:${entry.second}"
                 EntryType.MEMORY_EXPORT -> "memory:${entry.second}"
+                EntryType.UMS_DIR_FILE -> "ums:${entry.second}"
                 else -> continue
             }
 
@@ -677,6 +720,20 @@ class SystemBackupManager(private val context: Context) {
         Log.d(TAG, "Manifest validation passed")
     }
 
+    // ======================== UMS DIRECTORY COLLECTION ========================
+
+    private fun collectUmsDirectoryFiles(): List<Pair<String, ByteArray>> {
+        val umsDir = File(context.filesDir, "ums")
+        if (!umsDir.exists() || !umsDir.isDirectory) return emptyList()
+        return umsDir.walkTopDown()
+            .filter { it.isFile }
+            .map { file ->
+                val relativePath = file.relativeTo(umsDir).path
+                relativePath to file.readBytes()
+            }
+            .toList()
+    }
+
     // ======================== MODEL FILE COLLECTION ========================
 
     private suspend fun collectModelFiles(options: BackupOptions): List<Pair<String, ByteArray>> {
@@ -688,9 +745,9 @@ class SystemBackupManager(private val context: Context) {
             return results
         }
 
-        val db = AppContainer.getDatabase()
-        val models = db.modelDao().getAllOnce()
-        Log.d(TAG, "collectModelFiles: found ${models.size} models in DB, filter=${options.modelIdsToInclude}")
+        val modelRepo = VaultManager.modelRepo ?: return results
+        val models = modelRepo.getAllOnce()
+        Log.d(TAG, "collectModelFiles: found ${models.size} models, filter=${options.modelIdsToInclude}")
 
         for (model in models) {
             Log.d(TAG, "collectModelFiles: checking model '${model.modelName}' path=${model.modelPath} pathType=${model.pathType}")
@@ -750,14 +807,14 @@ class SystemBackupManager(private val context: Context) {
 
     private suspend fun collectMemoryExports(): List<Pair<String, ByteArray>> {
         val results = mutableListOf<Pair<String, ByteArray>>()
-        val db = AppContainer.getDatabase()
-        val memoryDao = db.aiMemoryDao()
-        val relationDao = db.knowledgeRelationDao()
-        val personaDao = db.personaDao()
 
-        val allMemories = memoryDao.getAllOnce()
-        val allRelations = relationDao.getAll()
-        val personas = personaDao.getAllOnce()
+        val memoryRepo = VaultManager.memoryRepo ?: return results
+        val knowledgeRepo = VaultManager.knowledgeRepo ?: return results
+        val personaRepo = VaultManager.personaRepo ?: return results
+
+        val allMemories = memoryRepo.getAllOnce()
+        val allRelations = knowledgeRepo.getAllRelations()
+        val personas = personaRepo.getAllOnce()
         val personaNameMap = personas.associate { it.id to it.name }
 
         // Group memories by persona_id (null = global)
@@ -804,8 +861,8 @@ class SystemBackupManager(private val context: Context) {
             )
 
             val exportJson = json.encodeToString(PersonaMemoryExport.serializer(), export)
-            val key = personaId ?: "global"
-            results.add(key to exportJson.toByteArray(Charsets.UTF_8))
+            val exportKey = personaId ?: "global"
+            results.add(exportKey to exportJson.toByteArray(Charsets.UTF_8))
         }
 
         Log.i(TAG, "Collected memory exports: ${results.size} persona groups, ${allMemories.size} memories, ${allRelations.size} relations")
@@ -813,13 +870,12 @@ class SystemBackupManager(private val context: Context) {
     }
 
     private suspend fun restoreMemoryExports(memoryEntries: List<Triple<EntryType, String, ByteArray>>) {
-        val db = AppContainer.getDatabase()
-        val memoryDao = db.aiMemoryDao()
-        val relationDao = db.knowledgeRelationDao()
+        val memoryRepo = VaultManager.memoryRepo ?: return
+        val knowledgeRepo = VaultManager.knowledgeRepo ?: return
 
-        // Get existing IDs to avoid duplicates (DB restore may have already inserted them)
-        val existingMemoryIds = memoryDao.getAllOnce().map { it.id }.toSet()
-        val existingRelationIds = relationDao.getAll().map { it.id }.toSet()
+        // Get existing IDs to avoid duplicates
+        val existingMemoryIds = memoryRepo.getAllOnce().map { it.id }.toSet()
+        val existingRelationIds = knowledgeRepo.getAllRelations().map { it.id }.toSet()
 
         var memoriesInserted = 0
         var relationsInserted = 0
@@ -833,7 +889,7 @@ class SystemBackupManager(private val context: Context) {
                 for (m in export.memories) {
                     if (m.id in existingMemoryIds) continue
                     val category = try { MemoryCategory.valueOf(m.category) } catch (_: Exception) { MemoryCategory.GENERAL }
-                    memoryDao.insert(
+                    memoryRepo.insert(
                         AiMemory(
                             id = m.id,
                             fact = m.fact,
@@ -846,7 +902,6 @@ class SystemBackupManager(private val context: Context) {
                             isSummarized = m.isSummarized,
                             summaryGroupId = m.summaryGroupId,
                             personaId = m.personaId
-                            // embedding excluded — will be regenerated via backfillEmbeddings()
                         )
                     )
                     memoriesInserted++
@@ -855,7 +910,7 @@ class SystemBackupManager(private val context: Context) {
                 // Insert KG relations not already present
                 for (r in export.kgTriples) {
                     if (r.id in existingRelationIds) continue
-                    relationDao.insert(
+                    knowledgeRepo.insertRelation(
                         KnowledgeRelation(
                             id = r.id,
                             subjectId = r.subjectId,
@@ -937,7 +992,7 @@ class SystemBackupManager(private val context: Context) {
 
         repeat(count) {
             val typeOrdinal = dis.readInt()
-            val type = if (typeOrdinal < types.size) types[typeOrdinal] else EntryType.VAULT_FILE // unknown → skip safely
+            val type = if (typeOrdinal < types.size) types[typeOrdinal] else EntryType.VAULT_FILE // unknown -> skip safely
             val pathLen = dis.readInt()
             val pathBytes = ByteArray(pathLen)
             dis.readFully(pathBytes)
@@ -1021,10 +1076,11 @@ class SystemBackupManager(private val context: Context) {
                     writeBytes(data)
                 }
             }
-            EntryType.CHAT_EXPORT -> { /* Handled separately after vault init */ }
+            EntryType.CHAT_EXPORT -> { /* Handled separately after VaultManager init */ }
             EntryType.MODEL_FILE -> { /* Handled separately via restoreModelEntry */ }
             EntryType.MANIFEST -> { /* Already validated */ }
-            EntryType.MEMORY_EXPORT -> { /* Handled separately after DB restore */ }
+            EntryType.MEMORY_EXPORT -> { /* Handled separately after VaultManager init */ }
+            EntryType.UMS_DIR_FILE -> { /* Handled separately before file entries */ }
         }
     }
 
@@ -1034,28 +1090,6 @@ class SystemBackupManager(private val context: Context) {
             dataStoreDir.listFiles()?.filter { it.name.endsWith(".preferences_pb") }?.forEach {
                 it.delete()
             }
-        }
-    }
-
-    // ======================== VAULT LIFECYCLE ========================
-
-    private suspend fun closeVaultForBackup(): Boolean {
-        return try {
-            if (VaultHelper.isInitialized()) {
-                VaultHelper.close()
-                true
-            } else false
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to close vault: ${e.message}")
-            false
-        }
-    }
-
-    private suspend fun reopenVault() {
-        try {
-            VaultHelper.initialize(context)
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to reopen vault: ${e.message}")
         }
     }
 
