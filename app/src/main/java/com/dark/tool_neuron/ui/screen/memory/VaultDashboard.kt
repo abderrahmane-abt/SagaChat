@@ -43,6 +43,7 @@ import com.dark.tool_neuron.ui.theme.ManropeFontFamily
 import com.dark.tool_neuron.global.formatBytes
 import com.dark.tool_neuron.global.formatCompactDate
 import com.dark.tool_neuron.viewmodel.memory.VaultManagementViewModel
+import com.dark.tool_neuron.ui.components.ExpandCollapseIcon
 import com.dark.tool_neuron.ui.icons.TnIcons
 
 @Composable
@@ -256,12 +257,7 @@ fun VaultDashboard(onNavigateBack: () -> Unit) {
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.weight(1f)
                         )
-                        Icon(
-                            if (showLogs) TnIcons.ChevronUp else TnIcons.ChevronDown,
-                            null,
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        ExpandCollapseIcon(isExpanded = showLogs, size = 18.dp)
                     }
                 }
             }

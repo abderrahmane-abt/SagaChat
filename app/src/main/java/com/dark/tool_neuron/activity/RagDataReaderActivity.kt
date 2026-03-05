@@ -11,8 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
+import com.dark.tool_neuron.ui.components.PasswordTextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -701,25 +700,12 @@ fun PasswordInputDialog(
                     "This RAG is encrypted. Please enter the password to view its contents.",
                     style = MaterialTheme.typography.bodyMedium
                 )
-                OutlinedTextField(
+                PasswordTextField(
                     value = password,
                     onValueChange = { password = it },
-                    label = { Text("Password") },
-                    singleLine = true,
-                    visualTransformation = if (showPassword)
-                        VisualTransformation.None
-                    else
-                        PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { showPassword = !showPassword }) {
-                            Icon(
-                                if (showPassword) TnIcons.EyeOff else TnIcons.Eye,
-                                contentDescription = if (showPassword) "Hide password" else "Show password"
-                            )
-                        }
-                    },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    showPasswordState = showPassword,
+                    onToggleVisibility = { showPassword = !showPassword }
                 )
             }
         },

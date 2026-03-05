@@ -6,6 +6,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import com.dark.tool_neuron.ui.components.ExpandCollapseIcon
 import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.gestures.Orientation
@@ -1498,11 +1499,7 @@ fun ModelFiltersSection(
             TextButton(
                 onClick = { showAdvancedFilters = !showAdvancedFilters }
             ) {
-                Icon(
-                    imageVector = if (showAdvancedFilters) TnIcons.ChevronUp else TnIcons.ChevronDown,
-                    contentDescription = if (showAdvancedFilters) "Hide" else "Show",
-                    modifier = Modifier.size(20.dp)
-                )
+                ExpandCollapseIcon(isExpanded = showAdvancedFilters, size = 20.dp)
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Advanced Filters")
                 if (activeFilterCount > 0) {

@@ -26,6 +26,7 @@ import com.neuronpacket.LoadingMode
 import com.neuronpacket.Permission
 import com.neuronpacket.UserCredentials
 import kotlinx.coroutines.launch
+import com.dark.tool_neuron.ui.components.ExpandCollapseIcon
 import com.dark.tool_neuron.ui.components.PasswordTextField
 import com.dark.tool_neuron.ui.icons.TnIcons
 
@@ -412,12 +413,7 @@ fun SecureRagCreationScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Icon(
-                        if (showAdvanced) TnIcons.ChevronUp else TnIcons.ChevronDown,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    ExpandCollapseIcon(isExpanded = showAdvanced, size = 20.dp)
                 }
             }
         }

@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import com.dark.tool_neuron.ui.components.ExpandCollapseIcon
 import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -687,12 +688,7 @@ private fun ThinkingBlock(
                     )
                 }
 
-                Icon(
-                    imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
-                    contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                ExpandCollapseIcon(isExpanded = isExpanded, size = 20.dp)
             }
 
             AnimatedVisibility(
@@ -1145,12 +1141,7 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
                     )
                 }
 
-                Icon(
-                    imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
-                    contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                ExpandCollapseIcon(isExpanded = isExpanded, size = 18.dp)
             }
         }
 
@@ -1326,12 +1317,7 @@ private fun MemoryMetricsDisplay(metrics: MemoryMetrics) {
                     }
                 }
 
-                Icon(
-                    imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
-                    contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                ExpandCollapseIcon(isExpanded = isExpanded, size = 18.dp)
             }
         }
 
@@ -1447,12 +1433,7 @@ private fun ImageMetricsDisplay(metrics: ImageGenerationMetrics) {
                     )
                 }
 
-                Icon(
-                    imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
-                    contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                ExpandCollapseIcon(isExpanded = isExpanded, size = 18.dp)
             }
         }
 
@@ -1613,12 +1594,7 @@ fun RagResultsDisplay(
                     )
                 }
 
-                Icon(
-                    imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
-                    contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                ExpandCollapseIcon(isExpanded = isExpanded, size = 18.dp)
             }
         }
 
@@ -1786,12 +1762,7 @@ fun SavedRagResultsDisplay(
                     )
                 }
 
-                Icon(
-                    imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
-                    contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                ExpandCollapseIcon(isExpanded = isExpanded, size = 18.dp)
             }
         }
 

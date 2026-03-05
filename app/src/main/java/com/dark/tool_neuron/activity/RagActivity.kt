@@ -76,8 +76,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
+import com.dark.tool_neuron.ui.components.PasswordTextField
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -1024,25 +1023,12 @@ private fun PasswordDialog(
                     text = "This RAG is encrypted. Enter the password to load it.",
                     style = MaterialTheme.typography.bodyMedium
                 )
-                OutlinedTextField(
+                PasswordTextField(
                     value = password,
                     onValueChange = { password = it },
-                    label = { Text("Password") },
-                    singleLine = true,
-                    visualTransformation = if (showPassword)
-                        VisualTransformation.None
-                    else
-                        PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { showPassword = !showPassword }) {
-                            Icon(
-                                if (showPassword) TnIcons.EyeOff else TnIcons.Eye,
-                                contentDescription = null
-                            )
-                        }
-                    },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    showPasswordState = showPassword,
+                    onToggleVisibility = { showPassword = !showPassword }
                 )
             }
         },

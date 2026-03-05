@@ -35,7 +35,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.models.table_schema.InstalledRag
 import com.neuronpacket.LoadingMode
@@ -235,13 +234,11 @@ fun RagExportDialog(
                                 modifier = Modifier.weight(1f),
                                 singleLine = true
                             )
-                            OutlinedTextField(
+                            PasswordTextField(
                                 value = currentReadOnlyPassword,
                                 onValueChange = { currentReadOnlyPassword = it },
-                                label = { Text("Password") },
                                 modifier = Modifier.weight(1f),
-                                singleLine = true,
-                                visualTransformation = PasswordVisualTransformation()
+                                showToggle = false
                             )
                         }
 
