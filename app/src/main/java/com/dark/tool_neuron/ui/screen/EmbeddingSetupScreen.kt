@@ -9,8 +9,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,6 +32,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URL
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun EmbeddingSetupScreen(onSetupComplete: () -> Unit) {
     val context = LocalContext.current
@@ -89,7 +91,7 @@ fun EmbeddingSetupScreen(onSetupComplete: () -> Unit) {
             verticalArrangement = Arrangement.Center
         ) {
             if (isDownloading) {
-                CircularProgressIndicator(
+                LoadingIndicator(
                     modifier = Modifier.size(64.dp),
                     color = MaterialTheme.colorScheme.primary
                 )

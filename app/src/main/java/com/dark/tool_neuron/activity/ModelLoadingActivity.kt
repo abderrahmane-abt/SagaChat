@@ -443,6 +443,7 @@ private fun EmptyState(onPickModel: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun LoadingStateView() {
     Box(
@@ -458,8 +459,8 @@ private fun LoadingStateView() {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(rDp(20.dp))
             ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(rDp(48.dp)), strokeWidth = rDp(4.dp)
+                LoadingIndicator(
+                    modifier = Modifier.size(rDp(48.dp))
                 )
                 Text(
                     "Loading Model...",
@@ -476,6 +477,7 @@ private fun LoadingStateView() {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ModelInfoView(
     info: ModelInfo,
@@ -619,9 +621,8 @@ private fun ModelInfoView(
                                 }
 
                                 InstallState.Installing -> {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(rDp(24.dp)),
-                                        strokeWidth = rDp(2.dp)
+                                    LoadingIndicator(
+                                        modifier = Modifier.size(rDp(24.dp))
                                     )
                                     Text(
                                         "Processing...",

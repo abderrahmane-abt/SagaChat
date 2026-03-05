@@ -51,7 +51,7 @@ enum class PickerMode {
     FOLDER     // Pick directories (for diffusion models)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ModelPickerScreen(
     finishWithPath: (String, ProviderType) -> Unit,
@@ -161,7 +161,7 @@ fun ModelPickerScreen(
                 ) { hasAllFiles = hasAllFilesAccess() }
 
                 loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                    LoadingIndicator()
                 }
 
                 error != null -> ErrorState(

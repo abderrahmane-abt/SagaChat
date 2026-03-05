@@ -434,11 +434,11 @@ private fun SummarySection(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun PhaseSpinner() {
-    CircularProgressIndicator(
+    LoadingIndicator(
         modifier = Modifier.size(rDp(12.dp)),
-        strokeWidth = rDp(2.dp),
         color = MaterialTheme.colorScheme.tertiary
     )
 }

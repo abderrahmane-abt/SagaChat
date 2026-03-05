@@ -40,8 +40,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -115,7 +116,7 @@ class RagActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun RagScreen(
     ragViewModel: RagViewModel = hiltViewModel(),
@@ -254,7 +255,7 @@ fun RagScreen(
                         .padding(rDp(8.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(modifier = Modifier.size(rDp(24.dp)))
+                    LoadingIndicator(modifier = Modifier.size(rDp(24.dp)))
                 }
             }
 
@@ -533,6 +534,7 @@ private fun EmptyRagListState(message: String, subMessage: String) {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun RagCard(
     rag: InstalledRag,
@@ -674,9 +676,8 @@ private fun RagCard(
                             )
                         }
                         RagStatus.LOADING -> {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(rDp(20.dp)),
-                                strokeWidth = rDp(2.dp)
+                            LoadingIndicator(
+                                modifier = Modifier.size(rDp(20.dp))
                             )
                         }
                         else -> {
@@ -775,7 +776,7 @@ private fun TagChip(tag: String) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun RagDetailBottomSheet(
     rag: InstalledRag,
@@ -914,9 +915,8 @@ private fun RagDetailBottomSheet(
                                 enabled = false,
                                 shape = RoundedCornerShape(rDp(12.dp))
                             ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(rDp(20.dp)),
-                                    strokeWidth = rDp(2.dp)
+                                LoadingIndicator(
+                                    modifier = Modifier.size(rDp(20.dp))
                                 )
                                 Spacer(modifier = Modifier.width(rDp(8.dp)))
                                 Text("Loading...")

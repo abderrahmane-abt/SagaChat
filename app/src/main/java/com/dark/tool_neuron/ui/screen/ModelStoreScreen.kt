@@ -35,9 +35,9 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -399,6 +399,7 @@ private fun RepoCardListView(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun StoreRepoCard(
     info: RepoGroupInfo,
@@ -439,9 +440,8 @@ private fun StoreRepoCard(
                     )
                     if (hasActiveDownload) {
                         CaptionText(text = "·")
-                        CircularProgressIndicator(
+                        LoadingIndicator(
                             modifier = Modifier.size(rDp(10.dp)),
-                            strokeWidth = rDp(1.5.dp),
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -626,6 +626,7 @@ private fun InstalledModelsTab(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun InstalledModelCard(
     model: Model,
@@ -695,9 +696,8 @@ private fun InstalledModelCard(
                     modifier = Modifier.size(rDp(Standards.ActionIconSize)),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(
+                    LoadingIndicator(
                         modifier = Modifier.size(rDp(Standards.IconMd)),
-                        strokeWidth = rDp(2.dp),
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -1015,6 +1015,7 @@ private fun DeviceInfoRow(label: String, value: String) {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun RepositoryCard(
     repository: HFModelRepository,
@@ -1048,9 +1049,8 @@ private fun RepositoryCard(
                     null -> MaterialTheme.colorScheme.outlineVariant
                 }
                 if (validationResult is ValidationResult.Checking) {
-                    CircularProgressIndicator(
+                    LoadingIndicator(
                         modifier = Modifier.size(rDp(10.dp)),
-                        strokeWidth = rDp(1.5.dp),
                         color = dotColor
                     )
                 } else {

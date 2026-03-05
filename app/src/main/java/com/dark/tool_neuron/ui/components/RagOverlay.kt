@@ -26,8 +26,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,7 +59,7 @@ import com.dark.tool_neuron.models.table_schema.RagStatus
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.ui.icons.TnIcons
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun RagOverlayBottomSheet(
     show: Boolean,
@@ -278,6 +279,7 @@ private fun RagList(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun RagListItem(
     rag: InstalledRag,
@@ -440,9 +442,8 @@ private fun RagListItem(
                                         .size(rDp(32.dp))
                                         .padding(rDp(4.dp))
                                 ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.fillMaxSize(),
-                                        strokeWidth = rDp(2.dp)
+                                    LoadingIndicator(
+                                        modifier = Modifier.fillMaxSize()
                                     )
                                 }
                             }

@@ -27,8 +27,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -64,6 +65,7 @@ import com.dark.tool_neuron.viewmodel.SetupViewModel
 import com.dark.tool_neuron.worker.SystemBackupManager
 import kotlinx.coroutines.delay
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SetupScreen(
     onSetupComplete: () -> Unit
@@ -262,6 +264,7 @@ fun SetupScreen(
 
 // ==================== Restore from Backup ====================
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun RestoreFromBackupCard(viewModel: SetupViewModel) {
     var showRestoreDialog by remember { mutableStateOf(false) }
@@ -307,7 +310,7 @@ private fun RestoreFromBackupCard(viewModel: SetupViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))
             ) {
-                CircularProgressIndicator(modifier = Modifier.size(rDp(20.dp)))
+                LoadingIndicator(modifier = Modifier.size(rDp(20.dp)))
                 Text(
                     text = when (progress) {
                         is SystemBackupManager.BackupProgress.Starting -> "Restoring..."

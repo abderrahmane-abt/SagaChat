@@ -58,7 +58,7 @@ data class RagCreationState(
     val isCreating: Boolean = false
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SecureRagCreationScreen(
     ragViewModel: RagViewModel,
@@ -659,6 +659,7 @@ private fun FileDropZone(
 
 // ==================== Supporting Composables ====================
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun EmbeddingModelCard(
     isDownloaded: Boolean,
@@ -731,9 +732,8 @@ private fun EmbeddingModelCard(
 
                 when {
                     isDownloading -> {
-                        CircularProgressIndicator(
+                        LoadingIndicator(
                             modifier = Modifier.size(rDp(24.dp)),
-                            strokeWidth = rDp(2.5f.dp),
                             color = MaterialTheme.colorScheme.primary
                         )
                     }

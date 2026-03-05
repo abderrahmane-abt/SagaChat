@@ -15,8 +15,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -66,6 +67,7 @@ fun AnimatedTitle(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun TitleRow(
     modifier: Modifier = Modifier, text: String, icon: ImageVector, state: AppState
@@ -88,10 +90,9 @@ fun TitleRow(
                 modifier = Modifier.padding(horizontal = rDp(12.dp))
             ) {
                 if (isLoading) {
-                    CircularProgressIndicator(
+                    LoadingIndicator(
                         modifier = Modifier.size(rDp(16.dp)),
-                        color = iconColor,
-                        strokeWidth = rDp(2.dp)
+                        color = iconColor
                     )
                 } else {
                     Icon(

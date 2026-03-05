@@ -81,7 +81,7 @@ class RagDataReaderActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun RagDataReaderScreen(
     filePath: String,
@@ -176,7 +176,7 @@ fun RagDataReaderScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
                     ) {
-                        CircularProgressIndicator()
+                        LoadingIndicator()
                         Text("Loading RAG data...")
                     }
                 }

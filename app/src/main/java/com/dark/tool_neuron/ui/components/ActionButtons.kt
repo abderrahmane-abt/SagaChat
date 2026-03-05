@@ -25,6 +25,7 @@ import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.FilledTonalButton
@@ -195,11 +196,9 @@ fun MultiActionButton(
                         )
                 ) {
                     if (action.isLoading) {
-                        CircularProgressIndicator(
+                        LoadingIndicator(
                             modifier = Modifier.size(rDp(Standards.ActionIconSize - 12.dp)),
-                            color = tint,
-                            strokeWidth = rDp(2.dp),
-                            trackColor = tint.copy(alpha = 0.1f)
+                            color = tint
                         )
                     } else {
                         when (action.icon) {

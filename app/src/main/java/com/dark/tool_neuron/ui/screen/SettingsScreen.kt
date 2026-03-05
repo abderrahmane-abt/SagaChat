@@ -28,8 +28,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -77,7 +78,7 @@ import com.dark.tool_neuron.worker.SystemBackupManager
 import kotlin.math.roundToInt
 import com.dark.tool_neuron.ui.icons.TnIcons
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
@@ -727,6 +728,7 @@ fun SettingsScreen(
 
 // ==================== Data Management Section ====================
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun DataManagementSection(viewModel: SettingsViewModel) {
     val context = LocalContext.current
@@ -802,7 +804,7 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
                 ) {
-                    CircularProgressIndicator(modifier = Modifier.size(rDp(20.dp)))
+                    LoadingIndicator(modifier = Modifier.size(rDp(20.dp)))
                     Text(
                         text = when (val p = backupProgress) {
                             is SystemBackupManager.BackupProgress.Starting -> "Starting..."

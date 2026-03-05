@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -270,9 +269,8 @@ private fun ChatListItem(
             }
 
             if (isDeleting) {
-                CircularProgressIndicator(
+                LoadingIndicator(
                     modifier = Modifier.size(rDp(20.dp)),
-                    strokeWidth = rDp(2.dp),
                     color = MaterialTheme.colorScheme.primary
                 )
             } else {
@@ -327,6 +325,7 @@ private fun EmptyState() {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun LoadingState() {
     Box(
@@ -337,7 +336,7 @@ private fun LoadingState() {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
         ) {
-            CircularProgressIndicator()
+            LoadingIndicator()
             Text(
                 "Loading chats...",
                 style = MaterialTheme.typography.bodyMedium,

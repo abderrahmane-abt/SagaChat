@@ -26,8 +26,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -165,6 +166,7 @@ fun ToolCard(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ToolStateIndicator(state: ToolState) {
     AnimatedContent(
@@ -179,9 +181,8 @@ private fun ToolStateIndicator(state: ToolState) {
                 modifier = Modifier.size(rDp(20.dp))
             )
 
-            is ToolState.InProgress -> CircularProgressIndicator(
+            is ToolState.InProgress -> LoadingIndicator(
                 modifier = Modifier.size(rDp(20.dp)),
-                strokeWidth = rDp(2.dp),
                 color = MaterialTheme.colorScheme.primary
             )
 

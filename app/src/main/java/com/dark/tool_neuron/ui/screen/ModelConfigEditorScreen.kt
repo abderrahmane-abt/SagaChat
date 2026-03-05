@@ -30,7 +30,7 @@ import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ModelConfigEditorViewModel
 import com.dark.tool_neuron.ui.icons.TnIcons
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ModelConfigEditorScreen(
     onBackClick: () -> Unit,
@@ -833,6 +833,7 @@ private fun EmptySelectionState(modifier: Modifier = Modifier) {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun LoadingOverlay() {
     Box(
@@ -841,7 +842,7 @@ private fun LoadingOverlay() {
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)),
         contentAlignment = Alignment.Center
     ) {
-        CircularProgressIndicator()
+        LoadingIndicator()
     }
 }
 
