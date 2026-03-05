@@ -80,7 +80,6 @@ import com.dark.tool_neuron.ui.icons.TnIcons
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onModelEditor: () -> Unit = {},
-    onPersonasClick: () -> Unit = {},
     onAiMemoryClick: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel()
 ) {
@@ -302,32 +301,10 @@ fun SettingsScreen(
                 }
             }
 
-            // ==================== AI Personality & Memory ====================
+            // ==================== AI Memory ====================
             item { Spacer(Modifier.height(Standards.SpacingSm)) }
             item { SectionDivider() }
-            item { SectionHeader(title = "AI Personality & Memory") }
-
-            item {
-                Surface(
-                    onClick = onPersonasClick,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerLow
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            "Personas",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            "Choose or create AI personalities with custom behavior",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
+            item { SectionHeader(title = "AI Memory") }
 
             item {
                 SwitchRow(

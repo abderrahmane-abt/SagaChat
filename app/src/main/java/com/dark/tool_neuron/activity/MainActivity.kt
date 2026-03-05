@@ -28,18 +28,15 @@ import com.dark.tool_neuron.data.VaultManager
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.ui.screen.AiMemoryScreen
+import com.dark.tool_neuron.ui.screen.GuideScreen
 import com.dark.tool_neuron.ui.screen.ModelConfigEditorScreen
 import com.dark.tool_neuron.ui.screen.ModelStoreScreen
-import com.dark.tool_neuron.ui.screen.PersonaEditorScreen
-import com.dark.tool_neuron.ui.screen.PersonaScreen
 import com.dark.tool_neuron.ui.screen.SetupScreen
 import com.dark.tool_neuron.ui.screen.SettingsScreen
 import com.dark.tool_neuron.ui.screen.TermsAndConditionsScreen
-import com.dark.tool_neuron.ui.screen.WelcomeScreen
 import com.dark.tool_neuron.ui.screen.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.screen.memory.VaultDashboard
 import com.dark.tool_neuron.ui.screens.IntroScreen
-import com.dark.tool_neuron.ui.screens.ShowcaseScreen
 import com.dark.tool_neuron.ui.screens.VaultGateScreen
 import com.dark.tool_neuron.viewModel.VaultGateViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -54,6 +51,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.dark.tool_neuron.global.AppPaths
+import java.io.File
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -87,41 +86,64 @@ class MainActivity : ComponentActivity() {
                 // Compute start destination from onboarding state + installed models
                 var startDestination by remember { mutableStateOf<String?>(null) }
                 var hasModelsInstalled by remember { mutableStateOf(false) }
+                var needsMigration by remember { mutableStateOf(false) }
 
                 LaunchedEffect(Unit) {
                     withContext(Dispatchers.IO) {
                         val termsDataStore = TermsDataStore(context)
                         val setupDataStore = SetupDataStore(context)
                         val appSettings = AppSettingsDataStore(context)
-                        val modelRepository = AppContainer.getModelRepository()
 
                         val termsAccepted = termsDataStore.hasAcceptedTerms.first()
                         val setupDone = setupDataStore.isSetupDone.first()
-                        val showcaseSeen = appSettings.showcaseSeen.first()
-                        val vaultReady = VaultManager.isReady.value
-                        val models = modelRepository.getAllModels().first()
+                        val guideSeen = appSettings.guideSeen.first()
 
-                        val hasModel = models.any {
-                            it.providerType == ProviderType.GGUF || it.providerType == ProviderType.DIFFUSION
+                        // Auto-init vault for returning users (exists on disk but not yet opened)
+                        if (!VaultManager.isReady.value && VaultManager.exists(context)) {
+                            VaultManager.initPlaintext(context)
+                            AppContainer.ensureVaultInitialized()
                         }
+
+                        val vaultReady = VaultManager.isReady.value
+
+                        // Check for legacy data that needs migration
+                        val roomDb = context.getDatabasePath("llm_models_database").exists()
+                        val vault = AppPaths.vaultFile(context).exists()
+                        needsMigration = roomDb || vault
+
+                        // Only check models if vault is ready
+                        val hasModel = if (vaultReady) {
+                            try {
+                                val modelRepository = AppContainer.getModelRepository()
+                                val models = modelRepository.getAllModels().first()
+                                models.any {
+                                    it.providerType == ProviderType.GGUF || it.providerType == ProviderType.DIFFUSION
+                                }
+                            } catch (_: Exception) { false }
+                        } else false
                         hasModelsInstalled = hasModel
 
                         startDestination = when {
-                            // First launch: show showcase, then vault gate
-                            !showcaseSeen -> Screen.Showcase.route
+                            // Returning user: vault ready + terms accepted + (setup done or has model)
+                            vaultReady && termsAccepted && (setupDone || hasModel) -> Screen.Chat.route
 
-                            // Vault not initialized: go to vault gate
-                            !vaultReady -> Screen.VaultGate.route
+                            // Vault ready but terms not accepted
+                            vaultReady && !termsAccepted -> Screen.Terms.route
 
-                            // Terms not accepted: returning user goes to terms directly, new user gets full onboarding
-                            !termsAccepted && hasModel -> Screen.Terms.route
-                            !termsAccepted -> Screen.Welcome.route
+                            // Vault ready but setup not done
+                            vaultReady && !setupDone && !hasModel -> Screen.OnboardingSetup.route
 
-                            // Terms accepted but setup not done and no models: go to setup
-                            !setupDone && !hasModel -> Screen.OnboardingSetup.route
+                            // First launch: show intro
+                            !guideSeen -> Screen.Intro.route
 
-                            // Everything done
-                            else -> Screen.Chat.route
+                            // Needs migration and vault not ready: go to migration
+                            needsMigration && !vaultReady -> Screen.Migration.route
+
+                            // Guide seen but terms not accepted
+                            !termsAccepted -> Screen.Terms.route
+
+                            // Fallback: go to setup (which handles vault init if needed)
+                            else -> Screen.OnboardingSetup.route
                         }
                     }
                 }
@@ -130,7 +152,8 @@ class MainActivity : ComponentActivity() {
 
                 AppNavigation(
                     startDestination = dest,
-                    hasModelsInstalled = hasModelsInstalled
+                    hasModelsInstalled = hasModelsInstalled,
+                    needsMigration = needsMigration
                 )
             }
         }
@@ -148,9 +171,8 @@ class MainActivity : ComponentActivity() {
 sealed class Screen(val route: String) {
     // Onboarding (flat routes so any can be used as startDestination)
     object Intro : Screen("intro")
-    object Showcase : Screen("showcase")
-    object VaultGate : Screen("vault_gate")
-    object Welcome : Screen("welcome")
+    object Guide : Screen("guide")
+    object Migration : Screen("migration")
     object Terms : Screen("terms")
     object OnboardingSetup : Screen("setup")
 
@@ -160,17 +182,14 @@ sealed class Screen(val route: String) {
     object Editor : Screen("editor")
     object Settings : Screen("settings")
     object VaultManager : Screen("vault_manager")
-    object Personas : Screen("personas")
-    object PersonaEditor : Screen("persona_editor/{personaId}") {
-        fun createRoute(personaId: String? = null) = "persona_editor/${personaId ?: "new"}"
-    }
     object AiMemory : Screen("ai_memory")
 }
 
 @Composable
 fun AppNavigation(
     startDestination: String,
-    hasModelsInstalled: Boolean
+    hasModelsInstalled: Boolean,
+    needsMigration: Boolean
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
@@ -212,42 +231,33 @@ fun AppNavigation(
         // ============ ONBOARDING SCREENS ============
         composable(Screen.Intro.route) {
             IntroScreen(onFinished = {
-                navController.navigate(Screen.Showcase.route) {
+                val nextRoute = if (needsMigration) Screen.Migration.route else Screen.Guide.route
+                navController.navigate(nextRoute) {
                     popUpTo(Screen.Intro.route) { inclusive = true }
                 }
             })
         }
 
-        composable(Screen.Showcase.route) {
-            val appSettings = remember { AppSettingsDataStore(context) }
-            ShowcaseScreen(onFinished = {
-                scope.launch { appSettings.saveShowcaseSeen(true) }
-                navController.navigate(Screen.VaultGate.route) {
-                    popUpTo(Screen.Showcase.route) { inclusive = true }
-                }
-            })
-        }
-
-        composable(Screen.VaultGate.route) {
+        composable(Screen.Migration.route) {
             val vaultGateViewModel: VaultGateViewModel = viewModel()
             VaultGateScreen(
                 viewModel = vaultGateViewModel,
                 onComplete = {
-                    // After vault is set up, continue onboarding or go to chat
-                    val nextRoute = if (hasModelsInstalled) Screen.Chat.route else Screen.Welcome.route
-                    navController.navigate(nextRoute) {
-                        popUpTo(Screen.VaultGate.route) { inclusive = true }
+                    navController.navigate(Screen.Guide.route) {
+                        popUpTo(Screen.Migration.route) { inclusive = true }
                     }
                 }
             )
         }
 
-        composable(Screen.Welcome.route) {
-            WelcomeScreen(
-                onContinue = {
-                    navController.navigate(Screen.Terms.route)
+        composable(Screen.Guide.route) {
+            val appSettings = remember { AppSettingsDataStore(context) }
+            GuideScreen(onContinue = {
+                scope.launch { appSettings.saveGuideSeen(true) }
+                navController.navigate(Screen.Terms.route) {
+                    popUpTo(Screen.Guide.route) { inclusive = true }
                 }
-            )
+            })
         }
 
         composable(Screen.Terms.route) {
@@ -264,7 +274,9 @@ fun AppNavigation(
                         }
                     } else {
                         // New user: proceed to setup
-                        navController.navigate(Screen.OnboardingSetup.route)
+                        navController.navigate(Screen.OnboardingSetup.route) {
+                            popUpTo(Screen.Terms.route) { inclusive = true }
+                        }
                     }
                 }
             )
@@ -292,9 +304,6 @@ fun AppNavigation(
                 onVaultManagerClick = {
                     navController.navigate(Screen.VaultManager.route)
                 },
-                onCharacterClick = {
-                    navController.navigate(Screen.Personas.route)
-                },
                 chatViewModel = chatViewModel,
                 llmModelViewModel = llmModelViewModel
             )
@@ -316,52 +325,12 @@ fun AppNavigation(
             SettingsScreen(
                 onNavigateBack = { navController.popBackStack() },
                 onModelEditor = { navController.navigate(Screen.Editor.route) },
-                onPersonasClick = { navController.navigate(Screen.Personas.route) },
                 onAiMemoryClick = { navController.navigate(Screen.AiMemory.route) }
             )
         }
 
         composable(Screen.VaultManager.route) {
             VaultDashboard(onNavigateBack = { navController.popBackStack() })
-        }
-
-        composable(Screen.Personas.route) {
-            val activePersonaId by chatViewModel.activePersona.collectAsState()
-            PersonaScreen(
-                activePersonaId = activePersonaId?.id,
-                onPersonaSelected = { personaId -> chatViewModel.setActivePersona(personaId) },
-                onEditPersona = { personaId ->
-                    navController.navigate(Screen.PersonaEditor.createRoute(personaId))
-                },
-                onCreatePersona = {
-                    navController.navigate(Screen.PersonaEditor.createRoute(null))
-                },
-                onNavigateBack = { navController.popBackStack() }
-            )
-        }
-
-        composable(
-            route = Screen.PersonaEditor.route,
-            arguments = listOf(
-                androidx.navigation.navArgument("personaId") {
-                    type = androidx.navigation.NavType.StringType
-                    defaultValue = "new"
-                }
-            )
-        ) { backStackEntry ->
-            val personaId = backStackEntry.arguments?.getString("personaId")
-                ?.takeIf { it != "new" }
-            PersonaEditorScreen(
-                personaId = personaId,
-                onNavigateBack = { navController.popBackStack() },
-                onDeleted = {
-                    // If deleted persona was active, clear selection
-                    if (personaId != null && chatViewModel.activePersona.value?.id == personaId) {
-                        chatViewModel.setActivePersona(null)
-                    }
-                    navController.popBackStack()
-                }
-            )
         }
 
         composable(Screen.AiMemory.route) {
