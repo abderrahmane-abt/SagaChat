@@ -6,7 +6,6 @@ import com.dark.tool_neuron.models.table_schema.Persona
 import com.dark.ums.UmsRecord
 import com.dark.ums.UnifiedMemorySystem
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -32,24 +31,11 @@ class UmsPersonaRepository(private val ums: UnifiedMemorySystem) {
         refreshCache()
     }
 
-    suspend fun insertAll(personas: List<Persona>) = withContext(Dispatchers.IO) {
-        personas.forEach { ums.put(collection, it.toRecord()) }
-        refreshCache()
-    }
-
-    suspend fun update(persona: Persona) = withContext(Dispatchers.IO) {
-        val existing = findRecordId(persona.id) ?: return@withContext
-        ums.put(collection, persona.toRecord(existing))
-        refreshCache()
-    }
-
     suspend fun delete(persona: Persona) = withContext(Dispatchers.IO) {
         val recordId = findRecordId(persona.id) ?: return@withContext
         ums.delete(collection, recordId)
         refreshCache()
     }
-
-    fun getAll(): Flow<List<Persona>> = _allPersonas
 
     suspend fun getAllOnce(): List<Persona> = withContext(Dispatchers.IO) {
         ums.getAll(collection).map { it.toPersona() }.sortedBy { it.createdAt }
@@ -58,14 +44,6 @@ class UmsPersonaRepository(private val ums: UnifiedMemorySystem) {
     suspend fun getById(id: String): Persona? = withContext(Dispatchers.IO) {
         ums.queryString(collection, Tags.Persona.ENTITY_ID, id)
             .firstOrNull()?.toPersona()
-    }
-
-    suspend fun getDefaults(): List<Persona> = withContext(Dispatchers.IO) {
-        ums.getAll(collection).map { it.toPersona() }.filter { it.isDefault }
-    }
-
-    suspend fun count(): Int = withContext(Dispatchers.IO) {
-        ums.count(collection)
     }
 
     private fun findRecordId(entityId: String): Int? {
