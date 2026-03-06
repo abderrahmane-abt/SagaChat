@@ -34,7 +34,15 @@ fun ToolChainDisplay(
 ) {
     if (steps.isEmpty() && !isLive) return
 
-    var isExpanded by remember { mutableStateOf(true) }
+    var isExpanded by remember { mutableStateOf(false) }
+    var showDetailDialog by remember { mutableStateOf(false) }
+
+    if (showDetailDialog) {
+        ToolChainDetailDialog(
+            steps = steps,
+            onDismiss = { showDetailDialog = false }
+        )
+    }
 
     Column(
         modifier = modifier
@@ -108,7 +116,9 @@ fun ToolChainDisplay(
             exit = Motion.Exit
         ) {
             Column(
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .clickable { showDetailDialog = true }
             ) {
                 steps.forEachIndexed { index, step ->
                     ToolChainStep(
@@ -287,6 +297,37 @@ private fun ToolChainLoadingStep() {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.tertiary,
                 fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+@Composable
+private fun ToolChainDetailDialog(
+    steps: List<ToolChainStepData>,
+    onDismiss: () -> Unit
+) {
+    ToolDetailDialog(
+        title = "Tool Chain (${steps.size} steps)",
+        onDismiss = onDismiss
+    ) {
+        steps.forEachIndexed { index, step ->
+            DetailSection(
+                label = "${index + 1}. ${step.toolName} (${step.pluginName})",
+                content = buildString {
+                    appendLine("Status: ${if (step.success) "Success" else "Failed"}")
+                    appendLine("Time: ${step.executionTimeMs}ms")
+                    if (step.args.isNotBlank()) {
+                        appendLine()
+                        appendLine("Arguments:")
+                        appendLine(step.args)
+                    }
+                    if (step.result.isNotBlank()) {
+                        appendLine()
+                        appendLine("Result:")
+                        appendLine(step.result)
+                    }
+                }
             )
         }
     }

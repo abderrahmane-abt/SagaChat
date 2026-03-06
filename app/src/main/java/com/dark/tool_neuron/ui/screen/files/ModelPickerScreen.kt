@@ -130,7 +130,7 @@ fun ModelPickerScreen(
                                     pickerMode = if (isFolder) PickerMode.FOLDER else PickerMode.FILE
                                 },
                                 text = if (pickerMode == PickerMode.FILE) "File" else "Folder",
-                                icon = if (pickerMode == PickerMode.FILE) TnIcons.Brain else null,
+                                icon = if (pickerMode == PickerMode.FILE) TnIcons.File else null,
                                 iconChecked = TnIcons.Upload
                             )
 
@@ -359,7 +359,7 @@ private fun FileList(
             FileListItem(
                 icon = {
                     Icon(
-                        imageVector = if (item.isDir) TnIcons.Upload else TnIcons.Brain,
+                        imageVector = if (item.isDir) TnIcons.Folder else TnIcons.File,
                         contentDescription = null,
                         tint = if (canSelect) {
                             MaterialTheme.colorScheme.primary

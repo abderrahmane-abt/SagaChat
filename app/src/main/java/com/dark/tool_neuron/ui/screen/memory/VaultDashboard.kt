@@ -80,7 +80,7 @@ fun VaultDashboard(onNavigateBack: () -> Unit) {
                         contentDescription = "Back"
                     )
                     Icon(
-                        TnIcons.Stack2, null,
+                        TnIcons.ShieldLock, null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(start = 8.dp, end = 8.dp)
                     )

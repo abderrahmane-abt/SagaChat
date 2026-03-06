@@ -34,7 +34,17 @@ fun AgentExecutionView(
     currentStep: Int = 0,
     modifier: Modifier = Modifier
 ) {
-    var isExpanded by remember { mutableStateOf(true) }
+    var isExpanded by remember { mutableStateOf(false) }
+    var showDetailDialog by remember { mutableStateOf(false) }
+
+    if (showDetailDialog) {
+        AgentDetailDialog(
+            plan = plan,
+            steps = steps,
+            summary = summary,
+            onDismiss = { showDetailDialog = false }
+        )
+    }
 
     Column(
         modifier = modifier
@@ -116,6 +126,7 @@ fun AgentExecutionView(
             exit = Motion.Exit
         ) {
             Column(
+                modifier = Modifier.clickable { showDetailDialog = true },
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 // Phase 1: Plan
@@ -435,4 +446,45 @@ private fun PhaseSpinner() {
         modifier = Modifier.size(12.dp),
         color = MaterialTheme.colorScheme.tertiary
     )
+}
+
+@Composable
+private fun AgentDetailDialog(
+    plan: String?,
+    steps: List<ToolChainStepData>,
+    summary: String?,
+    onDismiss: () -> Unit
+) {
+    ToolDetailDialog(
+        title = "Agent Execution",
+        onDismiss = onDismiss
+    ) {
+        if (plan != null) {
+            DetailSection(label = "Plan", content = plan)
+        }
+
+        steps.forEachIndexed { index, step ->
+            DetailSection(
+                label = "${index + 1}. ${step.toolName} (${step.pluginName})",
+                content = buildString {
+                    appendLine("Status: ${if (step.success) "Success" else "Failed"}")
+                    appendLine("Time: ${step.executionTimeMs}ms")
+                    if (step.args.isNotBlank()) {
+                        appendLine()
+                        appendLine("Arguments:")
+                        appendLine(step.args)
+                    }
+                    if (step.result.isNotBlank()) {
+                        appendLine()
+                        appendLine("Result:")
+                        appendLine(step.result)
+                    }
+                }
+            )
+        }
+
+        if (summary != null) {
+            DetailSection(label = "Summary", content = summary)
+        }
+    }
 }

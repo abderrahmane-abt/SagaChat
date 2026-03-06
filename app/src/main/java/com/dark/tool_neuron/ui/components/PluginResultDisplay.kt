@@ -24,6 +24,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.models.messages.Messages
+import com.dark.tool_neuron.models.plugins.PluginExecutionMetrics
+import com.dark.tool_neuron.models.plugins.PluginResultData
 import com.dark.tool_neuron.plugins.PluginManager
 import org.json.JSONObject
 import com.dark.tool_neuron.ui.icons.TnIcons
@@ -37,6 +39,15 @@ fun PluginResultCard(
     val metrics = message.pluginMetrics
 
     var isExpanded by remember { mutableStateOf(false) }
+    var showDetailDialog by remember { mutableStateOf(false) }
+
+    if (showDetailDialog) {
+        PluginResultDetailDialog(
+            pluginData = pluginData,
+            metrics = metrics,
+            onDismiss = { showDetailDialog = false }
+        )
+    }
 
     Column(
         modifier = modifier
@@ -125,6 +136,7 @@ fun PluginResultCard(
             exit = Motion.Exit
         ) {
             Surface(
+                onClick = { showDetailDialog = true },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 6.dp),
@@ -245,5 +257,31 @@ private fun formatJsonForDisplay(json: String): String {
         }
     } catch (_: Exception) {
         json
+    }
+}
+
+@Composable
+private fun PluginResultDetailDialog(
+    pluginData: PluginResultData,
+    metrics: PluginExecutionMetrics?,
+    onDismiss: () -> Unit
+) {
+    ToolDetailDialog(
+        title = "${pluginData.pluginName} · ${pluginData.toolName}",
+        onDismiss = onDismiss
+    ) {
+        DetailKeyValue("Status", if (pluginData.success) "Success" else "Failed")
+        metrics?.let {
+            DetailKeyValue("Execution Time", "${it.executionTimeMs}ms")
+        }
+
+        if (pluginData.inputParams.isNotBlank()) {
+            DetailSection(label = "Input Parameters", content = formatJsonForDisplay(pluginData.inputParams))
+        }
+
+        DetailSection(
+            label = if (pluginData.success) "Result" else "Error",
+            content = pluginData.resultData
+        )
     }
 }

@@ -209,7 +209,7 @@ fun ModelStoreScreen(
                         isLoading = isLoading,
                         error = error,
                         downloadStates = downloadStates,
-                        installedModelNames = installedModels.map { it.modelName }.toSet(),
+                        installedModelIds = installedModels.map { it.id }.toSet(),
                         viewModel = viewModel,
                         onDownload = { viewModel.downloadModel(it) },
                         onCancelDownload = { modelId -> viewModel.cancelDownload(modelId) },
@@ -238,7 +238,7 @@ private fun ModelsTab(
     isLoading: Boolean,
     error: String?,
     downloadStates: Map<String, ModelDownloadService.DownloadState>,
-    installedModelNames: Set<String>,
+    installedModelIds: Set<String>,
     viewModel: ModelStoreViewModel,
     onDownload: (HuggingFaceModel) -> Unit,
     onCancelDownload: (String) -> Unit,
@@ -335,7 +335,7 @@ private fun ModelsTab(
                             viewModel = viewModel,
                             isLoading = isLoading,
                             downloadStates = downloadStates,
-                            installedModelNames = installedModelNames,
+                            installedModelIds = installedModelIds,
                             onDownload = onDownload,
                             onCancelDownload = onCancelDownload
                         )
@@ -465,7 +465,7 @@ private fun RepoDetailView(
     viewModel: ModelStoreViewModel,
     isLoading: Boolean,
     downloadStates: Map<String, ModelDownloadService.DownloadState>,
-    installedModelNames: Set<String>,
+    installedModelIds: Set<String>,
     onDownload: (HuggingFaceModel) -> Unit,
     onCancelDownload: (String) -> Unit
 ) {
@@ -528,7 +528,7 @@ private fun RepoDetailView(
                 ) { model ->
                     ModelCard(
                         model = model,
-                        isInstalled = installedModelNames.contains(model.name),
+                        isInstalled = installedModelIds.contains(model.id),
                         downloadState = downloadStates[model.id],
                         onDownload = { onDownload(model) },
                         onCancelDownload = { onCancelDownload(model.id) }

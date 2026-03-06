@@ -35,7 +35,7 @@ fun GuideScreen(
         verticalArrangement = Arrangement.Center
     ) {
         Icon(
-            imageVector = TnIcons.Brain,
+            imageVector = TnIcons.Sparkles,
             contentDescription = null,
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.primary
