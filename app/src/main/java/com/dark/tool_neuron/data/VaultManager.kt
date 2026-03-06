@@ -3,6 +3,8 @@ package com.dark.tool_neuron.data
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import com.dark.tool_neuron.global.AppPaths
+import com.dark.tool_neuron.repo.ums.UmsAgentProjectRepository
 import com.dark.tool_neuron.repo.ums.UmsChatRepository
 import com.dark.tool_neuron.repo.ums.UmsConfigRepository
 import com.dark.tool_neuron.repo.ums.UmsKnowledgeRepository
@@ -30,9 +32,10 @@ object VaultManager {
     var memoryRepo: UmsMemoryRepository? = null; private set
     var knowledgeRepo: UmsKnowledgeRepository? = null; private set
     var chatRepo: UmsChatRepository? = null; private set
+    var agentProjectRepo: UmsAgentProjectRepository? = null; private set
 
     fun basePath(context: Context): String =
-        context.filesDir.resolve("ums").absolutePath
+        AppPaths.ums(context).absolutePath
 
     fun exists(context: Context): Boolean {
         val u = UnifiedMemorySystem()
@@ -40,26 +43,32 @@ object VaultManager {
     }
 
     fun initPlaintext(context: Context): Boolean {
-        val u = UnifiedMemorySystem()
-        val path = basePath(context)
-        val ok = if (u.exists(path)) u.openPlaintext(path) else u.createPlaintext(path)
-        if (!ok) return false
-        initRepos(u)
-        return true
+        synchronized(this) {
+            if (_isReady.value) return true
+            val u = UnifiedMemorySystem()
+            val path = basePath(context)
+            val ok = if (u.exists(path)) u.openPlaintext(path) else u.createPlaintext(path)
+            if (!ok) return false
+            initRepos(u)
+            return true
+        }
     }
 
     fun initEncrypted(context: Context, passphrase: String): Boolean {
-        val u = UnifiedMemorySystem()
-        val path = basePath(context)
-        val appKey = deriveAppKey(context)
-        val ok = if (u.exists(path)) {
-            u.openWithPassphrase(path, appKey, passphrase)
-        } else {
-            u.createWithPassphrase(path, appKey, passphrase)
+        synchronized(this) {
+            if (_isReady.value) return true
+            val u = UnifiedMemorySystem()
+            val path = basePath(context)
+            val appKey = deriveAppKey(context)
+            val ok = if (u.exists(path)) {
+                u.openWithPassphrase(path, appKey, passphrase)
+            } else {
+                u.createWithPassphrase(path, appKey, passphrase)
+            }
+            if (!ok) return false
+            initRepos(u)
+            return true
         }
-        if (!ok) return false
-        initRepos(u)
-        return true
     }
 
     private fun initRepos(u: UnifiedMemorySystem) {
@@ -70,6 +79,7 @@ object VaultManager {
         memoryRepo = UmsMemoryRepository(u).also { it.init() }
         knowledgeRepo = UmsKnowledgeRepository(u).also { it.init() }
         chatRepo = UmsChatRepository(u).also { it.init() }
+        agentProjectRepo = UmsAgentProjectRepository(u).also { it.init() }
         _isReady.value = true
     }
 
@@ -82,6 +92,7 @@ object VaultManager {
         memoryRepo = null
         knowledgeRepo = null
         chatRepo = null
+        agentProjectRepo = null
         _isReady.value = false
     }
 
@@ -108,6 +119,19 @@ object VaultManager {
             )
             gen.generateKey()
         }
-        return key.encoded ?: ByteArray(32)
+        // Hardware-backed keys return null for .encoded — derive via encrypt+hash
+        return key.encoded ?: deriveFromHardwareKey(key)
+    }
+
+    private fun deriveFromHardwareKey(key: SecretKey): ByteArray {
+        // Use GCM with a fixed IV to get deterministic output per device.
+        // This is safe because: (1) only used once for key derivation, not encryption,
+        // (2) the plaintext is a fixed constant, (3) we hash the result.
+        val fixedIv = "ToolNeuronKD".toByteArray() // 12 bytes for GCM
+        val spec = javax.crypto.spec.GCMParameterSpec(128, fixedIv)
+        val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, key, spec)
+        val ciphertext = cipher.doFinal("ToolNeuron-UMS-KeyDerivation".toByteArray())
+        return java.security.MessageDigest.getInstance("SHA-256").digest(ciphertext)
     }
 }
