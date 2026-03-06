@@ -8,20 +8,17 @@ import com.dark.tool_neuron.data.AppSettingsDataStore
 import com.dark.tool_neuron.data.MigrationProgress
 import com.dark.tool_neuron.data.UmsMigrationEngine
 import com.dark.tool_neuron.data.VaultManager
+import com.dark.tool_neuron.di.AppContainer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.dark.tool_neuron.global.AppPaths
 import java.io.File
 
-enum class SecurityMode { REGULAR, PROTECTED }
-
 sealed interface VaultGateState {
-    data object SecuritySelection : VaultGateState
-    data class Setup(val mode: SecurityMode) : VaultGateState
-    data object Unlock : VaultGateState
-    data object Deriving : VaultGateState
+    data object Initializing : VaultGateState
     data class Migrating(
         val phase: Int,
         val phaseName: String,
@@ -46,41 +43,20 @@ class VaultGateViewModel(application: Application) : AndroidViewModel(applicatio
     private val context get() = getApplication<Application>()
     private val settings by lazy { AppSettingsDataStore(context) }
 
-    private val _state = MutableStateFlow<VaultGateState>(computeInitialState())
+    private val _state = MutableStateFlow<VaultGateState>(VaultGateState.Initializing)
     val state: StateFlow<VaultGateState> = _state
-
-    private var selectedMode: SecurityMode = SecurityMode.REGULAR
 
     val needsMigration: Boolean by lazy {
         val roomDb = context.getDatabasePath("llm_models_database").exists()
-        val vault = File(context.filesDir, "memory_vault/vault.mvlt").exists()
+        val vault = AppPaths.vaultFile(context).exists()
         roomDb || vault
     }
 
-    private fun computeInitialState(): VaultGateState {
-        return if (VaultManager.exists(context)) {
-            VaultGateState.Unlock
-        } else {
-            VaultGateState.SecuritySelection
-        }
-    }
-
-    fun selectMode(mode: SecurityMode) {
-        selectedMode = mode
-        when (mode) {
-            SecurityMode.REGULAR -> {
-                // No passphrase needed -- go straight to init
-                _state.value = VaultGateState.Setup(mode)
-            }
-            SecurityMode.PROTECTED -> {
-                _state.value = VaultGateState.Setup(mode)
-            }
-        }
-    }
-
-    fun confirmRegularSetup(onComplete: () -> Unit) {
-        _state.value = VaultGateState.Deriving
+    /** Auto-init plaintext vault and run migration. Called from the screen. */
+    fun startMigration(onComplete: () -> Unit) {
+        _state.value = VaultGateState.Initializing
         viewModelScope.launch {
+            // Init vault as plaintext
             val ok = withContext(Dispatchers.IO) {
                 try {
                     VaultManager.initPlaintext(context)
@@ -91,38 +67,12 @@ class VaultGateViewModel(application: Application) : AndroidViewModel(applicatio
             }
 
             if (!ok) {
-                _state.value = VaultGateState.Error("Failed to create vault.")
+                _state.value = VaultGateState.Error("Failed to initialize storage.")
                 return@launch
             }
 
             withContext(Dispatchers.IO) { settings.saveSecurityMode("REGULAR") }
-
-            if (needsMigration) {
-                runMigration(onComplete)
-            } else {
-                onComplete()
-            }
-        }
-    }
-
-    fun submitPassphrase(passphrase: String, onComplete: () -> Unit) {
-        _state.value = VaultGateState.Deriving
-        viewModelScope.launch {
-            val ok = withContext(Dispatchers.IO) {
-                try {
-                    VaultManager.initEncrypted(context, passphrase)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Encrypted init failed", e)
-                    false
-                }
-            }
-
-            if (!ok) {
-                _state.value = VaultGateState.Error("Wrong passphrase. Try again.")
-                return@launch
-            }
-
-            withContext(Dispatchers.IO) { settings.saveSecurityMode("PROTECTED") }
+            AppContainer.ensureVaultInitialized()
 
             if (needsMigration) {
                 runMigration(onComplete)
@@ -207,9 +157,5 @@ class VaultGateViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun retryMigration(onComplete: () -> Unit) {
         runMigration(onComplete)
-    }
-
-    fun resetToInput() {
-        _state.value = computeInitialState()
     }
 }

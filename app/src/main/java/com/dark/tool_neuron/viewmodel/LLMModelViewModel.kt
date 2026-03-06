@@ -6,11 +6,12 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.data.AppSettingsDataStore
+import com.dark.tool_neuron.data.VaultManager
+import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.models.enums.PathType
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.models.table_schema.ModelConfig
-import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.state.AppStateManager
 import com.dark.tool_neuron.worker.DiffusionConfig
 import com.dark.tool_neuron.worker.DiffusionInferenceParams
@@ -24,19 +25,29 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import androidx.core.net.toUri
+import com.dark.tool_neuron.global.AppPaths
 
 @HiltViewModel
 class LLMModelViewModel @Inject constructor(
-    application: Application,
-    private val repository: ModelRepository
+    application: Application
 ) : AndroidViewModel(application) {
 
     private val appSettings = AppSettingsDataStore(application)
 
-    val installedModels: Flow<List<Model>> = repository.getAllModels()
+    // Deferred until vault is ready
+    private val repository get() = AppContainer.getModelRepository()
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val installedModels: Flow<List<Model>> = VaultManager.isReady
+        .flatMapLatest { ready ->
+            if (ready) repository.getAllModels()
+            else flowOf(emptyList())
+        }
         .map { models -> models.filter { it.providerType != ProviderType.TTS } }
 
     private val _currentModelID = MutableStateFlow("")
@@ -63,6 +74,16 @@ class LLMModelViewModel @Inject constructor(
                 return@launch
             }
             _lastModelOffer.value = model
+        }
+
+        // Watch for performance mode reload requests
+        viewModelScope.launch {
+            AppStateManager.reloadModelRequested.collect { requested ->
+                if (requested && _currentModelID.value.isNotEmpty()) {
+                    AppStateManager.clearReloadRequest()
+                    reloadCurrentModel()
+                }
+            }
         }
     }
 
@@ -128,11 +149,24 @@ class LLMModelViewModel @Inject constructor(
         }
 
         if (success) {
-            LlmModelWorker._currentGgufModelId.value = model.id
+            LlmModelWorker.setCurrentGgufModelId(model.id)
             _currentModelID.value = model.id
             _currentModelType.value = ProviderType.GGUF
             AppStateManager.setModelLoaded(model.modelName)
             appSettings.saveLastModelId(model.id)
+
+            // Wire optimizations after model load
+            try {
+                val cacheDir = AppPaths.promptCache(getApplication<android.app.Application>())
+                    .also { it.mkdirs() }
+                LlmModelWorker.setPromptCacheDirGguf(cacheDir.absolutePath)
+                // Speculative decoding disabled — causes KV cache position mismatch on some models
+                // TODO: re-enable once native engine position tracking is fixed
+                LlmModelWorker.setSpeculativeDecodingGguf(false)
+                LlmModelWorker.warmUpGguf()
+            } catch (e: Exception) {
+                android.util.Log.w("LLMModelVM", "Optimization wiring failed: ${e.message}")
+            }
 
             // Update tool calling model state and sync tools
             val nativeSupports = LlmModelWorker.isToolCallingSupportedGguf()
@@ -144,7 +178,7 @@ class LLMModelViewModel @Inject constructor(
     }
 
     private suspend fun loadDiffusionModel(model: Model, config: ModelConfig) {
-        val diffusionConfig = parseDiffusionConfig(config)
+        val diffusionConfig = DiffusionConfig.fromJson(config.modelLoadingParams)
 
         val success = LlmModelWorker.loadDiffusionModel(
             name = model.modelName,
@@ -160,7 +194,7 @@ class LLMModelViewModel @Inject constructor(
         )
 
         if (success) {
-            LlmModelWorker._currentDiffusionModelId.value = model.id
+            LlmModelWorker.setCurrentDiffusionModelId(model.id)
             _currentModelID.value = model.id
             _currentModelType.value = ProviderType.DIFFUSION
             AppStateManager.setModelLoaded(model.modelName)
@@ -170,40 +204,17 @@ class LLMModelViewModel @Inject constructor(
         }
     }
 
-    private fun parseDiffusionConfig(config: ModelConfig): DiffusionConfig {
-        if (config.modelLoadingParams == null) {
-            return DiffusionConfig()
-        }
-
-        return try {
-            val json = org.json.JSONObject(config.modelLoadingParams)
-            Log.d("DiffusionConfig", "JSON: $json")
-            DiffusionConfig(
-                textEmbeddingSize = json.optInt("text_embedding_size", 768),
-                runOnCpu = json.optBoolean("run_on_cpu", false),
-                useCpuClip = json.optBoolean("use_cpu_clip", true),
-                isPony = json.optBoolean("is_pony", false),
-                httpPort = json.optInt("http_port", 8081),
-                safetyMode = json.optBoolean("safety_mode", false),
-                width = json.optInt("width", 512),
-                height = json.optInt("height", 512)
-            )
-        } catch (e: Exception) {
-            Log.e("DiffusionConfig", "Error parsing JSON: ${e.message}")
-            DiffusionConfig()
-        }
-    }
 
     private suspend fun unloadCurrentModel() {
         try {
             when (_currentModelType.value) {
                 ProviderType.GGUF -> {
                     LlmModelWorker.unloadGgufModel()
-                    LlmModelWorker._currentGgufModelId.value = null // ADD THIS
+                    LlmModelWorker.setCurrentGgufModelId(null)
                 }
                 ProviderType.DIFFUSION -> {
                     LlmModelWorker.stopDiffusionBackend()
-                    LlmModelWorker._currentDiffusionModelId.value = null // ADD THIS
+                    LlmModelWorker.setCurrentDiffusionModelId(null)
                 }
                 else -> {}
             }
@@ -223,11 +234,11 @@ class LLMModelViewModel @Inject constructor(
                 when (_currentModelType.value) {
                     ProviderType.GGUF -> {
                         LlmModelWorker.unloadGgufModel()
-                        LlmModelWorker._currentGgufModelId.value = null
+                        LlmModelWorker.setCurrentGgufModelId(null)
                     }
                     ProviderType.DIFFUSION -> {
                         LlmModelWorker.stopDiffusionBackend()
-                        LlmModelWorker._currentDiffusionModelId.value = null
+                        LlmModelWorker.setCurrentDiffusionModelId(null)
                     }
                     else -> {}
                 }
@@ -238,6 +249,18 @@ class LLMModelViewModel @Inject constructor(
             } catch (e: Exception) {
                 AppStateManager.setError(e.message ?: "Failed to unload model")
             }
+        }
+    }
+
+    // ── Runtime Reload ──
+
+    fun reloadCurrentModel() {
+        val modelId = _currentModelID.value
+        if (modelId.isEmpty()) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val model = repository.getModelById(modelId) ?: return@launch
+            loadModel(model)
         }
     }
 

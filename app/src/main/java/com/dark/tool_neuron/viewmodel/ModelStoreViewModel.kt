@@ -180,8 +180,9 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
     private fun loadInstalledModels() {
         viewModelScope.launch {
             try {
-                val installedList = systemRepo.getAllModels().first()
-                _installedModels.value = installedList
+                systemRepo.getAllModels().collect { installedList ->
+                    _installedModels.value = installedList
+                }
             } catch (e: Exception) {
                 Log.e("ModelStoreViewModel", "Error loading installed models", e)
             }

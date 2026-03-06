@@ -551,25 +551,28 @@ class ChatViewModel @Inject constructor(
         for (round in 1..maxRounds) {
             // Generate next tool call
             PluginManager.restoreGrammar()
-            // Round 1: include tool signatures + plan (model needs to know params)
-            // Round 2+: minimal prompt — grammar already constrains which tools to call,
-            // just provide context about what's done + what the user wants
-            val systemPrompt = if (steps.isEmpty()) {
-                buildString {
-                    appendLine("Tools: $toolSignatures")
-                    appendLine("Plan: $truncatedPlan")
-                    appendLine("Call the first tool with ALL required arguments.")
-                }
-            } else {
-                buildString {
-                    appendLine("Done: ${steps.joinToString("; ") { "${it.toolName}=${it.result.take(100)}" }}")
-                    appendLine("Call the NEXT tool needed, or stop if the plan is complete.")
-                }
+            // Build proper multi-turn messages: system + user + tool call/result pairs
+            val messages = mutableListOf<JSONObject>()
+
+            // System prompt always includes tool signatures (model needs param info every round)
+            messages.add(JSONObject().put("role", "system").put("content", buildString {
+                appendLine("Tools: $toolSignatures")
+                if (steps.isEmpty()) appendLine("Plan: $truncatedPlan")
+                appendLine("Call the next tool needed, or generate a text response if done.")
+            }))
+
+            // Original user request
+            messages.add(JSONObject().put("role", "user").put("content", prompt))
+
+            // Previous tool call + result pairs (full context so model sees what already happened)
+            for (step in steps) {
+                messages.add(JSONObject().put("role", "assistant").put("content",
+                    """{"name":"${step.toolName}","arguments":${step.args}}"""
+                ))
+                messages.add(JSONObject().put("role", "user").put("content",
+                    "Tool '${step.toolName}' result: ${step.result}"
+                ))
             }
-            val messages = listOf(
-                JSONObject().put("role", "system").put("content", systemPrompt),
-                JSONObject().put("role", "user").put("content", prompt)
-            )
             Log.d(TAG, "Agent loop round $round: generating tool call")
             val toolCalls = generateAndCollectToolCalls(messages, maxTokens = 300)
             if (toolCalls.isEmpty()) {
@@ -667,8 +670,8 @@ class ChatViewModel @Inject constructor(
                     round = steps.size + 1,
                     toolName = normalizedName,
                     pluginName = result.pluginName,
-                    args = rawArgs.take(500),
-                    result = result.resultJson.take(500),
+                    args = rawArgs.take(2000),
+                    result = result.resultJson.take(2000),
                     executionTimeMs = result.executionTimeMs,
                     success = isSuccess
                 ))
@@ -1161,10 +1164,22 @@ class ChatViewModel @Inject constructor(
                         JSONObject().put("role", "user").put("content", msg.content.content)
                     )
                     Role.Assistant -> {
-                        if (msg.content.contentType == ContentType.Text) {
-                            result.add(
+                        when (msg.content.contentType) {
+                            ContentType.Text -> result.add(
                                 JSONObject().put("role", "assistant").put("content", msg.content.content)
                             )
+                            ContentType.PluginResult -> {
+                                msg.content.pluginResultData?.let { data ->
+                                    result.add(JSONObject().put("role", "assistant").put("content",
+                                        "Tool '${data.toolName}' result: ${data.resultData.take(1000)}"
+                                    ))
+                                }
+                            }
+                            else -> {
+                                if (msg.content.content.isNotBlank()) {
+                                    result.add(JSONObject().put("role", "assistant").put("content", msg.content.content))
+                                }
+                            }
                         }
                     }
                 }
@@ -1474,6 +1489,8 @@ class ChatViewModel @Inject constructor(
                         }
                     }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 handleImageGenerationException(prompt, e)
             }
@@ -1525,6 +1542,8 @@ class ChatViewModel @Inject constructor(
                         }
                     }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 handleImageGenerationExceptionExisting(chatId, userMessage, prompt, e)
             }
