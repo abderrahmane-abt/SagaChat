@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.tool_neuron.models.plugins.PluginInfo
 import com.dark.tool_neuron.plugins.api.SuperPlugin
-import com.dark.tool_neuron.plugins.services.DuckDuckGoSearchService
+import com.dark.tool_neuron.plugins.services.WebScrapingSearchService
 import com.dark.tool_neuron.plugins.services.WebScrapingService
 import com.dark.tool_neuron.plugins.ui.WebSearchPluginUI
 import com.dark.tool_neuron.plugins.viewmodel.WebSearchViewModel
@@ -52,14 +52,14 @@ data class ScrapedSearchResult(
 
 class WebSearchPlugin : SuperPlugin {
 
-    private val searchService = DuckDuckGoSearchService()
+    private val searchService = WebScrapingSearchService()
     private val scrapingService = WebScrapingService()
 
     companion object {
         private const val TAG = "WebSearchPlugin"
         const val TOOL_WEB_SEARCH = "web_search"
         private const val SCRAPE_TIMEOUT_MS = 10_000L
-        private const val MAX_SCRAPE_CHARS = 800
+        private const val MAX_SCRAPE_CHARS = 1500
     }
 
     override fun getPluginInfo(): PluginInfo {
@@ -123,6 +123,7 @@ class WebSearchPlugin : SuperPlugin {
         // Step 1: Search
         val searchResult = searchService.search(query, maxResults, safeSearch = true)
         if (searchResult.isFailure) {
+            Log.w(TAG, "Search failed for query '$query': ${searchResult.exceptionOrNull()?.message}")
             return Result.failure(searchResult.exceptionOrNull()
                 ?: Exception("Search failed"))
         }
@@ -130,7 +131,11 @@ class WebSearchPlugin : SuperPlugin {
         val searchResponse = searchResult.getOrThrow()
         val urls = searchResponse.results.take(maxResults)
 
-        Log.d(TAG, "Search returned ${urls.size} results, scraping...")
+        if (urls.isEmpty()) {
+            Log.w(TAG, "Search returned 0 results for query '$query' — all endpoints may be blocked")
+        } else {
+            Log.d(TAG, "Search returned ${urls.size} results, scraping...")
+        }
 
         // Step 2: Scrape top results in parallel with timeout
         val scrapedResults = coroutineScope {
@@ -138,7 +143,7 @@ class WebSearchPlugin : SuperPlugin {
                 async {
                     try {
                         val scraped = withTimeoutOrNull(SCRAPE_TIMEOUT_MS) {
-                            scrapingService.scrape(result.url, maxLength = MAX_SCRAPE_CHARS + 200)
+                            scrapingService.scrape(result.url, maxLength = MAX_SCRAPE_CHARS + 500)
                         }
                         ScrapedSearchResult(
                             title = result.title,
