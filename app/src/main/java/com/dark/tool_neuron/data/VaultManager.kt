@@ -4,7 +4,6 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import com.dark.tool_neuron.global.AppPaths
-import com.dark.tool_neuron.repo.ums.UmsAgentProjectRepository
 import com.dark.tool_neuron.repo.ums.UmsChatRepository
 import com.dark.tool_neuron.repo.ums.UmsConfigRepository
 import com.dark.tool_neuron.repo.ums.UmsKnowledgeRepository
@@ -32,7 +31,6 @@ object VaultManager {
     var memoryRepo: UmsMemoryRepository? = null; private set
     var knowledgeRepo: UmsKnowledgeRepository? = null; private set
     var chatRepo: UmsChatRepository? = null; private set
-    var agentProjectRepo: UmsAgentProjectRepository? = null; private set
 
     fun basePath(context: Context): String =
         AppPaths.ums(context).absolutePath
@@ -79,7 +77,6 @@ object VaultManager {
         memoryRepo = UmsMemoryRepository(u).also { it.init() }
         knowledgeRepo = UmsKnowledgeRepository(u).also { it.init() }
         chatRepo = UmsChatRepository(u).also { it.init() }
-        agentProjectRepo = UmsAgentProjectRepository(u).also { it.init() }
         _isReady.value = true
     }
 
@@ -92,7 +89,6 @@ object VaultManager {
         memoryRepo = null
         knowledgeRepo = null
         chatRepo = null
-        agentProjectRepo = null
         _isReady.value = false
     }
 

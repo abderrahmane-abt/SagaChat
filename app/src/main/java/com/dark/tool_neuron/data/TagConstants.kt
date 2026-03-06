@@ -9,7 +9,6 @@ object UmsCollections {
     const val KNOWLEDGE_RELATIONS = "knowledge_relations"
     const val CHATS = "chats"
     const val MESSAGES = "messages"
-    const val AGENT_PROJECTS = "agent_projects"
 }
 
 object Tags {
@@ -120,16 +119,4 @@ object Tags {
         const val PLUGIN_RESULT_DATA = 20 // BYTES (JSON)
     }
 
-    // ── Agent Projects ──
-    object AgentProject {
-        const val ENTITY_ID = 1        // BYTES — UUID string
-        const val NAME = 2             // BYTES — project name
-        const val DESCRIPTION = 3      // BYTES — optional description
-        const val TOOL_MODEL_ID = 4    // BYTES — small model ID (nullable)
-        const val WRITER_MODEL_ID = 5  // BYTES — main model ID
-        const val CREATED_AT = 6       // FIXED64 — timestamp
-        const val LAST_OPENED_AT = 7   // FIXED64 — timestamp
-        const val MESSAGE_COUNT = 8    // VARINT — total messages
-        const val STATUS = 9           // BYTES — "ACTIVE" | "ARCHIVED"
-    }
 }
