@@ -41,14 +41,20 @@ class GGUFEngine {
         val loading = schema.loadingParams
         val inference = schema.inferenceParams
 
-        val success = engine.load(
-            path = model.modelPath,
-            contextSize = loading.ctxSize,
-            threads = loading.threads,
-            flashAttn = loading.flashAttn,
-            cacheTypeK = cacheTypeIntToString(loading.cacheTypeK),
-            cacheTypeV = cacheTypeIntToString(loading.cacheTypeV)
-        )
+        val success = try {
+            engine.load(
+                path = model.modelPath,
+                contextSize = loading.ctxSize,
+                threads = loading.threads,
+                flashAttn = loading.flashAttn,
+                cacheTypeK = cacheTypeIntToString(loading.cacheTypeK),
+                cacheTypeV = cacheTypeIntToString(loading.cacheTypeV)
+            )
+        } catch (e: OutOfMemoryError) {
+            Log.e(TAG, "OOM loading model", e)
+            try { engine.unload() } catch (_: Throwable) {}
+            false
+        }
 
         if (success) {
             engine.setSampling(
@@ -86,14 +92,20 @@ class GGUFEngine {
         val loading = schema.loadingParams
         val inference = schema.inferenceParams
 
-        val success = engine.loadFromFd(
-            fd = fd,
-            contextSize = loading.ctxSize,
-            threads = loading.threads,
-            flashAttn = loading.flashAttn,
-            cacheTypeK = cacheTypeIntToString(loading.cacheTypeK),
-            cacheTypeV = cacheTypeIntToString(loading.cacheTypeV)
-        )
+        val success = try {
+            engine.loadFromFd(
+                fd = fd,
+                contextSize = loading.ctxSize,
+                threads = loading.threads,
+                flashAttn = loading.flashAttn,
+                cacheTypeK = cacheTypeIntToString(loading.cacheTypeK),
+                cacheTypeV = cacheTypeIntToString(loading.cacheTypeV)
+            )
+        } catch (e: OutOfMemoryError) {
+            Log.e(TAG, "OOM loading model from FD", e)
+            try { engine.unload() } catch (_: Throwable) {}
+            false
+        }
 
         if (success) {
             engine.setSampling(

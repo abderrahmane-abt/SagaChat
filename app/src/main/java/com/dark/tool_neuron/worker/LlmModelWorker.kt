@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
 import java.util.Base64
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -213,14 +214,17 @@ object LlmModelWorker {
         val svc = ensureServiceBound()
 
         return suspendCancellableCoroutine { continuation ->
+            val resumed = AtomicBoolean(false)
             val callback = object : IModelLoadCallback.Stub() {
                 override fun onSuccess() {
+                    if (!resumed.compareAndSet(false, true)) return
                     _isGgufModelLoaded.value = true
                     Log.i(TAG, "GGUF model loaded successfully")
                     continuation.resume(true)
                 }
 
                 override fun onError(message: String) {
+                    if (!resumed.compareAndSet(false, true)) return
                     _isGgufModelLoaded.value = false
                     Log.e(TAG, "Failed to load GGUF model: $message")
                     continuation.resume(false)
@@ -236,6 +240,7 @@ object LlmModelWorker {
                     callback
                 )
             } catch (e: Exception) {
+                if (!resumed.compareAndSet(false, true)) return@suspendCancellableCoroutine
                 Log.e(TAG, "Exception loading GGUF model", e)
                 continuation.resumeWithException(e)
             }
@@ -259,14 +264,24 @@ object LlmModelWorker {
             ?: throw IllegalArgumentException("Cannot open file descriptor for URI: $uri")
 
         return suspendCancellableCoroutine { continuation ->
+            val resumed = AtomicBoolean(false)
+
+            continuation.invokeOnCancellation {
+                try { pfd.close() } catch (_: Exception) {}
+            }
+
             val callback = object : IModelLoadCallback.Stub() {
                 override fun onSuccess() {
+                    if (!resumed.compareAndSet(false, true)) return
+                    try { pfd.close() } catch (_: Exception) {}
                     _isGgufModelLoaded.value = true
                     Log.i(TAG, "GGUF model loaded successfully from URI")
                     continuation.resume(true)
                 }
 
                 override fun onError(message: String) {
+                    if (!resumed.compareAndSet(false, true)) return
+                    try { pfd.close() } catch (_: Exception) {}
                     _isGgufModelLoaded.value = false
                     Log.e(TAG, "Failed to load GGUF model from URI: $message")
                     continuation.resume(false)
@@ -282,6 +297,7 @@ object LlmModelWorker {
                     callback
                 )
             } catch (e: Exception) {
+                if (!resumed.compareAndSet(false, true)) return@suspendCancellableCoroutine
                 Log.e(TAG, "Exception loading GGUF model from URI", e)
                 pfd.close()
                 continuation.resumeWithException(e)
@@ -535,11 +551,14 @@ object LlmModelWorker {
     suspend fun loadUpscaler(modelPath: String): Boolean {
         val svc = ensureServiceBound()
         return suspendCancellableCoroutine { continuation ->
+            val resumed = AtomicBoolean(false)
             val callback = object : IModelLoadCallback.Stub() {
                 override fun onSuccess() {
+                    if (!resumed.compareAndSet(false, true)) return
                     continuation.resume(true)
                 }
                 override fun onError(message: String) {
+                    if (!resumed.compareAndSet(false, true)) return
                     Log.e(TAG, "Failed to load upscaler: $message")
                     continuation.resume(false)
                 }
@@ -547,6 +566,7 @@ object LlmModelWorker {
             try {
                 svc.loadUpscaler(modelPath, callback)
             } catch (e: Exception) {
+                if (!resumed.compareAndSet(false, true)) return@suspendCancellableCoroutine
                 continuation.resumeWithException(e)
             }
         }
@@ -609,8 +629,10 @@ object LlmModelWorker {
         val svc = ensureServiceBound()
 
         return suspendCancellableCoroutine { continuation ->
+            val resumed = AtomicBoolean(false)
             val callback = object : IModelLoadCallback.Stub() {
                 override fun onSuccess() {
+                    if (!resumed.compareAndSet(false, true)) return
                     _isDiffusionModelLoaded.value = true
                     _diffusionBackendState.value = "Running"
                     Log.i(TAG, "Diffusion model loaded successfully: $name")
@@ -618,6 +640,7 @@ object LlmModelWorker {
                 }
 
                 override fun onError(message: String) {
+                    if (!resumed.compareAndSet(false, true)) return
                     _isDiffusionModelLoaded.value = false
                     _diffusionBackendState.value = "Error: $message"
                     Log.e(TAG, "Failed to load diffusion model: $message")
@@ -640,6 +663,7 @@ object LlmModelWorker {
                     callback
                 )
             } catch (e: Exception) {
+                if (!resumed.compareAndSet(false, true)) return@suspendCancellableCoroutine
                 Log.e(TAG, "Exception loading diffusion model", e)
                 continuation.resumeWithException(e)
             }
@@ -784,14 +808,17 @@ object LlmModelWorker {
         val svc = ensureServiceBound()
 
         return suspendCancellableCoroutine { continuation ->
+            val resumed = AtomicBoolean(false)
             val callback = object : IModelLoadCallback.Stub() {
                 override fun onSuccess() {
+                    if (!resumed.compareAndSet(false, true)) return
                     _diffusionBackendState.value = "Running"
                     Log.i(TAG, "Diffusion backend restarted")
                     continuation.resume(true)
                 }
 
                 override fun onError(message: String) {
+                    if (!resumed.compareAndSet(false, true)) return
                     _diffusionBackendState.value = "Error: $message"
                     Log.e(TAG, "Failed to restart diffusion backend: $message")
                     continuation.resume(false)
@@ -801,6 +828,7 @@ object LlmModelWorker {
             try {
                 svc.restartDiffusionBackend(callback)
             } catch (e: Exception) {
+                if (!resumed.compareAndSet(false, true)) return@suspendCancellableCoroutine
                 Log.e(TAG, "Exception restarting diffusion backend", e)
                 continuation.resumeWithException(e)
             }
