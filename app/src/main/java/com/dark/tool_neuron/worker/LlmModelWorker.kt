@@ -306,12 +306,16 @@ object LlmModelWorker {
     }
 
     fun ggufStopGeneration() {
-        _serviceFlow.value?.stopGenerationGguf()
+        val svc = _serviceFlow.value
+        if (svc == null) { Log.w(TAG, "ggufStopGeneration: service not bound"); return }
+        svc.stopGenerationGguf()
         Log.i(TAG, "GGUF generation stopped")
     }
 
     fun unloadGgufModel() {
-        _serviceFlow.value?.unloadModelGguf()
+        val svc = _serviceFlow.value
+        if (svc == null) { Log.w(TAG, "unloadGgufModel: service not bound"); return }
+        svc.unloadModelGguf()
         _isGgufModelLoaded.value = false
         Log.i(TAG, "GGUF model unloaded")
     }
@@ -797,7 +801,9 @@ object LlmModelWorker {
      * Stop diffusion image generation
      */
     fun stopDiffusionGeneration() {
-        _serviceFlow.value?.stopGenerationDiffusion()
+        val svc = _serviceFlow.value
+        if (svc == null) { Log.w(TAG, "stopDiffusionGeneration: service not bound"); return }
+        svc.stopGenerationDiffusion()
         Log.i(TAG, "Diffusion generation stopped")
     }
 
@@ -839,7 +845,9 @@ object LlmModelWorker {
      * Stop diffusion backend
      */
     fun stopDiffusionBackend() {
-        _serviceFlow.value?.stopDiffusionBackend()
+        val svc = _serviceFlow.value
+        if (svc == null) { Log.w(TAG, "stopDiffusionBackend: service not bound"); return }
+        svc.stopDiffusionBackend()
         _isDiffusionModelLoaded.value = false
         _diffusionBackendState.value = "Idle"
         Log.i(TAG, "Diffusion backend stopped")

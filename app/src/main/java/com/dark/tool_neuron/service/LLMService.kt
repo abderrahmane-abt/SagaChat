@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
+import android.os.DeadObjectException
 import android.os.ParcelFileDescriptor
 import android.os.Process
 import android.util.Log
@@ -47,22 +48,31 @@ class LLMService : Service() {
         scope.launch(Dispatchers.IO) {
             try {
                 flow.collect { event ->
-                    when (event) {
-                        is GenerationEvent.Token -> callback.onToken(event.text)
-                        is GenerationEvent.Done -> callback.onDone()
-                        is GenerationEvent.Error -> callback.onError(event.message)
-                        is GenerationEvent.Metrics -> {
-                            val m = event.metrics
-                            callback.onMetrics(
-                                m.tokensPerSecond, m.timeToFirstTokenMs, m.totalTimeMs,
-                                m.tokensEvaluated, m.tokensPredicted,
-                                m.modelSizeMB, m.contextSizeMB, m.peakMemoryMB, m.memoryUsagePercent
-                            )
+                    try {
+                        when (event) {
+                            is GenerationEvent.Token -> callback.onToken(event.text)
+                            is GenerationEvent.Done -> callback.onDone()
+                            is GenerationEvent.Error -> callback.onError(event.message)
+                            is GenerationEvent.Metrics -> {
+                                val m = event.metrics
+                                callback.onMetrics(
+                                    m.tokensPerSecond, m.timeToFirstTokenMs, m.totalTimeMs,
+                                    m.tokensEvaluated, m.tokensPredicted,
+                                    m.modelSizeMB, m.contextSizeMB, m.peakMemoryMB, m.memoryUsagePercent
+                                )
+                            }
+                            is GenerationEvent.ToolCall -> callback.onToolCall(event.name, event.args)
+                            is GenerationEvent.Progress -> callback.onProgress(event.progress)
                         }
-                        is GenerationEvent.ToolCall -> callback.onToolCall(event.name, event.args)
-                        is GenerationEvent.Progress -> callback.onProgress(event.progress)
+                    } catch (e: DeadObjectException) {
+                        Log.w(TAG, "Client disconnected during generation")
+                        ggufEngine.stopGeneration()
+                        return@collect
                     }
                 }
+            } catch (e: DeadObjectException) {
+                Log.w(TAG, "Client disconnected during generation", e)
+                ggufEngine.stopGeneration()
             } catch (e: Exception) {
                 try {
                     callback.onError(e.message ?: "Unknown error")
