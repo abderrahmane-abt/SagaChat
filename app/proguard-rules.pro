@@ -124,7 +124,7 @@
 
 # -- AI Core & GGUF --
 -keep class com.mp.ai_core.** { *; }
--keep class com.mp.ai_gguf.** { *; }
+-keep class com.dark.gguf_lib.** { *; }
 -keep class com.dark.ai_module.** { *; }
 -keep class com.dark.ai_sd.** { *; }
 -keep class com.android.tools.mlkit.** { *; }
@@ -142,13 +142,13 @@
 }
 
 # Keep all callback interfaces and their methods (critical for JNI)
--keep interface com.mp.ai_gguf.models.EmbeddingCallback { *; }
--keep interface com.mp.ai_gguf.models.StreamCallback { *; }
--keep class com.mp.ai_gguf.models.EmbeddingResult { *; }
--keep class com.mp.ai_gguf.models.** { *; }
+-keep interface com.dark.gguf_lib.models.EmbeddingCallback { *; }
+-keep interface com.dark.gguf_lib.models.StreamCallback { *; }
+-keep class com.dark.gguf_lib.models.EmbeddingResult { *; }
+-keep class com.dark.gguf_lib.models.** { *; }
 
 # Keep all methods that might be called from native code
--keepclassmembers class com.mp.ai_gguf.** {
+-keepclassmembers class com.dark.gguf_lib.** {
     native <methods>;
     public <methods>;
     public <fields>;
@@ -161,7 +161,7 @@
 }
 
 # Prevent callback interface methods from being renamed or removed
--keepclassmembers interface com.mp.ai_gguf.models.** {
+-keepclassmembers interface com.dark.gguf_lib.models.** {
     *;
 }
 

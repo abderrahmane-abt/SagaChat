@@ -34,6 +34,18 @@ interface ILLMService {
     boolean stateSaveToFileGguf(String path);
     boolean stateLoadFromFileGguf(String path);
 
+    // New optimizations
+    void setSpeculativeDecodingGguf(boolean enabled, int nDraft, int ngramSize);
+    void setPromptCacheDirGguf(String path);
+    boolean warmUpGguf();
+    boolean supportsThinkingGguf();
+    void setThinkingEnabledGguf(boolean enabled);
+    float getContextUsageGguf();
+
+    // Upscaler
+    void loadUpscaler(String modelPath, IModelLoadCallback callback);
+    void releaseUpscaler();
+
     //Diffusion
     void loadDiffusionModel(
         String name,

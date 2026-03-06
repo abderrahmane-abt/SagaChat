@@ -29,15 +29,51 @@ class LLMService : Service() {
 
     companion object {
         private const val TAG = "LLMService"
+
+        /** Direct reference for same-process callers (avoids AIDL serialization). */
+        @Volatile
+        var instance: LLMService? = null
+            private set
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val ggufEngine = GGUFEngine()
+    val ggufEngine = GGUFEngine()
     private val diffusionEngine = DiffusionEngine()
+
+    private fun collectGenerationFlow(
+        flow: kotlinx.coroutines.flow.Flow<GenerationEvent>,
+        callback: IGgufGenerationCallback
+    ) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                flow.collect { event ->
+                    when (event) {
+                        is GenerationEvent.Token -> callback.onToken(event.text)
+                        is GenerationEvent.Done -> callback.onDone()
+                        is GenerationEvent.Error -> callback.onError(event.message)
+                        is GenerationEvent.Metrics -> {
+                            val m = event.metrics
+                            callback.onMetrics(
+                                m.tokensPerSecond, m.timeToFirstTokenMs, m.totalTimeMs,
+                                m.tokensEvaluated, m.tokensPredicted,
+                                m.modelSizeMB, m.contextSizeMB, m.peakMemoryMB, m.memoryUsagePercent
+                            )
+                        }
+                        is GenerationEvent.ToolCall -> callback.onToolCall(event.name, event.args)
+                        is GenerationEvent.Progress -> callback.onProgress(event.progress)
+                    }
+                }
+            } catch (e: Exception) {
+                try {
+                    callback.onError(e.message ?: "Unknown error")
+                } catch (_: Exception) { }
+            }
+        }
+    }
 
     private val binder = object : ILLMService.Stub() {
 
-        // ==================== GGUF Methods ====================
+        // ── GGUF Methods ──
 
         override fun loadGgufModel(
             modelPath: String,
@@ -87,12 +123,13 @@ class LLMService : Service() {
             inferenceParams: String,
             callback: IModelLoadCallback
         ) {
+            // Detach fd synchronously before coroutine launch —
+            // Binder may close the ParcelFileDescriptor after the AIDL call returns
+            val fd = pfd.detachFd()
+
             scope.launch(Dispatchers.IO) {
                 try {
                     AppStateManager.setLoadingModel(modelName)
-
-                    // Get the native FD and detach it so GGUFEngine can own it
-                    val fd = pfd.detachFd()
 
                     val config = ModelConfig(
                         modelId = modelName,
@@ -119,46 +156,7 @@ class LLMService : Service() {
         override fun generateGguf(
             prompt: String, maxTokens: Int, callback: IGgufGenerationCallback
         ) {
-            scope.launch(Dispatchers.IO) {
-                try {
-                    ggufEngine.generateFlow(prompt, maxTokens).collect { event ->
-                        when (event) {
-                            is GenerationEvent.Token -> {
-                                callback.onToken(event.text)
-                            }
-
-                            is GenerationEvent.Done -> {
-                                callback.onDone()
-                            }
-
-                            is GenerationEvent.Error -> {
-                                callback.onError(event.message)
-                            }
-
-                            is GenerationEvent.Metrics -> {
-                                callback.onMetrics(
-                                    event.metrics.totalTokens,
-                                    event.metrics.promptTokens,
-                                    event.metrics.generatedTokens,
-                                    event.metrics.tokensPerSecond,
-                                    event.metrics.timeToFirstToken,
-                                    event.metrics.totalTimeMs
-                                )
-                            }
-
-                            is GenerationEvent.ToolCall -> {
-                                callback.onToolCall(event.name, event.args)
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    try {
-                        callback.onError(e.message ?: "Unknown error")
-                    } catch (_: Exception) {
-                        // Client may have disconnected
-                    }
-                }
-            }
+            collectGenerationFlow(ggufEngine.generateFlow(prompt, maxTokens), callback)
         }
 
         override fun stopGenerationGguf() {
@@ -174,65 +172,23 @@ class LLMService : Service() {
 
         override fun getModelInfoGguf(): String? = ggufEngine.getModelInfo()
 
-        override fun setToolsJsonGguf(toolsJson: String): Boolean {
-            return ggufEngine.setToolsJson(toolsJson)
-        }
+        override fun setToolsJsonGguf(toolsJson: String): Boolean =
+            ggufEngine.setToolsJson(toolsJson)
 
         override fun clearToolsGguf() {
             ggufEngine.clearTools()
         }
 
-        // ==================== Multi-turn Tool Calling ====================
+        // ── Multi-turn Tool Calling ──
 
         override fun enableToolCallingGguf(
-            toolsJson: String,
-            grammarMode: Int,
-            useTypedGrammar: Boolean
-        ): Boolean {
-            return ggufEngine.enableToolCalling(toolsJson, grammarMode, useTypedGrammar)
-        }
+            toolsJson: String, grammarMode: Int, useTypedGrammar: Boolean
+        ): Boolean = ggufEngine.enableToolCalling(toolsJson, grammarMode, useTypedGrammar)
 
         override fun generateGgufMultiTurn(
-            messagesJson: String,
-            maxTokens: Int,
-            callback: IGgufGenerationCallback
+            messagesJson: String, maxTokens: Int, callback: IGgufGenerationCallback
         ) {
-            scope.launch(Dispatchers.IO) {
-                try {
-                    ggufEngine.generateMultiTurnFlow(messagesJson, maxTokens).collect { event ->
-                        when (event) {
-                            is GenerationEvent.Token -> {
-                                callback.onToken(event.text)
-                            }
-                            is GenerationEvent.Done -> {
-                                callback.onDone()
-                            }
-                            is GenerationEvent.Error -> {
-                                callback.onError(event.message)
-                            }
-                            is GenerationEvent.Metrics -> {
-                                callback.onMetrics(
-                                    event.metrics.totalTokens,
-                                    event.metrics.promptTokens,
-                                    event.metrics.generatedTokens,
-                                    event.metrics.tokensPerSecond,
-                                    event.metrics.timeToFirstToken,
-                                    event.metrics.totalTimeMs
-                                )
-                            }
-                            is GenerationEvent.ToolCall -> {
-                                callback.onToolCall(event.name, event.args)
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    try {
-                        callback.onError(e.message ?: "Unknown error")
-                    } catch (_: Exception) {
-                        // Client may have disconnected
-                    }
-                }
-            }
+            collectGenerationFlow(ggufEngine.generateMultiTurnFlow(messagesJson, maxTokens), callback)
         }
 
         override fun setGrammarModeGguf(mode: Int) {
@@ -243,43 +199,68 @@ class LLMService : Service() {
             ggufEngine.setTypedGrammar(enabled)
         }
 
-        override fun isToolCallingSupportedGguf(): Boolean {
-            return ggufEngine.isToolCallingSupported()
+        override fun isToolCallingSupportedGguf(): Boolean =
+            ggufEngine.isToolCallingSupported()
+
+        // ── Persona Engine ──
+
+        override fun updateSamplerParamsGguf(paramsJson: String): Boolean =
+            ggufEngine.updateSamplerParams(paramsJson)
+
+        override fun setLogitBiasGguf(biasJson: String): Boolean =
+            ggufEngine.setLogitBias(biasJson)
+
+        override fun loadControlVectorsGguf(vectorsJson: String): Boolean =
+            ggufEngine.loadControlVectors(vectorsJson)
+
+        override fun clearControlVectorGguf(): Boolean =
+            ggufEngine.clearControlVector()
+
+        // ── KV Cache State Persistence ──
+
+        override fun getStateSizeGguf(): Long = ggufEngine.getStateSize()
+        override fun stateSaveToFileGguf(path: String): Boolean = ggufEngine.stateSaveToFile(path)
+        override fun stateLoadFromFileGguf(path: String): Boolean = ggufEngine.stateLoadFromFile(path)
+
+        // ── New Optimizations ──
+
+        override fun setSpeculativeDecodingGguf(enabled: Boolean, nDraft: Int, ngramSize: Int) {
+            ggufEngine.setSpeculativeDecoding(enabled, nDraft, ngramSize)
         }
 
-        // ==================== Persona Engine ====================
-
-        override fun updateSamplerParamsGguf(paramsJson: String): Boolean {
-            return ggufEngine.updateSamplerParams(paramsJson)
+        override fun setPromptCacheDirGguf(path: String) {
+            ggufEngine.setPromptCacheDir(path)
         }
 
-        override fun setLogitBiasGguf(biasJson: String): Boolean {
-            return ggufEngine.setLogitBias(biasJson)
+        override fun warmUpGguf(): Boolean = ggufEngine.warmUp()
+
+        override fun supportsThinkingGguf(): Boolean = ggufEngine.supportsThinking()
+
+        override fun setThinkingEnabledGguf(enabled: Boolean) {
+            ggufEngine.setThinkingEnabled(enabled)
         }
 
-        override fun loadControlVectorsGguf(vectorsJson: String): Boolean {
-            return ggufEngine.loadControlVectors(vectorsJson)
+        override fun getContextUsageGguf(): Float = ggufEngine.getContextUsage()
+
+        // ── Upscaler ──
+
+        override fun loadUpscaler(modelPath: String, callback: IModelLoadCallback) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val success = diffusionEngine.loadUpscaler(modelPath)
+                    if (success) callback.onSuccess()
+                    else callback.onError("Failed to load upscaler")
+                } catch (e: Exception) {
+                    callback.onError(e.message ?: "Unknown error loading upscaler")
+                }
+            }
         }
 
-        override fun clearControlVectorGguf(): Boolean {
-            return ggufEngine.clearControlVector()
+        override fun releaseUpscaler() {
+            diffusionEngine.releaseUpscaler()
         }
 
-        // ==================== KV Cache State Persistence ====================
-
-        override fun getStateSizeGguf(): Long {
-            return ggufEngine.getStateSize()
-        }
-
-        override fun stateSaveToFileGguf(path: String): Boolean {
-            return ggufEngine.stateSaveToFile(path)
-        }
-
-        override fun stateLoadFromFileGguf(path: String): Boolean {
-            return ggufEngine.stateLoadFromFile(path)
-        }
-
-        // ==================== Diffusion Methods ====================
+        // ── Diffusion Methods ──
 
         override fun loadDiffusionModel(
             name: String,
@@ -352,7 +333,6 @@ class LLMService : Service() {
                 try {
                     Log.i(TAG, "Starting diffusion generation: $prompt")
 
-                    // Start generation
                     diffusionEngine.generateImage(
                         prompt = prompt,
                         negativePrompt = negativePrompt,
@@ -370,17 +350,13 @@ class LLMService : Service() {
                         showDiffusionStride = showDiffusionStride
                     )
 
-                    // Observe generation state
                     diffusionEngine.observeGenerationState(onProgress = { progress, currentStep, totalSteps, intermediateBitmap ->
                         try {
                             val imageBase64 = intermediateBitmap?.let {
                                 diffusionEngine.bitmapToBase64(it, quality = 80)
                             } ?: ""
 
-                            callback.onProgress(
-                                progress, currentStep, totalSteps, imageBase64
-                            )
-
+                            callback.onProgress(progress, currentStep, totalSteps, imageBase64)
                             Log.d(TAG, "Generation progress: ${(progress * 100).toInt()}%")
                         } catch (e: Exception) {
                             Log.e(TAG, "Error sending progress", e)
@@ -388,9 +364,7 @@ class LLMService : Service() {
                     }, onComplete = { bitmap, completedSeed, resultWidth, resultHeight ->
                         try {
                             val imageBase64 = diffusionEngine.bitmapToBase64(bitmap)
-                            callback.onComplete(
-                                imageBase64, completedSeed ?: -1L, resultWidth, resultHeight
-                            )
+                            callback.onComplete(imageBase64, completedSeed ?: -1L, resultWidth, resultHeight)
                             Log.i(TAG, "Generation completed successfully")
                         } catch (e: Exception) {
                             Log.e(TAG, "Error sending completion", e)
@@ -408,9 +382,7 @@ class LLMService : Service() {
                     try {
                         callback.onError(e.message ?: "Unknown error during generation")
                         Log.e(TAG, "Exception in generateDiffusionImage", e)
-                    } catch (_: Exception) {
-                        // Client may have disconnected
-                    }
+                    } catch (_: Exception) { }
                 }
             }
         }
@@ -424,11 +396,8 @@ class LLMService : Service() {
             scope.launch(Dispatchers.IO) {
                 try {
                     val success = diffusionEngine.restartBackend()
-                    if (success) {
-                        callback.onSuccess()
-                    } else {
-                        callback.onError("Failed to restart backend")
-                    }
+                    if (success) callback.onSuccess()
+                    else callback.onError("Failed to restart backend")
                 } catch (e: Exception) {
                     callback.onError(e.message ?: "Unknown error restarting backend")
                 }
@@ -440,9 +409,8 @@ class LLMService : Service() {
             Log.i(TAG, "Diffusion backend stopped")
         }
 
-        override fun getDiffusionBackendState(): String {
-            return diffusionEngine.getBackendStateString()
-        }
+        override fun getDiffusionBackendState(): String =
+            diffusionEngine.getBackendStateString()
 
         override fun getCurrentDiffusionModel(): String? {
             val model = diffusionEngine.getCurrentModel()
@@ -454,6 +422,7 @@ class LLMService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
 
         try {
@@ -469,6 +438,7 @@ class LLMService : Service() {
     }
 
     override fun onDestroy() {
+        instance = null
         scope.launch {
             ggufEngine.unload()
             diffusionEngine.cleanup()
