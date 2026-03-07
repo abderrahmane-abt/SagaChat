@@ -9,10 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,10 +22,9 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.dark.tool_neuron.R
 import com.dark.tool_neuron.global.Standards
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.worker.ScoredVaultContent
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @Composable
 fun MemoryResultsDisplay(
@@ -42,7 +37,7 @@ fun MemoryResultsDisplay(
 
     StandardCard(
         modifier = modifier,
-        iconRes = R.drawable.memory_vault,
+        icon = TnIcons.ShieldLock,
         title = "Memory Vault Results",
         description = "${results.size} memories found",
         containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f),
@@ -53,11 +48,7 @@ fun MemoryResultsDisplay(
                 containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f),
                 contentColor = MaterialTheme.colorScheme.secondary
             )
-            Icon(
-                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                contentDescription = if (isExpanded) "Collapse" else "Expand",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            ExpandCollapseIcon(isExpanded = isExpanded)
         }
     ) {
         AnimatedVisibility(
@@ -66,7 +57,7 @@ fun MemoryResultsDisplay(
             exit = shrinkVertically()
         ) {
             Column(
-                verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
             ) {
                 results.forEach { result ->
                     MemoryEntryCard(result = result)
@@ -101,15 +92,15 @@ private fun MemoryEntryCard(
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = if (isRevealed) Int.MAX_VALUE else 3,
             overflow = TextOverflow.Ellipsis,
-            modifier = if (!isRevealed) Modifier.blur(rDp(6.dp)) else Modifier
+            modifier = if (!isRevealed) Modifier.blur(6.dp) else Modifier
         )
 
         if (result.category != null || result.tags.isNotEmpty()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = rDp(Standards.SpacingXs)),
-                horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))
+                    .padding(top = Standards.SpacingXs),
+                horizontalArrangement = Arrangement.spacedBy(Standards.SpacingXs)
             ) {
                 result.category?.let {
                     InfoBadge(

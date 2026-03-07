@@ -21,13 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,10 +41,10 @@ import com.dark.tool_neuron.models.plugins.ScrapedContent
 import com.dark.tool_neuron.plugins.viewmodel.WebSearchViewModel
 import com.dark.tool_neuron.ui.theme.ManropeFontFamily
 import com.dark.tool_neuron.ui.theme.maple
-import com.dark.tool_neuron.ui.theme.rDp
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 /**
  * UI component for Web Scraping Tool
@@ -66,7 +59,7 @@ fun WebScrapingUI(
 
     ToolCard(
         title = "Web Scraping",
-        icon = Icons.Default.Language,
+        icon = TnIcons.World,
         state = state,
         modifier = modifier
     ) {
@@ -89,7 +82,7 @@ private fun ScrapedContentDisplay(content: ScrapedContent) {
                     stiffness = Spring.StiffnessLow
                 )
             ),
-        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Metadata
         ContentMetadata(content = content)
@@ -98,7 +91,7 @@ private fun ScrapedContentDisplay(content: ScrapedContent) {
         Spacer(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(rDp(1.dp))
+                .height(1.dp)
                 .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
         )
 
@@ -115,11 +108,11 @@ private fun ScrapedContentDisplay(content: ScrapedContent) {
 private fun ContentMetadata(content: ScrapedContent) {
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // URL
         MetadataRow(
-            icon = Icons.Default.Language,
+            icon = TnIcons.World,
             label = "URL",
             value = content.url,
             valueStyle = MetadataValueStyle.Link
@@ -128,7 +121,7 @@ private fun ContentMetadata(content: ScrapedContent) {
         // Title
         if (content.title.isNotEmpty()) {
             MetadataRow(
-                icon = Icons.Default.TextFields,
+                icon = TnIcons.Code,
                 label = "Title",
                 value = content.title,
                 valueStyle = MetadataValueStyle.Normal
@@ -137,11 +130,11 @@ private fun ContentMetadata(content: ScrapedContent) {
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(rDp(16.dp))
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Content length
             MetadataChip(
-                icon = Icons.Default.TextFields,
+                icon = TnIcons.Code,
                 label = "${content.contentLength} chars"
             )
 
@@ -151,7 +144,7 @@ private fun ContentMetadata(content: ScrapedContent) {
                     .format(Date(content.fetchTime))
             }
             MetadataChip(
-                icon = Icons.Default.Schedule,
+                icon = TnIcons.Clock,
                 label = timeFormatted
             )
         }
@@ -160,7 +153,7 @@ private fun ContentMetadata(content: ScrapedContent) {
         content.metadata["selector"]?.let { selector ->
             if (selector != "none") {
                 MetadataRow(
-                    icon = Icons.Default.ContentCopy,
+                    icon = TnIcons.Copy,
                     label = "Selector",
                     value = selector,
                     valueStyle = MetadataValueStyle.Code
@@ -179,7 +172,7 @@ private fun MetadataRow(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.Top
     ) {
         Icon(
@@ -187,13 +180,13 @@ private fun MetadataRow(
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier
-                .size(rDp(16.dp))
-                .padding(top = rDp(2.dp))
+                .size(16.dp)
+                .padding(top = 2.dp)
         )
 
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(rDp(2.dp))
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(
                 text = label,
@@ -230,17 +223,17 @@ private fun MetadataChip(
 ) {
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(rDp(6.dp)))
+            .clip(RoundedCornerShape(6.dp))
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
-            .padding(horizontal = rDp(8.dp), vertical = rDp(4.dp)),
-        horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(rDp(14.dp))
+            modifier = Modifier.size(14.dp)
         )
         Text(
             text = label,
@@ -269,15 +262,15 @@ private fun ContentPreview(
 
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // Header with expand button
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(rDp(8.dp)))
+                .clip(RoundedCornerShape(8.dp))
                 .clickable { onExpandToggle() }
-                .padding(rDp(8.dp)),
+                .padding(8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -290,11 +283,11 @@ private fun ContentPreview(
             )
 
             Icon(
-                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                 contentDescription = if (isExpanded) "Collapse" else "Expand",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
-                    .size(rDp(20.dp))
+                    .size(20.dp)
                     .rotate(rotation)
             )
         }
@@ -316,18 +309,18 @@ private fun ContentPreview(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(rDp(8.dp)))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
                     .then(
                         if (isExpanded) {
                             Modifier
-                                .height(rDp(200.dp))
+                                .height(200.dp)
                                 .verticalScroll(scrollState)
                         } else {
                             Modifier
                         }
                     )
-                    .padding(rDp(12.dp))
+                    .padding(12.dp)
             ) {
                 Text(
                     text = if (isExpanded) content.content else content.content.take(200) + "...",

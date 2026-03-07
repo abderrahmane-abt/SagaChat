@@ -5,14 +5,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.dark.tool_neuron.models.messages.Messages
+import com.dark.tool_neuron.data.VaultManager
 import com.dark.tool_neuron.models.vault.ChatInfo
-import com.dark.tool_neuron.vault.VaultHelper
-import com.memoryvault.core.VaultStats
+import com.dark.tool_neuron.models.vault.VaultStatistics
 import kotlinx.coroutines.launch
 
 class VaultManagementViewModel : ViewModel() {
-    var vaultStats by mutableStateOf<VaultStats?>(null)
+    var vaultStats by mutableStateOf<VaultStatistics?>(null)
         private set
 
     var isLoading by mutableStateOf(false)
@@ -37,7 +36,8 @@ class VaultManagementViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 isLoading = true
-                vaultStats = VaultHelper.getVault().getStats()
+                val chatRepo = VaultManager.chatRepo ?: return@launch
+                vaultStats = chatRepo.getVaultStats()
             } catch (e: Exception) {
                 showError = true
                 errorMessage = e.message ?: "Failed to load vault stats"
@@ -51,7 +51,8 @@ class VaultManagementViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 isLoading = true
-                chatList = VaultHelper.getAllChats()
+                val chatRepo = VaultManager.chatRepo ?: return@launch
+                chatList = chatRepo.getAllChats()
             } catch (e: Exception) {
                 showError = true
                 errorMessage = e.message ?: "Failed to load chats"
@@ -66,7 +67,7 @@ class VaultManagementViewModel : ViewModel() {
             try {
                 isDefragging = true
                 defragProgress = 0f
-                VaultHelper.performMaintenance()
+                // UMS handles its own WAL compaction; no manual defrag needed
                 defragProgress = 1f
                 loadVaultStats()
             } catch (e: Exception) {
@@ -83,7 +84,8 @@ class VaultManagementViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 isLoading = true
-                VaultHelper.deleteChat(chatId)
+                val chatRepo = VaultManager.chatRepo ?: return@launch
+                chatRepo.deleteChat(chatId)
                 loadChatList()
             } catch (e: Exception) {
                 showError = true

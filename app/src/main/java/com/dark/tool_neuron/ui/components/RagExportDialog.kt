@@ -12,20 +12,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -42,13 +35,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.models.table_schema.InstalledRag
-import com.dark.tool_neuron.ui.theme.rDp
 import com.neuronpacket.LoadingMode
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 /**
  * Export configuration data class matching NeuronPacket ExportConfig
@@ -100,7 +90,7 @@ fun RagExportDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Packet Info Section
                 SectionHeader(title = "Packet Information")
@@ -123,7 +113,7 @@ fun RagExportDialog(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     OutlinedTextField(
                         value = author,
@@ -136,55 +126,39 @@ fun RagExportDialog(
                         value = version,
                         onValueChange = { version = it },
                         label = { Text("Version") },
-                        modifier = Modifier.width(rDp(80.dp)),
+                        modifier = Modifier.width(80.dp),
                         singleLine = true
                     )
                 }
 
-                Spacer(modifier = Modifier.height(rDp(8.dp)))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // Security Section
                 SectionHeader(title = "Security")
 
-                OutlinedTextField(
+                PasswordTextField(
                     value = adminPassword,
                     onValueChange = {
                         adminPassword = it
                         passwordError = null
                     },
-                    label = { Text("Admin Password") },
+                    label = "Admin Password",
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    leadingIcon = {
-                        Icon(Icons.Default.Lock, contentDescription = null)
-                    },
-                    trailingIcon = {
-                        IconButton(onClick = { showPassword = !showPassword }) {
-                            Icon(
-                                if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = if (showPassword) "Hide password" else "Show password"
-                            )
-                        }
-                    },
+                    showPasswordState = showPassword,
+                    onToggleVisibility = { showPassword = !showPassword },
                     isError = passwordError != null
                 )
 
-                OutlinedTextField(
+                PasswordTextField(
                     value = confirmPassword,
                     onValueChange = {
                         confirmPassword = it
                         passwordError = null
                     },
-                    label = { Text("Confirm Password") },
+                    label = "Confirm Password",
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    leadingIcon = {
-                        Icon(Icons.Default.Lock, contentDescription = null)
-                    },
+                    showPasswordState = showPassword,
+                    onToggleVisibility = { showPassword = !showPassword },
                     isError = passwordError != null,
                     supportingText = passwordError?.let { { Text(it, color = MaterialTheme.colorScheme.error) } }
                 )
@@ -207,7 +181,7 @@ fun RagExportDialog(
 
                 AnimatedVisibility(visible = addReadOnlyUsers) {
                     Column(
-                        verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         // Display existing read-only users
                         readOnlyUsers.forEachIndexed { index, (username, _) ->
@@ -215,23 +189,23 @@ fun RagExportDialog(
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
                                 ),
-                                shape = RoundedCornerShape(rDp(8.dp))
+                                shape = RoundedCornerShape(8.dp)
                             ) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(rDp(8.dp)),
+                                        .padding(8.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Icon(
-                                            Icons.Default.Person,
+                                            TnIcons.User,
                                             contentDescription = null,
-                                            modifier = Modifier.size(rDp(20.dp))
+                                            modifier = Modifier.size(20.dp)
                                         )
                                         Text(
                                             text = username,
@@ -250,7 +224,7 @@ fun RagExportDialog(
                         // Add new read-only user
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             OutlinedTextField(
@@ -260,13 +234,11 @@ fun RagExportDialog(
                                 modifier = Modifier.weight(1f),
                                 singleLine = true
                             )
-                            OutlinedTextField(
+                            PasswordTextField(
                                 value = currentReadOnlyPassword,
                                 onValueChange = { currentReadOnlyPassword = it },
-                                label = { Text("Password") },
                                 modifier = Modifier.weight(1f),
-                                singleLine = true,
-                                visualTransformation = PasswordVisualTransformation()
+                                showToggle = false
                             )
                         }
 
@@ -286,7 +258,7 @@ fun RagExportDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(rDp(8.dp)))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // Export Options Section
                 SectionHeader(title = "Export Options")
@@ -399,12 +371,12 @@ private fun LoadingModeOption(
         } else {
             MaterialTheme.colorScheme.surface
         },
-        shape = RoundedCornerShape(rDp(8.dp))
+        shape = RoundedCornerShape(8.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(8.dp)),
+                .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             RadioButton(

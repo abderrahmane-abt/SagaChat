@@ -1,23 +1,24 @@
 package com.dark.tool_neuron.repo
 
+import com.dark.tool_neuron.data.VaultManager
 import com.dark.tool_neuron.models.messages.ContentType
+import com.dark.tool_neuron.models.messages.MessageContent
 import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.models.messages.Role
 import com.dark.tool_neuron.models.vault.ChatExport
 import com.dark.tool_neuron.models.vault.ChatInfo
 import com.dark.tool_neuron.models.vault.VaultStatistics
-import com.dark.tool_neuron.vault.VaultHelper
-import com.dark.tool_neuron.vault.addAssistantMessage
-import com.dark.tool_neuron.vault.addUserMessage
-import com.mp.ai_gguf.models.DecodingMetrics
+import com.dark.tool_neuron.models.engine_schema.DecodingMetrics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class ChatRepository {
 
+    private val chatRepo get() = VaultManager.chatRepo ?: error("VaultManager not initialized")
+
     suspend fun createChat(): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val chatId = VaultHelper.createChat()
+            val chatId = chatRepo.createChat()
             Result.success(chatId)
         } catch (e: Exception) {
             Result.failure(e)
@@ -26,7 +27,7 @@ class ChatRepository {
 
     suspend fun getAllChats(): Result<List<ChatInfo>> = withContext(Dispatchers.IO) {
         try {
-            val chats = VaultHelper.getAllChats()
+            val chats = chatRepo.getAllChats()
             Result.success(chats)
         } catch (e: Exception) {
             Result.failure(e)
@@ -35,7 +36,7 @@ class ChatRepository {
 
     suspend fun getChat(chatId: String): Result<ChatInfo?> = withContext(Dispatchers.IO) {
         try {
-            val chat = VaultHelper.getAllChats().find { it.chatId == chatId }
+            val chat = chatRepo.getAllChats().find { it.chatId == chatId }
             Result.success(chat)
         } catch (e: Exception) {
             Result.failure(e)
@@ -44,7 +45,7 @@ class ChatRepository {
 
     suspend fun deleteChat(chatId: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            VaultHelper.deleteChat(chatId)
+            chatRepo.deleteChat(chatId)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -53,7 +54,7 @@ class ChatRepository {
 
     suspend fun addMessage(chatId: String, message: Messages): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val messageId = VaultHelper.addMessage(chatId, message)
+            val messageId = chatRepo.addMessage(chatId, message)
             Result.success(messageId)
         } catch (e: Exception) {
             Result.failure(e)
@@ -66,7 +67,11 @@ class ChatRepository {
         contentType: ContentType = ContentType.Text
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val messageId = VaultHelper.addUserMessage(chatId, content, contentType)
+            val message = Messages(
+                role = Role.User,
+                content = MessageContent(contentType = contentType, content = content)
+            )
+            val messageId = chatRepo.addMessage(chatId, message)
             Result.success(messageId)
         } catch (e: Exception) {
             Result.failure(e)
@@ -80,7 +85,12 @@ class ChatRepository {
         decodingMetrics: DecodingMetrics? = null
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val messageId = VaultHelper.addAssistantMessage(chatId, content, contentType, decodingMetrics)
+            val message = Messages(
+                role = Role.Assistant,
+                content = MessageContent(contentType = contentType, content = content),
+                decodingMetrics = decodingMetrics
+            )
+            val messageId = chatRepo.addMessage(chatId, message)
             Result.success(messageId)
         } catch (e: Exception) {
             Result.failure(e)
@@ -89,7 +99,7 @@ class ChatRepository {
 
     suspend fun getMessages(chatId: String, limit: Int = 1000): Result<List<Messages>> = withContext(Dispatchers.IO) {
         try {
-            val messages = VaultHelper.getMessagesForChat(chatId, limit)
+            val messages = chatRepo.getMessagesForChat(chatId, limit)
             Result.success(messages)
         } catch (e: Exception) {
             Result.failure(e)
@@ -98,7 +108,7 @@ class ChatRepository {
 
     suspend fun getMessage(messageId: String): Result<Messages?> = withContext(Dispatchers.IO) {
         try {
-            val message = VaultHelper.getMessage(messageId)
+            val message = chatRepo.getMessage(messageId)
             Result.success(message)
         } catch (e: Exception) {
             Result.failure(e)
@@ -107,7 +117,7 @@ class ChatRepository {
 
     suspend fun updateMessage(chatId: String, message: Messages): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
-            val updated = VaultHelper.updateMessage(chatId, message)
+            val updated = chatRepo.updateMessage(chatId, message)
             Result.success(updated)
         } catch (e: Exception) {
             Result.failure(e)
@@ -116,7 +126,7 @@ class ChatRepository {
 
     suspend fun deleteMessage(messageId: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            VaultHelper.deleteMessage(messageId)
+            chatRepo.deleteMessage(messageId)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -125,7 +135,7 @@ class ChatRepository {
 
     suspend fun searchMessages(query: String): Result<List<Messages>> = withContext(Dispatchers.IO) {
         try {
-            val results = VaultHelper.searchMessages(query)
+            val results = chatRepo.searchMessages(query)
             Result.success(results.map { it.message })
         } catch (e: Exception) {
             Result.failure(e)
@@ -134,7 +144,7 @@ class ChatRepository {
 
     suspend fun searchInChat(chatId: String, query: String): Result<List<Messages>> = withContext(Dispatchers.IO) {
         try {
-            val results = VaultHelper.searchInChat(chatId, query)
+            val results = chatRepo.searchInChat(chatId, query)
             Result.success(results)
         } catch (e: Exception) {
             Result.failure(e)
@@ -143,7 +153,7 @@ class ChatRepository {
 
     suspend fun getStatistics(): Result<VaultStatistics> = withContext(Dispatchers.IO) {
         try {
-            val stats = VaultHelper.getVaultStats()
+            val stats = chatRepo.getVaultStats()
             Result.success(stats)
         } catch (e: Exception) {
             Result.failure(e)
@@ -152,10 +162,9 @@ class ChatRepository {
 
     suspend fun exportChat(chatId: String, exportPath: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val export = VaultHelper.exportChat(chatId)
+            val export = chatRepo.exportChat(chatId)
             val jsonString = kotlinx.serialization.json.Json.encodeToString(
-                ChatExport.serializer(),
-                export
+                ChatExport.serializer(), export
             )
             java.io.File(exportPath).writeText(jsonString)
             Result.success(Unit)
@@ -168,38 +177,10 @@ class ChatRepository {
         try {
             val jsonString = java.io.File(importPath).readText()
             val export = kotlinx.serialization.json.Json.decodeFromString(
-                ChatExport.serializer(),
-                jsonString
+                ChatExport.serializer(), jsonString
             )
-            val chatId = VaultHelper.importChat(export)
+            val chatId = chatRepo.importChat(export)
             Result.success(chatId)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    suspend fun createBackup(backupPath: String): Result<Boolean> = withContext(Dispatchers.IO) {
-        try {
-            val success = VaultHelper.createBackup(backupPath)
-            Result.success(success)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    suspend fun restoreBackup(backupPath: String): Result<Boolean> = withContext(Dispatchers.IO) {
-        try {
-            val success = VaultHelper.restoreBackup(backupPath)
-            Result.success(success)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    suspend fun performMaintenance(): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
-            VaultHelper.performMaintenance()
-            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }

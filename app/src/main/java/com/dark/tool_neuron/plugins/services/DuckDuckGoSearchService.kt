@@ -163,7 +163,8 @@ class DuckDuckGoSearchService {
                     .header("Sec-Fetch-Dest", "document")
                     .header("Sec-Fetch-Mode", "navigate")
                     .header("Sec-Fetch-Site", "none")
-                    .header("Cache-Control", "max-age=0")
+                    .header("Cache-Control", "no-cache")
+                    .header("Pragma", "no-cache")
                     .build()
 
                 client.newCall(request).execute().use { response ->
@@ -177,6 +178,8 @@ class DuckDuckGoSearchService {
                     if (html.contains("detected unusual traffic") ||
                         html.contains("captcha") ||
                         html.length < 500) {
+                        // Longer backoff on rate limiting (5-10s)
+                        delay(5000 + Random.nextLong(0, 5000))
                         throw IOException("Possible rate limiting or blocking detected")
                     }
 
@@ -218,49 +221,66 @@ class DuckDuckGoSearchService {
         region: String?,
         timeRange: String?
     ): Result<DuckDuckGoSearchResponse> = withContext(Dispatchers.IO) {
-        try {
-            val startTime = System.currentTimeMillis()
-            val encodedQuery = URLEncoder.encode(query, "UTF-8")
+        var lastException: Exception? = null
 
-            val url = buildString {
-                append("https://lite.duckduckgo.com/lite/?q=")
-                append(encodedQuery)
-                if (safeSearch) append("&kp=1")
-                region?.let { append("&kl=$it") }
-                timeRange?.let { append("&df=$it") }
-            }
+        repeat(MAX_RETRIES) { attempt ->
+            try {
+                val startTime = System.currentTimeMillis()
+                val encodedQuery = URLEncoder.encode(query, "UTF-8")
 
-            val request = Request.Builder()
-                .url(url)
-                .header("User-Agent", userAgents.random())
-                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw IOException("HTTP ${response.code}")
+                val url = buildString {
+                    append("https://lite.duckduckgo.com/lite/?q=")
+                    append(encodedQuery)
+                    if (safeSearch) append("&kp=1")
+                    region?.let { append("&kl=$it") }
+                    timeRange?.let { append("&df=$it") }
                 }
 
-                val html = response.body.string()
-                val results = parseLiteResults(html, maxResults)
-                val searchTime = System.currentTimeMillis() - startTime
+                val request = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", userAgents.random())
+                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                    .header("Cache-Control", "no-cache")
+                    .header("Pragma", "no-cache")
+                    .build()
 
-                if (results.isEmpty()) {
-                    throw IOException("No results from Lite endpoint")
-                }
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw IOException("HTTP ${response.code}")
+                    }
 
-                return@withContext Result.success(
-                    DuckDuckGoSearchResponse(
-                        query = query,
-                        results = results,
-                        totalResults = results.size,
-                        searchTime = searchTime
+                    val html = response.body.string()
+
+                    if (html.contains("detected unusual traffic") || html.contains("captcha")) {
+                        throw IOException("Rate limited on Lite endpoint")
+                    }
+
+                    val results = parseLiteResults(html, maxResults)
+                    val searchTime = System.currentTimeMillis() - startTime
+
+                    if (results.isEmpty()) {
+                        throw IOException("No results from Lite endpoint")
+                    }
+
+                    return@withContext Result.success(
+                        DuckDuckGoSearchResponse(
+                            query = query,
+                            results = results,
+                            totalResults = results.size,
+                            searchTime = searchTime
+                        )
                     )
-                )
+                }
+            } catch (e: Exception) {
+                lastException = e
+                if (attempt < MAX_RETRIES - 1) {
+                    val delayTime = INITIAL_RETRY_DELAY * (1 shl attempt) + Random.nextLong(0, 1000)
+                    delay(delayTime)
+                }
             }
-        } catch (e: Exception) {
-            Result.failure(e)
         }
+
+        Result.failure(lastException ?: IOException("Lite endpoint failed"))
     }
 
     /**

@@ -2,26 +2,29 @@ package com.dark.tool_neuron.di
 
 import android.app.Application
 import android.content.Context
+import android.util.Log
+import com.dark.tool_neuron.data.VaultManager
 import com.dark.tool_neuron.database.AppDatabase
-import com.dark.tool_neuron.database.dao.AiMemoryDao
-import com.dark.tool_neuron.database.dao.PersonaDao
 import com.dark.tool_neuron.repo.ChatRepository
 import com.dark.tool_neuron.repo.ModelRepository
-import com.dark.tool_neuron.vault.VaultHelper
+import com.dark.tool_neuron.repo.ums.UmsKnowledgeRepository
+import com.dark.tool_neuron.repo.ums.UmsMemoryRepository
+import com.dark.tool_neuron.repo.ums.UmsPersonaRepository
 import com.dark.tool_neuron.viewmodel.factory.ChatListViewModelFactory
 import com.dark.tool_neuron.viewmodel.factory.ChatViewModelFactory
 import com.dark.tool_neuron.viewmodel.factory.LLMModelViewModelFactory
 import com.dark.tool_neuron.worker.ChatManager
-import com.dark.tool_neuron.worker.GenerationManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.StateFlow
 
 object AppContainer {
 
+    // Room database kept for RAG (FTS4) and migration reads only
     private lateinit var database: AppDatabase
-    private lateinit var modelRepository: ModelRepository
+    private var modelRepository: ModelRepository? = null
     private lateinit var chatRepository: ChatRepository
     private lateinit var llmModelViewModelFactory: LLMModelViewModelFactory
     private lateinit var chatListViewModelFactory: ChatListViewModelFactory
@@ -29,63 +32,51 @@ object AppContainer {
 
     private val appScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val chatManager = ChatManager()
-    private var generationManager = GenerationManager()
 
-    // Keep track of context for re-initialization if needed
     private lateinit var appContext: Context
+
+    private const val TAG = "AppContainer"
 
     fun init(context: Context, application: Application) {
         appContext = context.applicationContext
+
+        // Keep Room database for RAG (FTS4) and one-time migration reads
         database = AppDatabase.getDatabase(context)
 
-        modelRepository = ModelRepository(
-            modelDao = database.modelDao(), configDao = database.modelConfigDao()
-        )
+        // Initialize UMS storage (plaintext by default; VaultGateScreen can switch to encrypted)
+        // Don't auto-init here — let the onboarding flow handle vault initialization
+        if (VaultManager.isReady.value) {
+            initModelRepository()
+        } else {
+            Log.w(TAG, "VaultManager not ready at init — ModelRepository deferred")
+        }
 
         chatRepository = ChatRepository()
 
-        llmModelViewModelFactory = LLMModelViewModelFactory(application, modelRepository)
         chatListViewModelFactory = ChatListViewModelFactory(chatManager)
-        chatViewModelFactory = ChatViewModelFactory(context, chatManager, generationManager)
-
-        initVault(context)
+        chatViewModelFactory = ChatViewModelFactory(context, chatManager)
     }
 
-    private fun initVault(context: Context) {
-        appScope.launch {
-            val maxRetries = 3
-            for (attempt in 1..maxRetries) {
-                try {
-                    VaultHelper.initialize(context)
-                    break
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    if (attempt < maxRetries) {
-                        kotlinx.coroutines.delay(500L * attempt)
-                    }
-                }
-            }
-        }
+    private fun initModelRepository() {
+        val mRepo = VaultManager.modelRepo ?: return
+        val cRepo = VaultManager.configRepo ?: return
+        modelRepository = ModelRepository(modelRepo = mRepo, configRepo = cRepo)
+        llmModelViewModelFactory = LLMModelViewModelFactory(appContext as Application)
     }
 
-    /**
-     * Re-initialize vault if needed (e.g., after configuration change or process death)
-     * This can be called from Activities/Fragments to ensure vault is ready
-     */
     fun ensureVaultInitialized() {
-        if (!VaultHelper.isInitialized() && ::appContext.isInitialized) {
-            initVault(appContext)
+        if (!VaultManager.isReady.value && ::appContext.isInitialized) {
+            val ok = VaultManager.initPlaintext(appContext)
+            if (!ok) Log.e(TAG, "VaultManager re-init failed")
+        }
+        if (modelRepository == null && VaultManager.isReady.value) {
+            initModelRepository()
         }
     }
 
     fun shutdown() {
-        appScope.launch {
-            try {
-                VaultHelper.close()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+        appScope.cancel()
+        VaultManager.close()
     }
 
     /**
@@ -96,52 +87,67 @@ object AppContainer {
     }
 
     /**
+     * Close UMS storage for backup/restore operations.
+     */
+    fun closeUms() {
+        VaultManager.close()
+    }
+
+    /**
      * Re-initialize the entire container after a restore operation.
-     * Closes everything and re-creates database + vault connections.
      */
     fun reinitialize(context: Context) {
         val ctx = context.applicationContext
         appContext = ctx
         database = AppDatabase.getDatabase(ctx)
 
-        modelRepository = ModelRepository(
-            modelDao = database.modelDao(), configDao = database.modelConfigDao()
-        )
+        VaultManager.close()
+        val ok = VaultManager.initPlaintext(ctx)
+        if (!ok) {
+            Log.e(TAG, "VaultManager reinit failed")
+        } else {
+            initModelRepository()
+        }
 
         chatRepository = ChatRepository()
-
-        appScope.launch {
-            try {
-                VaultHelper.initialize(ctx)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
     }
 
+    // Room database — for RAG (FTS4) and migration only
     fun getDatabase(): AppDatabase = database
 
-    fun getModelRepository(): ModelRepository = modelRepository
+    fun getModelRepository(): ModelRepository {
+        if (modelRepository == null) ensureVaultInitialized()
+        return modelRepository ?: error("VaultManager not initialized — cannot access ModelRepository")
+    }
 
     fun getChatRepository(): ChatRepository = chatRepository
 
-    fun getLLMModelViewModelFactory(): LLMModelViewModelFactory = llmModelViewModelFactory
+    fun getLLMModelViewModelFactory(): LLMModelViewModelFactory {
+        if (!::llmModelViewModelFactory.isInitialized) ensureVaultInitialized()
+        return llmModelViewModelFactory
+    }
 
     fun getChatListViewModelFactory(): ChatListViewModelFactory = chatListViewModelFactory
 
     fun getChatViewModelFactory(): ChatViewModelFactory = chatViewModelFactory
 
+    fun isVaultReady(): Boolean = VaultManager.isReady.value
 
-    fun isVaultReady(): Boolean = VaultHelper.isInitialized()
+    val vaultReadyState: StateFlow<Boolean> = VaultManager.isReady
 
-    /**
-     * Exposes the vault readiness StateFlow for UI observation
-     */
-    val vaultReadyState = VaultHelper.isReady
+    fun getPersonaRepo(): UmsPersonaRepository {
+        if (VaultManager.personaRepo == null) ensureVaultInitialized()
+        return VaultManager.personaRepo ?: error("VaultManager not initialized — cannot access PersonaRepository")
+    }
 
-    fun getPersonaDao(): PersonaDao = database.personaDao()
+    fun getMemoryRepo(): UmsMemoryRepository {
+        if (VaultManager.memoryRepo == null) ensureVaultInitialized()
+        return VaultManager.memoryRepo ?: error("VaultManager not initialized — cannot access MemoryRepository")
+    }
 
-    fun getAiMemoryDao(): AiMemoryDao = database.aiMemoryDao()
+    fun getKnowledgeRepo(): UmsKnowledgeRepository {
+        if (VaultManager.knowledgeRepo == null) ensureVaultInitialized()
+        return VaultManager.knowledgeRepo ?: error("VaultManager not initialized — cannot access KnowledgeRepository")
+    }
 
-    fun getGenerationManager(): GenerationManager = generationManager
 }

@@ -19,16 +19,16 @@ import com.dark.tool_neuron.repo.RepositoryValidator
 import com.dark.tool_neuron.repo.ValidationResult
 import com.dark.tool_neuron.service.ModelDownloadService
 import com.dark.tool_neuron.models.table_schema.ModelConfig
+import com.dark.tool_neuron.global.AppPaths
+import com.dark.tool_neuron.ui.screen.model_store.StoreTab
 import com.dark.tool_neuron.utils.ModelMetadataExtractor
 import com.dark.tool_neuron.utils.SizeCategory
-import com.dark.tool_neuron.ui.screen.StoreTab
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 
 enum class SortOption {
@@ -136,7 +136,7 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
     private var explorerSearchJob: Job? = null
 
     // App's internal models directory
-    private val appModelsDir = File(application.filesDir, "models")
+    private val appModelsDir = AppPaths.models(application)
 
     init {
         loadDeviceInfo()
@@ -199,8 +199,9 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
     private fun loadInstalledModels() {
         viewModelScope.launch {
             try {
-                val installedList = systemRepo.getAllModels().first()
-                _installedModels.value = installedList
+                systemRepo.getAllModels().collect { installedList ->
+                    _installedModels.value = installedList
+                }
             } catch (e: Exception) {
                 Log.e("ModelStoreViewModel", "Error loading installed models", e)
             }

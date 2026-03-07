@@ -18,10 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -38,7 +34,7 @@ import com.dark.tool_neuron.models.plugins.ToolState
 import com.dark.tool_neuron.plugins.viewmodel.WebSearchViewModel
 import com.dark.tool_neuron.ui.theme.ManropeFontFamily
 import com.dark.tool_neuron.ui.theme.maple
-import com.dark.tool_neuron.ui.theme.rDp
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 /**
  * UI component for DuckDuckGo Search Tool
@@ -53,7 +49,7 @@ fun DuckDuckGoSearchUI(
 
     ToolCard(
         title = "DuckDuckGo Search",
-        icon = Icons.Default.Search,
+        icon = TnIcons.Search,
         state = state,
         modifier = modifier
     ) {
@@ -74,7 +70,7 @@ private fun SearchResults(response: DuckDuckGoSearchResponse) {
                     stiffness = Spring.StiffnessLow
                 )
             ),
-        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Search metadata
         SearchMetadata(response = response)
@@ -83,7 +79,7 @@ private fun SearchResults(response: DuckDuckGoSearchResponse) {
         Spacer(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(rDp(1.dp))
+                .height(1.dp)
                 .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
         )
 
@@ -122,7 +118,7 @@ private fun SearchResults(response: DuckDuckGoSearchResponse) {
                 }
 
                 if (index < response.results.size - 1) {
-                    Spacer(modifier = Modifier.height(rDp(8.dp)))
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
         }
@@ -156,14 +152,14 @@ private fun SearchMetadata(response: DuckDuckGoSearchResponse) {
 
         // Results count
         Row(
-            horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.AccessTime,
+                imageVector = TnIcons.Clock,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(rDp(16.dp))
+                modifier = Modifier.size(16.dp)
             )
             Text(
                 text = "${response.totalResults} results",
@@ -184,11 +180,11 @@ private fun SearchResultItem(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(rDp(8.dp)))
+            .clip(RoundedCornerShape(8.dp))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
             .clickable { /* TODO: Handle URL click */ }
-            .padding(rDp(12.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         // Position badge
         Text(
@@ -198,9 +194,9 @@ private fun SearchResultItem(
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold,
             modifier = Modifier
-                .clip(RoundedCornerShape(rDp(4.dp)))
+                .clip(RoundedCornerShape(4.dp))
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
-                .padding(horizontal = rDp(6.dp), vertical = rDp(2.dp))
+                .padding(horizontal = 6.dp, vertical = 2.dp)
         )
 
         // Title
@@ -227,14 +223,14 @@ private fun SearchResultItem(
 
         // URL
         Row(
-            horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.Link,
+                imageVector = TnIcons.Link,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.tertiary,
-                modifier = Modifier.size(rDp(12.dp))
+                modifier = Modifier.size(12.dp)
             )
             Text(
                 text = result.url,
@@ -253,15 +249,15 @@ private fun NoResultsMessage() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = rDp(20.dp)),
+            .padding(vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Icon(
-            imageVector = Icons.Default.Search,
+            imageVector = TnIcons.Search,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-            modifier = Modifier.size(rDp(40.dp))
+            modifier = Modifier.size(40.dp)
         )
         Text(
             text = "No results found",

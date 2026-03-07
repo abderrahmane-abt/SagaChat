@@ -14,9 +14,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -37,7 +34,6 @@ import com.dark.tool_neuron.R
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.CuteToggle
-import com.dark.tool_neuron.ui.theme.rDp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -47,13 +43,14 @@ import java.util.Locale
 import kotlin.math.log10
 import kotlin.math.min
 import kotlin.math.pow
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 enum class PickerMode {
     FILE,      // Pick .gguf files
     FOLDER     // Pick directories (for diffusion models)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ModelPickerScreen(
     finishWithPath: (String, ProviderType) -> Unit,
@@ -110,7 +107,7 @@ fun ModelPickerScreen(
                             currentPath = File(currentPath).parentFile?.absolutePath ?: rootPath
                         } else onClose()
                     }) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back")
+                        Icon(TnIcons.ArrowLeft, "Back")
                     }
                 },
                 title = { PathBreadcrumbText(currentPath) },
@@ -118,12 +115,12 @@ fun ModelPickerScreen(
                     if (!hasAllFiles) {
                         ActionButton(
                             onClickListener = { openAllFilesAccessSettings(context) },
-                            icon = Icons.Outlined.Settings,
+                            icon = TnIcons.Settings,
                             contentDescription = "Grant access"
                         )
                     } else {
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             // Mode toggle using CuteToggle
@@ -133,13 +130,13 @@ fun ModelPickerScreen(
                                     pickerMode = if (isFolder) PickerMode.FOLDER else PickerMode.FILE
                                 },
                                 text = if (pickerMode == PickerMode.FILE) "File" else "Folder",
-                                icon = if (pickerMode == PickerMode.FILE) R.drawable.ai_model else null,
-                                iconChecked = R.drawable.load_model
+                                icon = if (pickerMode == PickerMode.FILE) TnIcons.File else null,
+                                iconChecked = TnIcons.Upload
                             )
 
                             ActionButton(
                                 onClickListener = { currentPath = rootPath },
-                                icon = Icons.Outlined.Home,
+                                icon = TnIcons.Home,
                                 contentDescription = "Home"
                             )
                         }
@@ -163,7 +160,7 @@ fun ModelPickerScreen(
                 ) { hasAllFiles = hasAllFilesAccess() }
 
                 loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                    LoadingIndicator()
                 }
 
                 error != null -> ErrorState(
@@ -231,20 +228,20 @@ private fun PermissionGate(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(24.dp)),
-            shape = RoundedCornerShape(rDp(20.dp)),
+                .padding(24.dp),
+            shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = rDp(2.dp)
+            tonalElevation = 2.dp
         ) {
             Column(
-                Modifier.padding(rDp(24.dp)),
-                verticalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Icon(
-                    Icons.Outlined.Folder,
+                    TnIcons.Folder,
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(48.dp)),
+                    modifier = Modifier.size(48.dp),
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Text(
@@ -261,16 +258,16 @@ private fun PermissionGate(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
-                Spacer(Modifier.height(rDp(8.dp)))
-                Row(horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))) {
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ActionButton(
                         onClickListener = { openAllFilesAccessSettings(ctx) },
-                        icon = Icons.Outlined.Settings,
+                        icon = TnIcons.Settings,
                         contentDescription = "Open Settings"
                     )
                     ActionButton(
                         onClickListener = onCheck,
-                        icon = Icons.Outlined.Refresh,
+                        icon = TnIcons.Refresh,
                         contentDescription = "Refresh"
                     )
                 }
@@ -283,14 +280,14 @@ private fun PermissionGate(
 private fun ErrorState(error: String, onRetry: () -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Surface(
-            modifier = Modifier.padding(rDp(24.dp)),
-            shape = RoundedCornerShape(rDp(20.dp)),
+            modifier = Modifier.padding(24.dp),
+            shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.errorContainer
         ) {
             Column(
-                Modifier.padding(rDp(24.dp)),
+                Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
                     "Error",
@@ -305,7 +302,7 @@ private fun ErrorState(error: String, onRetry: () -> Unit) {
                 )
                 ActionButton(
                     onClickListener = onRetry,
-                    icon = Icons.Outlined.Refresh,
+                    icon = TnIcons.Refresh,
                     contentDescription = "Retry"
                 )
             }
@@ -326,15 +323,15 @@ private fun FileList(
 ) {
     val parent = File(currentPath).parentFile
     LazyColumn(
-        modifier = modifier.padding(horizontal = rDp(12.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+        modifier = modifier.padding(horizontal = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         if (parent != null && currentPath != rootPath) {
             item("..parent") {
                 FileListItem(
                     icon = {
                         Icon(
-                            Icons.Outlined.Folder,
+                            TnIcons.Folder,
                             null,
                             tint = MaterialTheme.colorScheme.primary
                         )
@@ -344,9 +341,9 @@ private fun FileList(
                     trailing = {
                         ActionButton(
                             onClickListener = { onNavigate(parent) },
-                            icon = Icons.Outlined.ArrowUpward,
+                            icon = TnIcons.ArrowUp,
                             contentDescription = "Go up",
-                            modifier = Modifier.size(rDp(32.dp))
+                            modifier = Modifier.size(32.dp)
                         )
                     }
                 )
@@ -362,29 +359,27 @@ private fun FileList(
             FileListItem(
                 icon = {
                     Icon(
-                        painter = painterResource(
-                            if (item.isDir) R.drawable.load_model else R.drawable.ai_model
-                        ),
+                        imageVector = if (item.isDir) TnIcons.Folder else TnIcons.File,
                         contentDescription = null,
                         tint = if (canSelect) {
                             MaterialTheme.colorScheme.primary
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
-                        modifier = Modifier.size(rDp(20.dp))
+                        modifier = Modifier.size(20.dp)
                     )
                 },
                 title = item.name,
                 subtitle = if (item.isDir) "Folder" else humanSize(item.size),
                 trailing = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         // Info button for all items
                         if (canSelect) {
                             ActionButton(
                                 onClickListener = { onShowInfo(item) },
-                                icon = Icons.Outlined.Info,
+                                icon = TnIcons.InfoCircle,
                                 contentDescription = "Info",
-                                modifier = Modifier.size(rDp(32.dp))
+                                modifier = Modifier.size(32.dp)
                             )
                         }
 
@@ -394,27 +389,27 @@ private fun FileList(
                             item.isDir && pickerMode == PickerMode.FILE -> {
                                 ActionButton(
                                     onClickListener = { onNavigate(item.file) },
-                                    icon = Icons.Outlined.ChevronRight,
+                                    icon = TnIcons.ChevronRight,
                                     contentDescription = "Open",
-                                    modifier = Modifier.size(rDp(32.dp))
+                                    modifier = Modifier.size(32.dp)
                                 )
                             }
                             // Select folder in FOLDER mode
                             item.isDir && pickerMode == PickerMode.FOLDER -> {
                                 ActionButton(
                                     onClickListener = { onPick(item.file, ProviderType.DIFFUSION) },
-                                    icon = Icons.Outlined.Check,
+                                    icon = TnIcons.Check,
                                     contentDescription = "Select",
-                                    modifier = Modifier.size(rDp(32.dp))
+                                    modifier = Modifier.size(32.dp)
                                 )
                             }
                             // Select file in FILE mode
                             !item.isDir && pickerMode == PickerMode.FILE -> {
                                 ActionButton(
                                     onClickListener = { onPick(item.file, ProviderType.GGUF) },
-                                    icon = Icons.Outlined.Check,
+                                    icon = TnIcons.Check,
                                     contentDescription = "Select",
-                                    modifier = Modifier.size(rDp(32.dp))
+                                    modifier = Modifier.size(32.dp)
                                 )
                             }
                         }
@@ -435,22 +430,22 @@ private fun FileListItem(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = RoundedCornerShape(rDp(12.dp))
+        shape = RoundedCornerShape(12.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = rDp(14.dp), vertical = rDp(12.dp)),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 Modifier
-                    .size(rDp(32.dp))
-                    .clip(RoundedCornerShape(rDp(8.dp)))
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(8.dp))
                     .background(MaterialTheme.colorScheme.primary.copy(0.08f)),
                 contentAlignment = Alignment.Center
             ) {
                 icon()
             }
-            Spacer(Modifier.width(rDp(12.dp)))
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     title,
@@ -465,7 +460,7 @@ private fun FileListItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Spacer(Modifier.width(rDp(8.dp)))
+            Spacer(Modifier.width(8.dp))
             trailing()
         }
     }
@@ -492,11 +487,11 @@ private fun FileDetailDialog(
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(rDp(24.dp)),
+            shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
-            tonalElevation = rDp(3.dp)
+            tonalElevation = 3.dp
         ) {
-            Column(Modifier.padding(rDp(24.dp))) {
+            Column(Modifier.padding(24.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -512,13 +507,13 @@ private fun FileDetailDialog(
                     )
                     ActionButton(
                         onClickListener = onDismiss,
-                        icon = Icons.Outlined.Close,
+                        icon = TnIcons.X,
                         contentDescription = "Close",
-                        modifier = Modifier.size(rDp(32.dp))
+                        modifier = Modifier.size(32.dp)
                     )
                 }
 
-                Spacer(Modifier.height(rDp(16.dp)))
+                Spacer(Modifier.height(16.dp))
 
                 DetailInfoCard {
                     InfoRow("Name", item.name)
@@ -539,18 +534,18 @@ private fun FileDetailDialog(
                     }
                 }
 
-                Spacer(Modifier.height(rDp(20.dp)))
+                Spacer(Modifier.height(20.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     OutlinedButton(
                         onClick = onDismiss,
                         modifier = Modifier
                             .weight(1f)
-                            .height(rDp(48.dp)),
-                        shape = RoundedCornerShape(rDp(12.dp))
+                            .height(48.dp),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
                         Text("Cancel")
                     }
@@ -559,15 +554,15 @@ private fun FileDetailDialog(
                         onClick = onSelect,
                         modifier = Modifier
                             .weight(1f)
-                            .height(rDp(48.dp)),
-                        shape = RoundedCornerShape(rDp(12.dp))
+                            .height(48.dp),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(
-                            Icons.Outlined.Check,
+                            TnIcons.Check,
                             contentDescription = null,
-                            modifier = Modifier.size(rDp(18.dp))
+                            modifier = Modifier.size(18.dp)
                         )
-                        Spacer(Modifier.width(rDp(6.dp)))
+                        Spacer(Modifier.width(6.dp))
                         Text(
                             when (pickerMode) {
                                 PickerMode.FILE -> "Load File"
@@ -584,13 +579,13 @@ private fun FileDetailDialog(
 @Composable
 private fun DetailInfoCard(content: @Composable () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(rDp(16.dp)),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            Modifier.padding(rDp(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             content()
         }
@@ -606,7 +601,7 @@ private fun InfoRow(k: String, v: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.Medium
         )
-        Spacer(Modifier.height(rDp(4.dp)))
+        Spacer(Modifier.height(4.dp))
         Text(
             v,
             style = MaterialTheme.typography.bodyMedium,

@@ -19,9 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -43,8 +40,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.tts.TTSSettings
-import com.dark.tool_neuron.ui.theme.rDp
 import kotlin.math.roundToInt
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,10 +68,10 @@ fun TTSSettingsBottomSheet(
             dragHandle = {
                 Box(
                     Modifier
-                        .padding(vertical = rDp(12.dp))
-                        .width(rDp(40.dp))
-                        .height(rDp(4.dp))
-                        .clip(RoundedCornerShape(rDp(2.dp)))
+                        .padding(vertical = 12.dp)
+                        .width(40.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
                         .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
                 )
             }
@@ -82,27 +79,27 @@ fun TTSSettingsBottomSheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = rDp(600.dp))
+                    .heightIn(max = 600.dp)
                     .verticalScroll(rememberScrollState())
-                    .padding(bottom = rDp(16.dp))
+                    .padding(bottom = 16.dp)
             ) {
                 // Header
                 TTSSettingsHeader(isModelLoaded = isModelLoaded)
 
-                Spacer(modifier = Modifier.height(rDp(12.dp)))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Model Status
                 TTSModelStatus(isModelLoaded = isModelLoaded)
 
                 if (isModelLoaded) {
-                    Spacer(modifier = Modifier.height(rDp(12.dp)))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = rDp(16.dp)),
+                        modifier = Modifier.padding(horizontal = 16.dp),
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                     )
 
-                    Spacer(modifier = Modifier.height(rDp(12.dp)))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     // Voice Selection
                     VoiceSelectionSection(
@@ -111,7 +108,7 @@ fun TTSSettingsBottomSheet(
                         onVoiceChange = onVoiceChange
                     )
 
-                    Spacer(modifier = Modifier.height(rDp(16.dp)))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     // Language Selection
                     LanguageSelectionSection(
@@ -119,7 +116,7 @@ fun TTSSettingsBottomSheet(
                         onLanguageChange = onLanguageChange
                     )
 
-                    Spacer(modifier = Modifier.height(rDp(16.dp)))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     // Speed Slider
                     SpeedSection(
@@ -127,7 +124,7 @@ fun TTSSettingsBottomSheet(
                         onSpeedChange = onSpeedChange
                     )
 
-                    Spacer(modifier = Modifier.height(rDp(16.dp)))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     // Steps Slider
                     StepsSection(
@@ -135,14 +132,14 @@ fun TTSSettingsBottomSheet(
                         onStepsChange = onStepsChange
                     )
 
-                    Spacer(modifier = Modifier.height(rDp(16.dp)))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = rDp(16.dp)),
+                        modifier = Modifier.padding(horizontal = 16.dp),
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                     )
 
-                    Spacer(modifier = Modifier.height(rDp(12.dp)))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     // Toggles
                     ToggleSection(
@@ -153,7 +150,7 @@ fun TTSSettingsBottomSheet(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(rDp(16.dp)))
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
@@ -164,7 +161,7 @@ private fun TTSSettingsHeader(isModelLoaded: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(16.dp)),
+            .padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -183,9 +180,9 @@ private fun TTSSettingsHeader(isModelLoaded: Boolean) {
         }
 
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+            imageVector = TnIcons.Volume,
             contentDescription = null,
-            modifier = Modifier.size(rDp(28.dp)),
+            modifier = Modifier.size(28.dp),
             tint = if (isModelLoaded) MaterialTheme.colorScheme.primary
                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
         )
@@ -197,8 +194,8 @@ private fun TTSModelStatus(isModelLoaded: Boolean) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(16.dp)),
-        shape = RoundedCornerShape(rDp(10.dp)),
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(10.dp),
         color = if (isModelLoaded) {
             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
         } else {
@@ -208,14 +205,14 @@ private fun TTSModelStatus(isModelLoaded: Boolean) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(12.dp)),
-            horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.CheckCircle,
+                imageVector = TnIcons.CircleCheck,
                 contentDescription = null,
-                modifier = Modifier.size(rDp(20.dp)),
+                modifier = Modifier.size(20.dp),
                 tint = if (isModelLoaded) MaterialTheme.colorScheme.primary
                        else MaterialTheme.colorScheme.error
             )
@@ -251,8 +248,8 @@ private fun VoiceSelectionSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
             text = "Voice",
@@ -263,8 +260,8 @@ private fun VoiceSelectionSection(
 
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             voices.forEach { voice ->
                 FilterChip(
@@ -314,8 +311,8 @@ private fun LanguageSelectionSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
             text = "Language",
@@ -326,8 +323,8 @@ private fun LanguageSelectionSection(
 
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             languages.forEach { (code, name) ->
                 FilterChip(
@@ -358,8 +355,8 @@ private fun SpeedSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -374,14 +371,14 @@ private fun SpeedSection(
             )
             Surface(
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(rDp(4.dp))
+                shape = RoundedCornerShape(4.dp)
             ) {
                 Text(
                     text = "${"%.2f".format(speed)}x",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = rDp(8.dp), vertical = rDp(2.dp))
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                 )
             }
         }
@@ -415,8 +412,8 @@ private fun StepsSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -438,14 +435,14 @@ private fun StepsSection(
             }
             Surface(
                 color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(rDp(4.dp))
+                shape = RoundedCornerShape(4.dp)
             ) {
                 Text(
                     text = "$steps",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.tertiary,
-                    modifier = Modifier.padding(horizontal = rDp(8.dp), vertical = rDp(2.dp))
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                 )
             }
         }
@@ -473,19 +470,19 @@ private fun ToggleSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Auto-speak toggle
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(rDp(10.dp)),
+            shape = RoundedCornerShape(10.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(rDp(12.dp)),
+                    .padding(12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -517,13 +514,13 @@ private fun ToggleSection(
         // NNAPI toggle
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(rDp(10.dp)),
+            shape = RoundedCornerShape(10.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(rDp(12.dp)),
+                    .padding(12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {

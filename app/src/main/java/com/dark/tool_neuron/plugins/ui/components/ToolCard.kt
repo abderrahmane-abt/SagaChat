@@ -26,12 +26,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Pending
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,7 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.models.plugins.ToolState
 import com.dark.tool_neuron.ui.theme.ManropeFontFamily
-import com.dark.tool_neuron.ui.theme.rDp
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 /**
  * Animated card component for displaying tool execution state
@@ -99,18 +96,18 @@ fun ToolCard(
     Box(
         modifier = modifier
             .scale(scale)
-            .clip(RoundedCornerShape(rDp(12.dp)))
+            .clip(RoundedCornerShape(12.dp))
             .background(containerColor)
             .border(
-                width = rDp(1.dp),
+                width = 1.dp,
                 color = borderColor,
-                shape = RoundedCornerShape(rDp(12.dp))
+                shape = RoundedCornerShape(12.dp)
             )
-            .padding(rDp(16.dp))
+            .padding(16.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Header
             Row(
@@ -119,14 +116,14 @@ fun ToolCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = title,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(rDp(20.dp))
+                        modifier = Modifier.size(20.dp)
                     )
                     Text(
                         text = title,
@@ -168,6 +165,7 @@ fun ToolCard(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ToolStateIndicator(state: ToolState) {
     AnimatedContent(
@@ -176,30 +174,29 @@ private fun ToolStateIndicator(state: ToolState) {
     ) { targetState ->
         when (targetState) {
             is ToolState.Idle -> Icon(
-                imageVector = Icons.Default.Pending,
+                imageVector = TnIcons.Clock,
                 contentDescription = "Idle",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.size(rDp(20.dp))
+                modifier = Modifier.size(20.dp)
             )
 
-            is ToolState.InProgress -> CircularProgressIndicator(
-                modifier = Modifier.size(rDp(20.dp)),
-                strokeWidth = rDp(2.dp),
+            is ToolState.InProgress -> LoadingIndicator(
+                modifier = Modifier.size(20.dp),
                 color = MaterialTheme.colorScheme.primary
             )
 
             is ToolState.Success -> Icon(
-                imageVector = Icons.Default.CheckCircle,
+                imageVector = TnIcons.CircleCheck,
                 contentDescription = "Success",
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(rDp(20.dp))
+                modifier = Modifier.size(20.dp)
             )
 
             is ToolState.Error -> Icon(
-                imageVector = Icons.Default.Error,
+                imageVector = TnIcons.AlertTriangle,
                 contentDescription = "Error",
                 tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(rDp(20.dp))
+                modifier = Modifier.size(20.dp)
             )
         }
     }
@@ -218,9 +215,9 @@ private fun ToolStateMessage(state: ToolState) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(rDp(8.dp)))
+                .clip(RoundedCornerShape(8.dp))
                 .background(color.copy(alpha = 0.1f))
-                .padding(horizontal = rDp(12.dp), vertical = rDp(8.dp))
+                .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             Text(
                 text = message,
