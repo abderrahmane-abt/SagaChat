@@ -13,18 +13,22 @@ import com.dark.tool_neuron.models.data.ModelType
 import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.repo.ModelRepositoryDataStore
 import com.dark.tool_neuron.repo.ModelStoreRepository
+import com.dark.tool_neuron.repo.HuggingFaceExplorerRepo
+import com.dark.tool_neuron.repo.HuggingFaceExplorerRepository
 import com.dark.tool_neuron.repo.RepositoryValidator
 import com.dark.tool_neuron.repo.ValidationResult
 import com.dark.tool_neuron.service.ModelDownloadService
 import com.dark.tool_neuron.models.table_schema.ModelConfig
+import com.dark.tool_neuron.global.AppPaths
+import com.dark.tool_neuron.ui.screen.model_store.StoreTab
 import com.dark.tool_neuron.utils.ModelMetadataExtractor
 import com.dark.tool_neuron.utils.SizeCategory
-import com.dark.tool_neuron.ui.screen.model_store.StoreTab
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import com.dark.tool_neuron.global.AppPaths
 import java.io.File
 
 enum class SortOption {
@@ -46,6 +50,7 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
     private val systemRepo = AppContainer.getModelRepository()
     private val repoDataStore = ModelRepositoryDataStore(application)
     private val repositoryValidator = RepositoryValidator()
+    private val explorerRepository = HuggingFaceExplorerRepository()
 
     private val _selectedTab = MutableStateFlow(StoreTab.MODELS)
     val selectedTab: StateFlow<StoreTab> = _selectedTab
@@ -115,6 +120,20 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
     // Validation results
     private val _validationResults = MutableStateFlow<Map<String, ValidationResult>>(emptyMap())
     val validationResults: StateFlow<Map<String, ValidationResult>> = _validationResults
+
+    private val _explorerQuery = MutableStateFlow("")
+    val explorerQuery: StateFlow<String> = _explorerQuery
+
+    private val _explorerResults = MutableStateFlow<List<HuggingFaceExplorerRepo>>(emptyList())
+    val explorerResults: StateFlow<List<HuggingFaceExplorerRepo>> = _explorerResults
+
+    private val _isExplorerLoading = MutableStateFlow(false)
+    val isExplorerLoading: StateFlow<Boolean> = _isExplorerLoading
+
+    private val _explorerError = MutableStateFlow<String?>(null)
+    val explorerError: StateFlow<String?> = _explorerError
+
+    private var explorerSearchJob: Job? = null
 
     // App's internal models directory
     private val appModelsDir = AppPaths.models(application)
@@ -476,6 +495,66 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
     fun addRepository(repo: HFModelRepository) {
         viewModelScope.launch {
             repoDataStore.addRepository(repo)
+            loadModels()
+        }
+    }
+
+    fun setExplorerQuery(query: String) {
+        _explorerQuery.value = query
+        if (query.isBlank()) {
+            _explorerResults.value = emptyList()
+            _explorerError.value = null
+        }
+    }
+
+    fun searchExplorerRepositories() {
+        explorerSearchJob?.cancel()
+        explorerSearchJob = viewModelScope.launch {
+            val query = _explorerQuery.value.trim()
+            if (query.isBlank()) {
+                _explorerError.value = "Enter a search term"
+                _explorerResults.value = emptyList()
+                return@launch
+            }
+
+            _isExplorerLoading.value = true
+            _explorerError.value = null
+
+            try {
+                explorerRepository.searchGgufRepositories(query).onSuccess { repos ->
+                    _explorerResults.value = repos
+                    if (repos.isEmpty()) {
+                        _explorerError.value = "No repositories found"
+                    }
+                }.onFailure { exception ->
+                    _explorerResults.value = emptyList()
+                    _explorerError.value = exception.message ?: "Search failed"
+                }
+            } finally {
+                _isExplorerLoading.value = false
+            }
+        }
+    }
+
+    fun addExplorerRepository(explorerRepo: HuggingFaceExplorerRepo) {
+        viewModelScope.launch {
+            val currentRepos = repositories.first()
+            if (currentRepos.any { it.repoPath.equals(explorerRepo.id, ignoreCase = true) }) {
+                _explorerError.value = "Repository already added"
+                return@launch
+            }
+
+            val repo = HFModelRepository(
+                id = "hf-${explorerRepo.id.replace("/", "-").lowercase()}",
+                name = explorerRepo.id.substringAfter("/"),
+                repoPath = explorerRepo.id,
+                modelType = ModelType.GGUF,
+                isEnabled = true,
+                category = ModelCategory.GENERAL
+            )
+
+            repoDataStore.addRepository(repo)
+            _explorerError.value = null
             loadModels()
         }
     }
