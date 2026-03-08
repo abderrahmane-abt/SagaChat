@@ -18,6 +18,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.ui.icons.TnIcons
+import com.dark.tool_neuron.global.Standards
 
 // ── Password Text Field ──
 
@@ -58,6 +59,6 @@ fun PasswordTextField(
         } else null,
         isError = isError,
         supportingText = supportingText,
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(Standards.RadiusLg)
     )
 }

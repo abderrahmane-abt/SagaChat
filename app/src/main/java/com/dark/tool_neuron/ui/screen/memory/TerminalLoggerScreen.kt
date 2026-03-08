@@ -1,10 +1,7 @@
 package com.dark.tool_neuron.ui.screen.memory
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -58,11 +55,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.dark.tool_neuron.ui.theme.ManropeFontFamily
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import com.dark.tool_neuron.global.formatTimeOnly
 import com.dark.tool_neuron.ui.icons.TnIcons
+import com.dark.tool_neuron.global.Standards
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -122,8 +119,8 @@ fun TerminalLoggerScreen() {
             // Filters
             AnimatedVisibility(
                 visible = showFilters,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
+                enter = Motion.Enter,
+                exit = Motion.Exit
             ) {
                 MinimalFilters(
                     currentFilter = filterLevel,
@@ -298,7 +295,7 @@ fun StatusLine(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-            .padding(horizontal = 20.dp, vertical = 8.dp),
+            .padding(horizontal = 20.dp, vertical = Standards.SpacingSm),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -345,8 +342,8 @@ fun MinimalFilters(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(Standards.SpacingLg),
+        verticalArrangement = Arrangement.spacedBy(Standards.SpacingMd)
     ) {
         // Minimal search
         OutlinedTextField(
@@ -376,7 +373,7 @@ fun MinimalFilters(
                 }
             },
             singleLine = true,
-            shape = RoundedCornerShape(4.dp),
+            shape = RoundedCornerShape(Standards.SpacingXs),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.outline,
                 unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
@@ -391,7 +388,7 @@ fun MinimalFilters(
 
         // Level filters - minimal chips
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
         ) {
             item {
                 MinimalChip(
@@ -423,7 +420,7 @@ fun MinimalChip(
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(4.dp),
+        shape = RoundedCornerShape(Standards.SpacingXs),
         color = if (selected) {
             color?.copy(alpha = 0.15f) ?: MaterialTheme.colorScheme.primaryContainer
         } else {
@@ -511,7 +508,7 @@ fun RawLogLine(entry: LogEntry) {
                 fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
                 lineHeight = 16.sp,
-                modifier = Modifier.padding(start = 4.dp, top = 2.dp),
+                modifier = Modifier.padding(start = Standards.SpacingXs, top = Standards.SpacingXxs),
                 maxLines = 3,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
@@ -529,7 +526,7 @@ fun EmptyTerminal(isPaused: Boolean) {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
         ) {
             Text(
                 if (isPaused) "│ paused" else "│ waiting",

@@ -56,7 +56,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dark.tool_neuron.ui.icons.TnIcons
-import com.dark.tool_neuron.ui.theme.ManropeFontFamily
 import com.dark.tool_neuron.ui.theme.MapleMonoFontFamily
 import com.dark.tool_neuron.global.Standards
 
@@ -187,11 +186,14 @@ private val parseCache = java.util.concurrent.ConcurrentHashMap<String, List<Mar
 
 private fun parseMarkdownCached(text: String): List<MarkdownElement> {
     parseCache[text]?.let { return it }
-    if (parseCache.size >= 16) {
-        val keysToRemove = parseCache.keys.take(parseCache.size / 2)
-        keysToRemove.forEach { parseCache.remove(it) }
+    synchronized(parseCache) {
+        parseCache[text]?.let { return it }
+        if (parseCache.size >= 16) {
+            val keysToRemove = parseCache.keys.take(parseCache.size / 2)
+            keysToRemove.forEach { parseCache.remove(it) }
+        }
+        return parseMarkdown(text).also { parseCache[text] = it }
     }
-    return parseMarkdown(text).also { parseCache[text] = it }
 }
 
 private val BULLET_REGEX = Regex("^\\s*[+\\-*]\\s+.+")
@@ -540,7 +542,7 @@ private fun HeadingText(
 ) {
     Text(
         text = cachedInlineFormatting(text, colors),
-        fontFamily = ManropeFontFamily,
+        style = MaterialTheme.typography.titleLarge,
         fontSize = fontSize,
         fontWeight = fontWeight,
         color = LocalContentColor.current.copy(alpha = alpha),
@@ -552,9 +554,7 @@ private fun HeadingText(
 private fun BodyText(text: String, colors: InlineColors) {
     Text(
         text = cachedInlineFormatting(text, colors),
-        fontFamily = ManropeFontFamily,
-        fontSize = 14.sp,
-        fontWeight = FontWeight.Normal,
+        style = MaterialTheme.typography.bodyMedium,
         color = LocalContentColor.current.copy(alpha = 0.87f),
         lineHeight = 20.sp
     )
@@ -568,15 +568,13 @@ private fun BulletPointView(text: String, level: Int, colors: InlineColors) {
     ) {
         Text(
             text = "\u2022",
-            fontFamily = ManropeFontFamily,
-            fontSize = 14.sp,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(top = 1.dp)
         )
         Text(
             text = cachedInlineFormatting(text, colors),
-            fontFamily = ManropeFontFamily,
-            fontSize = 14.sp,
+            style = MaterialTheme.typography.bodyMedium,
             color = LocalContentColor.current.copy(alpha = 0.87f),
             lineHeight = 20.sp,
             modifier = Modifier.weight(1f)
@@ -587,21 +585,19 @@ private fun BulletPointView(text: String, level: Int, colors: InlineColors) {
 @Composable
 private fun NumberedPointView(text: String, number: String, colors: InlineColors) {
     Row(
-        modifier = Modifier.padding(start = 4.dp),
+        modifier = Modifier.padding(start = Standards.SpacingXs),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Text(
             text = "$number.",
-            fontFamily = ManropeFontFamily,
-            fontSize = 14.sp,
+            style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(top = 1.dp)
         )
         Text(
             text = cachedInlineFormatting(text, colors),
-            fontFamily = ManropeFontFamily,
-            fontSize = 14.sp,
+            style = MaterialTheme.typography.bodyMedium,
             color = LocalContentColor.current.copy(alpha = 0.87f),
             lineHeight = 20.sp,
             modifier = Modifier.weight(1f)
@@ -628,8 +624,7 @@ private fun BlockQuoteView(text: String, level: Int, colors: InlineColors) {
         )
         Text(
             text = cachedInlineFormatting(text, colors),
-            fontFamily = ManropeFontFamily,
-            fontSize = 14.sp,
+            style = MaterialTheme.typography.bodyMedium,
             color = LocalContentColor.current.copy(alpha = 0.87f),
             lineHeight = 20.sp,
             modifier = Modifier.weight(1f)
@@ -698,7 +693,7 @@ private fun CodeBlockView(code: String, language: String) {
                     )
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Standards.SpacingXs)) {
                 ActionButton(
                     onClickListener = {
                         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -735,7 +730,7 @@ private fun CodeBlockView(code: String, language: String) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                    .padding(horizontal = 10.dp, vertical = Standards.SpacingSm)
             ) {
                 Text(
                     text = highlighted ?: AnnotatedString(code),
@@ -770,8 +765,9 @@ private fun TableView(
     val cornerRadius = with(density) { 8.dp.toPx() }
     val textMeasurer = rememberTextMeasurer()
 
-    val headerStyle = TextStyle(fontFamily = ManropeFontFamily, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = textColor, lineHeight = 17.sp)
-    val cellStyle = TextStyle(fontFamily = ManropeFontFamily, fontSize = 12.sp, color = dimTextColor, lineHeight = 17.sp)
+    val baseTypo = MaterialTheme.typography.bodySmall
+    val headerStyle = baseTypo.copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = textColor, lineHeight = 17.sp)
+    val cellStyle = baseTypo.copy(fontSize = 12.sp, color = dimTextColor, lineHeight = 17.sp)
 
     androidx.compose.foundation.layout.BoxWithConstraints(
         modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small)

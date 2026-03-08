@@ -357,8 +357,9 @@ private fun tokenize(code: String, language: String): List<CodeToken> {
 
     while (pos < code.length) {
         if (rules.blockCommentStart != null && code.startsWith(rules.blockCommentStart, pos)) {
-            val end = code.indexOf(rules.blockCommentEnd!!, pos + rules.blockCommentStart.length)
-            val commentEnd = if (end >= 0) end + rules.blockCommentEnd!!.length else code.length
+            val blockEnd = rules.blockCommentEnd ?: ""
+            val end = code.indexOf(blockEnd, pos + rules.blockCommentStart.length)
+            val commentEnd = if (end >= 0) end + blockEnd.length else code.length
             tokens.add(CodeToken(code.substring(pos, commentEnd), CodeTokenType.Comment))
             pos = commentEnd; continue
         }

@@ -3,13 +3,12 @@ package com.dark.tool_neuron.ui.screen.setup
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -220,8 +219,8 @@ fun ImageGenSetupScreen(
             AnimatedContent(
                 targetState = phase,
                 transitionSpec = {
-                    (fadeIn(tween(300)) + expandVertically()) togetherWith
-                            (fadeOut(tween(200)) + shrinkVertically())
+                    (fadeIn(Motion.entrance()) + expandVertically(Motion.entrance())) togetherWith
+                            (fadeOut(Motion.exit()) + shrinkVertically(Motion.exit()))
                 },
                 label = "phase"
             ) { currentPhase ->
@@ -270,7 +269,7 @@ private fun downloadFile(
         throw RuntimeException("Failed to download $label: HTTP ${response.code}")
     }
 
-    val body = response.body ?: throw RuntimeException("Empty response for $label")
+    val body = response.body
     val totalBytes = body.contentLength()
 
     body.byteStream().use { input ->
@@ -367,14 +366,14 @@ private fun ReadyContent(
                     onClickListener = onSkip,
                     icon = TnIcons.X,
                     text = "Skip",
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(Standards.RadiusLg),
                     modifier = Modifier.weight(1f)
                 )
                 ActionTextButton(
                     onClickListener = onStart,
                     icon = TnIcons.Download,
                     text = "Download",
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(Standards.RadiusLg),
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -429,14 +428,14 @@ private fun NoInternetContent(
                     onClickListener = onSkip,
                     icon = TnIcons.X,
                     text = "Skip",
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(Standards.RadiusLg),
                     modifier = Modifier.weight(1f)
                 )
                 ActionTextButton(
                     onClickListener = onRetry,
                     icon = TnIcons.Refresh,
                     text = "Retry",
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(Standards.RadiusLg),
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -457,7 +456,7 @@ private fun DownloadingContent(
 
     val animatedProgress by animateFloatAsState(
         targetValue = if (progress >= 0f) progress else 0f,
-        animationSpec = spring(stiffness = 300f),
+        animationSpec = Motion.content(),
         label = "dlProg"
     )
 
@@ -628,7 +627,7 @@ private fun CompleteContent(onContinue: () -> Unit) {
                 onClickListener = onContinue,
                 icon = TnIcons.ChevronRight,
                 text = "Continue",
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(Standards.RadiusLg)
             )
         }
     }
@@ -682,14 +681,14 @@ private fun ErrorContent(
                     onClickListener = onSkip,
                     icon = TnIcons.X,
                     text = "Skip",
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(Standards.RadiusLg),
                     modifier = Modifier.weight(1f)
                 )
                 ActionTextButton(
                     onClickListener = onRetry,
                     icon = TnIcons.Refresh,
                     text = "Retry",
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(Standards.RadiusLg),
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -712,7 +711,7 @@ private fun InfoRow(label: String, value: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Surface(
-            shape = RoundedCornerShape(4.dp),
+            shape = RoundedCornerShape(Standards.SpacingXs),
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
         ) {
             Text(
@@ -720,7 +719,7 @@ private fun InfoRow(label: String, value: String) {
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                modifier = Modifier.padding(horizontal = Standards.SpacingSm, vertical = Standards.SpacingXxs)
             )
         }
     }

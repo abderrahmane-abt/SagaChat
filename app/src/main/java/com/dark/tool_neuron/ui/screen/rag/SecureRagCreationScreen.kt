@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import com.dark.tool_neuron.ui.components.ExpandCollapseIcon
 import com.dark.tool_neuron.ui.components.PasswordTextField
 import com.dark.tool_neuron.ui.icons.TnIcons
+import com.dark.tool_neuron.global.Standards
 
 enum class DocumentType(val label: String, val mimeTypes: Array<String>, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
     TEXT("Text", arrayOf("text/plain"), TnIcons.FileText),
@@ -138,8 +139,8 @@ fun SecureRagCreationScreen(
             .fillMaxSize()
             .padding(padding)
             .imePadding(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(horizontal = Standards.SpacingLg, vertical = Standards.SpacingMd),
+        verticalArrangement = Arrangement.spacedBy(Standards.SpacingMd)
     ) {
         // Embedding model card — shown when model needs download, is downloading, or needs init
         if (!isEmbeddingReady) {
@@ -164,7 +165,7 @@ fun SecureRagCreationScreen(
                 placeholder = { Text("My Knowledge Base") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(Standards.RadiusLg),
                 leadingIcon = {
                     Icon(
                         TnIcons.Tag,
@@ -192,7 +193,7 @@ fun SecureRagCreationScreen(
                     .fillMaxWidth()
                     .heightIn(min = 120.dp),
                 minLines = 4,
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(Standards.RadiusLg)
             )
         }
 
@@ -354,7 +355,7 @@ fun SecureRagCreationScreen(
                     .fillMaxWidth()
                     .height(48.dp),
                 enabled = canCreate,
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(Standards.RadiusLg),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -367,7 +368,7 @@ fun SecureRagCreationScreen(
                     contentDescription = null,
                     modifier = Modifier.size(20.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(Standards.SpacingSm))
                 Text(
                     text = when {
                         state.isCreating -> "Creating..."
@@ -398,7 +399,7 @@ fun SecureRagCreationScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
@@ -428,14 +429,14 @@ fun SecureRagCreationScreen(
                     placeholder = { Text("What is this RAG about?") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(Standards.RadiusLg)
                 )
             }
 
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
                 ) {
                     OutlinedTextField(
                         value = state.domain,
@@ -443,7 +444,7 @@ fun SecureRagCreationScreen(
                         label = { Text("Domain") },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(Standards.RadiusLg)
                     )
                     OutlinedTextField(
                         value = state.tags,
@@ -452,7 +453,7 @@ fun SecureRagCreationScreen(
                         placeholder = { Text("comma, separated") },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(Standards.RadiusLg)
                     )
                 }
             }
@@ -504,7 +505,7 @@ fun SecureRagCreationScreen(
         }
 
         // Bottom spacer
-        item { Spacer(modifier = Modifier.height(16.dp)) }
+        item { Spacer(modifier = Modifier.height(Standards.SpacingLg)) }
     }
 
     if (showAddUserDialog) {
@@ -541,7 +542,7 @@ private fun FileDropZone(
     Surface(
         onClick = if (fileUri == null) onPickFile else ({}),
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(Standards.RadiusLg),
         color = bgColor,
         border = BorderStroke(
             width = 1.5f.dp,
@@ -553,9 +554,9 @@ private fun FileDropZone(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 20.dp, horizontal = 16.dp),
+                    .padding(vertical = 20.dp, horizontal = Standards.SpacingLg),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
             ) {
                 Icon(
                     TnIcons.FileUpload,
@@ -580,20 +581,20 @@ private fun FileDropZone(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(12.dp),
+                    .padding(Standards.SpacingMd),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // File type icon
                 Surface(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(Standards.RadiusMd)
                 ) {
                     Icon(
                         documentType.icon,
                         contentDescription = null,
                         modifier = Modifier
-                            .padding(8.dp)
+                            .padding(Standards.SpacingSm)
                             .size(22.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
@@ -678,7 +679,7 @@ private fun EmbeddingModelCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = containerColor),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(Standards.RadiusLg)
     ) {
         Column(
             modifier = Modifier
@@ -749,7 +750,7 @@ private fun EmbeddingModelCard(
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(modifier = Modifier.width(Standards.SpacingXs))
                             Text("Download", style = MaterialTheme.typography.labelMedium)
                         }
                     }
@@ -826,7 +827,7 @@ private fun EncryptionSection(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
                 ) {
                     OutlinedButton(
                         onClick = {
@@ -838,10 +839,10 @@ private fun EncryptionSection(
                             ))
                         },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(Standards.RadiusLg)
                     ) {
                         Icon(TnIcons.Database, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(Standards.SpacingXs))
                         Text(
                             if (state.loadingMode == LoadingMode.EMBEDDED) "Embedded" else "Transient",
                             style = MaterialTheme.typography.labelMedium
@@ -851,10 +852,10 @@ private fun EncryptionSection(
                     OutlinedButton(
                         onClick = onAddUser,
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(Standards.RadiusLg)
                     ) {
                         Icon(TnIcons.UserPlus, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(Standards.SpacingXs))
                         Text("Add User", style = MaterialTheme.typography.labelMedium)
                     }
                 }
@@ -892,12 +893,12 @@ private fun EncryptionSection(
                                             MaterialTheme.colorScheme.primaryContainer
                                         else
                                             MaterialTheme.colorScheme.secondaryContainer,
-                                        shape = RoundedCornerShape(4.dp)
+                                        shape = RoundedCornerShape(Standards.SpacingXs)
                                     ) {
                                         Text(
                                             user.permissions.name,
                                             style = MaterialTheme.typography.labelSmall,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = Standards.SpacingXxs)
                                         )
                                     }
                                 }
@@ -927,7 +928,7 @@ private fun CreationProgressCard(
                 .fillMaxWidth()
                 .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingMd)
         ) {
             CircularProgressIndicator(
                 progress = { progress },
@@ -980,7 +981,7 @@ private fun AddUserDialog(
                     placeholder = { Text("e.g., Reader, Guest") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(Standards.RadiusLg)
                 )
 
                 PasswordTextField(
@@ -992,7 +993,7 @@ private fun AddUserDialog(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
                 ) {
                     FilterChip(
                         selected = selectedPermission == Permission.READ,

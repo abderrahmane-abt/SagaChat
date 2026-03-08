@@ -7,18 +7,17 @@ import com.dark.tool_neuron.models.table_schema.InstalledRag
 import com.dark.tool_neuron.models.table_schema.RagSourceType
 import com.dark.tool_neuron.models.table_schema.RagStatus
 import com.dark.tool_neuron.neuron_example.NeuronGraph
-import com.dark.tool_neuron.neuron_example.NeuronNode
 import com.dark.tool_neuron.neuron_example.RetrievalConfidence
 import com.dark.tool_neuron.neuron_example.RetrievalResult
 import com.dark.tool_neuron.util.DocumentParser
 import com.neuronpacket.NeuronPacketManager
-import com.neuronpacket.PacketMetadata
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import com.dark.tool_neuron.global.AppPaths
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 class RagRepository(
     private val ragDao: RagDao,
@@ -29,10 +28,10 @@ class RagRepository(
     }
 
     // Loaded graphs in memory
-    private val loadedGraphs = mutableMapOf<String, NeuronGraph>()
+    private val loadedGraphs = ConcurrentHashMap<String, NeuronGraph>()
 
     // Password cache for encrypted RAGs (cleared when app terminates)
-    private val passwordCache = mutableMapOf<String, String>()
+    private val passwordCache = ConcurrentHashMap<String, String>()
 
     // ==================== Database Operations ====================
 
@@ -68,10 +67,6 @@ class RagRepository(
 
     suspend fun updateRagEnabled(id: String, isEnabled: Boolean) = ragDao.updateEnabled(id, isEnabled)
 
-    suspend fun markRagAsLoaded(id: String) = ragDao.markAsLoaded(id)
-
-    suspend fun markRagAsUnloaded(id: String) = ragDao.markAsUnloaded(id)
-
     suspend fun unloadAllRags() {
         ragDao.unloadAllRags()
         loadedGraphs.values.forEach { it.close() }
@@ -106,8 +101,6 @@ class RagRepository(
     suspend fun getRagCount(): Int = ragDao.getRagCount()
 
     suspend fun getLoadedRagCount(): Int = ragDao.getLoadedRagCount()
-
-    suspend fun searchRags(query: String): List<InstalledRag> = ragDao.searchRags(query)
 
     // ==================== File Operations ====================
 
@@ -346,10 +339,6 @@ class RagRepository(
 
     // ==================== Graph Operations ====================
 
-    fun getLoadedGraph(ragId: String): NeuronGraph? = loadedGraphs[ragId]
-
-    fun isGraphLoaded(ragId: String): Boolean = loadedGraphs.containsKey(ragId)
-
     suspend fun loadGraph(ragId: String, graph: NeuronGraph, password: String? = null): Result<NeuronGraph> = withContext(Dispatchers.IO) {
         try {
             val rag = ragDao.getById(ragId) ?: return@withContext Result.failure(Exception("RAG not found"))
@@ -380,20 +369,23 @@ class RagRepository(
             // For neuron packets, we need to decrypt
             if (rag.sourceType == RagSourceType.NEURON_PACKET && effectivePassword != null) {
                 val packetManager = NeuronPacketManager()
-                packetManager.open(file)
-                val authResult = packetManager.authenticate(effectivePassword)
-                if (authResult.isFailure) {
-                    return@withContext Result.failure(authResult.exceptionOrNull() ?: Exception("Authentication failed"))
+                try {
+                    packetManager.open(file)
+                    val authResult = packetManager.authenticate(effectivePassword)
+                    if (authResult.isFailure) {
+                        return@withContext Result.failure(authResult.exceptionOrNull() ?: Exception("Authentication failed"))
+                    }
+                    val payloadResult = packetManager.decryptPayload(authResult.getOrThrow())
+                    if (payloadResult.isFailure) {
+                        return@withContext Result.failure(payloadResult.exceptionOrNull() ?: Exception("Decryption failed"))
+                    }
+                    val deserializeResult = graph.deserialize(payloadResult.getOrThrow())
+                    if (deserializeResult.isFailure) {
+                        return@withContext Result.failure(deserializeResult.exceptionOrNull() ?: Exception("Deserialization failed"))
+                    }
+                } finally {
+                    packetManager.close()
                 }
-                val payloadResult = packetManager.decryptPayload(authResult.getOrThrow())
-                if (payloadResult.isFailure) {
-                    return@withContext Result.failure(payloadResult.exceptionOrNull() ?: Exception("Decryption failed"))
-                }
-                val deserializeResult = graph.deserialize(payloadResult.getOrThrow())
-                if (deserializeResult.isFailure) {
-                    return@withContext Result.failure(deserializeResult.exceptionOrNull() ?: Exception("Deserialization failed"))
-                }
-                packetManager.close()
             } else {
                 // Direct file read
                 val payload = file.readBytes()
@@ -429,7 +421,8 @@ class RagRepository(
 
         android.util.Log.d("RagRepository", "Querying ${loadedGraphs.size} loaded graphs for: $query")
 
-        for ((ragId, graph) in loadedGraphs) {
+        val snapshot = loadedGraphs.toMap()
+        for ((ragId, graph) in snapshot) {
             val rag = ragDao.getById(ragId) ?: continue
             android.util.Log.d("RagRepository", "Checking RAG: ${rag.name}, isEnabled: ${rag.isEnabled}, nodeCount: ${graph.nodeCount}")
 
@@ -471,7 +464,8 @@ class RagRepository(
 
         android.util.Log.d("RagRepository", "Pipeline query on ${loadedGraphs.size} loaded graphs for: $query")
 
-        for ((ragId, graph) in loadedGraphs) {
+        val snapshot = loadedGraphs.toMap()
+        for ((ragId, graph) in snapshot) {
             val rag = ragDao.getById(ragId) ?: continue
             if (!rag.isEnabled) continue
 
@@ -690,5 +684,4 @@ class RagRepository(
         }
     }
 
-    fun getRagsDirectory(): File = ragsDir
 }

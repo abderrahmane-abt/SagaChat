@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.dark.tool_neuron.ui.icons.TnIcons
+import com.dark.tool_neuron.global.Standards
 
 @Composable
 fun ToolDetailDialog(
@@ -31,7 +32,7 @@ fun ToolDetailDialog(
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Surface(
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(Standards.RadiusXl),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp,
             modifier = Modifier
@@ -43,12 +44,12 @@ fun ToolDetailDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(horizontal = Standards.SpacingLg, vertical = Standards.SpacingMd),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
@@ -80,8 +81,8 @@ fun ToolDetailDialog(
                         .fillMaxWidth()
                         .weight(1f)
                         .verticalScroll(rememberScrollState())
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                        .padding(Standards.SpacingLg),
+                    verticalArrangement = Arrangement.spacedBy(Standards.SpacingMd)
                 ) {
                     content()
                 }
@@ -102,7 +103,7 @@ fun DetailSection(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(Standards.SpacingXs)
     ) {
         Text(
             text = label,
@@ -111,7 +112,7 @@ fun DetailSection(
             color = MaterialTheme.colorScheme.primary
         )
         Surface(
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(Standards.RadiusMd),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         ) {
             Text(

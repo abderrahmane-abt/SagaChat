@@ -43,7 +43,6 @@ class RagDataReaderActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_RAG_FILE_PATH = "rag_file_path"
-        const val EXTRA_RAG_PASSWORD = "rag_password"
         const val EXTRA_RAG_NAME = "rag_name"
         const val EXTRA_IS_ENCRYPTED = "is_encrypted"
     }
@@ -53,7 +52,7 @@ class RagDataReaderActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val filePath = intent.getStringExtra(EXTRA_RAG_FILE_PATH)
-        val password = intent.getStringExtra(EXTRA_RAG_PASSWORD)
+        val password = intent.getStringExtra("rag_password")
         val ragName = intent.getStringExtra(EXTRA_RAG_NAME) ?: "Unknown RAG"
         val isEncrypted = intent.getBooleanExtra(EXTRA_IS_ENCRYPTED, false)
 

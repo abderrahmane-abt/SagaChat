@@ -209,6 +209,25 @@
     *;
 }
 
+# -- UMS (Unified Memory System with JNI) --
+-keep class com.dark.ums.** { *; }
+-keepclassmembers class com.dark.ums.** {
+    native <methods>;
+    public <methods>;
+    public <fields>;
+}
+
+# -- System Encryptor (native encryption with JNI) --
+-keep class com.dark.system_encryptor.** { *; }
+-keepclassmembers class com.dark.system_encryptor.** {
+    native <methods>;
+    public <methods>;
+    public <fields>;
+}
+
+# -- File Operations --
+-keep class com.dark.file_ops.** { *; }
+
 # -- Document Parsing Libraries --
 
 # Apache POI (Excel, Word)

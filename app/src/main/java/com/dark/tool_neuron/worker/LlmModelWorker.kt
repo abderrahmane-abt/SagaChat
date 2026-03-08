@@ -450,53 +450,6 @@ object LlmModelWorker {
         }
     }
 
-    // ==================== KV Cache State Persistence ====================
-
-    /**
-     * Get the size of the current KV cache state in bytes.
-     * Returns 0 if no model is loaded or no context exists.
-     */
-    fun getStateSizeGguf(): Long {
-        return try {
-            _serviceFlow.value?.getStateSizeGguf() ?: 0
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to get state size: ${e.message}")
-            0
-        }
-    }
-
-    /**
-     * Save the current KV cache state to a file.
-     * The file includes model compatibility checks and prompt tokens.
-     *
-     * @param path Absolute path to write the state file
-     * @return true if saved successfully
-     */
-    fun stateSaveToFileGguf(path: String): Boolean {
-        return try {
-            _serviceFlow.value?.stateSaveToFileGguf(path) ?: false
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to save KV state: ${e.message}")
-            false
-        }
-    }
-
-    /**
-     * Load a previously saved KV cache state from a file.
-     * Must be the same model architecture that created the file.
-     *
-     * @param path Absolute path to the state file
-     * @return true if loaded successfully
-     */
-    fun stateLoadFromFileGguf(path: String): Boolean {
-        return try {
-            _serviceFlow.value?.stateLoadFromFileGguf(path) ?: false
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to load KV state: ${e.message}")
-            false
-        }
-    }
-
     // ==================== New Optimizations ====================
 
     fun setSpeculativeDecodingGguf(enabled: Boolean, nDraft: Int = 4, ngramSize: Int = 4) {
@@ -816,8 +769,8 @@ object LlmModelWorker {
                 steps,
                 cfgScale,
                 seed,
-                512,
-                512,
+                width,
+                height,
                 scheduler,
                 useOpenCL,
                 inputImage,
@@ -930,25 +883,6 @@ object LlmModelWorker {
         bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
         val bytes = outputStream.toByteArray()
         return Base64.getEncoder().encodeToString(bytes)
-    }
-
-    /**
-     * Convert Bitmap to RGB base64 (for img2img with raw RGB data)
-     */
-    fun bitmapToRgbBase64(bitmap: Bitmap): String {
-        val pixels = IntArray(bitmap.width * bitmap.height)
-        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
-
-        val rgbBytes = ByteArray(bitmap.width * bitmap.height * 3)
-        for (i in pixels.indices) {
-            val pixel = pixels[i]
-            val index = i * 3
-            rgbBytes[index] = ((pixel shr 16) and 0xFF).toByte()     // R
-            rgbBytes[index + 1] = ((pixel shr 8) and 0xFF).toByte()  // G
-            rgbBytes[index + 2] = (pixel and 0xFF).toByte()          // B
-        }
-
-        return Base64.getEncoder().encodeToString(rgbBytes)
     }
 
     // ==================== Embedding Model Download ====================

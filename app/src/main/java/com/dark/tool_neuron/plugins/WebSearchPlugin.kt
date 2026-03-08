@@ -16,13 +16,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.tool_neuron.models.plugins.PluginInfo
 import com.dark.tool_neuron.plugins.api.SuperPlugin
 import com.dark.tool_neuron.plugins.services.WebScrapingSearchService
 import com.dark.tool_neuron.plugins.services.WebScrapingService
-import com.dark.tool_neuron.plugins.ui.WebSearchPluginUI
-import com.dark.tool_neuron.plugins.viewmodel.WebSearchViewModel
 import com.dark.gguf_lib.toolcalling.ToolCall
 import com.dark.gguf_lib.toolcalling.ToolDefinitionBuilder
 import kotlinx.coroutines.async
@@ -179,8 +176,7 @@ class WebSearchPlugin : SuperPlugin {
 
     @Composable
     override fun ToolCallUI() {
-        val viewModel: WebSearchViewModel = viewModel()
-        WebSearchPluginUI(viewModel = viewModel)
+        // No standalone UI — results shown via CacheToolUI
     }
 
     @Composable

@@ -106,7 +106,9 @@ class ModelLoadingActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Check if launched from ModelPickerActivity with a file path
+        // Check if launched from ModelPickerActivity with a URI or file path
+        val pickerUri = intent.getStringExtra(ModelPickerActivity.EXTRA_RESULT_URI)
+            ?.let { Uri.parse(it) }
         val pickerFilePath = intent.getStringExtra(ModelPickerActivity.EXTRA_RESULT_FILE_PATH)
         val pickerMode = intent.getStringExtra(ModelPickerActivity.EXTRA_PICKER_MODE)
 
@@ -114,6 +116,7 @@ class ModelLoadingActivity : ComponentActivity() {
             NeuroVerseTheme {
                 ModelLoadingScreen(
                     modelParser = modelParser,
+                    initialUri = pickerUri,
                     initialFilePath = pickerFilePath,
                     initialProviderType = when (pickerMode) {
                         ProviderType.DIFFUSION.name -> ProviderType.DIFFUSION
@@ -141,6 +144,7 @@ class ModelLoadingActivity : ComponentActivity() {
 @Composable
 fun ModelLoadingScreen(
     modelParser: ModelDataParser,
+    initialUri: Uri? = null,
     initialFilePath: String? = null,
     initialProviderType: ProviderType? = null,
     onEngineLoaded: (Any) -> Unit,
@@ -150,7 +154,7 @@ fun ModelLoadingScreen(
     var loadingState by remember { mutableStateOf<LoadingState>(LoadingState.Idle) }
     var installState by remember { mutableStateOf<InstallState>(InstallState.NotInstalled) }
     var currentModel by remember { mutableStateOf<Model?>(null) }
-    var selectedUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedUri by remember { mutableStateOf(initialUri) }
     var selectedFilePath by remember { mutableStateOf(initialFilePath) }
     var selectedProviderType by remember { mutableStateOf(initialProviderType) }
     val scope = rememberCoroutineScope()

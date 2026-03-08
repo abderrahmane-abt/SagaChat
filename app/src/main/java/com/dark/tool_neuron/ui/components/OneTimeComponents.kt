@@ -22,7 +22,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -86,7 +85,7 @@ fun TitleRow(
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 12.dp)
+                modifier = Modifier.padding(horizontal = Standards.SpacingMd)
             ) {
                 if (isLoading) {
                     LoadingIndicator(
@@ -156,7 +155,7 @@ fun ModelListItem(
         ), shape = RoundedCornerShape(10.dp)
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(Standards.SpacingMd),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -191,7 +190,7 @@ fun ModelListItem(
             }
 
             Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(Standards.SpacingXs),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (onDeleteListener != null && !isLoaded) {
@@ -199,7 +198,7 @@ fun ModelListItem(
                         onClickListener = { showDeleteConfirm = true },
                         icon = TnIcons.Trash,
                         contentDescription = "Delete",
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(Standards.RadiusMd),
                         colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.error.copy(0.12f),
                             contentColor = MaterialTheme.colorScheme.error
@@ -220,14 +219,14 @@ fun ModelListItem(
                                 containerColor = MaterialTheme.colorScheme.error.copy(0.12f),
                                 contentColor = MaterialTheme.colorScheme.error
                             ),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(Standards.RadiusMd)
                         )
                     } else {
                         ActionButton(
                             onClickListener = { onClickListener(model) },
                             icon = TnIcons.ExternalLink,
                             contentDescription = "Load",
-                            shape = RoundedCornerShape(8.dp),
+                            shape = RoundedCornerShape(Standards.RadiusMd),
                             colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
                                 containerColor = MaterialTheme.colorScheme.primary.copy(0.12f),
                                 contentColor = MaterialTheme.colorScheme.primary

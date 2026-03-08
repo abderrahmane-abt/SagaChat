@@ -35,7 +35,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +57,7 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 import com.dark.tool_neuron.ui.icons.TnIcons
+import com.dark.tool_neuron.global.Standards
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -139,7 +139,7 @@ fun AiMemoryScreen(
                 onValueChange = { searchQuery = it },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                    .padding(horizontal = Standards.SpacingLg, vertical = Standards.SpacingXs),
                 placeholder = { Text("Search memories...") },
                 leadingIcon = { Icon(TnIcons.Search, contentDescription = null) },
                 trailingIcon = {
@@ -150,14 +150,14 @@ fun AiMemoryScreen(
                     }
                 },
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(Standards.RadiusLg)
             )
 
             // Category filter chips
             FlowRow(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                    .padding(horizontal = Standards.SpacingLg, vertical = Standards.SpacingXs),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 FilterChip(
@@ -183,7 +183,7 @@ fun AiMemoryScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(32.dp),
+                        .padding(Standards.SpacingXxl),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -196,7 +196,7 @@ fun AiMemoryScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(horizontal = Standards.SpacingLg, vertical = Standards.SpacingSm),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     items(filteredMemories, key = { it.id }) { memory ->
@@ -213,7 +213,7 @@ fun AiMemoryScreen(
                     // Clear all button at bottom
                     if (allMemories.size > 3) {
                         item {
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(Standards.SpacingSm))
                             TextButton(
                                 onClick = { showClearAllDialog = true },
                                 modifier = Modifier.fillMaxWidth()
@@ -226,7 +226,7 @@ fun AiMemoryScreen(
                         }
                     }
 
-                    item { Spacer(modifier = Modifier.height(16.dp)) }
+                    item { Spacer(modifier = Modifier.height(Standards.SpacingLg)) }
                 }
             }
         }
@@ -302,7 +302,7 @@ private fun MemoryItem(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp)
+                .padding(Standards.SpacingMd)
                 .animateContentSize()
         ) {
             Row(
@@ -318,7 +318,7 @@ private fun MemoryItem(
                     else MaterialTheme.colorScheme.onSurface
                 )
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(Standards.SpacingSm))
 
                 IconButton(
                     onClick = onDelete,
@@ -333,7 +333,7 @@ private fun MemoryItem(
                 }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(Standards.SpacingXs))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -368,7 +368,7 @@ private fun MemoryItem(
 
                 // Metadata
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(

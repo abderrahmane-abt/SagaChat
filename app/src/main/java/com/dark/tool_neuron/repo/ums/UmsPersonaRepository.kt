@@ -31,12 +31,6 @@ class UmsPersonaRepository(private val ums: UnifiedMemorySystem) {
         refreshCache()
     }
 
-    suspend fun delete(persona: Persona) = withContext(Dispatchers.IO) {
-        val recordId = findRecordId(persona.id) ?: return@withContext
-        ums.delete(collection, recordId)
-        refreshCache()
-    }
-
     suspend fun getAllOnce(): List<Persona> = withContext(Dispatchers.IO) {
         ums.getAll(collection).map { it.toPersona() }.sortedBy { it.createdAt }
     }
@@ -44,11 +38,6 @@ class UmsPersonaRepository(private val ums: UnifiedMemorySystem) {
     suspend fun getById(id: String): Persona? = withContext(Dispatchers.IO) {
         ums.queryString(collection, Tags.Persona.ENTITY_ID, id)
             .firstOrNull()?.toPersona()
-    }
-
-    private fun findRecordId(entityId: String): Int? {
-        return ums.queryString(collection, Tags.Persona.ENTITY_ID, entityId)
-            .firstOrNull()?.id?.takeIf { it != 0 }
     }
 }
 

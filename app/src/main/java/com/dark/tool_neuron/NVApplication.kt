@@ -103,17 +103,4 @@ class NVApplication : Application() {
 
         // Note: Service binding moved to MainActivity to comply with Android 14+ foreground service restrictions
     }
-
-    override fun onTerminate() {
-        super.onTerminate()
-        Log.d(TAG, "Application onTerminate")
-    }
-
-    override fun onTrimMemory(level: Int) {
-        super.onTrimMemory(level)
-        // Don't unbind on configuration changes
-        if (level == TRIM_MEMORY_UI_HIDDEN) {
-            Log.d(TAG, "UI hidden, keeping service bound")
-        }
-    }
 }

@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.ui.icons.TnIcons
+import com.dark.tool_neuron.global.Standards
 
 @Composable
 fun GuideScreen(
@@ -30,7 +31,7 @@ fun GuideScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 32.dp, vertical = 48.dp),
+            .padding(horizontal = Standards.SpacingXxl, vertical = Standards.SpacingXxxl),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -41,7 +42,7 @@ fun GuideScreen(
             tint = MaterialTheme.colorScheme.primary
         )
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(Standards.SpacingXl))
 
         Text(
             text = "Welcome to ToolNeuron",
@@ -51,7 +52,7 @@ fun GuideScreen(
             color = MaterialTheme.colorScheme.primary
         )
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Standards.SpacingMd))
 
         Text(
             text = "Your privacy-first AI assistant.\nEverything runs on your device — no cloud, no telemetry.",
@@ -60,7 +61,7 @@ fun GuideScreen(
             textAlign = TextAlign.Center
         )
 
-        Spacer(Modifier.height(48.dp))
+        Spacer(Modifier.height(Standards.SpacingXxxl))
 
         Button(
             onClick = onContinue,

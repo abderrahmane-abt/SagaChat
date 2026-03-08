@@ -25,7 +25,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +42,7 @@ import com.dark.tool_neuron.viewModel.VaultGateState
 import com.dark.tool_neuron.viewModel.VaultGateViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.dark.tool_neuron.global.Standards
 
 @Composable
 fun VaultGateScreen(
@@ -127,7 +127,7 @@ fun VaultGateScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp)
+                    .padding(horizontal = Standards.SpacingXl)
                     .alpha(contentAlpha.value),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
@@ -137,7 +137,7 @@ fun VaultGateScreen(
                     contentDescription = null,
                     modifier = Modifier
                         .size(64.dp)
-                        .padding(bottom = 8.dp),
+                        .padding(bottom = Standards.SpacingSm),
                     tint = MaterialTheme.colorScheme.primary
                 )
 
@@ -164,7 +164,7 @@ fun VaultGateScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(Standards.SpacingLg))
 
                 when (state) {
                     is VaultGateState.Initializing -> {
@@ -195,7 +195,7 @@ fun VaultGateScreen(
                                 )
                                 Text(
                                     "Retry Migration",
-                                    modifier = Modifier.padding(start = 8.dp)
+                                    modifier = Modifier.padding(start = Standards.SpacingSm)
                                 )
                             }
                         } else {
@@ -209,7 +209,7 @@ fun VaultGateScreen(
                                 )
                                 Text(
                                     "Retry",
-                                    modifier = Modifier.padding(start = 8.dp)
+                                    modifier = Modifier.padding(start = Standards.SpacingSm)
                                 )
                             }
                         }
@@ -228,10 +228,10 @@ fun VaultGateScreen(
             ) {
                 Column(
                     modifier = Modifier
-                        .padding(horizontal = 32.dp)
+                        .padding(horizontal = Standards.SpacingXxl)
                         .alpha(overlayAlpha.value),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(Standards.SpacingLg)
                 ) {
                     Text(
                         text = overlayText,
@@ -264,7 +264,7 @@ private fun MigrationProgressContent(state: VaultGateState.Migrating) {
         fontWeight = FontWeight.SemiBold
     )
 
-    Spacer(Modifier.height(8.dp))
+    Spacer(Modifier.height(Standards.SpacingSm))
 
     if (state.total > 0) {
         Text(
@@ -279,9 +279,9 @@ private fun MigrationProgressContent(state: VaultGateState.Migrating) {
         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
     }
 
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.height(Standards.SpacingMd))
     HorizontalDivider()
-    Spacer(Modifier.height(8.dp))
+    Spacer(Modifier.height(Standards.SpacingSm))
 
     Text(
         "Log",
@@ -312,7 +312,7 @@ private fun MigrationSummary(
         fontWeight = FontWeight.SemiBold
     )
 
-    Spacer(Modifier.height(8.dp))
+    Spacer(Modifier.height(Standards.SpacingSm))
 
     Text(
         "${state.migrated} records migrated",
@@ -327,9 +327,9 @@ private fun MigrationSummary(
             color = MaterialTheme.colorScheme.error
         )
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Standards.SpacingSm))
         HorizontalDivider()
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Standards.SpacingSm))
 
         Text(
             "Skipped Items",
@@ -345,7 +345,7 @@ private fun MigrationSummary(
         }
     }
 
-    Spacer(Modifier.height(24.dp))
+    Spacer(Modifier.height(Standards.SpacingXl))
 
     Button(
         onClick = onContinue,

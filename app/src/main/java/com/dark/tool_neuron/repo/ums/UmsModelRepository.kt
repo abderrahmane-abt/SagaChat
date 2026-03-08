@@ -33,11 +33,6 @@ class UmsModelRepository(private val ums: UnifiedMemorySystem) {
         refreshCache()
     }
 
-    suspend fun insertAll(models: List<Model>) = withContext(Dispatchers.IO) {
-        models.forEach { ums.put(collection, it.toRecord()) }
-        refreshCache()
-    }
-
     suspend fun update(model: Model) = withContext(Dispatchers.IO) {
         val existing = findRecordId(model.id) ?: return@withContext
         ums.put(collection, model.toRecord(existing))
@@ -55,21 +50,11 @@ class UmsModelRepository(private val ums: UnifiedMemorySystem) {
             .firstOrNull()?.toModel()
     }
 
-    suspend fun getByName(name: String): Model? = withContext(Dispatchers.IO) {
-        ums.getAll(collection).map { it.toModel() }
-            .firstOrNull { it.modelName == name }
-    }
-
-    fun getAllActive(): Flow<List<Model>> = _allModels.mapFlow { it.filter { m -> m.isActive } }
-
     fun getAll(): Flow<List<Model>> = _allModels
 
     suspend fun getAllOnce(): List<Model> = withContext(Dispatchers.IO) {
         ums.getAll(collection).map { it.toModel() }
     }
-
-    fun getByProvider(providerType: ProviderType): Flow<List<Model>> =
-        _allModels.mapFlow { it.filter { m -> m.providerType == providerType } }
 
     suspend fun updateActiveStatus(id: String, isActive: Boolean) = withContext(Dispatchers.IO) {
         val model = getById(id) ?: return@withContext

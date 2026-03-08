@@ -5,12 +5,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.spring
 import com.dark.tool_neuron.ui.theme.Motion
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
@@ -40,7 +37,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -145,7 +141,7 @@ private fun SetupOptionsContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = Standards.SpacingXl),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -170,7 +166,7 @@ private fun SetupOptionsContent(
                             ),
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(Standards.SpacingSm))
                         Text(
                             "You can Minimize the app, Will Notify You",
                             style = MaterialTheme.typography.bodyMedium,
@@ -178,7 +174,7 @@ private fun SetupOptionsContent(
                             textAlign = TextAlign.Center
                         )
 
-                        Spacer(Modifier.height(24.dp))
+                        Spacer(Modifier.height(Standards.SpacingXl))
 
                         // Progress bar with droplets
                         if (progress >= 0f) {
@@ -192,7 +188,7 @@ private fun SetupOptionsContent(
                                     barColor = MaterialTheme.colorScheme.primary,
                                     trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                                 )
-                                Spacer(Modifier.width(12.dp))
+                                Spacer(Modifier.width(Standards.SpacingMd))
                                 Text(
                                     "${(progress * 100).toInt()}%",
                                     style = MaterialTheme.typography.labelMedium.copy(
@@ -220,7 +216,7 @@ private fun SetupOptionsContent(
                             ),
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(Standards.SpacingSm))
                         Text(
                             "Choose Your Setup!",
                             style = MaterialTheme.typography.bodyMedium,
@@ -230,7 +226,7 @@ private fun SetupOptionsContent(
                 }
             }
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(Standards.SpacingXxl))
 
             // Options list with staggered animation
             data class SetupCard(
@@ -271,7 +267,7 @@ private fun SetupOptionsContent(
                     }
 
                     if (index < options.lastIndex) {
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(Standards.SpacingSm))
                     }
                 }
             }
@@ -279,11 +275,11 @@ private fun SetupOptionsContent(
             // Error message
             AnimatedVisibility(
                 visible = downloadError != null,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
+                enter = Motion.Enter,
+                exit = Motion.Exit
             ) {
                 Column(
-                    modifier = Modifier.padding(top = 16.dp),
+                    modifier = Modifier.padding(top = Standards.SpacingLg),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
@@ -292,7 +288,7 @@ private fun SetupOptionsContent(
                         color = MaterialTheme.colorScheme.error,
                         textAlign = TextAlign.Center
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(Standards.SpacingSm))
                     TextButton(onClick = { viewModel.retryDownload() }) {
                         Text("Retry")
                     }
@@ -301,7 +297,7 @@ private fun SetupOptionsContent(
 
             // Restore from Backup section
             if (!isDownloading) {
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(Standards.SpacingXl))
                 RestoreFromBackupCard(viewModel = viewModel)
             }
         }
@@ -341,7 +337,7 @@ private fun PerformancePickerContent(viewModel: SetupViewModel) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = Standards.SpacingXl),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -350,7 +346,7 @@ private fun PerformancePickerContent(viewModel: SetupViewModel) {
                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Standards.SpacingSm))
             Text(
                 "Choose how your device runs AI models",
                 style = MaterialTheme.typography.bodyMedium,
@@ -358,7 +354,7 @@ private fun PerformancePickerContent(viewModel: SetupViewModel) {
             )
 
             clusterInfo?.let {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(Standards.SpacingXs))
                 Text(
                     "Detected: $it",
                     style = MaterialTheme.typography.bodySmall,
@@ -366,7 +362,7 @@ private fun PerformancePickerContent(viewModel: SetupViewModel) {
                 )
             }
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(Standards.SpacingXxl))
 
             val modes = listOf(
                 Triple(PerformanceMode.PERFORMANCE, TnIcons.Gauge, "Maximum speed, higher battery usage"),
@@ -395,11 +391,11 @@ private fun PerformancePickerContent(viewModel: SetupViewModel) {
                 }
 
                 if (index < modes.lastIndex) {
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(Standards.SpacingSm))
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(Standards.SpacingXl))
 
             FilledTonalButton(
                 onClick = { viewModel.confirmPerformanceMode() },
@@ -455,9 +451,9 @@ private fun RestoreFromBackupCard(viewModel: SetupViewModel) {
             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                modifier = Modifier.padding(horizontal = Standards.SpacingLg, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(Standards.SpacingMd)
             ) {
                 LoadingIndicator(modifier = Modifier.size(20.dp))
                 Text(
@@ -482,9 +478,9 @@ private fun RestoreFromBackupCard(viewModel: SetupViewModel) {
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                modifier = Modifier.padding(horizontal = Standards.SpacingLg, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(Standards.SpacingMd)
             ) {
                 Icon(
                     TnIcons.Restore, null,
@@ -501,7 +497,7 @@ private fun RestoreFromBackupCard(viewModel: SetupViewModel) {
 
         // Error from previous attempt
         if (progress is SystemBackupManager.BackupProgress.Error) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Standards.SpacingSm))
             Text(
                 text = progress.message,
                 style = MaterialTheme.typography.bodySmall,
@@ -522,7 +518,7 @@ private fun RestoreFromBackupCard(viewModel: SetupViewModel) {
             icon = { Icon(TnIcons.Restore, null, tint = MaterialTheme.colorScheme.primary) },
             title = { Text("Restore from Backup", fontWeight = FontWeight.SemiBold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)) {
                     Text(
                         "Enter your backup password, then select the backup file.",
                         style = MaterialTheme.typography.bodySmall,
@@ -549,7 +545,7 @@ private fun RestoreFromBackupCard(viewModel: SetupViewModel) {
                     restorePassword = ""
                 }) { Text("Cancel") }
             },
-            shape = RoundedCornerShape(16.dp)
+            shape = RoundedCornerShape(Standards.RadiusXl)
         )
     }
 }
@@ -586,13 +582,13 @@ private fun PerformanceModeCard(
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(Standards.RadiusXl),
         color = backgroundColor
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            modifier = Modifier.padding(horizontal = Standards.SpacingLg, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingMd)
         ) {
             Icon(
                 imageVector = icon,
@@ -658,14 +654,14 @@ private fun SetupOptionCard(
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(Standards.RadiusXl),
         color = backgroundColor,
         enabled = enabled && !isDownloading
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            modifier = Modifier.padding(horizontal = Standards.SpacingLg, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingMd)
         ) {
             Icon(
                 imageVector = icon,

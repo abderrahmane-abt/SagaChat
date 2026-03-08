@@ -5,7 +5,6 @@ import android.content.Context
 import android.util.Log
 import com.mp.ai_supertonic_tts.SupertonicTTS
 import com.mp.ai_supertonic_tts.callback.TTSCallback
-import com.mp.ai_supertonic_tts.models.AudioFormat
 import com.mp.ai_supertonic_tts.models.Language
 import com.mp.ai_supertonic_tts.models.SynthesisResult
 import com.mp.ai_supertonic_tts.models.TTSConfig
@@ -15,7 +14,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import com.dark.tool_neuron.global.AppPaths
-import java.io.File
 
 @SuppressLint("StaticFieldLeak")
 object TTSManager {
@@ -80,8 +78,6 @@ object TTSManager {
 
     fun isLoaded(): Boolean = _isModelLoaded.value
 
-    fun getAvailableVoices(): List<String> = _availableVoices.value
-
     suspend fun speak(text: String, settings: TTSSettings = TTSSettings(), msgId: String? = null) {
         val engine = tts ?: return
         if (!_isModelLoaded.value) {
@@ -142,54 +138,12 @@ object TTSManager {
         }
     }
 
-    suspend fun synthesize(text: String, settings: TTSSettings = TTSSettings()): SynthesisResult? {
-        val engine = tts ?: return null
-        if (!_isModelLoaded.value) return null
-
-        return withContext(Dispatchers.IO) {
-            try {
-                val config = TTSConfig(
-                    speed = settings.speed,
-                    steps = settings.steps,
-                    language = parseLanguage(settings.language),
-                    voice = settings.voice,
-                    useNNAPI = settings.useNNAPI
-                )
-                engine.synthesize(text, config)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error during TTS synthesis", e)
-                null
-            }
-        }
-    }
-
     fun stopPlayback() {
         tts?.stopPlayback()
         _isPlaying.value = false
         _currentPlayingMsgId.value = null
         _isSynthesizing.value = false
         _synthProgress.value = 0f
-    }
-
-    fun pausePlayback() {
-        tts?.pausePlayback()
-    }
-
-    fun resumePlayback() {
-        tts?.resumePlayback()
-    }
-
-    fun setVolume(volume: Float) {
-        tts?.setVolume(volume.coerceIn(0f, 1f))
-    }
-
-    fun release() {
-        stopPlayback()
-        tts?.release()
-        tts = null
-        _isModelLoaded.value = false
-        _availableVoices.value = emptyList()
-        Log.d(TAG, "TTSManager released")
     }
 
     fun getModelDirectory(): String? {

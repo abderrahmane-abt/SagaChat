@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.stateIn
@@ -100,19 +101,12 @@ class ChatViewModel @Inject constructor(
     private val _imageGenerationStep = MutableStateFlow("")
     val imageGenerationStep: StateFlow<String> = _imageGenerationStep
 
-    // Tool calling state
-    private val _currentToolName = MutableStateFlow<String?>(null)
-    val currentToolName: StateFlow<String?> = _currentToolName
-
     // Tool chain steps (used by both streaming UI and persistence)
     private val _toolChainSteps = MutableStateFlow<List<ToolChainStepData>>(emptyList())
     val toolChainSteps: StateFlow<List<ToolChainStepData>> = _toolChainSteps
 
     private val _currentToolChainRound = MutableStateFlow(0)
     val currentToolChainRound: StateFlow<Int> = _currentToolChainRound
-
-    private val _maxToolChainRounds = MutableStateFlow(5)
-    val maxToolChainRounds: StateFlow<Int> = _maxToolChainRounds
 
     // Agent phase state (Plan → Execute → Summarize)
     private val _agentPhase = MutableStateFlow(AgentPhase.Idle)
@@ -139,7 +133,7 @@ class ChatViewModel @Inject constructor(
     private var imageGenerationStartTime: Long = 0
 
     // Track if user message was already added to prevent duplicates
-    @Volatile private var userMessageAdded = false
+    private val userMessageAdded = java.util.concurrent.atomic.AtomicBoolean(false)
 
     // Current model ID for per-message attribution
     private val currentModelId: String? get() = LlmModelWorker.currentGgufModelId.value
@@ -186,6 +180,58 @@ class ChatViewModel @Inject constructor(
 
     private val _currentRagResults = MutableStateFlow<List<RagQueryDisplayResult>>(emptyList())
     val currentRagResults: StateFlow<List<RagQueryDisplayResult>> = _currentRagResults
+
+    // ── Grouped State Flows (for optimized recomposition) ──
+
+    val streamingState: StateFlow<StreamingState> = combine(
+        _streamingUserMessage,
+        _streamingAssistantMessage,
+        _streamingImage,
+        _imageGenerationProgress,
+        _imageGenerationStep
+    ) { userMsg, assistantMsg, image, progress, step ->
+        StreamingState(userMsg, assistantMsg, image, progress, step)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StreamingState())
+
+    val chatUiState: StateFlow<ChatUiState> = combine(
+        combine(_isGenerating, _currentChatId, _error) { gen, chatId, err -> Triple(gen, chatId, err) },
+        combine(_currentGenerationType, _thinkingModeEnabled, _modelSupportsThinking) { type, think, supports -> Triple(type, think, supports) }
+    ) { (gen, chatId, err), (type, think, supports) ->
+        ChatUiState(
+            isGenerating = gen,
+            currentChatId = chatId,
+            error = err,
+            generationType = type,
+            thinkingEnabled = think,
+            modelSupportsThinking = supports
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ChatUiState())
+
+    val agentState: StateFlow<AgentState> = combine(
+        _agentPhase,
+        _agentPlan,
+        _agentSummary,
+        _toolChainSteps,
+        _currentToolChainRound
+    ) { phase, plan, summary, steps, round ->
+        AgentState(phase, plan, summary, steps, round)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AgentState())
+
+    val ragState: StateFlow<RagState> = combine(
+        _currentRagContext,
+        _currentRagResults
+    ) { context, results ->
+        RagState(context, results)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RagState())
+
+    val chatConfigState: StateFlow<ChatConfigState> = combine(
+        streamingEnabled,
+        chatMemoryEnabled,
+        _showDynamicWindow,
+        _showModelList
+    ) { streaming, memory, dynWindow, modelList ->
+        ChatConfigState(streaming, memory, dynWindow, modelList)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ChatConfigState())
 
     // ==================== Auto-restore last chat ====================
 
@@ -276,9 +322,8 @@ class ChatViewModel @Inject constructor(
         currentGeneratedImage = null
         currentMetrics = null
         currentImageMetrics = null
-        userMessageAdded = false
+        userMessageAdded.set(false)
         _error.value = null
-        _currentToolName.value = null
         _toolChainSteps.value = emptyList()
         _currentToolChainRound.value = 0
         _agentPhase.value = AgentPhase.Idle
@@ -337,7 +382,7 @@ class ChatViewModel @Inject constructor(
         _isGenerating.value = true
         _streamingUserMessage.value = prompt
         _streamingAssistantMessage.value = ""
-        userMessageAdded = false
+        userMessageAdded.set(false)
         currentMetrics = null
         _error.value = null
 
@@ -412,7 +457,7 @@ class ChatViewModel @Inject constructor(
         _isGenerating.value = true
         _streamingUserMessage.value = prompt
         _streamingAssistantMessage.value = ""
-        userMessageAdded = false
+        userMessageAdded.set(false)
         currentMetrics = null
         _error.value = null
 
@@ -475,9 +520,9 @@ class ChatViewModel @Inject constructor(
                 } else {
                     val chatId = _currentChatId.value ?: return@launch
                     val pendingUserMsg = currentUserMessage
-                    if (!userMessageAdded && pendingUserMsg != null) {
+                    if (!userMessageAdded.get() && pendingUserMsg != null) {
                         _messages.add(pendingUserMsg)
-                        userMessageAdded = true
+                        userMessageAdded.set(true)
                     }
                     if (finalResponse.isNotBlank()) {
                         val assistantMessage = Messages(
@@ -535,7 +580,7 @@ class ChatViewModel @Inject constructor(
         _isGenerating.value = true
         _streamingUserMessage.value = prompt
         _streamingAssistantMessage.value = ""
-        userMessageAdded = true // already added — skip re-adding user message
+        userMessageAdded.set(true) // already added — skip re-adding user message
         currentMetrics = null
         _error.value = null
 
@@ -653,7 +698,6 @@ class ChatViewModel @Inject constructor(
         val seenCalls = mutableSetOf<String>()
         var consecutiveFailures = 0
         _toolChainSteps.value = emptyList()
-        _maxToolChainRounds.value = maxRounds
 
         val toolSignatures = PluginManager.getToolSignaturesText()
         val enabledNames = PluginManager.getEnabledToolNames().map { it.lowercase() }
@@ -751,7 +795,6 @@ class ChatViewModel @Inject constructor(
                     continue
                 }
 
-                _currentToolName.value = normalizedName
                 AppStateManager.setExecutingPlugin("", normalizedName)
 
                 val toolCall = ToolCall(name = normalizedName, arguments = argsObj)
@@ -819,9 +862,9 @@ class ChatViewModel @Inject constructor(
                         )
                     )
                     val pendingUserMsg = currentUserMessage
-                    if (!userMessageAdded && pendingUserMsg != null) {
+                    if (!userMessageAdded.get() && pendingUserMsg != null) {
                         _messages.add(pendingUserMsg)
-                        userMessageAdded = true
+                        userMessageAdded.set(true)
                     }
                     _messages.add(pluginMessage)
                 }
@@ -830,7 +873,6 @@ class ChatViewModel @Inject constructor(
             if (generatedDuplicate || consecutiveFailures >= 2) break
         }
 
-        _currentToolName.value = null
         return steps
     }
 
@@ -913,9 +955,9 @@ class ChatViewModel @Inject constructor(
 
             // Add user message to in-memory list if not already added
             val pendingUserMsg = currentUserMessage
-            if (!userMessageAdded && pendingUserMsg != null) {
+            if (!userMessageAdded.get() && pendingUserMsg != null) {
                 _messages.add(pendingUserMsg)
-                userMessageAdded = true
+                userMessageAdded.set(true)
             }
 
             val assistantMessage = Messages(
@@ -969,9 +1011,9 @@ class ChatViewModel @Inject constructor(
             _streamingAssistantMessage.value = finalResponse
 
             val pendingUserMsg = currentUserMessage
-            if (!userMessageAdded && pendingUserMsg != null) {
+            if (!userMessageAdded.get() && pendingUserMsg != null) {
                 _messages.add(pendingUserMsg)
-                userMessageAdded = true
+                userMessageAdded.set(true)
             }
 
             val ragResultItems = _currentRagResults.value.takeIf { it.isNotEmpty() }?.map { result ->
@@ -1501,60 +1543,68 @@ class ChatViewModel @Inject constructor(
         }
 
         if (_isGenerating.value) return
+        _isGenerating.value = true
 
         viewModelScope.launch {
-            val modelId = LlmModelWorker.currentDiffusionModelId.value
-            if (modelId == null) {
-                reportError("Model configuration not found")
-                return@launch
-            }
-
-            val config = getModelConfig(modelId)
-            val inferenceParams = if (config != null) {
-                DiffusionInferenceParams.fromJson(config.modelInferenceParams)
-            } else {
-                DiffusionInferenceParams()
-            }
-            val diffusionConfig = if (config != null) {
-                DiffusionConfig.fromJson(config.modelLoadingParams)
-            } else {
-                DiffusionConfig()
-            }
-
-            val finalNegativePrompt = negativePrompt ?: inferenceParams.negativePrompt
-            val finalSteps = steps ?: inferenceParams.steps
-            val finalCfgScale = cfgScale ?: inferenceParams.cfgScale
-            val finalWidth = width ?: diffusionConfig.width
-            val finalHeight = height ?: diffusionConfig.height
-            val finalScheduler = scheduler ?: inferenceParams.scheduler
-
-            _streamingUserMessage.value = prompt
-            imageGenerationStartTime = System.currentTimeMillis()
-            userMessageAdded = false
-
-            if (isNewConversation) {
-                currentUserMessage = Messages(
-                    msgId = "",
-                    role = Role.User,
-                    content = MessageContent(contentType = ContentType.Text, content = "Generate image: $prompt"),
-                    modelId = LlmModelWorker.currentDiffusionModelId.value,
-                        )
-                AppStateManager.setHasMessages(true)
-                generateImageForNewChat(prompt, finalNegativePrompt, finalSteps, finalCfgScale, seed, finalWidth, finalHeight, finalScheduler, inferenceParams.showDiffusionProcess, inferenceParams.showDiffusionStride)
-            } else {
-                val chatId = _currentChatId.value
-                if (chatId == null) {
-                    reportError("No chat selected")
+            try {
+                val modelId = LlmModelWorker.currentDiffusionModelId.value
+                if (modelId == null) {
+                    reportError("Model configuration not found")
+                    resetStreamingState()
                     return@launch
                 }
-                chatManager.addUserMessage(chatId, "Generate image: $prompt").onSuccess { userMessage ->
-                    currentUserMessage = userMessage
-                    AppStateManager.setHasMessages(true)
-                    generateImage(chatId, userMessage, prompt, finalNegativePrompt, finalSteps, finalCfgScale, seed, finalWidth, finalHeight, finalScheduler, inferenceParams.showDiffusionProcess, inferenceParams.showDiffusionStride)
-                }.onFailure { e ->
-                    reportError("Failed to save message: ${e.message}")
-                    resetStreamingState()
+
+                val config = getModelConfig(modelId)
+                val inferenceParams = if (config != null) {
+                    DiffusionInferenceParams.fromJson(config.modelInferenceParams)
+                } else {
+                    DiffusionInferenceParams()
                 }
+                val diffusionConfig = if (config != null) {
+                    DiffusionConfig.fromJson(config.modelLoadingParams)
+                } else {
+                    DiffusionConfig()
+                }
+
+                val finalNegativePrompt = negativePrompt ?: inferenceParams.negativePrompt
+                val finalSteps = steps ?: inferenceParams.steps
+                val finalCfgScale = cfgScale ?: inferenceParams.cfgScale
+                val finalWidth = width ?: diffusionConfig.width
+                val finalHeight = height ?: diffusionConfig.height
+                val finalScheduler = scheduler ?: inferenceParams.scheduler
+
+                _streamingUserMessage.value = prompt
+                imageGenerationStartTime = System.currentTimeMillis()
+                userMessageAdded.set(false)
+
+                if (isNewConversation) {
+                    currentUserMessage = Messages(
+                        msgId = "",
+                        role = Role.User,
+                        content = MessageContent(contentType = ContentType.Text, content = "Generate image: $prompt"),
+                        modelId = LlmModelWorker.currentDiffusionModelId.value,
+                            )
+                    AppStateManager.setHasMessages(true)
+                    generateImageForNewChat(prompt, finalNegativePrompt, finalSteps, finalCfgScale, seed, finalWidth, finalHeight, finalScheduler, inferenceParams.showDiffusionProcess, inferenceParams.showDiffusionStride)
+                } else {
+                    val chatId = _currentChatId.value
+                    if (chatId == null) {
+                        reportError("No chat selected")
+                        resetStreamingState()
+                        return@launch
+                    }
+                    chatManager.addUserMessage(chatId, "Generate image: $prompt").onSuccess { userMessage ->
+                        currentUserMessage = userMessage
+                        AppStateManager.setHasMessages(true)
+                        generateImage(chatId, userMessage, prompt, finalNegativePrompt, finalSteps, finalCfgScale, seed, finalWidth, finalHeight, finalScheduler, inferenceParams.showDiffusionProcess, inferenceParams.showDiffusionStride)
+                    }.onFailure { e ->
+                        reportError("Failed to save message: ${e.message}")
+                        resetStreamingState()
+                    }
+                }
+            } catch (e: Exception) {
+                reportError(e.message)
+                resetStreamingState()
             }
         }
     }
@@ -1634,7 +1684,7 @@ class ChatViewModel @Inject constructor(
                             _isGenerating.value = false
                             val generationTime = System.currentTimeMillis() - imageGenerationStartTime
                             currentImageMetrics = ImageGenerationMetrics(steps = steps, cfgScale = cfgScale, seed = event.seed, width = event.width, height = event.height, scheduler = scheduler, generationTimeMs = generationTime)
-                            if (!userMessageAdded) { _messages.add(userMessage); userMessageAdded = true }
+                            if (!userMessageAdded.get()) { _messages.add(userMessage); userMessageAdded.set(true) }
                             val imageBase64 = LlmModelWorker.bitmapToBase64(event.image)
                             val imageMessage = Messages(
                                 role = Role.Assistant,
@@ -1730,7 +1780,7 @@ class ChatViewModel @Inject constructor(
                 )
             chatManager.addMessage(newChatId, userMsg).onSuccess { userMessage ->
                 _messages.add(userMessage)
-                userMessageAdded = true
+                userMessageAdded.set(true)
                 val imageMsg = Messages(
                     role = Role.Assistant,
                     content = MessageContent(
@@ -1774,7 +1824,7 @@ class ChatViewModel @Inject constructor(
     private fun handleImageGenerationErrorExisting(chatId: String, userMessage: Messages, prompt: String, errorMessage: String) {
         _isGenerating.value = false
         reportError(errorMessage)
-        if (!userMessageAdded) { _messages.add(userMessage); userMessageAdded = true }
+        if (!userMessageAdded.get()) { _messages.add(userMessage); userMessageAdded.set(true) }
         _messages.add(Messages(role = Role.Assistant, content = MessageContent(contentType = ContentType.Text, content = "Error generating image: $errorMessage")))
         resetStreamingState()
     }
@@ -1782,7 +1832,7 @@ class ChatViewModel @Inject constructor(
     private fun handleImageGenerationExceptionExisting(chatId: String, userMessage: Messages, prompt: String, exception: Exception) {
         _isGenerating.value = false
         reportError(exception.message)
-        if (!userMessageAdded) { _messages.add(userMessage); userMessageAdded = true }
+        if (!userMessageAdded.get()) { _messages.add(userMessage); userMessageAdded.set(true) }
         resetStreamingState()
     }
 
@@ -1803,8 +1853,7 @@ class ChatViewModel @Inject constructor(
         currentGeneratedImage = null
         currentMetrics = null
         currentImageMetrics = null
-        userMessageAdded = false
-        _currentToolName.value = null
+        userMessageAdded.set(false)
         _toolChainSteps.value = emptyList()
         _currentToolChainRound.value = 0
         _agentPhase.value = AgentPhase.Idle
@@ -1826,7 +1875,7 @@ class ChatViewModel @Inject constructor(
         val snapshotMetrics = currentMetrics
         val snapshotImage = currentGeneratedImage
         val snapshotImageMetrics = currentImageMetrics
-        val snapshotUserAdded = userMessageAdded
+        val snapshotUserAdded = userMessageAdded.get()
 
         // 2. Stop native generation (synchronous signal to engine)
         when (_currentGenerationType.value) {

@@ -1,6 +1,8 @@
 package com.dark.tool_neuron.repo
 
 import com.dark.tool_neuron.network.HuggingFaceClient
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -13,7 +15,8 @@ data class HuggingFaceExplorerRepo(
     val tags: List<String>
 )
 
-class HuggingFaceExplorerRepository {
+@Singleton
+class HuggingFaceExplorerRepository @Inject constructor() {
 
     suspend fun searchGgufRepositories(query: String, limit: Int = 20): Result<List<HuggingFaceExplorerRepo>> = withContext(Dispatchers.IO) {
         try {

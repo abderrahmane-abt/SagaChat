@@ -170,7 +170,7 @@ fun ActionButton(
 fun MultiActionButton(
     actions: List<ActionItem>,
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(6.dp),
+    shape: Shape = RoundedCornerShape(Standards.RadiusSm),
     containerColor: Color = MaterialTheme.colorScheme.primary.copy(0.06f),
     contentColor: Color = MaterialTheme.colorScheme.primary,
     dividerColor: Color = MaterialTheme.colorScheme.outline.copy(0.3f)
@@ -246,7 +246,7 @@ fun ActionTextButton(
         containerColor = MaterialTheme.colorScheme.primary.copy(0.06f),
         contentColor = MaterialTheme.colorScheme.primary
     ),
-    shape: Shape = RoundedCornerShape(6.dp)
+    shape: Shape = RoundedCornerShape(Standards.RadiusSm)
 ) {
     FilledTonalButton(
         onClick = onClickListener,
@@ -274,7 +274,7 @@ fun ActionTextButton(
         containerColor = MaterialTheme.colorScheme.primary.copy(0.06f),
         contentColor = MaterialTheme.colorScheme.primary
     ),
-    shape: Shape = RoundedCornerShape(6.dp),
+    shape: Shape = RoundedCornerShape(Standards.RadiusSm),
     enabled: Boolean = true
 ) {
     FilledTonalButton(
@@ -373,7 +373,7 @@ fun ActionSwitch(
     width: Dp = 52.dp,
     height: Dp = Standards.ActionIconSize,
     thumbSize: Dp = 22.dp,
-    shape: Shape = RoundedCornerShape(8.dp)
+    shape: Shape = RoundedCornerShape(Standards.RadiusMd)
 ) {
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -429,8 +429,8 @@ fun ActionSwitch(
                 .offset(x = thumbOffset)
                 .size(thumbSize)
                 .scale(thumbScale)
-                .background(thumbColor, RoundedCornerShape(6.dp))
-                .border(1.dp, trackColor.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
+                .background(thumbColor, RoundedCornerShape(Standards.RadiusSm))
+                .border(1.dp, trackColor.copy(alpha = 0.15f), RoundedCornerShape(Standards.RadiusSm))
         )
     }
 }
@@ -475,7 +475,7 @@ fun <T> ActionToggleGroup(
             .height(Standards.ActionIconSize)
             .onSizeChanged { containerWidth.intValue = it.width },
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f),
-        shape = RoundedCornerShape(6.dp)
+        shape = RoundedCornerShape(Standards.RadiusSm)
     ) {
         Box {
             // Sliding indicator
@@ -488,7 +488,7 @@ fun <T> ActionToggleGroup(
                         .height(Standards.ActionIconSize - 4.dp)
                         .background(
                             MaterialTheme.colorScheme.primary,
-                            RoundedCornerShape(4.dp)
+                            RoundedCornerShape(Standards.SpacingXs)
                         )
                 )
             }
@@ -517,7 +517,7 @@ fun <T> ActionToggleGroup(
                         modifier = Modifier
                             .weight(1f)
                             .height(Standards.ActionIconSize)
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(RoundedCornerShape(Standards.SpacingXs))
                             .clickable(
                                 enabled = enabled,
                                 interactionSource = remember { MutableInteractionSource() },

@@ -22,7 +22,6 @@ add_link_options(
 add_link_options($<$<NOT:$<CONFIG:Debug>>:-flto>)
 
 add_library(${CMAKE_PROJECT_NAME} SHARED
-    file_ops.cpp
     path_guard.cpp
     io_engine.cpp
 )

@@ -8,9 +8,7 @@ import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.models.messages.RagResultItem
 import com.dark.tool_neuron.models.messages.Role
 import com.dark.tool_neuron.models.messages.ToolChainStepData
-import com.dark.tool_neuron.models.vault.ChatExport
 import com.dark.tool_neuron.models.vault.ChatInfo
-import com.dark.tool_neuron.models.vault.MessageSearchResult
 import com.dark.tool_neuron.state.AppStateManager
 import com.dark.tool_neuron.models.engine_schema.DecodingMetrics
 import kotlinx.coroutines.Dispatchers
@@ -148,35 +146,6 @@ class ChatManager {
     suspend fun deleteChat(chatId: String): Result<Unit> = withContext(Dispatchers.IO) {
         withUmsReady {
             chatRepo.deleteChat(chatId)
-        }
-    }
-
-    suspend fun searchMessages(query: String): Result<List<Messages>> =
-        withContext(Dispatchers.IO) {
-            withUmsReady {
-                val results = chatRepo.searchMessages(query)
-                results.map { it.message }
-            }
-        }
-
-    suspend fun exportChat(chatId: String, exportPath: String): Result<Unit> =
-        withContext(Dispatchers.IO) {
-            withUmsReady {
-                val export = chatRepo.exportChat(chatId)
-                val jsonString = kotlinx.serialization.json.Json.encodeToString(
-                    ChatExport.serializer(), export
-                )
-                java.io.File(exportPath).writeText(jsonString)
-            }
-        }
-
-    suspend fun importChat(importPath: String): Result<String> = withContext(Dispatchers.IO) {
-        withUmsReady {
-            val jsonString = java.io.File(importPath).readText()
-            val export = kotlinx.serialization.json.Json.decodeFromString(
-                ChatExport.serializer(), jsonString
-            )
-            chatRepo.importChat(export)
         }
     }
 

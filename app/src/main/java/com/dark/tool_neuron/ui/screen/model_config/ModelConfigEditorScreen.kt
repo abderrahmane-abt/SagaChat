@@ -160,8 +160,8 @@ fun ModelConfigEditorScreen(
             // Loading overlay
             AnimatedVisibility(
                 visible = isLoading,
-                enter = fadeIn(),
-                exit = fadeOut()
+                enter = fadeIn(Motion.entrance()),
+                exit = fadeOut(Motion.exit())
             ) {
                 LoadingOverlay()
             }
@@ -169,17 +169,17 @@ fun ModelConfigEditorScreen(
             // Save success message
             AnimatedVisibility(
                 visible = saveSuccess,
-                enter = fadeIn() + slideInVertically(
+                enter = fadeIn(Motion.entrance()) + slideInVertically(
                     initialOffsetY = { it },
                     animationSpec = Motion.interactive()
                 ),
-                exit = fadeOut() + slideOutVertically(
+                exit = fadeOut(Motion.exit()) + slideOutVertically(
                     targetOffsetY = { it },
                     animationSpec = Motion.exit()
                 ),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 32.dp)
+                    .padding(bottom = Standards.SpacingXxl)
             ) {
                 SuccessMessage()
             }
@@ -203,12 +203,12 @@ private fun ModelListPanel(
                 text = "Models (${models.size})",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(16.dp)
+                modifier = Modifier.padding(Standards.SpacingLg)
             )
 
             LazyColumn(
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                contentPadding = PaddingValues(horizontal = Standards.SpacingSm, vertical = Standards.SpacingSm),
+                verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
             ) {
                 items(models, key = { it.id }) { model ->
                     ModelListItem(
@@ -240,15 +240,15 @@ private fun ModelListItem(
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(Standards.RadiusLg),
         color = backgroundColor,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
-                .padding(12.dp)
+                .padding(Standards.SpacingMd)
                 .fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingMd),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -299,7 +299,7 @@ private fun ConfigEditorPanel(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.padding(16.dp)
+        modifier = modifier.padding(Standards.SpacingLg)
     ) {
         // Header
         Row(
@@ -321,12 +321,12 @@ private fun ConfigEditorPanel(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(Standards.SpacingLg))
 
         // Config content based on model type
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(Standards.SpacingLg)
         ) {
             item {
                 when (model.providerType) {
@@ -365,18 +365,18 @@ private fun GgufConfigEditor(viewModel: ModelConfigEditorViewModel) {
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingLg)) {
         ConfigSection("Loading Parameters") {
             AnimatedVisibility(
                 visible = loadingLocked,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
+                enter = Motion.Enter,
+                exit = Motion.Exit
             ) {
                 Text(
                     text = "Managed by Performance Mode \u2014 disable Hardware Tuning in Settings to edit",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    modifier = Modifier.padding(bottom = Standards.SpacingSm)
                 )
             }
 
@@ -493,7 +493,7 @@ private fun DiffusionConfigEditor(viewModel: ModelConfigEditorViewModel) {
     val diffusionConfig by viewModel.diffusionConfig.collectAsStateWithLifecycle()
     val inferenceParams by viewModel.diffusionInferenceParams.collectAsStateWithLifecycle()
 
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingLg)) {
         ConfigSection("Model Configuration") {
             IntField(
                 label = "Text Embedding Size",
@@ -569,7 +569,7 @@ private fun DiffusionConfigEditor(viewModel: ModelConfigEditorViewModel) {
             )
 
             // Scheduler dropdown
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)) {
                 Text(
                     text = "Scheduler",
                     style = MaterialTheme.typography.bodyMedium,
@@ -578,7 +578,7 @@ private fun DiffusionConfigEditor(viewModel: ModelConfigEditorViewModel) {
 
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
                 ) {
                     listOf("dpm", "euler", "euler_a", "ddim", "pndm").forEach { scheduler ->
                         FilterChip(
@@ -628,7 +628,7 @@ private fun ConfigSection(
     title: String,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingMd)) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleSmall,
@@ -637,12 +637,12 @@ private fun ConfigSection(
         )
 
         Surface(
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(Standards.RadiusLg),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                modifier = Modifier.padding(Standards.SpacingLg),
+                verticalArrangement = Arrangement.spacedBy(Standards.SpacingMd)
             ) {
                 content()
             }
@@ -663,7 +663,7 @@ private fun IntField(
     val alpha = if (enabled) 1f else 0.5f
     Column(
         modifier = Modifier.alpha(alpha),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -686,14 +686,14 @@ private fun IntField(
             }
 
             Surface(
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(Standards.RadiusMd),
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
             ) {
                 Text(
                     text = value.toString(),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    modifier = Modifier.padding(horizontal = Standards.SpacingMd, vertical = 6.dp)
                 )
             }
         }
@@ -717,7 +717,7 @@ private fun FloatField(
     step: Float,
     description: String? = null
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -739,14 +739,14 @@ private fun FloatField(
             }
 
             Surface(
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(Standards.RadiusMd),
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
             ) {
                 Text(
                     text = "%.2f".format(value),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    modifier = Modifier.padding(horizontal = Standards.SpacingMd, vertical = 6.dp)
                 )
             }
         }
@@ -806,7 +806,7 @@ private fun TextField(
     multiline: Boolean = false,
     minLines: Int = 1
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
@@ -819,7 +819,7 @@ private fun TextField(
             modifier = Modifier.fillMaxWidth(),
             minLines = if (multiline) minLines else 1,
             maxLines = if (multiline) 6 else 1,
-            shape = RoundedCornerShape(8.dp)
+            shape = RoundedCornerShape(Standards.RadiusMd)
         )
     }
 }
@@ -832,7 +832,7 @@ private fun EmptyModelsState() {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(Standards.SpacingLg)
         ) {
             Icon(
                 imageVector = TnIcons.Sparkles,
@@ -862,7 +862,7 @@ private fun EmptySelectionState(modifier: Modifier = Modifier) {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(Standards.SpacingMd)
         ) {
             Icon(
                 imageVector = TnIcons.Settings,
@@ -895,13 +895,13 @@ private fun LoadingOverlay() {
 @Composable
 private fun SuccessMessage() {
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(Standards.RadiusLg),
         color = MaterialTheme.colorScheme.primaryContainer,
         shadowElevation = 8.dp
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = Standards.SpacingMd),
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingMd),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(

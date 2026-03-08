@@ -57,6 +57,7 @@ import com.dark.tool_neuron.models.table_schema.InstalledRag
 import com.dark.tool_neuron.models.table_schema.RagSourceType
 import com.dark.tool_neuron.models.table_schema.RagStatus
 import com.dark.tool_neuron.ui.icons.TnIcons
+import com.dark.tool_neuron.global.Standards
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -86,7 +87,7 @@ fun RagOverlayBottomSheet(
             dragHandle = {
                 Box(
                     Modifier
-                        .padding(vertical = 12.dp)
+                        .padding(vertical = Standards.SpacingMd)
                         .width(40.dp)
                         .height(4.dp)
                         .clip(RoundedCornerShape(2.dp))
@@ -98,7 +99,7 @@ fun RagOverlayBottomSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 500.dp)
-                    .padding(bottom = 16.dp)
+                    .padding(bottom = Standards.SpacingLg)
             ) {
                 // Header
                 RagOverlayHeader(
@@ -108,7 +109,7 @@ fun RagOverlayBottomSheet(
                     onInstallRag = onInstallRag
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(Standards.SpacingSm))
 
                 // Tabs
                 SecondaryTabRow(
@@ -128,7 +129,7 @@ fun RagOverlayBottomSheet(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(Standards.SpacingSm))
 
                 // Content
                 when (selectedTab) {
@@ -184,13 +185,13 @@ private fun RagOverlayHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = Standards.SpacingLg),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
             SectionHeader(title = "RAG Management") {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Standards.SpacingXs)) {
                     InfoBadge(
                         text = "$loadedCount active",
                         containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
@@ -205,12 +206,12 @@ private fun RagOverlayHeader(
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)) {
             ActionTextButton(
                 onClickListener = onOpenRagActivity,
                 icon = TnIcons.Plus,
                 text = "Create",
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(Standards.RadiusLg)
             )
         }
     }
@@ -224,7 +225,7 @@ private fun EmptyRagState(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(32.dp),
+            .padding(Standards.SpacingXxl),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -234,13 +235,13 @@ private fun EmptyRagState(
             modifier = Modifier.size(48.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
         )
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(Standards.SpacingLg))
         Text(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(Standards.SpacingSm))
         Text(
             text = suggestion,
             style = MaterialTheme.typography.bodySmall,
@@ -261,8 +262,8 @@ private fun RagList(
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        contentPadding = PaddingValues(horizontal = Standards.SpacingLg, vertical = Standards.SpacingSm),
+        verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
     ) {
         items(rags, key = { it.id }) { rag ->
             RagListItem(
@@ -301,12 +302,12 @@ private fun RagListItem(
                 else -> MaterialTheme.colorScheme.surfaceVariant
             }
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(Standards.RadiusLg)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp)
+                .padding(Standards.SpacingMd)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -323,7 +324,7 @@ private fun RagListItem(
                         modifier = Modifier.size(24.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(Standards.SpacingSm))
                     Column {
                         Text(
                             text = rag.name,
@@ -343,7 +344,7 @@ private fun RagListItem(
                 // Status indicator and controls
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(Standards.SpacingXs)
                 ) {
                     when (rag.status) {
                         RagStatus.LOADED -> {
@@ -382,7 +383,7 @@ private fun RagListItem(
             }
 
             if (rag.description.isNotBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(Standards.SpacingXs))
                 Text(
                     text = rag.description,
                     style = MaterialTheme.typography.bodySmall,
@@ -393,8 +394,8 @@ private fun RagListItem(
             }
 
             if (rag.getTagsList().isNotEmpty()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Spacer(modifier = Modifier.height(Standards.SpacingXs))
+                Row(horizontalArrangement = Arrangement.spacedBy(Standards.SpacingXs)) {
                     rag.getTagsList().take(3).forEach { tag ->
                         RagTag(tag = tag)
                     }
@@ -409,9 +410,9 @@ private fun RagListItem(
             }
 
             // Action row
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(Standards.SpacingSm))
             HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f))
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(Standards.SpacingSm))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -424,7 +425,7 @@ private fun RagListItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)) {
                     if (showLoadButton) {
                         when (rag.status) {
                             RagStatus.LOADED -> {
@@ -432,14 +433,14 @@ private fun RagListItem(
                                     onClickListener = onUnload,
                                     icon = TnIcons.X,
                                     text = "Unload",
-                                    shape = RoundedCornerShape(12.dp)
+                                    shape = RoundedCornerShape(Standards.RadiusLg)
                                 )
                             }
                             RagStatus.LOADING -> {
                                 Box(
                                     modifier = Modifier
                                         .size(32.dp)
-                                        .padding(4.dp)
+                                        .padding(Standards.SpacingXs)
                                 ) {
                                     LoadingIndicator(
                                         modifier = Modifier.fillMaxSize()
@@ -451,7 +452,7 @@ private fun RagListItem(
                                     onClickListener = onLoad,
                                     icon = TnIcons.Download,
                                     text = "Load",
-                                    shape = RoundedCornerShape(12.dp)
+                                    shape = RoundedCornerShape(Standards.RadiusLg)
                                 )
                             }
                         }

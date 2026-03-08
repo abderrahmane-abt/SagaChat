@@ -227,14 +227,6 @@ class GGUFEngine {
         }
     }
 
-    fun setGrammarMode(mode: Int) {
-        // Grammar mode is applied via enableToolCallingDirect() with ToolCallingConfig
-    }
-
-    fun setTypedGrammar(enabled: Boolean) {
-        // Typed grammar is applied via enableToolCallingDirect() with ToolCallingConfig
-    }
-
     // ── Persona Engine ──
 
     fun updateSamplerParams(paramsJson: String): Boolean {
@@ -299,8 +291,6 @@ class GGUFEngine {
             } catch (_: Exception) { }
         }
     }
-
-    fun hasToolsEnabled(): Boolean = !currentToolsJson.isNullOrEmpty()
 
     // ── New Optimizations ──
 

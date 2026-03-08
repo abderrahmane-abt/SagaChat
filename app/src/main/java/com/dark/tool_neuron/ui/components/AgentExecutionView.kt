@@ -17,6 +17,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.models.messages.ToolChainStepData
 import com.dark.tool_neuron.viewmodel.AgentPhase
 import com.dark.tool_neuron.ui.icons.TnIcons
@@ -49,7 +50,7 @@ fun AgentExecutionView(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = Standards.SpacingMd),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         // Header
@@ -57,19 +58,19 @@ fun AgentExecutionView(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { isExpanded = !isExpanded },
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(Standards.RadiusMd),
             color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f),
             tonalElevation = 1.dp
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                    .padding(horizontal = 10.dp, vertical = Standards.SpacingSm),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -127,7 +128,7 @@ fun AgentExecutionView(
         ) {
             Column(
                 modifier = Modifier.clickable { showDetailDialog = true },
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(Standards.SpacingXs)
             ) {
                 // Phase 1: Plan
                 if (plan != null) {
@@ -165,7 +166,7 @@ private fun PlanSection(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(Standards.RadiusMd),
         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
     ) {
         Column(
@@ -211,7 +212,7 @@ private fun ExecutionSection(
     currentStep: Int
 ) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+        verticalArrangement = Arrangement.spacedBy(Standards.SpacingXxs)
     ) {
         steps.forEachIndexed { index, step ->
             ExecutionStepRow(
@@ -239,14 +240,14 @@ private fun ExecutionStepRow(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(Standards.RadiusMd),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm),
             verticalAlignment = Alignment.Top
         ) {
             // Status icon
@@ -282,7 +283,7 @@ private fun ExecutionStepRow(
 
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(Standards.SpacingXs)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -315,7 +316,7 @@ private fun ExecutionStepRow(
                 // Result preview
                 if (step.result.isNotBlank()) {
                     Surface(
-                        shape = RoundedCornerShape(4.dp),
+                        shape = RoundedCornerShape(Standards.SpacingXs),
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
                     ) {
                         Text(
@@ -365,14 +366,14 @@ private fun ExecutingLoadingRow() {
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(Standards.RadiusMd),
         color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.2f)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -400,7 +401,7 @@ private fun SummarySection(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(Standards.RadiusMd),
         color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.2f)
     ) {
         Column(

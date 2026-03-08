@@ -12,10 +12,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import java.util.concurrent.ConcurrentHashMap
 import com.dark.tool_neuron.models.data.HuggingFaceModel
 import com.dark.tool_neuron.models.data.ModelType
-import org.json.JSONArray
+import java.util.concurrent.ConcurrentHashMap
 import org.json.JSONObject
 
 object PluginManager {
@@ -78,7 +77,6 @@ object PluginManager {
 
     // Bypass model check for tool calling
     private val _toolCallingBypassEnabled = MutableStateFlow(false)
-    val toolCallingBypassEnabled: StateFlow<Boolean> = _toolCallingBypassEnabled.asStateFlow()
 
     /**
      * Set whether to bypass the tool calling model check.
@@ -321,22 +319,18 @@ object PluginManager {
     }
 
     /**
-     * Check if a plugin is enabled
-     */
-    fun isPluginEnabled(pluginName: String): Boolean {
-        return _enabledPluginNames.value.contains(pluginName)
-    }
-
-    /**
      * Get tool definitions for all enabled plugins (cached)
      */
     fun getEnabledToolDefinitions(): List<ToolDefinitionBuilder> {
         _cachedEnabledToolDefs?.let { return it }
-        val defs = _enabledPluginNames.value.flatMap { pluginName ->
-            _plugins[pluginName]?.getPluginInfo()?.toolDefinitionBuilder ?: emptyList()
+        synchronized(this) {
+            _cachedEnabledToolDefs?.let { return it }
+            val defs = _enabledPluginNames.value.flatMap { pluginName ->
+                _plugins[pluginName]?.getPluginInfo()?.toolDefinitionBuilder ?: emptyList()
+            }
+            _cachedEnabledToolDefs = defs
+            return defs
         }
-        _cachedEnabledToolDefs = defs
-        return defs
     }
 
     /**
@@ -369,7 +363,7 @@ object PluginManager {
 
         val pluginInfo = plugin.getPluginInfo()
 
-        if (!isPluginEnabled(pluginInfo.name)) {
+        if (!_enabledPluginNames.value.contains(pluginInfo.name)) {
             return MultiTurnToolResult(
                 toolName = toolCall.name,
                 resultJson = """{"error": "Plugin not enabled: ${pluginInfo.name}"}""",

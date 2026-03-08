@@ -93,11 +93,6 @@ class UmsChatRepository(private val ums: UnifiedMemorySystem) {
         message.msgId
     }
 
-    suspend fun getMessage(messageId: String): Messages? = withContext(Dispatchers.IO) {
-        ums.queryString(messages, Tags.Message.MSG_ID, messageId)
-            .firstOrNull()?.toMessages()
-    }
-
     suspend fun updateMessage(chatId: String, message: Messages): Boolean = withContext(Dispatchers.IO) {
         val existing = ums.queryString(messages, Tags.Message.MSG_ID, message.msgId)
             .firstOrNull() ?: return@withContext false
@@ -122,16 +117,6 @@ class UmsChatRepository(private val ums: UnifiedMemorySystem) {
                 .takeLast(limit)
         }
 
-    suspend fun getMessagesForChatPaged(
-        chatId: String, fromTime: Long? = null, toTime: Long? = null, limit: Int = 50
-    ): List<Messages> = withContext(Dispatchers.IO) {
-        var result = ums.queryString(messages, Tags.Message.CHAT_ID, chatId)
-            .map { it.toMessages() }
-        if (fromTime != null) result = result.filter { (it.timestamp ?: 0L) >= fromTime }
-        if (toTime != null) result = result.filter { (it.timestamp ?: Long.MAX_VALUE) <= toTime }
-        result.sortedBy { it.timestamp ?: 0L }.takeLast(limit)
-    }
-
     // ── Search ──
 
     suspend fun searchMessages(query: String): List<MessageSearchResult> = withContext(Dispatchers.IO) {
@@ -143,23 +128,7 @@ class UmsChatRepository(private val ums: UnifiedMemorySystem) {
             }
     }
 
-    suspend fun searchInChat(chatId: String, query: String): List<Messages> = withContext(Dispatchers.IO) {
-        val lower = query.lowercase()
-        getMessagesForChat(chatId)
-            .filter { it.content.content.lowercase().contains(lower) }
-    }
-
     // ── Statistics ──
-
-    suspend fun getMessageCount(chatId: String): Int = withContext(Dispatchers.IO) {
-        ums.queryString(messages, Tags.Message.CHAT_ID, chatId).size
-    }
-
-    suspend fun getLastMessageTime(chatId: String): Long? = withContext(Dispatchers.IO) {
-        ums.queryString(messages, Tags.Message.CHAT_ID, chatId)
-            .mapNotNull { it.getTimestamp(Tags.Message.TIMESTAMP) }
-            .maxOrNull()
-    }
 
     suspend fun getVaultStats(): VaultStatistics = withContext(Dispatchers.IO) {
         val allMsgs = ums.getAll(messages)

@@ -33,65 +33,10 @@ class UmsKnowledgeRepository(private val ums: UnifiedMemorySystem) {
         ums.put(entities, entity.toRecord())
     }
 
-    suspend fun updateEntity(entity: KnowledgeEntity) = withContext(Dispatchers.IO) {
-        val existing = findEntityRecordId(entity.id) ?: return@withContext
-        ums.put(entities, entity.toRecord(existing))
-    }
-
-    suspend fun deleteEntity(entity: KnowledgeEntity) = withContext(Dispatchers.IO) {
-        val recordId = findEntityRecordId(entity.id) ?: return@withContext
-        ums.delete(entities, recordId)
-    }
-
-    suspend fun getAllEntities(): List<KnowledgeEntity> = withContext(Dispatchers.IO) {
-        ums.getAll(entities).map { it.toKnowledgeEntity() }
-            .sortedByDescending { it.lastSeen }
-    }
-
-    suspend fun getEntityById(id: String): KnowledgeEntity? = withContext(Dispatchers.IO) {
-        ums.queryString(entities, Tags.KgEntity.ENTITY_ID, id)
-            .firstOrNull()?.toKnowledgeEntity()
-    }
-
-    suspend fun getEntityByName(name: String): KnowledgeEntity? = withContext(Dispatchers.IO) {
-        ums.getAll(entities).map { it.toKnowledgeEntity() }
-            .firstOrNull { it.name.equals(name, ignoreCase = true) }
-    }
-
-    suspend fun getEntitiesByType(type: EntityType): List<KnowledgeEntity> = withContext(Dispatchers.IO) {
-        ums.queryString(entities, Tags.KgEntity.TYPE, type.name)
-            .map { it.toKnowledgeEntity() }
-            .sortedByDescending { it.mentionCount }
-    }
-
-    suspend fun searchEntitiesByName(query: String): List<KnowledgeEntity> = withContext(Dispatchers.IO) {
-        val lower = query.lowercase()
-        ums.getAll(entities).map { it.toKnowledgeEntity() }
-            .filter { it.name.lowercase().contains(lower) }
-    }
-
-    suspend fun entityCount(): Int = withContext(Dispatchers.IO) {
-        ums.count(entities)
-    }
-
-    suspend fun deleteAllEntities() = withContext(Dispatchers.IO) {
-        ums.getAll(entities).forEach { ums.delete(entities, it.id) }
-    }
-
     // ── Relation CRUD ──
 
     suspend fun insertRelation(relation: KnowledgeRelation) = withContext(Dispatchers.IO) {
         ums.put(relations, relation.toRecord())
-    }
-
-    suspend fun updateRelation(relation: KnowledgeRelation) = withContext(Dispatchers.IO) {
-        val existing = findRelationRecordId(relation.id) ?: return@withContext
-        ums.put(relations, relation.toRecord(existing))
-    }
-
-    suspend fun deleteRelation(relation: KnowledgeRelation) = withContext(Dispatchers.IO) {
-        val recordId = findRelationRecordId(relation.id) ?: return@withContext
-        ums.delete(relations, recordId)
     }
 
     suspend fun getAllRelations(): List<KnowledgeRelation> = withContext(Dispatchers.IO) {
@@ -99,69 +44,6 @@ class UmsKnowledgeRepository(private val ums: UnifiedMemorySystem) {
             .sortedByDescending { it.createdAt }
     }
 
-    suspend fun getSubjectRelations(entityId: String): List<KnowledgeRelation> = withContext(Dispatchers.IO) {
-        ums.queryString(relations, Tags.KgRelation.SUBJECT_ID, entityId)
-            .map { it.toKnowledgeRelation() }
-    }
-
-    suspend fun getObjectRelations(entityId: String): List<KnowledgeRelation> = withContext(Dispatchers.IO) {
-        ums.queryString(relations, Tags.KgRelation.OBJECT_ID, entityId)
-            .map { it.toKnowledgeRelation() }
-    }
-
-    suspend fun getRelationsForEntity(entityId: String): List<KnowledgeRelation> = withContext(Dispatchers.IO) {
-        val subj = ums.queryString(relations, Tags.KgRelation.SUBJECT_ID, entityId)
-        val obj = ums.queryString(relations, Tags.KgRelation.OBJECT_ID, entityId)
-        (subj + obj).distinctBy { it.getString(Tags.KgRelation.ENTITY_ID) }
-            .map { it.toKnowledgeRelation() }
-    }
-
-    suspend fun findRelation(subjectId: String, predicate: String, objectId: String): KnowledgeRelation? =
-        withContext(Dispatchers.IO) {
-            ums.queryString(relations, Tags.KgRelation.SUBJECT_ID, subjectId)
-                .map { it.toKnowledgeRelation() }
-                .firstOrNull { it.predicate == predicate && it.objectId == objectId }
-        }
-
-    suspend fun relationCount(): Int = withContext(Dispatchers.IO) {
-        ums.count(relations)
-    }
-
-    suspend fun deleteAllRelations() = withContext(Dispatchers.IO) {
-        ums.getAll(relations).forEach { ums.delete(relations, it.id) }
-    }
-
-    suspend fun getRelationsForEntityAndPersona(entityId: String, personaId: String): List<KnowledgeRelation> =
-        withContext(Dispatchers.IO) {
-            getRelationsForEntity(entityId)
-                .filter { it.personaId == personaId || it.personaId == null }
-        }
-
-    suspend fun findRelationForPersona(
-        subjectId: String, predicate: String, objectId: String, personaId: String?
-    ): KnowledgeRelation? = withContext(Dispatchers.IO) {
-        ums.queryString(relations, Tags.KgRelation.SUBJECT_ID, subjectId)
-            .map { it.toKnowledgeRelation() }
-            .firstOrNull {
-                it.predicate == predicate && it.objectId == objectId &&
-                    it.personaId == personaId
-            }
-    }
-
-    suspend fun deleteAllRelationsForPersona(personaId: String) = withContext(Dispatchers.IO) {
-        ums.queryString(relations, Tags.KgRelation.PERSONA_ID, personaId)
-            .forEach { ums.delete(relations, it.id) }
-    }
-
-    private fun findEntityRecordId(entityId: String): Int? {
-        return ums.queryString(entities, Tags.KgEntity.ENTITY_ID, entityId)
-            .firstOrNull()?.id?.takeIf { it != 0 }
-    }
-
-    private fun findRelationRecordId(entityId: String): Int? {
-        return ums.queryString(relations, Tags.KgRelation.ENTITY_ID, entityId)
-            .firstOrNull()?.id?.takeIf { it != 0 }
-    }
 }
 
 // ── KnowledgeEntity serialization ──

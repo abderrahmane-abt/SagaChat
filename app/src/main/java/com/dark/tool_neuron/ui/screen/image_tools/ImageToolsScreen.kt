@@ -6,13 +6,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -64,6 +60,7 @@ import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.viewmodel.ImageToolsViewModel
 import com.dark.tool_neuron.viewmodel.ImageToolsViewModel.ImageTool
 import com.dark.tool_neuron.viewmodel.ImageToolsViewModel.ProcessingState
+import com.dark.tool_neuron.global.Standards
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -106,7 +103,7 @@ fun ImageToolsScreen(
                     ActionButton(
                         onClickListener = onNavigateBack,
                         icon = TnIcons.ArrowLeft,
-                        modifier = Modifier.padding(start = 4.dp)
+                        modifier = Modifier.padding(start = Standards.SpacingXs)
                     )
                 }
             )
@@ -124,51 +121,51 @@ fun ImageToolsScreen(
                 onToolSelected = { viewModel.selectTool(it) }
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(Standards.SpacingMd))
 
             // ── Input Image ──
             ImagePickerCard(
                 label = "Input Image",
                 bitmap = inputImage,
                 onPick = { imagePicker.launch("image/*") },
-                modifier = Modifier.padding(horizontal = 16.dp)
+                modifier = Modifier.padding(horizontal = Standards.SpacingLg)
             )
 
             // ── Style Image (only for Style Transfer) ──
             AnimatedVisibility(
                 visible = selectedTool == ImageTool.STYLE_TRANSFER,
-                enter = fadeIn(tween(300)) + expandVertically(tween(300)),
-                exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
+                enter = Motion.Enter,
+                exit = Motion.Exit
             ) {
                 Column {
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(Standards.SpacingMd))
                     ImagePickerCard(
                         label = "Style Image",
                         bitmap = styleImage,
                         onPick = { stylePicker.launch("image/*") },
-                        modifier = Modifier.padding(horizontal = 16.dp)
+                        modifier = Modifier.padding(horizontal = Standards.SpacingLg)
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(Standards.SpacingSm))
                     StyleStrengthSlider(
                         strength = styleStrength,
                         onStrengthChange = { viewModel.setStyleStrength(it) },
-                        modifier = Modifier.padding(horizontal = 16.dp)
+                        modifier = Modifier.padding(horizontal = Standards.SpacingLg)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(Standards.SpacingLg))
 
             // ── Result Image ──
             AnimatedVisibility(
                 visible = resultImage != null,
-                enter = fadeIn(tween(400)) + expandVertically(tween(400)),
-                exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
+                enter = Motion.Enter,
+                exit = Motion.Exit
             ) {
                 resultImage?.let { bitmap ->
                     ResultImageCard(
                         bitmap = bitmap,
-                        modifier = Modifier.padding(horizontal = 16.dp)
+                        modifier = Modifier.padding(horizontal = Standards.SpacingLg)
                     )
                 }
             }
@@ -177,26 +174,26 @@ fun ImageToolsScreen(
             AnimatedVisibility(
                 visible = processingState is ProcessingState.Processing ||
                         processingState is ProcessingState.Loading,
-                enter = fadeIn(tween(300)),
-                exit = fadeOut(tween(200))
+                enter = fadeIn(Motion.entrance()),
+                exit = fadeOut(Motion.exit())
             ) {
                 ProcessingIndicator(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 16.dp)
+                        .padding(vertical = Standards.SpacingLg)
                 )
             }
 
             // ── Error Message ──
             AnimatedVisibility(
                 visible = processingState is ProcessingState.Error,
-                enter = fadeIn(tween(300)) + expandVertically(tween(300)),
-                exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
+                enter = Motion.Enter,
+                exit = Motion.Exit
             ) {
                 if (processingState is ProcessingState.Error) {
                     ErrorCard(
                         message = (processingState as ProcessingState.Error).message,
-                        modifier = Modifier.padding(horizontal = 16.dp)
+                        modifier = Modifier.padding(horizontal = Standards.SpacingLg)
                     )
                 }
             }
@@ -204,8 +201,8 @@ fun ImageToolsScreen(
             // ── Completion Info ──
             AnimatedVisibility(
                 visible = processingState is ProcessingState.Complete,
-                enter = fadeIn(tween(300)),
-                exit = fadeOut(tween(200))
+                enter = fadeIn(Motion.entrance()),
+                exit = fadeOut(Motion.exit())
             ) {
                 if (processingState is ProcessingState.Complete) {
                     val elapsed = (processingState as ProcessingState.Complete).timeMs
@@ -215,13 +212,13 @@ fun ImageToolsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                            .padding(horizontal = Standards.SpacingLg, vertical = Standards.SpacingSm),
                         textAlign = TextAlign.Center
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(Standards.SpacingSm))
 
             // ── Action Button ──
             val isModelReady = toolModelReady[selectedTool] == true
@@ -239,7 +236,7 @@ fun ImageToolsScreen(
                     enabled = hasInput && !isProcessing,
                     isProcessing = isProcessing,
                     onClick = { viewModel.process() },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    modifier = Modifier.padding(horizontal = Standards.SpacingLg, vertical = Standards.SpacingSm)
                 )
             } else {
                 DownloadButton(
@@ -248,15 +245,15 @@ fun ImageToolsScreen(
                     isDownloading = isDownloading,
                     isAvailable = hasDownloadUrl,
                     downloadProgress = if (isDownloading) {
-                        val state = spec?.let { downloadStates[it.id] }
+                        val state = spec.let { downloadStates[it.id] }
                         if (state is ModelDownloadService.DownloadState.Downloading) state.progress else null
                     } else null,
                     onClick = { viewModel.downloadToolModel(selectedTool) },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    modifier = Modifier.padding(horizontal = Standards.SpacingLg, vertical = Standards.SpacingSm)
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(Standards.SpacingXl))
         }
     }
 }
@@ -275,8 +272,8 @@ private fun ToolSelector(
         modifier = modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(horizontal = Standards.SpacingMd),
+        horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
     ) {
         ImageTool.entries.forEach { tool ->
             val isSelected = tool == selectedTool
@@ -286,7 +283,7 @@ private fun ToolSelector(
                 } else {
                     MaterialTheme.colorScheme.surfaceContainerHigh
                 },
-                animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                animationSpec = Motion.content(),
                 label = "chipColor"
             )
 
@@ -335,7 +332,7 @@ private fun ImagePickerCard(
     onPick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(Standards.RadiusXl)
 
     Surface(
         onClick = onPick,
@@ -359,7 +356,7 @@ private fun ImagePickerCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(200.dp)
-                    .padding(24.dp),
+                    .padding(Standards.SpacingXl),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -369,7 +366,7 @@ private fun ImagePickerCard(
                     modifier = Modifier.size(48.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(Standards.SpacingMd))
                 Text(
                     text = "Tap to pick $label",
                     style = MaterialTheme.typography.bodyMedium,
@@ -385,14 +382,14 @@ private fun ResultImageCard(
     bitmap: Bitmap,
     modifier: Modifier = Modifier
 ) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(Standards.RadiusXl)
 
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = "Result",
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier.padding(bottom = Standards.SpacingSm)
         )
 
         Surface(
@@ -457,7 +454,7 @@ private fun ProcessingIndicator(modifier: Modifier = Modifier) {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
         ) {
             LoadingIndicator()
             Text(
@@ -476,12 +473,12 @@ private fun ErrorCard(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(Standards.RadiusLg),
         color = MaterialTheme.colorScheme.errorContainer
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(Standards.SpacingMd),
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -513,7 +510,7 @@ private fun ProcessButton(
     Surface(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(Standards.RadiusXl),
         color = if (enabled) {
             MaterialTheme.colorScheme.primary
         } else {
@@ -524,7 +521,7 @@ private fun ProcessButton(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(Standards.SpacingLg),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -538,7 +535,7 @@ private fun ProcessButton(
                     MaterialTheme.colorScheme.onSurfaceVariant
                 }
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(Standards.SpacingSm))
             Text(
                 text = "Process",
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
@@ -568,7 +565,7 @@ private fun DownloadButton(
         } else {
             MaterialTheme.colorScheme.surfaceContainerHighest
         },
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        animationSpec = Motion.content(),
         label = "dlBtnColor"
     )
     val contentColor = if (isAvailable) {
@@ -580,14 +577,14 @@ private fun DownloadButton(
     Surface(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(Standards.RadiusXl),
         color = containerColor,
         enabled = isAvailable && !isDownloading
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(Standards.SpacingLg),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -597,7 +594,7 @@ private fun DownloadButton(
                 modifier = Modifier.size(20.dp),
                 tint = contentColor
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(Standards.SpacingSm))
             Text(
                 text = when {
                     isDownloading -> "Downloading... ${downloadProgress?.let { "${(it * 100).toInt()}%" } ?: ""}"

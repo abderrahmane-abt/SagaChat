@@ -43,6 +43,7 @@ import com.dark.tool_neuron.models.plugins.PluginInfo
 import com.dark.gguf_lib.toolcalling.ToolCallingConfig
 import kotlin.math.roundToInt
 import com.dark.tool_neuron.ui.icons.TnIcons
+import com.dark.tool_neuron.global.Standards
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,7 +70,7 @@ fun PluginOverlayBottomSheet(
             dragHandle = {
                 Box(
                     Modifier
-                        .padding(vertical = 12.dp)
+                        .padding(vertical = Standards.SpacingMd)
                         .width(40.dp)
                         .height(4.dp)
                         .clip(RoundedCornerShape(2.dp))
@@ -81,7 +82,7 @@ fun PluginOverlayBottomSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 600.dp)
-                    .padding(bottom = 16.dp)
+                    .padding(bottom = Standards.SpacingLg)
             ) {
                 // ── Header ──
                 PluginOverlayHeader(
@@ -89,11 +90,11 @@ fun PluginOverlayBottomSheet(
                     totalCount = plugins.size
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(Standards.SpacingMd))
 
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
                 ) {
                     // ── Config Section ──
                     item {
@@ -107,7 +108,7 @@ fun PluginOverlayBottomSheet(
 
                     item {
                         HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = Standards.SpacingLg, vertical = Standards.SpacingXs),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
                     }
@@ -144,8 +145,8 @@ private fun ToolCallingConfigSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(horizontal = Standards.SpacingLg),
+        verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
     ) {
         SectionHeader(title = "Tool Calling Config")
 
@@ -155,8 +156,8 @@ private fun ToolCallingConfigSection(
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
         ) {
             Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.padding(Standards.SpacingMd),
+                verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
             ) {
                 // Multi-turn toggle
                 SwitchRow(
@@ -172,7 +173,7 @@ private fun ToolCallingConfigSection(
                     enter = Motion.Enter,
                     exit = Motion.Exit
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingXs)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -186,7 +187,7 @@ private fun ToolCallingConfigSection(
                             )
                             Surface(
                                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                                shape = RoundedCornerShape(4.dp)
+                                shape = RoundedCornerShape(Standards.SpacingXs)
                             ) {
                                 Text(
                                     text = "${toolCallingConfig.maxRounds}",
@@ -228,7 +229,7 @@ private fun PluginOverlayHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = Standards.SpacingLg),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -257,7 +258,7 @@ private fun PluginListItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = Standards.SpacingLg),
         colors = CardDefaults.cardColors(
             containerColor = if (isEnabled) {
                 MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
@@ -265,12 +266,12 @@ private fun PluginListItem(
                 MaterialTheme.colorScheme.surfaceVariant
             }
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(Standards.RadiusLg)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp)
+                .padding(horizontal = Standards.SpacingLg, vertical = 6.dp)
         ) {
             // Header Row
             Row(
@@ -319,7 +320,7 @@ private fun PluginListItem(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp)
+                        .padding(top = Standards.SpacingSm)
                 ) {
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 6.dp),
@@ -330,7 +331,7 @@ private fun PluginListItem(
                         text = plugin.description,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        modifier = Modifier.padding(bottom = Standards.SpacingSm)
                     )
 
                     // Tools
@@ -340,14 +341,14 @@ private fun PluginListItem(
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(bottom = 4.dp)
+                            modifier = Modifier.padding(bottom = Standards.SpacingXs)
                         )
 
                         plugin.toolDefinitionBuilder.forEach { tool ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 2.dp)
+                                    .padding(vertical = Standards.SpacingXxs)
                             ) {
                                 Text(
                                     text = "• ",
@@ -383,7 +384,7 @@ private fun EmptyPluginState() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(32.dp),
+            .padding(Standards.SpacingXxl),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -391,7 +392,7 @@ private fun EmptyPluginState() {
             text = "No Plugins Available",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier.padding(bottom = Standards.SpacingSm)
         )
         Text(
             text = "Plugins will appear here once they are registered",

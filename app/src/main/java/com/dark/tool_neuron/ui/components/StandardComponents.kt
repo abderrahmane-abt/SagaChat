@@ -5,19 +5,15 @@ import androidx.compose.animation.animateColorAsState
 import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -25,39 +21,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.global.Standards
 
 // ==================== Text Components ====================
-
-/**
- * Section title text - used for section headers in forms and settings
- */
-@Composable
-fun SectionTitle(
-    text: String,
-    modifier: Modifier = Modifier,
-    color: Color = MaterialTheme.colorScheme.primary
-) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.SemiBold,
-        color = color,
-        modifier = modifier.padding(vertical = Standards.SpacingXs)
-    )
-}
 
 /**
  * Body label text - used for descriptions, labels alongside controls
@@ -167,171 +141,6 @@ fun SwitchRow(
                 onCheckedChange = onCheckedChange,
                 enabled = enabled
             )
-        }
-    }
-}
-
-// ==================== Multi-Toggle Components ====================
-
-/**
- * A group of segmented toggle items in a row.
- * Each item is a labeled toggle chip. Only one can be selected at a time.
- */
-@SuppressLint("ModifierParameter")
-@Composable
-fun <T> SegmentedToggleGroup(
-    items: List<T>,
-    selectedItem: T,
-    onItemSelected: (T) -> Unit,
-    itemLabel: (T) -> String,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-        shape = RoundedCornerShape(Standards.CardSmallCornerRadius)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(Standards.SpacingXs),
-            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingXs)
-        ) {
-            items.forEach { item ->
-                val isSelected = item == selectedItem
-                SegmentedToggleItem(
-                    label = itemLabel(item),
-                    isSelected = isSelected,
-                    enabled = enabled,
-                    onClick = { onItemSelected(item) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SegmentedToggleItem(
-    label: String,
-    isSelected: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val backgroundColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primary
-        else Color.Transparent,
-        animationSpec = Motion.state(),
-        label = "segBg"
-    )
-
-    val contentColor by animateColorAsState(
-        targetValue = when {
-            !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-            isSelected -> MaterialTheme.colorScheme.onPrimary
-            else -> MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        animationSpec = Motion.state(),
-        label = "segContent"
-    )
-
-    Surface(
-        modifier = modifier
-            .height(Standards.ToggleGroupHeight)
-            .clip(RoundedCornerShape(Standards.CardSmallCornerRadius - 2.dp))
-            .clickable(
-                enabled = enabled,
-                role = Role.Tab,
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            ),
-        color = backgroundColor,
-        shape = RoundedCornerShape(Standards.CardSmallCornerRadius - 2.dp)
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Standards.SpacingSm)
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                color = contentColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-/**
- * Multi-select toggle row - allows multiple items to be selected.
- */
-@SuppressLint("ModifierParameter")
-@Composable
-fun <T> MultiToggleRow(
-    items: List<T>,
-    selectedItems: Set<T>,
-    onItemToggle: (T) -> Unit,
-    itemLabel: (T) -> String,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
-    ) {
-        items.forEach { item ->
-            val isSelected = selectedItems.contains(item)
-
-            val backgroundColor by animateColorAsState(
-                targetValue = if (isSelected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                animationSpec = Motion.state(),
-                label = "multiToggleBg"
-            )
-
-            val contentColor by animateColorAsState(
-                targetValue = when {
-                    !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    isSelected -> MaterialTheme.colorScheme.onPrimary
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                animationSpec = Motion.state(),
-                label = "multiToggleContent"
-            )
-
-            Surface(
-                modifier = Modifier
-                    .height(Standards.ToggleGroupHeight)
-                    .clip(RoundedCornerShape(Standards.CardSmallCornerRadius))
-                    .clickable(
-                        enabled = enabled,
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { onItemToggle(item) }
-                    ),
-                color = backgroundColor,
-                shape = RoundedCornerShape(Standards.CardSmallCornerRadius)
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.padding(horizontal = Standards.SpacingMd)
-                ) {
-                    Text(
-                        text = itemLabel(item),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                        color = contentColor,
-                        maxLines = 1
-                    )
-                }
-            }
         }
     }
 }

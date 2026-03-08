@@ -69,7 +69,7 @@ fun ModeToggleSwitch(
                     .offset(x = thumbOffset + 2.dp)
                     .align(Alignment.CenterStart)
                     .size(Standards.ActionIconSize)
-                    .padding(2.dp)
+                    .padding(Standards.SpacingXxs)
                     .clip(RoundedCornerShape(Standards.ActionIconRoundedSize - 2.dp))
                     .background(MaterialTheme.colorScheme.primary)
             )
@@ -78,7 +78,7 @@ fun ModeToggleSwitch(
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(2.dp),
+                    .padding(Standards.SpacingXxs),
                 horizontalArrangement = Arrangement.spacedBy(Standards.ActionIconSpace),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -152,7 +152,7 @@ private fun IconButton(
             contentDescription = contentDescription,
             tint = iconTint,
             modifier = Modifier
-                .padding(2.dp)
+                .padding(Standards.SpacingXxs)
                 .scale(scale)
         )
     }

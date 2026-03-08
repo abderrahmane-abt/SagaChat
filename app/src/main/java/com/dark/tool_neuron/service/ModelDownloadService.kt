@@ -33,13 +33,14 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipInputStream
 
 class ModelDownloadService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val downloadJobs = mutableMapOf<String, Job>()
+    private val downloadJobs = ConcurrentHashMap<String, Job>()
     private var notificationIdCounter = NOTIFICATION_ID
 
     private val notificationManager by lazy {
@@ -361,7 +362,7 @@ class ModelDownloadService : Service() {
                     throw Exception("Download failed with code: ${response.code}")
                 }
 
-                val body = response.body ?: throw Exception("Empty response body")
+                val body = response.body
                 val totalBytes = body.contentLength()
                 var downloadedBytes = 0L
                 var lastUpdateTime = 0L
@@ -467,6 +468,9 @@ class ModelDownloadService : Service() {
                         ))
 
                         val file = File(destDir, fileName)
+                        require(file.canonicalPath.startsWith(destDir.canonicalPath + File.separator)) {
+                            "Zip entry path traversal detected: ${entry.name}"
+                        }
                         FileOutputStream(file).buffered().use { output ->
                             zis.copyTo(output)
                         }

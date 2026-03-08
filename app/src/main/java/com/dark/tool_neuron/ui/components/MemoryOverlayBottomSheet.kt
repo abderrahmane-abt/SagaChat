@@ -47,7 +47,7 @@ fun MemoryOverlayBottomSheet(
             dragHandle = {
                 Box(
                     Modifier
-                        .padding(vertical = 12.dp)
+                        .padding(vertical = Standards.SpacingMd)
                         .width(40.dp)
                         .height(4.dp)
                         .clip(RoundedCornerShape(2.dp))

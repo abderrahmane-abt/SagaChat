@@ -33,7 +33,6 @@ object DocumentParser {
         const val XLS = "application/vnd.ms-excel"
         const val DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         const val DOC = "application/msword"
-        const val TXT = "text/plain"
     }
 
     /**
@@ -63,7 +62,7 @@ object DocumentParser {
                     MimeTypes.XLS -> parseXls(inputStream)
                     MimeTypes.DOCX -> parseDocx(inputStream)
                     MimeTypes.DOC -> parseDoc(inputStream)
-                    MimeTypes.TXT -> parsePlainText(inputStream)
+                    "text/plain" -> parsePlainText(inputStream)
                     else -> {
                         // Try to infer from file extension
                         val fileName = uri.lastPathSegment ?: ""
@@ -314,23 +313,9 @@ object DocumentParser {
             MimeTypes.EPUB -> "EPUB"
             MimeTypes.XLSX, MimeTypes.XLS -> "Excel"
             MimeTypes.DOCX, MimeTypes.DOC -> "Word"
-            MimeTypes.TXT -> "Text"
+            "text/plain" -> "Text"
             else -> "Document"
         }
     }
 
-    /**
-     * Check if a MIME type is supported
-     */
-    fun isSupportedMimeType(mimeType: String?): Boolean {
-        return mimeType in listOf(
-            MimeTypes.PDF,
-            MimeTypes.EPUB,
-            MimeTypes.XLSX,
-            MimeTypes.XLS,
-            MimeTypes.DOCX,
-            MimeTypes.DOC,
-            MimeTypes.TXT
-        )
-    }
 }

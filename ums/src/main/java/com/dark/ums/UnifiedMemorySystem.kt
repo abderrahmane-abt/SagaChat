@@ -222,19 +222,14 @@ class UmsRecord internal constructor(internal val data: ByteArray) {
         return java.lang.Float.intBitsToFloat(bits)
     }
 
-    // check if a tag exists in this record
-    fun hasField(tag: Int): Boolean = fields.containsKey(tag)
 }
 
 class UnifiedMemorySystem {
 
-    private external fun nativeCreate(basePath: String, appKey: ByteArray, userKey: ByteArray): Boolean
-    private external fun nativeOpen(basePath: String, appKey: ByteArray, userKey: ByteArray): Boolean
     private external fun nativeExists(basePath: String): Boolean
     private external fun nativeClose()
     private external fun nativeEnsureCollection(name: String): Boolean
     private external fun nativePut(collection: String, recordData: ByteArray): Int
-    private external fun nativeGet(collection: String, recordId: Int): ByteArray?
     private external fun nativeDelete(collection: String, recordId: Int): Boolean
     private external fun nativeCount(collection: String): Int
     private external fun nativeGetAll(collection: String): Array<ByteArray>?
@@ -246,15 +241,6 @@ class UnifiedMemorySystem {
     private external fun nativeSetFlags(flags: Int): Boolean
     private external fun nativeAddIndex(collection: String, tag: Int, wireType: Int): Boolean
     private external fun nativeQueryString(collection: String, tag: Int, value: String): Array<ByteArray>?
-    private external fun nativeQueryInt(collection: String, tag: Int, value: Long): Array<ByteArray>?
-    private external fun nativeQueryRange(collection: String, tag: Int, minVal: Long, maxVal: Long): Array<ByteArray>?
-
-    fun create(basePath: String, appKey: ByteArray, userKey: ByteArray): Boolean =
-        nativeCreate(basePath, appKey, userKey)
-
-    fun open(basePath: String, appKey: ByteArray, userKey: ByteArray): Boolean =
-        nativeOpen(basePath, appKey, userKey)
-
     fun createWithPassphrase(basePath: String, appKey: ByteArray, passphrase: String): Boolean =
         nativeCreateWithPassphrase(basePath, appKey, passphrase.toByteArray())
 
@@ -273,9 +259,6 @@ class UnifiedMemorySystem {
 
     fun put(collection: String, record: UmsRecord): Int =
         nativePut(collection, record.data)
-
-    fun get(collection: String, recordId: Int): UmsRecord? =
-        nativeGet(collection, recordId)?.let { UmsRecord(it) }
 
     fun delete(collection: String, recordId: Int): Boolean =
         nativeDelete(collection, recordId)
@@ -296,23 +279,12 @@ class UnifiedMemorySystem {
     fun queryString(collection: String, tag: Int, value: String): List<UmsRecord> =
         nativeQueryString(collection, tag, value)?.map { UmsRecord(it) } ?: emptyList()
 
-    // query by varint field equality
-    fun queryInt(collection: String, tag: Int, value: Long): List<UmsRecord> =
-        nativeQueryInt(collection, tag, value)?.map { UmsRecord(it) } ?: emptyList()
-
-    // query by fixed64 range (inclusive both ends, for timestamps)
-    fun queryRange(collection: String, tag: Int, min: Long, max: Long): List<UmsRecord> =
-        nativeQueryRange(collection, tag, min, max)?.map { UmsRecord(it) } ?: emptyList()
-
     companion object {
         const val FLAG_MIGRATION_COMPLETE = 0x0001
-        const val FLAG_PLAINTEXT_MODE = 0x0002
 
         // wire type constants matching C++ WireType enum
-        const val WIRE_VARINT = 0
         const val WIRE_FIXED64 = 1
         const val WIRE_BYTES = 2
-        const val WIRE_FIXED32 = 3
 
         init {
             System.loadLibrary("ums")

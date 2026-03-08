@@ -49,6 +49,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.dark.tool_neuron.ui.icons.TnIcons
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import com.dark.tool_neuron.global.Standards
+import com.dark.tool_neuron.viewmodel.ChatUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,7 +66,7 @@ fun HomeDrawerScreen(
     val isDialogOpen by viewModel.isDialogOpen.collectAsStateWithLifecycle()
 
     val isChatRefreshed by AppStateManager.isChatRefreshed.collectAsStateWithLifecycle()
-    val currentChatId by chatViewModel.currentChatId.collectAsStateWithLifecycle()
+    val chatState by chatViewModel.chatUiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(isChatRefreshed) {
         if (isChatRefreshed) {
@@ -131,7 +133,7 @@ fun HomeDrawerScreen(
                         onDeleteChat = { chatId ->
                             viewModel.deleteChat(chatId)
                             // If deleting the currently loaded chat, start a new conversation
-                            if (chatId == currentChatId) {
+                            if (chatId == chatState.currentChatId) {
                                 chatViewModel.startNewConversation()
                             }
                         }
@@ -189,7 +191,7 @@ private fun ChatList(
                 .then(
                     if (isManualRefreshing) Modifier.blur(16.dp) else Modifier
                 ),
-            contentPadding = PaddingValues(vertical = 8.dp)
+            contentPadding = PaddingValues(vertical = Standards.SpacingSm)
         ) {
             items(
                 items = dedupedChats,
@@ -214,24 +216,31 @@ private fun ChatListItem(
 ) {
     var isDeleting by remember { mutableStateOf(false) }
 
+    LaunchedEffect(isDeleting) {
+        if (isDeleting) {
+            kotlinx.coroutines.delay(5000)
+            isDeleting = false
+        }
+    }
+
     Surface(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(8.dp),
+            .padding(horizontal = Standards.SpacingMd, vertical = Standards.SpacingXs),
+        shape = RoundedCornerShape(Standards.RadiusMd),
         color = MaterialTheme.colorScheme.surfaceContainer
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = Standards.SpacingMd, vertical = Standards.SpacingSm),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
                 modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -300,7 +309,7 @@ private fun EmptyState() {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(Standards.SpacingMd)
         ) {
             Icon(
                 imageVector = TnIcons.Messages,
@@ -333,7 +342,7 @@ private fun LoadingState() {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(Standards.SpacingMd)
         ) {
             LoadingIndicator()
             Text(
@@ -353,18 +362,18 @@ private fun ErrorSnackbar(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(Standards.SpacingLg),
         contentAlignment = Alignment.BottomCenter
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(Standards.RadiusMd),
             color = MaterialTheme.colorScheme.errorContainer
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(12.dp),
+                    .padding(Standards.SpacingMd),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {

@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.icons.TnIcons
+import com.dark.tool_neuron.global.Standards
 
 @Composable
 fun TermsAndConditionsScreen(
@@ -45,14 +46,14 @@ fun TermsAndConditionsScreen(
                     fontWeight = FontWeight.Bold
                 ),
                 color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(bottom = 8.dp)
+                modifier = Modifier.padding(bottom = Standards.SpacingSm)
             )
 
             Text(
                 text = "Please read carefully before using ToolNeuron",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                modifier = Modifier.padding(bottom = 24.dp)
+                modifier = Modifier.padding(bottom = Standards.SpacingXl)
             )
 
             // Scrollable content
@@ -60,7 +61,7 @@ fun TermsAndConditionsScreen(
                 modifier = Modifier
                     .weight(1f)
                     .verticalScroll(scrollState)
-                    .padding(bottom = 16.dp)
+                    .padding(bottom = Standards.SpacingLg)
             ) {
                 TermsSection(
                     title = "1. Acceptance of Terms",
@@ -395,7 +396,7 @@ fun TermsAndConditionsScreen(
                 )
 
                 // Final acknowledgment
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(Standards.SpacingXl))
 
                 Text(
                     text = "BY CLICKING 'I ACCEPT' BELOW, YOU ACKNOWLEDGE THAT YOU HAVE READ, UNDERSTOOD, AND AGREE TO BE BOUND BY THESE TERMS AND CONDITIONS. YOU ACCEPT FULL RESPONSIBILITY FOR ALL CONTENT GENERATED USING THIS APP.",
@@ -407,17 +408,17 @@ fun TermsAndConditionsScreen(
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 16.dp)
+                        .padding(vertical = Standards.SpacingLg)
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(Standards.SpacingLg))
             }
 
             // Accept button
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 16.dp),
+                    .padding(vertical = Standards.SpacingLg),
                 contentAlignment = Alignment.Center
             ) {
                 ActionTextButton(
@@ -463,7 +464,7 @@ private fun TermsSection(
                 fontFamily = FontFamily.Monospace
             ),
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier.padding(bottom = Standards.SpacingSm)
         )
 
         Text(

@@ -31,6 +31,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URL
+import com.dark.tool_neuron.global.Standards
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -86,7 +87,7 @@ fun EmbeddingSetupScreen(onSetupComplete: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(32.dp),
+                .padding(Standards.SpacingXxl),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -96,7 +97,7 @@ fun EmbeddingSetupScreen(onSetupComplete: () -> Unit) {
                     color = MaterialTheme.colorScheme.primary
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(Standards.SpacingXl))
 
                 Text(
                     text = "Setting up ToolNeuron",
@@ -104,14 +105,14 @@ fun EmbeddingSetupScreen(onSetupComplete: () -> Unit) {
                     color = MaterialTheme.colorScheme.onBackground
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(Standards.SpacingLg))
 
                 LinearProgressIndicator(
                     progress = { downloadProgress },
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(Standards.SpacingSm))
 
                 Text(
                     text = statusMessage,

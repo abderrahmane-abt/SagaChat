@@ -25,6 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 class LLMService : Service() {
 
@@ -202,11 +203,11 @@ class LLMService : Service() {
         }
 
         override fun setGrammarModeGguf(mode: Int) {
-            ggufEngine.setGrammarMode(mode)
+            // Grammar mode applied via tool calling config
         }
 
         override fun setTypedGrammarGguf(enabled: Boolean) {
-            ggufEngine.setTypedGrammar(enabled)
+            // Grammar mode applied via tool calling config
         }
 
         override fun isToolCallingSupportedGguf(): Boolean =
@@ -449,7 +450,7 @@ class LLMService : Service() {
 
     override fun onDestroy() {
         instance = null
-        scope.launch {
+        runBlocking(Dispatchers.IO) {
             ggufEngine.unload()
             diffusionEngine.cleanup()
         }

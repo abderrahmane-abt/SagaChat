@@ -34,11 +34,6 @@ class UmsMemoryRepository(private val ums: UnifiedMemorySystem) {
         refreshCache()
     }
 
-    suspend fun insertAll(memories: List<AiMemory>) = withContext(Dispatchers.IO) {
-        memories.forEach { ums.put(collection, it.toRecord()) }
-        refreshCache()
-    }
-
     suspend fun update(memory: AiMemory) = withContext(Dispatchers.IO) {
         val existing = findRecordId(memory.id) ?: return@withContext
         ums.put(collection, memory.toRecord(existing))
@@ -58,12 +53,6 @@ class UmsMemoryRepository(private val ums: UnifiedMemorySystem) {
             .sortedByDescending { it.updatedAt }
     }
 
-    suspend fun getByCategory(category: MemoryCategory): List<AiMemory> = withContext(Dispatchers.IO) {
-        ums.queryString(collection, Tags.Memory.CATEGORY, category.name)
-            .map { it.toAiMemory() }
-            .sortedByDescending { it.updatedAt }
-    }
-
     suspend fun search(query: String): List<AiMemory> = withContext(Dispatchers.IO) {
         val lower = query.lowercase()
         ums.getAll(collection).map { it.toAiMemory() }
@@ -78,61 +67,6 @@ class UmsMemoryRepository(private val ums: UnifiedMemorySystem) {
 
     suspend fun count(): Int = withContext(Dispatchers.IO) {
         ums.count(collection)
-    }
-
-    suspend fun updateEmbedding(id: String, embedding: ByteArray) = withContext(Dispatchers.IO) {
-        val memory = getAllOnce().find { it.id == id } ?: return@withContext
-        update(memory.copy(embedding = embedding))
-    }
-
-    suspend fun getAllWithEmbeddings(): List<AiMemory> = withContext(Dispatchers.IO) {
-        ums.getAll(collection).map { it.toAiMemory() }
-            .filter { it.embedding != null }
-    }
-
-    suspend fun getUnsummarized(): List<AiMemory> = withContext(Dispatchers.IO) {
-        ums.getAll(collection).map { it.toAiMemory() }
-            .filter { !it.isSummarized && it.summaryGroupId == null }
-            .sortedWith(compareBy<AiMemory> { it.category }.thenByDescending { it.updatedAt })
-    }
-
-    suspend fun markSummarized(ids: List<String>, groupId: String) = withContext(Dispatchers.IO) {
-        val allRecords = ums.getAll(collection).map { it.toAiMemory() to it.id }
-        allRecords.filter { it.first.id in ids }.forEach { (memory, recordId) ->
-            ums.put(collection, memory.copy(isSummarized = true, summaryGroupId = groupId).toRecord(recordId))
-        }
-        refreshCache()
-    }
-
-    suspend fun getSummaries(): List<AiMemory> = withContext(Dispatchers.IO) {
-        ums.getAll(collection).map { it.toAiMemory() }
-            .filter { it.summaryGroupId != null && !it.isSummarized }
-            .sortedByDescending { it.updatedAt }
-    }
-
-    suspend fun getAllForPersonaOnce(personaId: String): List<AiMemory> = withContext(Dispatchers.IO) {
-        ums.getAll(collection).map { it.toAiMemory() }
-            .filter { it.personaId == personaId || it.personaId == null }
-            .sortedByDescending { it.updatedAt }
-    }
-
-    suspend fun getUnsummarizedForPersona(personaId: String): List<AiMemory> = withContext(Dispatchers.IO) {
-        ums.getAll(collection).map { it.toAiMemory() }
-            .filter {
-                (it.personaId == personaId || it.personaId == null) &&
-                    !it.isSummarized && it.summaryGroupId == null
-            }
-            .sortedWith(compareBy<AiMemory> { it.category }.thenByDescending { it.updatedAt })
-    }
-
-    suspend fun deleteAllForPersona(personaId: String) = withContext(Dispatchers.IO) {
-        ums.queryString(collection, Tags.Memory.PERSONA_ID, personaId)
-            .forEach { ums.delete(collection, it.id) }
-        refreshCache()
-    }
-
-    suspend fun countForPersona(personaId: String): Int = withContext(Dispatchers.IO) {
-        ums.queryString(collection, Tags.Memory.PERSONA_ID, personaId).size
     }
 
     private fun findRecordId(entityId: String): Int? {

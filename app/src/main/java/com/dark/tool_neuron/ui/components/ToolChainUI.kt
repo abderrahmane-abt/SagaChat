@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.models.messages.ToolChainStepData
 import com.dark.tool_neuron.ui.icons.TnIcons
+import com.dark.tool_neuron.global.Standards
 
 /**
  * Displays a sequential tool chain with animated connectors.
@@ -47,26 +48,26 @@ fun ToolChainDisplay(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp)
+            .padding(horizontal = Standards.SpacingMd)
     ) {
         // Header
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { isExpanded = !isExpanded },
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(Standards.RadiusMd),
             color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f),
             tonalElevation = 1.dp
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                    .padding(horizontal = 10.dp, vertical = Standards.SpacingSm),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -117,7 +118,7 @@ fun ToolChainDisplay(
         ) {
             Column(
                 modifier = Modifier
-                    .padding(top = 4.dp)
+                    .padding(top = Standards.SpacingXs)
                     .clickable { showDetailDialog = true }
             ) {
                 steps.forEachIndexed { index, step ->
@@ -148,14 +149,14 @@ private fun ToolChainStep(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(Standards.RadiusMd),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm),
             verticalAlignment = Alignment.Top
         ) {
             // Step number with status icon
@@ -191,7 +192,7 @@ private fun ToolChainStep(
 
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(Standards.SpacingXs)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -224,7 +225,7 @@ private fun ToolChainStep(
                 // Result preview
                 if (step.result.isNotBlank()) {
                     Surface(
-                        shape = RoundedCornerShape(4.dp),
+                        shape = RoundedCornerShape(Standards.SpacingXs),
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
                     ) {
                         Text(
@@ -274,14 +275,14 @@ private fun ToolChainLoadingStep() {
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(Standards.RadiusMd),
         color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.2f)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(

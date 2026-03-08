@@ -1,5 +1,6 @@
 package com.dark.tool_neuron.viewmodel.memory
 
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -15,12 +16,6 @@ class VaultManagementViewModel : ViewModel() {
         private set
 
     var isLoading by mutableStateOf(false)
-        private set
-
-    var showError by mutableStateOf(false)
-        private set
-
-    var errorMessage by mutableStateOf("")
         private set
 
     var defragProgress by mutableStateOf(0f)
@@ -39,8 +34,7 @@ class VaultManagementViewModel : ViewModel() {
                 val chatRepo = VaultManager.chatRepo ?: return@launch
                 vaultStats = chatRepo.getVaultStats()
             } catch (e: Exception) {
-                showError = true
-                errorMessage = e.message ?: "Failed to load vault stats"
+                Log.e("VaultManagementVM", "Failed to load vault stats", e)
             } finally {
                 isLoading = false
             }
@@ -54,8 +48,7 @@ class VaultManagementViewModel : ViewModel() {
                 val chatRepo = VaultManager.chatRepo ?: return@launch
                 chatList = chatRepo.getAllChats()
             } catch (e: Exception) {
-                showError = true
-                errorMessage = e.message ?: "Failed to load chats"
+                Log.e("VaultManagementVM", "Failed to load chats", e)
             } finally {
                 isLoading = false
             }
@@ -71,8 +64,7 @@ class VaultManagementViewModel : ViewModel() {
                 defragProgress = 1f
                 loadVaultStats()
             } catch (e: Exception) {
-                showError = true
-                errorMessage = e.message ?: "Defragmentation failed"
+                Log.e("VaultManagementVM", "Defragmentation failed", e)
             } finally {
                 isDefragging = false
                 defragProgress = 0f
@@ -88,16 +80,11 @@ class VaultManagementViewModel : ViewModel() {
                 chatRepo.deleteChat(chatId)
                 loadChatList()
             } catch (e: Exception) {
-                showError = true
-                errorMessage = e.message ?: "Failed to delete chat"
+                Log.e("VaultManagementVM", "Failed to delete chat", e)
             } finally {
                 isLoading = false
             }
         }
     }
 
-    fun dismissError() {
-        showError = false
-        errorMessage = ""
-    }
 }

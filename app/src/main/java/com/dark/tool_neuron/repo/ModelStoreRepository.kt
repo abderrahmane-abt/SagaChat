@@ -61,11 +61,6 @@ class ModelStoreRepository(private val context: Context) {
         }
     }
 
-    fun isDeviceSupported(): Boolean {
-        val soc = getDeviceSoc()
-        return getChipsetSuffix(soc) != null
-    }
-
     fun isQualcommDevice(): Boolean {
         val soc = getDeviceSoc()
         return soc.startsWith("SM") || soc.startsWith("QCS") || soc.startsWith("QCM")
@@ -187,10 +182,6 @@ class ModelStoreRepository(private val context: Context) {
         } catch (e: Exception) {
             Log.e("ModelStoreRepository", "Failed to write disk cache", e)
         }
-    }
-
-    fun invalidateCache() {
-        cachedModels = null
     }
 
     private suspend fun getSDModels(repositories: List<HFModelRepository>): List<HuggingFaceModel> {

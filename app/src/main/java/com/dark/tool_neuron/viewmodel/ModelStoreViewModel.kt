@@ -6,24 +6,25 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.di.AppContainer
+import com.dark.tool_neuron.global.AppPaths
 import com.dark.tool_neuron.models.data.HFModelRepository
 import com.dark.tool_neuron.models.data.HuggingFaceModel
 import com.dark.tool_neuron.models.data.ModelCategory
 import com.dark.tool_neuron.models.data.ModelType
 import com.dark.tool_neuron.models.table_schema.Model
-import com.dark.tool_neuron.repo.ModelRepositoryDataStore
-import com.dark.tool_neuron.repo.ModelStoreRepository
+import com.dark.tool_neuron.models.table_schema.ModelConfig
 import com.dark.tool_neuron.repo.HuggingFaceExplorerRepo
 import com.dark.tool_neuron.repo.HuggingFaceExplorerRepository
+import com.dark.tool_neuron.repo.ModelRepositoryDataStore
+import com.dark.tool_neuron.repo.ModelStoreRepository
 import com.dark.tool_neuron.repo.RepositoryValidator
 import com.dark.tool_neuron.repo.ValidationResult
 import com.dark.tool_neuron.service.ModelDownloadService
-import com.dark.tool_neuron.models.table_schema.ModelConfig
-import com.dark.tool_neuron.global.AppPaths
 import com.dark.tool_neuron.ui.screen.model_store.StoreTab
 import com.dark.tool_neuron.utils.ModelMetadataExtractor
 import com.dark.tool_neuron.utils.SizeCategory
-import kotlinx.coroutines.Dispatchers
+import dagger.hilt.android.lifecycle.HiltViewModel
+import jakarta.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -44,13 +45,16 @@ data class RepoGroupInfo(
     val modelCount: Int
 )
 
-class ModelStoreViewModel(application: Application) : AndroidViewModel(application) {
+@HiltViewModel
+class ModelStoreViewModel @Inject constructor(
+    application: Application,
+    private val explorerRepository: HuggingFaceExplorerRepository
+) : AndroidViewModel(application) {
 
     private val repository = ModelStoreRepository(application)
     private val systemRepo = AppContainer.getModelRepository()
     private val repoDataStore = ModelRepositoryDataStore(application)
     private val repositoryValidator = RepositoryValidator()
-    private val explorerRepository = HuggingFaceExplorerRepository()
 
     private val _selectedTab = MutableStateFlow(StoreTab.MODELS)
     val selectedTab: StateFlow<StoreTab> = _selectedTab
