@@ -462,14 +462,26 @@ class RagRepository(
     ): AggregatedRetrievalResult = withContext(Dispatchers.IO) {
         val ragResults = mutableListOf<Pair<InstalledRag, RetrievalResult>>()
 
-        android.util.Log.d("RagRepository", "Pipeline query on ${loadedGraphs.size} loaded graphs for: $query")
-
         val snapshot = loadedGraphs.toMap()
+        android.util.Log.d("RagRepository", "Pipeline query on ${snapshot.size} loaded graphs for: $query")
+
         for ((ragId, graph) in snapshot) {
-            val rag = ragDao.getById(ragId) ?: continue
-            if (!rag.isEnabled) continue
+            val rag = ragDao.getById(ragId)
+            if (rag == null) {
+                android.util.Log.w("RagRepository", "RAG $ragId in loadedGraphs but not in database — skipping")
+                continue
+            }
+            if (!rag.isEnabled) {
+                android.util.Log.w("RagRepository", "RAG ${rag.name} is disabled — skipping")
+                continue
+            }
+
+            val nodeCount = graph.getAllNodes().size
+            android.util.Log.d("RagRepository", "Querying RAG '${rag.name}' with $nodeCount nodes")
 
             val result = graph.queryWithPipeline(query, topK)
+            android.util.Log.d("RagRepository", "RAG '${rag.name}' returned ${result.results.size} results, confidence=${result.confidence}")
+
             if (result.results.isNotEmpty()) {
                 ragResults.add(rag to result)
             }
