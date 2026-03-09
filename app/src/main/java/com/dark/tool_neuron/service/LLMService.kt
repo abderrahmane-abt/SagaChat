@@ -5,12 +5,15 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import android.os.DeadObjectException
 import android.os.ParcelFileDescriptor
 import android.os.Process
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import com.dark.tool_neuron.R
 import com.dark.tool_neuron.engine.DiffusionEngine
 import com.dark.tool_neuron.engine.GGUFEngine
@@ -445,7 +448,16 @@ class LLMService : Service() {
             Log.e(TAG, "Failed to initialize diffusion engine", e)
         }
 
-        startForeground(1, createNotification())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ServiceCompat.startForeground(
+                this, 1, createNotification(),
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                else 0
+            )
+        } else {
+            startForeground(1, createNotification())
+        }
     }
 
     override fun onDestroy() {

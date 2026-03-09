@@ -275,7 +275,7 @@ class ImageToolsViewModel @Inject constructor(
             putExtra(ModelDownloadService.EXTRA_MODEL_TYPE, "IMAGE_TOOL")
             putExtra(ModelDownloadService.EXTRA_IS_ZIP, false)
         }
-        context.startForegroundService(intent)
+        androidx.core.content.ContextCompat.startForegroundService(context, intent)
     }
 
     fun releaseAll() {

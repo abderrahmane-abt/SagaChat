@@ -4,8 +4,11 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import com.dark.tool_neuron.data.AppSettingsDataStore
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.global.AppPaths
@@ -115,7 +118,15 @@ class ModelDownloadService : Service() {
                 val runOnCpu = intent.getBooleanExtra(EXTRA_RUN_ON_CPU, false)
                 val textEmbeddingSize = intent.getIntExtra(EXTRA_TEXT_EMBEDDING_SIZE, 768)
 
-                startForeground(NOTIFICATION_ID, createNotification(modelName, 0f))
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    ServiceCompat.startForeground(
+                        this@ModelDownloadService, NOTIFICATION_ID,
+                        createNotification(modelName, 0f),
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                    )
+                } else {
+                    startForeground(NOTIFICATION_ID, createNotification(modelName, 0f))
+                }
                 startDownload(
                     modelId,
                     modelName,

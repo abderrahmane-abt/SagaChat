@@ -269,7 +269,7 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
             putExtra(ModelDownloadService.EXTRA_TEXT_EMBEDDING_SIZE, model.textEmbeddingSize)
         }
 
-        context.startForegroundService(intent)
+        androidx.core.content.ContextCompat.startForegroundService(context, intent)
     }
 
     // ==================== Restore from Backup ====================

@@ -446,7 +446,7 @@ class ModelStoreViewModel @Inject constructor(
             putExtra(ModelDownloadService.EXTRA_TEXT_EMBEDDING_SIZE, model.textEmbeddingSize)
         }
 
-        context.startForegroundService(intent)
+        androidx.core.content.ContextCompat.startForegroundService(context, intent)
     }
 
     fun cancelDownload(modelId: String) {
