@@ -39,4 +39,20 @@ class ModelStoreRepositoryTest {
         assertEquals("Q5_K_M", ModelStoreRepository.extractQuantType("whisper-en-small.q5_k_m.gguf"))
         assertEquals("MODEL", ModelStoreRepository.extractQuantType("model.GGUF"))
     }
+
+    @Test
+    fun extractQuantTypeIgnoresTrailingDescriptorSuffixes() {
+        assertEquals(
+            "Q4_K_M",
+            ModelStoreRepository.extractQuantType("Whisper-EN-Small-Q4_K_M-hip-optimized.gguf")
+        )
+    }
+
+    @Test
+    fun extractModelFamilyKeyRemovesTrailingQuantizationDetails() {
+        assertEquals(
+            "whisper-en-small",
+            ModelStoreRepository.extractModelFamilyKey("Whisper-EN-Small-Q4_K_M-hip-optimized.gguf")
+        )
+    }
 }

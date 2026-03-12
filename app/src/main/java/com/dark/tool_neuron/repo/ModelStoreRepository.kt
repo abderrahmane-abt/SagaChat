@@ -31,24 +31,36 @@ class ModelStoreRepository(private val context: Context) {
 
     companion object {
         private val GGUF_SUFFIX_REGEX = Regex("\\.gguf$", RegexOption.IGNORE_CASE)
-        private val QUANTIZATION_SEGMENT_REGEX = Regex("^Q\\d.*", RegexOption.IGNORE_CASE)
+        private val QUANTIZATION_MATCH_REGEX = Regex("""(?:^|[.-])((?:I?Q)\d+(?:_[A-Z0-9]+)*)""")
+        private val TRAILING_QUANTIZATION_REGEX = Regex("""([.-])(?:I?Q)\d+(?:_[A-Z0-9]+)*(?:-[A-Z0-9]+)*$""")
+        private val PROJECTOR_MARKERS = listOf("mmproj", "vision-adapter", "projector")
+
+        internal fun isProjectorGgufFile(path: String): Boolean {
+            return path.endsWith(".gguf", ignoreCase = true) &&
+                    PROJECTOR_MARKERS.any { marker ->
+                        path.contains(marker, ignoreCase = true)
+                    }
+        }
 
         internal fun isSupportedGgufFile(path: String): Boolean {
             return path.endsWith(".gguf", ignoreCase = true) &&
-                    !path.contains("mmproj", ignoreCase = true) &&
-                    !path.contains("vision-adapter", ignoreCase = true) &&
-                    !path.contains("projector", ignoreCase = true)
+                    !isProjectorGgufFile(path)
         }
 
         internal fun stripGgufSuffix(fileName: String): String {
             return fileName.replace(GGUF_SUFFIX_REGEX, "")
         }
 
+        internal fun extractModelFamilyKey(fileName: String): String {
+            val baseName = stripGgufSuffix(fileName).uppercase()
+            return baseName.replace(TRAILING_QUANTIZATION_REGEX, "").lowercase()
+        }
+
         internal fun extractQuantType(fileName: String): String {
-            val baseName = stripGgufSuffix(fileName)
-            val dotSegment = baseName.substringAfterLast(".", "")
-            if (dotSegment.isNotEmpty() && QUANTIZATION_SEGMENT_REGEX.matches(dotSegment)) {
-                return dotSegment.uppercase()
+            val baseName = stripGgufSuffix(fileName).uppercase()
+            val quantMatch = QUANTIZATION_MATCH_REGEX.find(baseName)
+            if (quantMatch != null) {
+                return quantMatch.groupValues[1]
             }
 
             return baseName.substringAfterLast("-", baseName).uppercase()

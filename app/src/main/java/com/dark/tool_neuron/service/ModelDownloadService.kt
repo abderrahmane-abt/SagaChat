@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.dark.tool_neuron.data.AppSettingsDataStore
@@ -19,6 +20,9 @@ import com.dark.tool_neuron.models.enums.PathType
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.models.table_schema.ModelConfig
+import com.dark.tool_neuron.network.HuggingFaceClient
+import com.dark.tool_neuron.network.HuggingFaceFileResponse
+import com.dark.tool_neuron.repo.ModelStoreRepository
 import com.dark.tool_neuron.worker.DiffusionConfig
 import com.dark.tool_neuron.worker.DiffusionInferenceParams
 import com.dark.tool_neuron.worker.ModelDataParser
@@ -41,6 +45,11 @@ import java.util.concurrent.TimeUnit
 import java.util.zip.ZipInputStream
 
 class ModelDownloadService : Service() {
+
+    private data class HuggingFaceResolvedFile(
+        val repoPath: String,
+        val filePath: String
+    )
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val downloadJobs = ConcurrentHashMap<String, Job>()
@@ -229,12 +238,17 @@ class ModelDownloadService : Service() {
                         AppPaths.models(applicationContext).mkdirs()
 
                         val targetFile = AppPaths.modelFile(applicationContext, modelId)
+                        val projectorFile = AppPaths.modelProjectorFile(applicationContext, modelId)
 
                         if (targetFile.exists()) {
                             targetFile.delete()
                         }
+                        if (projectorFile.exists()) {
+                            projectorFile.delete()
+                        }
 
                         tempFile?.copyTo(targetFile, overwrite = true)
+                        downloadProjectorSidecarIfPresent(fileUrl, modelId, modelName, notificationId)
 
                         updateDownloadState(modelId, DownloadState.Processing(modelId))
                         updateNotification(modelName, 0f, notificationId, isProcessing = true)
@@ -359,6 +373,89 @@ class ModelDownloadService : Service() {
         }
 
         downloadJobs[modelId] = job
+    }
+
+    private fun parseHuggingFaceResolvedFile(url: String): HuggingFaceResolvedFile? {
+        val prefix = "https://huggingface.co/"
+        val marker = "/resolve/main/"
+        if (!url.startsWith(prefix)) return null
+
+        val path = url.removePrefix(prefix)
+        val markerIndex = path.indexOf(marker)
+        if (markerIndex < 0) return null
+
+        val repoPath = path.substring(0, markerIndex)
+        val filePath = path.substring(markerIndex + marker.length)
+        if (repoPath.isBlank() || filePath.isBlank()) return null
+
+        return HuggingFaceResolvedFile(repoPath = repoPath, filePath = filePath)
+    }
+
+    private fun selectProjectorSidecar(
+        files: List<HuggingFaceFileResponse>,
+        mainFilePath: String
+    ): HuggingFaceFileResponse? {
+        val projectorFiles = files.filter { ModelStoreRepository.isProjectorGgufFile(it.path) }
+        if (projectorFiles.isEmpty()) return null
+        if (projectorFiles.size == 1) return projectorFiles.first()
+
+        val mainDirectory = mainFilePath.substringBeforeLast("/", "")
+        val modelFamilyKey = ModelStoreRepository.extractModelFamilyKey(mainFilePath.substringAfterLast("/"))
+
+        return projectorFiles
+            .map { file ->
+                var score = 0
+                val candidateDirectory = file.path.substringBeforeLast("/", "")
+                if (mainDirectory.isNotEmpty() && candidateDirectory == mainDirectory) {
+                    score += 4
+                }
+
+                val lowerPath = file.path.lowercase()
+                if (modelFamilyKey.isNotBlank() && lowerPath.contains(modelFamilyKey)) {
+                    score += 3
+                }
+                if (lowerPath.contains("mmproj")) {
+                    score += 1
+                }
+                file to score
+            }
+            .filter { (_, score) -> score > 0 }
+            .maxByOrNull { (_, score) -> score }
+            ?.first
+    }
+
+    private suspend fun downloadProjectorSidecarIfPresent(
+        fileUrl: String,
+        modelId: String,
+        modelName: String,
+        notificationId: Int
+    ) {
+        val resolved = parseHuggingFaceResolvedFile(fileUrl) ?: return
+        val response = HuggingFaceClient.api.getRepoFiles(resolved.repoPath)
+        if (!response.isSuccessful) {
+            Log.w("ModelDownloadService", "Failed to inspect repo files for projector sidecar: ${resolved.repoPath}")
+            return
+        }
+
+        val projectorFile = selectProjectorSidecar(response.body().orEmpty(), resolved.filePath) ?: return
+        val projectorUrl = "https://huggingface.co/${resolved.repoPath}/resolve/main/${projectorFile.path}"
+        val targetFile = AppPaths.modelProjectorFile(applicationContext, modelId)
+        targetFile.parentFile?.mkdirs()
+
+        val tempFile = File(
+            AppPaths.tempDownloads(applicationContext, modelId),
+            "projector_${System.currentTimeMillis()}.tmp"
+        )
+
+        downloadFile(projectorUrl, tempFile, modelId, "$modelName projector", notificationId)
+
+        if (targetFile.exists()) {
+            targetFile.delete()
+        }
+        tempFile.copyTo(targetFile, overwrite = true)
+        tempFile.delete()
+
+        Log.i("ModelDownloadService", "Downloaded projector sidecar ${projectorFile.path} for $modelId")
     }
 
     private suspend fun downloadFile(
