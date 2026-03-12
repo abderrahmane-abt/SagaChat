@@ -27,6 +27,7 @@ import com.dark.tool_neuron.worker.DiffusionConfig
 import com.dark.tool_neuron.worker.DiffusionInferenceParams
 import com.dark.tool_neuron.worker.ModelDataParser
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -447,15 +448,20 @@ class ModelDownloadService : Service() {
             "projector_${System.currentTimeMillis()}.tmp"
         )
 
-        downloadFile(projectorUrl, tempFile, modelId, "$modelName projector", notificationId)
-
-        if (targetFile.exists()) {
-            targetFile.delete()
+        try {
+            downloadFile(projectorUrl, tempFile, modelId, "$modelName projector", notificationId)
+            tempFile.copyTo(targetFile, overwrite = true)
+            Log.i("ModelDownloadService", "Downloaded projector sidecar ${projectorFile.path} for $modelId")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(
+                "ModelDownloadService",
+                "Projector sidecar download failed for $modelId from ${projectorFile.path}: ${e.message}"
+            )
+        } finally {
+            tempFile.delete()
         }
-        tempFile.copyTo(targetFile, overwrite = true)
-        tempFile.delete()
-
-        Log.i("ModelDownloadService", "Downloaded projector sidecar ${projectorFile.path} for $modelId")
     }
 
     private suspend fun downloadFile(
