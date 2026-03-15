@@ -87,7 +87,7 @@ fun ModeToggleSwitch(
                     isSelected = !isImageMode,
                     isEnabled = textModelLoaded,
                     icon = TnIcons.Code,
-                    contentDescription = "Text mode",
+                    contentDescription = if (textModelLoaded) "Switch to text chat" else "Load a text model to enable chat",
                     onClick = {
                         if (!isImageMode) return@IconButton
                         onModeChange(false)
@@ -99,7 +99,7 @@ fun ModeToggleSwitch(
                     isSelected = isImageMode,
                     isEnabled = imageModelLoaded,
                     icon = TnIcons.Photo,
-                    contentDescription = "Image mode",
+                    contentDescription = if (imageModelLoaded) "Switch to image generation" else "Load an image model to enable",
                     onClick = {
                         if (isImageMode) return@IconButton
                         onModeChange(true)

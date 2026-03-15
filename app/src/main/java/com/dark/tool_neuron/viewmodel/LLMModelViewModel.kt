@@ -67,11 +67,12 @@ class LLMModelViewModel @Inject constructor(
     private val _needsQnnSetup = MutableStateFlow(false)
     val needsQnnSetup: StateFlow<Boolean> = _needsQnnSetup.asStateFlow()
 
-    private fun isQnnRuntimeReady(): Boolean {
+    private fun isQnnRuntimeReady(): Boolean = try {
         val runtimeDir = File(getApplication<Application>().filesDir, "runtime_libs/qnnlibs")
         val marker = File(runtimeDir, ".extracted")
-        Log.d("QNN", runtimeDir.exists().toString())
-        return marker.exists() && (runtimeDir.listFiles()?.size ?: 0) > 1
+        marker.exists() && (runtimeDir.listFiles()?.size ?: 0) > 1
+    } catch (_: Exception) {
+        false
     }
 
     fun onQnnSetupComplete() {

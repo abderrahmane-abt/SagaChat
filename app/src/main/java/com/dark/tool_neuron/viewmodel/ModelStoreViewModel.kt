@@ -433,6 +433,19 @@ class ModelStoreViewModel @Inject constructor(
 
     fun downloadModel(model: HuggingFaceModel) {
         val context = getApplication<Application>()
+
+        // Warn user if model is likely too large for their device
+        val approxSizeMB = parseApproxSizeMB(model.approximateSize)
+        if (approxSizeMB > 0) {
+            val activityManager = context.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            val memInfo = android.app.ActivityManager.MemoryInfo()
+            activityManager.getMemoryInfo(memInfo)
+            val totalRamMB = (memInfo.totalMem / (1024 * 1024)).toInt()
+            if (approxSizeMB > totalRamMB * 0.8) {
+                _error.value = "Warning: This model (~${approxSizeMB}MB) may be too large for your device (${totalRamMB}MB RAM). It might fail to load."
+            }
+        }
+
         val fileUrl = "https://huggingface.co/${model.fileUri}"
 
         val intent = Intent(context, ModelDownloadService::class.java).apply {
@@ -447,6 +460,16 @@ class ModelStoreViewModel @Inject constructor(
         }
 
         androidx.core.content.ContextCompat.startForegroundService(context, intent)
+    }
+
+    private fun parseApproxSizeMB(sizeStr: String): Int {
+        val cleaned = sizeStr.trim().uppercase()
+        val number = cleaned.filter { it.isDigit() || it == '.' }.toDoubleOrNull() ?: return 0
+        return when {
+            cleaned.endsWith("GB") -> (number * 1024).toInt()
+            cleaned.endsWith("MB") -> number.toInt()
+            else -> 0
+        }
     }
 
     fun cancelDownload(modelId: String) {

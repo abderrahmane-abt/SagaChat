@@ -384,7 +384,11 @@ class ChatViewModel @Inject constructor(
 
     fun sendChat(prompt: String) {
         if (!isAnyTextModelLoaded) {
-            reportError("Please load a text generation model first")
+            val hint = if (LlmModelWorker.isDiffusionModelLoaded.value)
+                "You have an image model loaded — switch to image mode, or load a text model for chat"
+            else
+                "Please load a text generation model first"
+            reportError(hint)
             return
         }
         if (_isGenerating.value) return
@@ -2036,7 +2040,7 @@ class ChatViewModel @Inject constructor(
                 val modelDir = TTSManager.getModelDirectory()
                 if (modelDir == null) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(appContext, "Install the TTS model from Settings", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(appContext, "Download the TTS voice model from Model Store to enable speech", Toast.LENGTH_LONG).show()
                     }
                     return@launch
                 }

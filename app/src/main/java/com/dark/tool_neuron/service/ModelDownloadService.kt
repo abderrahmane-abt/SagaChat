@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.dark.tool_neuron.data.AppSettingsDataStore
@@ -21,7 +22,6 @@ import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.models.table_schema.ModelConfig
 import com.dark.tool_neuron.worker.DiffusionConfig
 import com.dark.tool_neuron.worker.DiffusionInferenceParams
-import com.dark.tool_neuron.worker.ModelDataParser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -44,7 +44,7 @@ class ModelDownloadService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val downloadJobs = ConcurrentHashMap<String, Job>()
-    private var notificationIdCounter = NOTIFICATION_ID
+    private val notificationIdCounter = java.util.concurrent.atomic.AtomicInteger(NOTIFICATION_ID)
 
     private val notificationManager by lazy {
         getSystemService(NOTIFICATION_SERVICE) as NotificationManager
@@ -157,10 +157,14 @@ class ModelDownloadService : Service() {
         runOnCpu: Boolean,
         textEmbeddingSize: Int
     ) {
-        // Cancel existing download for this model if any
+        // Skip if this model is already downloading
+        if (downloadJobs[modelId]?.isActive == true) {
+            Log.w("DownloadService", "Download already in progress for $modelId, skipping duplicate")
+            return
+        }
         downloadJobs[modelId]?.cancel()
 
-        val notificationId = ++notificationIdCounter
+        val notificationId = notificationIdCounter.incrementAndGet()
         val job = serviceScope.launch {
             var tempFile: File? = null
             var extractTempDir: File? = null
@@ -562,10 +566,10 @@ class ModelDownloadService : Service() {
         textEmbeddingSize: Int
     ) = withContext(Dispatchers.IO) {
         val repository = AppContainer.getModelRepository()
-        val parser = ModelDataParser()
 
-        val checksum = parser.checksumSHA256(modelPath)
-
+        // Use the store model ID as primary key so the UI can match
+        // installed models against store listings. SHA256 is still computed
+        // for integrity but not used as the DB key.
         val providerType = when (modelType) {
             "SD" -> ProviderType.DIFFUSION
             "GGUF" -> ProviderType.GGUF
@@ -589,7 +593,7 @@ class ModelDownloadService : Service() {
         }
 
         val model = Model(
-            id = checksum,
+            id = modelId,
             modelName = modelName,
             modelPath = modelPath,
             pathType = pathType,
@@ -614,7 +618,7 @@ class ModelDownloadService : Service() {
                 )
                 val inferenceParams = DiffusionInferenceParams()
                 ModelConfig(
-                    modelId = checksum,
+                    modelId = modelId,
                     modelLoadingParams = diffusionConfig.toJson(),
                     modelInferenceParams = inferenceParams.toJson()
                 )
@@ -633,16 +637,15 @@ class ModelDownloadService : Service() {
                 }
                 val ggufSchema = GgufEngineSchema(loadingParams = loadingParams)
                 ModelConfig(
-                    modelId = checksum,
+                    modelId = modelId,
                     modelLoadingParams = ggufSchema.toLoadingJson(),
                     modelInferenceParams = ggufSchema.toInferenceJson()
                 )
             }
 
             ProviderType.TTS -> {
-                // TTS models use simple config with voice/speed/language
                 ModelConfig(
-                    modelId = checksum,
+                    modelId = modelId,
                     modelLoadingParams = """{"type":"tts","useNNAPI":false}""",
                     modelInferenceParams = """{"voice":"F1","speed":1.05,"steps":2,"language":"en"}"""
                 )
