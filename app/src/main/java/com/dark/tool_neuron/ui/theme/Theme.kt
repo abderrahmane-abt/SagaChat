@@ -12,29 +12,45 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 
-private val DarkColorScheme = darkColorScheme()
-
+// Fallback schemes for pre-API-31 or OEM ROMs missing Monet resources.
+private val DarkColorScheme  = darkColorScheme()
 private val LightColorScheme = lightColorScheme()
 
-private val ManropeTypography: Typography by lazy {
+/*
+ * All 15 M3 roles use Figtree. Weight contrast drives hierarchy, not just size:
+ *   Display  → Light (300)     large thin text feels premium
+ *   Headline → SemiBold (600)  punchy section headers
+ *   Title    → Medium (500)    card titles, nav labels
+ *   Body     → Regular (400)   reading copy
+ *   Label    → SemiBold (600)  buttons, chips — need visual punch
+ *
+ * MapleMonoFontFamily is not applied here — use it directly on AI response
+ * Text composables and technical stat displays.
+ */
+private val FigtreeTypography: Typography by lazy {
     val base = Typography()
     base.copy(
-        displayLarge = base.displayLarge.copy(fontFamily = ManropeFontFamily),
-        displayMedium = base.displayMedium.copy(fontFamily = ManropeFontFamily),
-        displaySmall = base.displaySmall.copy(fontFamily = ManropeFontFamily),
-        headlineLarge = base.headlineLarge.copy(fontFamily = ManropeFontFamily),
-        headlineMedium = base.headlineMedium.copy(fontFamily = ManropeFontFamily),
-        headlineSmall = base.headlineSmall.copy(fontFamily = ManropeFontFamily),
-        titleLarge = base.titleLarge.copy(fontFamily = ManropeFontFamily),
-        titleMedium = base.titleMedium.copy(fontFamily = ManropeFontFamily),
-        titleSmall = base.titleSmall.copy(fontFamily = ManropeFontFamily),
-        bodyLarge = base.bodyLarge.copy(fontFamily = ManropeFontFamily),
-        bodyMedium = base.bodyMedium.copy(fontFamily = ManropeFontFamily),
-        bodySmall = base.bodySmall.copy(fontFamily = ManropeFontFamily),
-        labelLarge = base.labelLarge.copy(fontFamily = ManropeFontFamily),
-        labelMedium = base.labelMedium.copy(fontFamily = ManropeFontFamily),
-        labelSmall = base.labelSmall.copy(fontFamily = ManropeFontFamily),
+        displayLarge  = base.displayLarge.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.Light),
+        displayMedium = base.displayMedium.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.Light),
+        displaySmall  = base.displaySmall.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.Normal),
+
+        headlineLarge  = base.headlineLarge.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.SemiBold),
+        headlineMedium = base.headlineMedium.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.SemiBold),
+        headlineSmall  = base.headlineSmall.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.Medium),
+
+        titleLarge  = base.titleLarge.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.SemiBold),
+        titleMedium = base.titleMedium.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.Medium),
+        titleSmall  = base.titleSmall.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.Medium),
+
+        bodyLarge  = base.bodyLarge.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.Normal),
+        bodyMedium = base.bodyMedium.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.Normal),
+        bodySmall  = base.bodySmall.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.Normal),
+
+        labelLarge  = base.labelLarge.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.SemiBold),
+        labelMedium = base.labelMedium.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.SemiBold),
+        labelSmall  = base.labelSmall.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.Medium),
     )
 }
 
@@ -46,9 +62,6 @@ fun ToolNeuronTheme(
 ) {
     val context = LocalContext.current
 
-    // Dynamic color requires Android 12+ (API 31). Older devices get Material3 defaults.
-    // Try-catch guards against OEM ROMs that report API 31+ but lack Monet resources —
-    // dynamicDarkColorScheme() throws Resources$NotFoundException on these devices.
     val colorScheme = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         try {
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
@@ -60,9 +73,9 @@ fun ToolNeuronTheme(
     }
 
     MaterialExpressiveTheme(
-        colorScheme = colorScheme,
-        typography = ManropeTypography,
+        colorScheme  = colorScheme,
+        typography   = FigtreeTypography,
         motionScheme = MotionScheme.expressive(),
-        content = content
+        content      = content
     )
 }
