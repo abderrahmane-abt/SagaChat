@@ -1,5 +1,6 @@
 package com.dark.tool_neuron.ui.theme
 
+import android.annotation.SuppressLint
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -17,7 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 
 // Fallback schemes for pre-API-31 or OEM ROMs missing Monet resources.
-private val DarkColorScheme  = darkColorScheme()
+private val DarkColorScheme = darkColorScheme()
 private val LightColorScheme = lightColorScheme()
 
 /*
@@ -34,28 +35,74 @@ private val LightColorScheme = lightColorScheme()
 private val FigtreeTypography: Typography by lazy {
     val base = Typography()
     base.copy(
-        displayLarge  = base.displayLarge.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.Light),
-        displayMedium = base.displayMedium.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.Light),
-        displaySmall  = base.displaySmall.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.Normal),
+        displayLarge = base.displayLarge.copy(
+            fontFamily = FigtreeFontFamily,
+            fontWeight = FontWeight.Light
+        ),
+        displayMedium = base.displayMedium.copy(
+            fontFamily = FigtreeFontFamily,
+            fontWeight = FontWeight.Light
+        ),
+        displaySmall = base.displaySmall.copy(
+            fontFamily = FigtreeFontFamily,
+            fontWeight = FontWeight.Normal
+        ),
 
-        headlineLarge  = base.headlineLarge.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.SemiBold),
-        headlineMedium = base.headlineMedium.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.SemiBold),
-        headlineSmall  = base.headlineSmall.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.Medium),
+        headlineLarge = base.headlineLarge.copy(
+            fontFamily = FigtreeFontFamily,
+            fontWeight = FontWeight.SemiBold
+        ),
+        headlineMedium = base.headlineMedium.copy(
+            fontFamily = FigtreeFontFamily,
+            fontWeight = FontWeight.SemiBold
+        ),
+        headlineSmall = base.headlineSmall.copy(
+            fontFamily = FigtreeFontFamily,
+            fontWeight = FontWeight.Medium
+        ),
 
-        titleLarge  = base.titleLarge.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.SemiBold),
-        titleMedium = base.titleMedium.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.Medium),
-        titleSmall  = base.titleSmall.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.Medium),
+        titleLarge = base.titleLarge.copy(
+            fontFamily = FigtreeFontFamily,
+            fontWeight = FontWeight.SemiBold
+        ),
+        titleMedium = base.titleMedium.copy(
+            fontFamily = FigtreeFontFamily,
+            fontWeight = FontWeight.Medium
+        ),
+        titleSmall = base.titleSmall.copy(
+            fontFamily = FigtreeFontFamily,
+            fontWeight = FontWeight.Medium
+        ),
 
-        bodyLarge  = base.bodyLarge.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.Normal),
-        bodyMedium = base.bodyMedium.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.Normal),
-        bodySmall  = base.bodySmall.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.Normal),
+        bodyLarge = base.bodyLarge.copy(
+            fontFamily = FigtreeFontFamily,
+            fontWeight = FontWeight.Normal
+        ),
+        bodyMedium = base.bodyMedium.copy(
+            fontFamily = FigtreeFontFamily,
+            fontWeight = FontWeight.Normal
+        ),
+        bodySmall = base.bodySmall.copy(
+            fontFamily = FigtreeFontFamily,
+            fontWeight = FontWeight.Normal
+        ),
 
-        labelLarge  = base.labelLarge.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.SemiBold),
-        labelMedium = base.labelMedium.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.SemiBold),
-        labelSmall  = base.labelSmall.copy(fontFamily = FigtreeFontFamily, fontWeight = FontWeight.Medium),
+        labelLarge = base.labelLarge.copy(
+            fontFamily = FigtreeFontFamily,
+            fontWeight = FontWeight.SemiBold
+        ),
+        labelMedium = base.labelMedium.copy(
+            fontFamily = FigtreeFontFamily,
+            fontWeight = FontWeight.SemiBold
+        ),
+        labelSmall = base.labelSmall.copy(
+            fontFamily = FigtreeFontFamily,
+            fontWeight = FontWeight.Medium
+        ),
     )
 }
 
+@SuppressLint("ConfigurationScreenWidthHeight")
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ToolNeuronTheme(
@@ -66,9 +113,9 @@ fun ToolNeuronTheme(
     val screenWidth = LocalConfiguration.current.screenWidthDp
 
     val dimens = when {
-        screenWidth < 600  -> CompactDimens
-        screenWidth < 840  -> MediumDimens
-        else               -> ExpandedDimens
+        screenWidth < 600 -> CompactDimens
+        screenWidth < 840 -> MediumDimens
+        else -> ExpandedDimens
     }
 
     val colorScheme = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -81,12 +128,12 @@ fun ToolNeuronTheme(
         if (darkTheme) DarkColorScheme else LightColorScheme
     }
 
-    CompositionLocalProvider(LocalDimens provides dimens) {
+    CompositionLocalProvider(LocalDimens provides dimens, LocalTnShapes provides DefaultTnShapes) {
         MaterialExpressiveTheme(
-            colorScheme  = colorScheme,
-            typography   = FigtreeTypography,
+            colorScheme = colorScheme,
+            typography = FigtreeTypography,
             motionScheme = MotionScheme.expressive(),
-            content      = content
+            content = content
         )
     }
 }
