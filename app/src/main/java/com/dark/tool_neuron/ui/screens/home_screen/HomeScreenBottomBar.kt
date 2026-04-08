@@ -36,17 +36,19 @@ fun HomeScreenBottomBar(navController: NavHostController) {
     var text by remember { mutableStateOf("") }
     var isImageMode by remember { mutableStateOf(false) }
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.04f)
-                    .compositeOver(MaterialTheme.colorScheme.background)
-            )
+    Column(
+        modifier = Modifier.fillMaxWidth()
     ) {
+
+
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .background(
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.04f)
+                        .compositeOver(MaterialTheme.colorScheme.background)
+                )
                 .navigationBarsPadding()
                 .padding(horizontal = dimens.spacingMd)
                 .padding(top = dimens.spacingXxs, bottom = dimens.spacingSm)

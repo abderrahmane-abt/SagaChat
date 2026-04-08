@@ -49,9 +49,29 @@ android {
         buildConfig = true
         aidl = true
     }
+
+    packaging {
+        jniLibs {
+            pickFirsts += setOf(
+                "lib/arm64-v8a/libc++_shared.so",
+                "lib/x86_64/libc++_shared.so",
+                "lib/armeabi-v7a/libc++_shared.so"
+            )
+        }
+    }
 }
 
 dependencies {
+    // Local modules
+    implementation(project(":hxs_encryptor"))
+    implementation(project(":hxs"))
+    implementation(project(":download_manager"))
+
+    // AI inference AARs
+    implementation(files("../libs/gguf_lib-release.aar"))
+    implementation(files("../libs/ai_sherpa-release.aar"))
+    implementation(libs.kotlinx.coroutines.android)
+
     // DI
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)

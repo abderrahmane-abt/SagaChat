@@ -496,10 +496,16 @@ fun highlightCode(
     }
 }
 
+private val sortedDefaultLigatures: List<Pair<String, String>> by lazy {
+    defaultLigatures.entries.sortedByDescending { it.key.length }.map { it.key to it.value }
+}
+
 private fun applyCharLigatures(text: String, ligatures: Map<String, String>): String {
+    val sorted = if (ligatures === defaultLigatures) sortedDefaultLigatures
+                 else ligatures.entries.sortedByDescending { it.key.length }.map { it.key to it.value }
     var result = text
-    for ((from, to) in ligatures.entries.sortedByDescending { it.key.length }) {
-        result = result.replace(from, to)
+    for ((from, to) in sorted) {
+        if (from in result) result = result.replace(from, to)
     }
     return result
 }

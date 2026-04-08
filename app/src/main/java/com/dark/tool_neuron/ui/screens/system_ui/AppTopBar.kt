@@ -2,6 +2,7 @@ package com.dark.tool_neuron.ui.screens.system_ui
 
 import androidx.compose.runtime.Composable
 import com.dark.tool_neuron.model.NavScreens
+import com.dark.tool_neuron.ui.screens.dev_notes.DevNotesTopBar
 import com.dark.tool_neuron.ui.screens.home_screen.HomeScreenTopbar
 
 @Composable
@@ -15,6 +16,7 @@ fun AppTopBar(
             expanded = actionWindowExpanded,
             onToggle = onActionWindowToggle
         )
+        NavScreens.DevNotes.route -> DevNotesTopBar()
         else -> Unit
     }
 }

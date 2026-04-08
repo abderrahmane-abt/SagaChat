@@ -38,7 +38,7 @@ fun AppScaffold() {
         TNavigation(
             navController = navController,
             innerPadding = innerPadding,
-            startDestination = NavScreens.HomeScreen.route,
+            startDestination = NavScreens.DevNotes.route,
             actionWindowExpanded = actionWindowExpanded,
             onActionWindowDismiss = homeViewModel::collapseActionWindow
         )

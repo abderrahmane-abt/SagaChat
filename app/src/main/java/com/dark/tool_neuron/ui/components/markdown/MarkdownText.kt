@@ -24,6 +24,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.compositionLocalOf
@@ -58,14 +59,20 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dark.tool_neuron.ui.components.ActionButton
+import com.dark.tool_neuron.ui.components.ActionToggleButton
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.MapleMonoFontFamily
-import java.util.concurrent.ConcurrentHashMap
 
 // ── Backward-compat composition local ──
 
 val LocalCodeHighlightEnabled = compositionLocalOf { true }
+
+/** Hoisted theme colors — set once at the LazyColumn scope, read per item without re-reading MaterialTheme. */
+val LocalMarkdownColors = compositionLocalOf {
+    InlineColors(codeBg = Color.Transparent, highlightBg = Color.Transparent, mathColor = Color.Transparent)
+}
 
 /**
  * Colors extracted once from MaterialTheme — passed to non-composable formatters
@@ -78,6 +85,19 @@ data class InlineColors(
     val mathColor: Color
 )
 
+/** Resolves InlineColors from the current MaterialTheme. Call once per scope. */
+@Composable
+fun rememberMarkdownColors(): InlineColors {
+    val scheme = MaterialTheme.colorScheme
+    return remember(scheme) {
+        InlineColors(
+            codeBg = scheme.surfaceVariant.copy(alpha = 0.5f),
+            highlightBg = scheme.primary.copy(alpha = 0.3f),
+            mathColor = scheme.primary
+        )
+    }
+}
+
 /**
  * Full markdown renderer for completed (non-streaming) messages.
  * Parses text into elements and renders each with appropriate styling.
@@ -87,11 +107,7 @@ data class InlineColors(
 fun MarkdownText(text: String, modifier: Modifier = Modifier) {
     val dimens = LocalDimens.current
     val parsedContent = remember(text) { parseMarkdown(text) }
-    val colors = InlineColors(
-        codeBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        highlightBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-        mathColor = MaterialTheme.colorScheme.primary
-    )
+    val colors = rememberMarkdownColors()
     Column(
         modifier = modifier.padding(horizontal = dimens.spacingXs),
         verticalArrangement = Arrangement.spacedBy(dimens.spacingXs)
@@ -117,14 +133,7 @@ fun LazyListScope.lazyMarkdownItems(
         contentType = { index -> elements[index]::class.simpleName }
     ) { index ->
         val element = elements[index]
-        val scheme = MaterialTheme.colorScheme
-        val colors = remember(scheme) {
-            InlineColors(
-                codeBg = scheme.surfaceVariant.copy(alpha = 0.5f),
-                highlightBg = scheme.primary.copy(alpha = 0.3f),
-                mathColor = scheme.primary
-            )
-        }
+        val colors = LocalMarkdownColors.current
         Box(modifier = modifier.padding(
             top = element.topSpacing(),
             bottom = element.bottomSpacing()
@@ -187,17 +196,13 @@ internal sealed class MarkdownElement {
 
 // ── Parser cache & precompiled regex ──
 
-private val parseCache = ConcurrentHashMap<String, List<MarkdownElement>>(16)
+private val parseCache = object : LinkedHashMap<String, List<MarkdownElement>>(32, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<MarkdownElement>>): Boolean = size > 24
+}
 
 private fun parseMarkdownCached(text: String): List<MarkdownElement> {
-    parseCache[text]?.let { return it }
     synchronized(parseCache) {
-        parseCache[text]?.let { return it }
-        if (parseCache.size >= 16) {
-            val keysToRemove = parseCache.keys.take(parseCache.size / 2)
-            keysToRemove.forEach { parseCache.remove(it) }
-        }
-        return parseMarkdown(text).also { parseCache[text] = it }
+        return parseCache.getOrPut(text) { parseMarkdown(text) }
     }
 }
 
@@ -401,107 +406,110 @@ private fun findStarClose(text: String, from: Int): Int {
     return -1
 }
 
-/** Pure function — no @Composable, no MaterialTheme reads. */
+/** Pure function — no @Composable, no MaterialTheme reads. Uses single builder via pushStyle/pop. */
 internal fun buildInlineFormatted(text: String, colors: InlineColors): AnnotatedString = buildAnnotatedString {
+    appendFormatted(text, colors)
+}
+
+private fun AnnotatedString.Builder.appendFormatted(text: String, colors: InlineColors) {
     var i = 0
-    val chars = text.toCharArray()
-    while (i < chars.size) {
+    while (i < text.length) {
         when {
             // Bold+Italic ***...***
-            i + 2 < chars.size && chars[i] == '*' && chars[i + 1] == '*' && chars[i + 2] == '*' -> {
+            i + 2 < text.length && text[i] == '*' && text[i + 1] == '*' && text[i + 2] == '*' -> {
                 val end = text.indexOf("***", i + 3)
                 if (end != -1) {
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic)) {
-                        append(buildInlineFormatted(text.substring(i + 3, end), colors))
-                    }; i = end + 3
-                } else { append(chars[i]); i++ }
+                    pushStyle(SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic))
+                    appendFormatted(text.substring(i + 3, end), colors)
+                    pop(); i = end + 3
+                } else { append(text[i]); i++ }
             }
             // Bold **...**
-            i + 1 < chars.size && chars[i] == '*' && chars[i + 1] == '*' -> {
+            i + 1 < text.length && text[i] == '*' && text[i + 1] == '*' -> {
                 val end = findStarClose(text, i + 2)
                 if (end != -1) {
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                        append(buildInlineFormatted(text.substring(i + 2, end), colors))
-                    }; i = end + 2
-                } else { append(chars[i]); i++ }
+                    pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
+                    appendFormatted(text.substring(i + 2, end), colors)
+                    pop(); i = end + 2
+                } else { append(text[i]); i++ }
             }
             // Bold __...__
-            i + 1 < chars.size && chars[i] == '_' && chars[i + 1] == '_' -> {
+            i + 1 < text.length && text[i] == '_' && text[i + 1] == '_' -> {
                 val end = text.indexOf("__", i + 2)
                 if (end != -1) {
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                        append(buildInlineFormatted(text.substring(i + 2, end), colors))
-                    }; i = end + 2
-                } else { append(chars[i]); i++ }
+                    pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
+                    appendFormatted(text.substring(i + 2, end), colors)
+                    pop(); i = end + 2
+                } else { append(text[i]); i++ }
             }
             // Italic *...*
-            chars[i] == '*' -> {
+            text[i] == '*' -> {
                 val end = text.indexOf('*', i + 1)
                 if (end != -1) {
-                    withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
-                        append(buildInlineFormatted(text.substring(i + 1, end), colors))
-                    }; i = end + 1
-                } else { append(chars[i]); i++ }
+                    pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
+                    appendFormatted(text.substring(i + 1, end), colors)
+                    pop(); i = end + 1
+                } else { append(text[i]); i++ }
             }
             // Italic _..._
-            chars[i] == '_' -> {
+            text[i] == '_' -> {
                 val end = text.indexOf('_', i + 1)
                 if (end != -1) {
-                    withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
-                        append(buildInlineFormatted(text.substring(i + 1, end), colors))
-                    }; i = end + 1
-                } else { append(chars[i]); i++ }
+                    pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
+                    appendFormatted(text.substring(i + 1, end), colors)
+                    pop(); i = end + 1
+                } else { append(text[i]); i++ }
             }
             // Strikethrough ~~...~~
-            i + 1 < chars.size && chars[i] == '~' && chars[i + 1] == '~' -> {
+            i + 1 < text.length && text[i] == '~' && text[i + 1] == '~' -> {
                 val end = text.indexOf("~~", i + 2)
                 if (end != -1) {
-                    withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) {
-                        append(buildInlineFormatted(text.substring(i + 2, end), colors))
-                    }; i = end + 2
-                } else { append(chars[i]); i++ }
+                    pushStyle(SpanStyle(textDecoration = TextDecoration.LineThrough))
+                    appendFormatted(text.substring(i + 2, end), colors)
+                    pop(); i = end + 2
+                } else { append(text[i]); i++ }
             }
             // Inline code `...`
-            chars[i] == '`' -> {
+            text[i] == '`' -> {
                 val end = text.indexOf('`', i + 1)
                 if (end != -1) {
-                    withStyle(SpanStyle(fontFamily = MapleMonoFontFamily, background = colors.codeBg, fontSize = 12.sp)) {
-                        append(" ${text.substring(i + 1, end)} ")
-                    }; i = end + 1
-                } else { append(chars[i]); i++ }
+                    pushStyle(SpanStyle(fontFamily = MapleMonoFontFamily, background = colors.codeBg, fontSize = 12.sp))
+                    append(' '); append(text, i + 1, end); append(' ')
+                    pop(); i = end + 1
+                } else { append(text[i]); i++ }
             }
             // Highlight ==...==
-            i + 1 < chars.size && chars[i] == '=' && chars[i + 1] == '=' -> {
+            i + 1 < text.length && text[i] == '=' && text[i + 1] == '=' -> {
                 val end = text.indexOf("==", i + 2)
                 if (end != -1) {
-                    withStyle(SpanStyle(background = colors.highlightBg)) {
-                        append(buildInlineFormatted(text.substring(i + 2, end), colors))
-                    }; i = end + 2
-                } else { append(chars[i]); i++ }
+                    pushStyle(SpanStyle(background = colors.highlightBg))
+                    appendFormatted(text.substring(i + 2, end), colors)
+                    pop(); i = end + 2
+                } else { append(text[i]); i++ }
             }
             // Inline math \(...\)
-            i + 1 < chars.size && chars[i] == '\\' && chars[i + 1] == '(' -> {
+            i + 1 < text.length && text[i] == '\\' && text[i + 1] == '(' -> {
                 val endIdx = text.indexOf("\\)", i + 2)
                 if (endIdx != -1) {
-                    val rendered = renderMathToUnicode(text.substring(i + 2, endIdx))
-                    withStyle(SpanStyle(fontFamily = MapleMonoFontFamily, fontStyle = FontStyle.Italic, color = colors.mathColor)) { append(rendered) }
-                    i = endIdx + 2
-                } else { append(chars[i]); i++ }
+                    pushStyle(SpanStyle(fontFamily = MapleMonoFontFamily, fontStyle = FontStyle.Italic, color = colors.mathColor))
+                    append(renderMathToUnicode(text.substring(i + 2, endIdx)))
+                    pop(); i = endIdx + 2
+                } else { append(text[i]); i++ }
             }
             // Inline math $...$
-            chars[i] == '$' && (i + 1 >= chars.size || chars[i + 1] != '$') -> {
+            text[i] == '$' && (i + 1 >= text.length || text[i + 1] != '$') -> {
                 val end = text.indexOf('$', i + 1)
                 if (end != -1 && end > i + 1) {
-                    val rendered = renderMathToUnicode(text.substring(i + 1, end))
-                    withStyle(SpanStyle(fontFamily = MapleMonoFontFamily, fontStyle = FontStyle.Italic, color = colors.mathColor)) { append(rendered) }
-                    i = end + 1
-                } else { append(chars[i]); i++ }
+                    pushStyle(SpanStyle(fontFamily = MapleMonoFontFamily, fontStyle = FontStyle.Italic, color = colors.mathColor))
+                    append(renderMathToUnicode(text.substring(i + 1, end)))
+                    pop(); i = end + 1
+                } else { append(text[i]); i++ }
             }
             // Default — handle surrogates
             else -> {
-                val c = chars[i]
-                if (c.isHighSurrogate() && i + 1 < chars.size && chars[i + 1].isLowSurrogate()) {
-                    append(c); append(chars[i + 1]); i += 2
+                val c = text[i]
+                if (c.isHighSurrogate() && i + 1 < text.length && text[i + 1].isLowSurrogate()) {
+                    append(c); append(text[i + 1]); i += 2
                 } else { append(c); i++ }
             }
         }
@@ -615,27 +623,24 @@ private fun NumberedPointView(text: String, number: String, colors: InlineColors
 @Composable
 private fun BlockQuoteView(text: String, level: Int, colors: InlineColors) {
     val dimens = LocalDimens.current
-    Row(
+    val barColor = MaterialTheme.colorScheme.primary
+    val barWidthPx = with(LocalDensity.current) { 2.dp.toPx() }
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = ((level - 1) * 10).dp)
             .clip(MaterialTheme.shapes.small)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .padding(dimens.spacingSm),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+            .drawBehind {
+                drawRect(color = barColor, size = Size(barWidthPx, size.height))
+            }
+            .padding(start = dimens.spacingSm + 2.dp, end = dimens.spacingSm, top = dimens.spacingSm, bottom = dimens.spacingSm)
     ) {
-        Box(
-            modifier = Modifier
-                .width(2.dp)
-                .height(18.dp)
-                .background(MaterialTheme.colorScheme.primary)
-        )
         Text(
             text = cachedInlineFormatting(text, colors),
             style = MaterialTheme.typography.bodyMedium,
             color = LocalContentColor.current.copy(alpha = 0.87f),
-            lineHeight = 20.sp,
-            modifier = Modifier.weight(1f)
+            lineHeight = 20.sp
         )
     }
 }
@@ -680,53 +685,45 @@ private fun CodeBlockView(code: String, language: String) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-//            Row(
-//                horizontalArrangement = Arrangement.spacedBy(6.dp),
-//                verticalAlignment = Alignment.CenterVertically
-//            ) {
-//                ActionButton(
-//                    onClickListener = {},
-//                    icon = TnIcons.Code,
-//                    colors = IconButtonDefaults.filledIconButtonColors(
-//                        containerColor = headerFg.copy(0.1f),
-//                        contentColor = headerFg.copy(0.7f)
-//                    )
-//                )
-//                if (language.isNotEmpty()) {
-//                    Text(
-//                        text = language.uppercase(),
-//                        fontFamily = MapleMonoFontFamily,
-//                        fontSize = 10.sp,
-//                        fontWeight = FontWeight.Medium,
-//                        color = headerFg.copy(alpha = 0.5f)
-//                    )
-//                }
-//            }
-//            Row(horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs)) {
-//                ActionButton(
-//                    onClickListener = {
-//                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-//                        cm.setPrimaryClip(ClipData.newPlainText(language, code))
-//                        Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
-//                    },
-//                    icon = TnIcons.Copy,
-//                    colors = IconButtonDefaults.filledIconButtonColors(
-//                        containerColor = headerFg.copy(0.1f),
-//                        contentColor = headerFg.copy(0.7f)
-//                    )
-//                )
-//                ActionToggleButton(
-//                    checked = isExpanded,
-//                    onCheckedChange = { isExpanded = !isExpanded },
-//                    icon = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
-//                    colors = IconButtonDefaults.filledIconToggleButtonColors(
-//                        containerColor = headerFg.copy(0.1f),
-//                        contentColor = headerFg.copy(0.7f),
-//                        checkedContainerColor = headerFg.copy(0.15f),
-//                        checkedContentColor = headerFg.copy(0.8f)
-//                    )
-//                )
-//            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (language.isNotEmpty()) {
+                    Text(
+                        text = language.uppercase(),
+                        fontFamily = MapleMonoFontFamily,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = headerFg.copy(alpha = 0.5f)
+                    )
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs)) {
+                ActionButton(
+                    onClickListener = {
+                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        cm.setPrimaryClip(ClipData.newPlainText(language, code))
+                        Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+                    },
+                    icon = TnIcons.Copy,
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = headerFg.copy(0.1f),
+                        contentColor = headerFg.copy(0.7f)
+                    )
+                )
+                ActionToggleButton(
+                    checked = isExpanded,
+                    onCheckedChange = { isExpanded = !isExpanded },
+                    icon = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
+                    colors = IconButtonDefaults.filledIconToggleButtonColors(
+                        containerColor = headerFg.copy(0.1f),
+                        contentColor = headerFg.copy(0.7f),
+                        checkedContainerColor = headerFg.copy(0.15f),
+                        checkedContentColor = headerFg.copy(0.8f)
+                    )
+                )
+            }
         }
 
         if (isExpanded) {
@@ -778,6 +775,12 @@ private fun TableView(
     val headerStyle = baseTypo.copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = textColor, lineHeight = 17.sp)
     val cellStyle = baseTypo.copy(fontSize = 12.sp, color = dimTextColor, lineHeight = 17.sp)
 
+    // Pre-build AnnotatedStrings once (width-independent)
+    val headerFormatted = remember(headers, colors) { headers.map { buildInlineFormatted(it, colors) } }
+    val rowsFormatted = remember(rows, colors) {
+        rows.map { row -> (0 until colCount).map { ci -> buildInlineFormatted(row.getOrElse(ci) { "" }, colors) } }
+    }
+
     BoxWithConstraints(
         modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small)
     ) {
@@ -785,27 +788,11 @@ private fun TableView(
         val colWidth = (totalWidth - dividerWidth * (colCount - 1)) / colCount
         val cellTextWidth = (colWidth - cellPadH * 2).coerceAtLeast(1f).toInt()
 
-        val headerMeasured = remember(headers, cellTextWidth, colors) {
-            headers.map { h ->
-                textMeasurer.measure(
-                    text = buildInlineFormatted(h, colors),
-                    style = headerStyle,
-                    maxLines = 3,
-                    constraints = Constraints(maxWidth = cellTextWidth)
-                )
-            }
+        val headerMeasured = remember(headerFormatted, cellTextWidth) {
+            headerFormatted.map { textMeasurer.measure(it, headerStyle, maxLines = 3, constraints = Constraints(maxWidth = cellTextWidth)) }
         }
-        val rowsMeasured = remember(rows, cellTextWidth, colors) {
-            rows.map { row ->
-                (0 until colCount).map { ci ->
-                    textMeasurer.measure(
-                        text = buildInlineFormatted(row.getOrElse(ci) { "" }, colors),
-                        style = cellStyle,
-                        maxLines = 5,
-                        constraints = Constraints(maxWidth = cellTextWidth)
-                    )
-                }
-            }
+        val rowsMeasured = remember(rowsFormatted, cellTextWidth) {
+            rowsFormatted.map { row -> row.map { textMeasurer.measure(it, cellStyle, maxLines = 5, constraints = Constraints(maxWidth = cellTextWidth)) } }
         }
 
         val headerRowHeight = remember(headerMeasured) { (headerMeasured.maxOfOrNull { it.size.height } ?: 0) + (cellPadV * 2) }

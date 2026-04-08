@@ -23,7 +23,6 @@ fun HomeScreen(
     actionWindowExpanded: Boolean,
     onActionWindowDismiss: () -> Unit,
 ) {
-    val expanded by viewModel.actionWindowExpanded.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier

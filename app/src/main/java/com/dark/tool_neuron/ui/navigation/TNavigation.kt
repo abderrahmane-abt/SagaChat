@@ -7,6 +7,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.dark.tool_neuron.model.NavScreens
+import com.dark.tool_neuron.ui.screens.dev_notes.DevNotesScreen
 import com.dark.tool_neuron.ui.screens.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.screens.intro_screen.IntroScreen
 import com.dark.tool_neuron.ui.theme.rememberNavTransitions
@@ -23,10 +24,10 @@ fun TNavigation(
     val transitions = rememberNavTransitions()
 
     LaunchedEffect(Unit) {
-        delay(3000)
-        navController.navigate(NavScreens.HomeScreen.route) {
-            popUpTo(NavScreens.IntroScreen.route) { inclusive = true }
-        }
+//        delay(3000)
+//        navController.navigate(NavScreens.HomeScreen.route) {
+//            popUpTo(NavScreens.IntroScreen.route) { inclusive = true }
+//        }
     }
 
     NavHost(
@@ -46,6 +47,9 @@ fun TNavigation(
                 actionWindowExpanded = actionWindowExpanded,
                 onActionWindowDismiss = onActionWindowDismiss
             )
+        }
+        composable(NavScreens.DevNotes.route) {
+            DevNotesScreen(innerPadding = innerPadding)
         }
     }
 }

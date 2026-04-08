@@ -10,6 +10,9 @@
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/app" />
+            <option value="$PROJECT_DIR$/download_manager" />
+            <option value="$PROJECT_DIR$/hxs" />
+            <option value="$PROJECT_DIR$/hxs_encryptor" />
           </set>
         </option>
       </GradleProjectSettings>

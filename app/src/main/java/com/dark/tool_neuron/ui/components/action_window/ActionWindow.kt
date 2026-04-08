@@ -5,6 +5,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -30,8 +30,6 @@ import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.ui.theme.Motion
-
-// ── Pill (lives in TopBar) ──────────────────────────────────────────────────
 
 @Composable
 fun ActionWindowPill(
@@ -80,8 +78,6 @@ fun ActionWindowPill(
     }
 }
 
-// ── Overlay card (lives in body Box) ───────────────────────────────────────
-
 @Composable
 fun ActionWindowOverlay(
     modelName: String,
@@ -95,6 +91,7 @@ fun ActionWindowOverlay(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() },
@@ -124,7 +121,8 @@ fun ActionWindowOverlay(
                 tonalElevation = dimens.cardElevation,
                 shadowElevation = dimens.cardElevation,
                 modifier = Modifier
-                    .width(dimens.spacingXxxl * 5)
+                    .fillMaxWidth()
+                    .padding(horizontal = dimens.screenPadding)
                     .padding(top = dimens.spacingXs)
             ) {
                 Column(

@@ -624,27 +624,37 @@ private fun processLineBreaks(input: String): String {
 }
 
 internal fun renderMathToUnicode(expression: String): String {
+    if (expression.isBlank()) return expression
     var r = expression
-    r = processTextCommands(r)
-    r = processBlackboardBold(r)
-    r = processCalligraphic(r)
-    r = processBoxed(r)
-    r = processModular(r)
-    r = processOverUnderline(r)
-    r = processStacking(r)
-    r = processWideAccents(r)
-    r = processCancel(r)
-    r = processEnvironments(r)
-    r = processDelimiters(r)
-    sortedMathSymbols.forEach { (latex, unicode) -> r = r.replace(latex, unicode) }
-    r = processAccents(r)
+    // Only run LaTeX processing if backslash is present
+    val hasBackslash = '\\' in r
+    if (hasBackslash) {
+        r = processTextCommands(r)
+        r = processBlackboardBold(r)
+        r = processCalligraphic(r)
+        r = processBoxed(r)
+        r = processModular(r)
+        r = processOverUnderline(r)
+        r = processStacking(r)
+        r = processWideAccents(r)
+        r = processCancel(r)
+        r = processEnvironments(r)
+        r = processDelimiters(r)
+        // Only call replace() when the symbol key actually exists in the string
+        for ((latex, unicode) in sortedMathSymbols) {
+            if (latex in r) r = r.replace(latex, unicode)
+        }
+        r = processAccents(r)
+    }
     r = processSuperscripts(r)
     r = processSubscripts(r)
-    r = processFractions(r)
-    r = processBinomials(r)
-    r = processSqrt(r)
-    r = processLineBreaks(r)
-    r = processSpacing(r)
+    if (hasBackslash || '\\' in r) {
+        r = processFractions(r)
+        r = processBinomials(r)
+        r = processSqrt(r)
+        r = processLineBreaks(r)
+        r = processSpacing(r)
+    }
     r = r.replace("{", "").replace("}", "")
     return r.trim()
 }

@@ -24,4 +24,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "Tool-Neuron"
 include(":app")
- 
+include(":hxs")
+include(":hxs_encryptor")
+include(":download_manager")

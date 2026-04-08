@@ -17,6 +17,8 @@ object TnIcons {
             "M 11 19 A 1 1 0 1 0 13 19 A 1 1 0 1 0 11 19 Z",
         )
     }
+    val AlertTriangle by lazy { icon("M12 9v4", "M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0", "M12 16h.01") }
+
     val ChevronUp by lazy { icon("M6 15L12 9L18 15") }
     val ChevronDown by lazy { icon("M6 9L12 15L18 9") }
     val X by lazy { icon("M6 6L18 18", "M18 6L6 18") }
@@ -91,6 +93,14 @@ object TnIcons {
         )
     }
     val Photo by lazy { icon("M15 8h.01", "M3 6a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v12a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3v-12z", "M3 16l5 -5c.928 -.893 2.072 -.893 3 0l4 4", "M14 14l1 -1c.928 -.893 2.072 -.893 3 0l3 3") }
+
+    val Copy by lazy {
+        icon(
+            "M10 8h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2z",
+            "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"
+        )
+    }
+    val Code by lazy { icon("m16 18 6-6-6-6", "m8 6-6 6 6 6") }
 
 }
 
