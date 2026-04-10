@@ -665,6 +665,7 @@ private fun InlineCodeView(text: String) {
 @Composable
 private fun CodeBlockView(code: String, language: String) {
     var isExpanded by remember { mutableStateOf(false) }
+    val codeScrollState = rememberScrollState()
     val context = LocalContext.current
     val dimens = LocalDimens.current
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
@@ -735,7 +736,7 @@ private fun CodeBlockView(code: String, language: String) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
+                    .horizontalScroll(codeScrollState)
                     .padding(horizontal = 10.dp, vertical = dimens.spacingSm)
             ) {
                 Text(

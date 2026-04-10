@@ -68,6 +68,11 @@ data class Dimens(
     // Timeline
     val timelineNodeSize: Dp,
     val timelineLineWidth: Dp,
+
+    // Pin pad
+    val padButtonSize: Dp,
+    val padButtonGap: Dp,
+    val padFontSize: Int,
 )
 
 // Compact (phones, small screens)
@@ -122,6 +127,10 @@ val CompactDimens = Dimens(
 
     timelineNodeSize = 8.dp,
     timelineLineWidth = 2.dp,
+
+    padButtonSize = 60.dp,
+    padButtonGap = 14.dp,
+    padFontSize = 22,
 )
 
 // Medium (large phones, small tablets)
@@ -176,6 +185,10 @@ val MediumDimens = Dimens(
 
     timelineNodeSize = 9.dp,
     timelineLineWidth = 2.dp,
+
+    padButtonSize = 68.dp,
+    padButtonGap = 16.dp,
+    padFontSize = 24,
 )
 
 // Expanded (tablets, foldables unfolded)
@@ -230,6 +243,10 @@ val ExpandedDimens = Dimens(
 
     timelineNodeSize = 10.dp,
     timelineLineWidth = 2.dp,
+
+    padButtonSize = 76.dp,
+    padButtonGap = 18.dp,
+    padFontSize = 26,
 )
 
 val LocalDimens = compositionLocalOf { CompactDimens }

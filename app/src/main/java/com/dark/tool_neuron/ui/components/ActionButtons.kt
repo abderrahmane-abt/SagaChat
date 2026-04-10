@@ -35,7 +35,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,8 +43,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -213,7 +211,7 @@ fun MultiActionButton(
                         .size(dimens.actionIconSize)
                         .then(
                             if (action.enabled) Modifier.clickable(
-                                interactionSource = remember { MutableInteractionSource() },
+                                interactionSource = remember(index) { MutableInteractionSource() },
                                 indication = null,
                                 onClick = action.onClick
                             ) else Modifier
@@ -399,40 +397,32 @@ fun <T> ActionToggleGroup(
 
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
-    val density = LocalDensity.current
     val selectedIndex = items.indexOf(selectedItem).coerceAtLeast(0)
-    val containerWidthPx = remember { mutableIntStateOf(0) }
-    val itemWidth = remember(containerWidthPx.intValue, items.size) {
-        if (containerWidthPx.intValue > 0) {
-            with(density) { (containerWidthPx.intValue / items.size).toDp() }
-        } else 0.dp
-    }
-
-    val indicatorOffset by animateDpAsState(
-        targetValue = itemWidth * selectedIndex,
-        animationSpec = Motion.interactive(),
-        label = "toggleIndicatorOffset"
-    )
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(dimens.actionIconSize)
-            .onSizeChanged { containerWidthPx.intValue = it.width },
+            .height(dimens.actionIconSize),
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
         shape = tnShapes.actionIcon
     ) {
-        Box {
-            if (itemWidth > 0.dp) {
-                Box(
-                    modifier = Modifier
-                        .offset(x = indicatorOffset + 2.dp)
-                        .padding(vertical = 2.dp)
-                        .width(itemWidth - 4.dp)
-                        .height(dimens.actionIconSize - 4.dp)
-                        .background(MaterialTheme.colorScheme.primary, tnShapes.actionIcon)
-                )
-            }
+        BoxWithConstraints {
+            val itemWidth = maxWidth / items.size
+
+            val indicatorOffset by animateDpAsState(
+                targetValue = itemWidth * selectedIndex,
+                animationSpec = Motion.interactive(),
+                label = "toggleIndicatorOffset"
+            )
+
+            Box(
+                modifier = Modifier
+                    .offset(x = indicatorOffset + 2.dp)
+                    .padding(vertical = 2.dp)
+                    .width(itemWidth - 4.dp)
+                    .height(dimens.actionIconSize - 4.dp)
+                    .background(MaterialTheme.colorScheme.primary, tnShapes.actionIcon)
+            )
 
             Row(
                 modifier = Modifier
@@ -459,7 +449,7 @@ fun <T> ActionToggleGroup(
                             .clip(tnShapes.actionIcon)
                             .clickable(
                                 enabled = enabled,
-                                interactionSource = remember { MutableInteractionSource() },
+                                interactionSource = remember(index) { MutableInteractionSource() },
                                 indication = null,
                                 onClick = { onItemSelected(item) }
                             ),

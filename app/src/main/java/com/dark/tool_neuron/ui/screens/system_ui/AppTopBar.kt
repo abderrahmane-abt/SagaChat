@@ -4,6 +4,8 @@ import androidx.compose.runtime.Composable
 import com.dark.tool_neuron.model.NavScreens
 import com.dark.tool_neuron.ui.screens.dev_notes.DevNotesTopBar
 import com.dark.tool_neuron.ui.screens.home_screen.HomeScreenTopbar
+import com.dark.tool_neuron.ui.screens.password_screen.PasswordScreenTopBar
+import com.dark.tool_neuron.ui.screens.setup_screen.SetupScreenTopBar
 
 @Composable
 fun AppTopBar(
@@ -17,6 +19,8 @@ fun AppTopBar(
             onToggle = onActionWindowToggle
         )
         NavScreens.DevNotes.route -> DevNotesTopBar()
+        NavScreens.PasswordScreen.route -> PasswordScreenTopBar()
+        NavScreens.SetupScreen.route -> SetupScreenTopBar()
         else -> Unit
     }
 }

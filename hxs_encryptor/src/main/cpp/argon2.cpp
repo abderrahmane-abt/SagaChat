@@ -240,24 +240,18 @@ static void fill_block(const Block& prev, const Block& ref, Block& next, bool xo
         G(blockR.v[b+3],  blockR.v[b+4],  blockR.v[b+9],  blockR.v[b+14]);
     }
 
-    // Column permutations (8 columns, each 16 elements interleaved)
+    // Column permutations: 8×8 matrix of 128-bit (2 × uint64) values.
+    // Column i picks one 128-bit element from each of the 8 rows (stride 16 qwords).
     for (int i = 0; i < 8; i++) {
-        G(blockR.v[i*2+  0], blockR.v[i*2+ 2], blockR.v[i*2+ 4], blockR.v[i*2+ 6]);
-        G(blockR.v[i*2+  1], blockR.v[i*2+ 3], blockR.v[i*2+ 5], blockR.v[i*2+ 7]);
-        G(blockR.v[i*2+ 16], blockR.v[i*2+18], blockR.v[i*2+20], blockR.v[i*2+22]);
-        G(blockR.v[i*2+ 17], blockR.v[i*2+19], blockR.v[i*2+21], blockR.v[i*2+23]);
-        G(blockR.v[i*2+ 32], blockR.v[i*2+34], blockR.v[i*2+36], blockR.v[i*2+38]);
-        G(blockR.v[i*2+ 33], blockR.v[i*2+35], blockR.v[i*2+37], blockR.v[i*2+39]);
-        G(blockR.v[i*2+ 48], blockR.v[i*2+50], blockR.v[i*2+52], blockR.v[i*2+54]);
-        G(blockR.v[i*2+ 49], blockR.v[i*2+51], blockR.v[i*2+53], blockR.v[i*2+55]);
-        G(blockR.v[i*2+ 64], blockR.v[i*2+66], blockR.v[i*2+68], blockR.v[i*2+70]);
-        G(blockR.v[i*2+ 65], blockR.v[i*2+67], blockR.v[i*2+69], blockR.v[i*2+71]);
-        G(blockR.v[i*2+ 80], blockR.v[i*2+82], blockR.v[i*2+84], blockR.v[i*2+86]);
-        G(blockR.v[i*2+ 81], blockR.v[i*2+83], blockR.v[i*2+85], blockR.v[i*2+87]);
-        G(blockR.v[i*2+ 96], blockR.v[i*2+98], blockR.v[i*2+100],blockR.v[i*2+102]);
-        G(blockR.v[i*2+ 97], blockR.v[i*2+99], blockR.v[i*2+101],blockR.v[i*2+103]);
-        G(blockR.v[i*2+112], blockR.v[i*2+114],blockR.v[i*2+116],blockR.v[i*2+118]);
-        G(blockR.v[i*2+113], blockR.v[i*2+115],blockR.v[i*2+117],blockR.v[i*2+119]);
+        int c = 2 * i;
+        G(blockR.v[c],    blockR.v[c+32], blockR.v[c+64], blockR.v[c+96]);
+        G(blockR.v[c+1],  blockR.v[c+33], blockR.v[c+65], blockR.v[c+97]);
+        G(blockR.v[c+16], blockR.v[c+48], blockR.v[c+80], blockR.v[c+112]);
+        G(blockR.v[c+17], blockR.v[c+49], blockR.v[c+81], blockR.v[c+113]);
+        G(blockR.v[c],    blockR.v[c+33], blockR.v[c+80], blockR.v[c+113]);
+        G(blockR.v[c+1],  blockR.v[c+32], blockR.v[c+81], blockR.v[c+112]);
+        G(blockR.v[c+16], blockR.v[c+49], blockR.v[c+64], blockR.v[c+97]);
+        G(blockR.v[c+17], blockR.v[c+48], blockR.v[c+65], blockR.v[c+96]);
     }
 
     if (xor_mode) {

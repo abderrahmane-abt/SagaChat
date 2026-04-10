@@ -360,11 +360,15 @@ class HxsRecord private constructor(
         private fun encodeVarint(v: Long): ByteArray {
             var value = v
             val out = mutableListOf<Byte>()
-            while (value > 0x7F) {
-                out.add(((value and 0x7F) or 0x80).toByte())
+            do {
+                val byte = (value and 0x7F).toByte()
                 value = value ushr 7
-            }
-            out.add((value and 0x7F).toByte())
+                if (value != 0L) {
+                    out.add((byte.toInt() or 0x80).toByte())
+                } else {
+                    out.add(byte)
+                }
+            } while (value != 0L)
             return out.toByteArray()
         }
 
