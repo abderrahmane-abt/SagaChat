@@ -15,6 +15,7 @@ import com.dark.tool_neuron.ui.theme.LocalDimens
 fun HomeScreenTopbar(
     expanded: Boolean,
     onToggle: () -> Unit,
+    onStoreClick: () -> Unit = {},
 ) {
     val dimens = LocalDimens.current
 
@@ -42,7 +43,7 @@ fun HomeScreenTopbar(
                 modifier = Modifier.padding(end = dimens.spacingSm)
             )
             ActionButton(
-                onClickListener = {},
+                onClickListener = onStoreClick,
                 icon = TnIcons.Download,
                 contentDescription = "Store",
                 modifier = Modifier.padding(end = dimens.screenPadding)

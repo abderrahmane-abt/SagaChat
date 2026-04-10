@@ -36,7 +36,9 @@ fun AppScaffold() {
             if (!isFullscreen) AppTopBar(
                 currentRoute = currentRoute,
                 actionWindowExpanded = actionWindowExpanded,
-                onActionWindowToggle = homeViewModel::toggleActionWindow
+                onActionWindowToggle = homeViewModel::toggleActionWindow,
+                onBack = { navController.popBackStack() },
+                onNavigateToStore = { navController.navigate(NavScreens.ModelStore.route) },
             )
         },
         bottomBar = {

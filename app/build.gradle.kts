@@ -52,6 +52,7 @@ android {
 
     packaging {
         jniLibs {
+            useLegacyPackaging = true
             pickFirsts += setOf(
                 "lib/arm64-v8a/libc++_shared.so",
                 "lib/x86_64/libc++_shared.so",

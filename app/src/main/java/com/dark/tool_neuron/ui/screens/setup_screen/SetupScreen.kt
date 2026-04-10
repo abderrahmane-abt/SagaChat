@@ -1,5 +1,9 @@
 package com.dark.tool_neuron.ui.screens.setup_screen
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
@@ -48,6 +52,15 @@ fun SetupScreen(
     val dimens = LocalDimens.current
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { delay(80); visible = true }
+
+    val notifLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {}
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     Column(
         modifier = Modifier

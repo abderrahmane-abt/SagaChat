@@ -113,6 +113,12 @@ object TnIcons {
             "M12 9l6 6"
         )
     }
+    val ArrowLeft by lazy { icon("M19 12H5", "M12 19l-7-7 7-7") }
+    val Refresh by lazy { icon("M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", "M3 3v5h5", "M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16", "M21 21v-5h-5") }
+    val Search by lazy { icon("M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16z", "M21 21l-4.35-4.35") }
+    val Trash by lazy { icon("M3 6h18", "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6", "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2") }
+    val Info by lazy { icon("M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z", "M12 16v-4", "M12 8h.01") }
+    val Sparkles by lazy { icon("M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 1-1.275-1.275L3 12l5.813-1.912a2 2 0 0 1 1.275-1.275L12 3z") }
     val Check by lazy { icon("M20 6L9 17l-5-5") }
     val OAuth by lazy {
         icon(

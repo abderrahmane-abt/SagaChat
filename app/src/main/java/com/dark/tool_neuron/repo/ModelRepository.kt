@@ -1,0 +1,160 @@
+package com.dark.tool_neuron.repo
+
+import android.content.Context
+import com.dark.hxs.HexStorage
+import com.dark.hxs.HxsRecord
+import com.dark.tool_neuron.model.ModelConfig
+import com.dark.tool_neuron.model.ModelInfo
+import com.dark.tool_neuron.model.enums.PathType
+import com.dark.tool_neuron.model.enums.ProviderType
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import java.io.File
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class ModelRepository @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
+    private val storage = HexStorage()
+    private val _models = MutableStateFlow<List<ModelInfo>>(emptyList())
+    val models: StateFlow<List<ModelInfo>> = _models.asStateFlow()
+
+    init {
+        val dir = File(context.filesDir, "model_store")
+        dir.mkdirs()
+        val path = dir.absolutePath
+        if (storage.exists(path)) {
+            storage.openPlaintext(path)
+        } else {
+            storage.createPlaintext(path)
+        }
+        storage.ensureCollection(COL_MODELS)
+        storage.ensureCollection(COL_CONFIG)
+        storage.addIndex(COL_MODELS, TAG_ID, HexStorage.WIRE_BYTES)
+        refresh()
+    }
+
+    fun refresh() {
+        _models.value = storage.getAll(COL_MODELS).map { it.toModelInfo() }
+    }
+
+    fun insert(model: ModelInfo, config: ModelConfig? = null) {
+        storage.put(COL_MODELS, model.toRecord())
+        storage.flush(COL_MODELS)
+        if (config != null) {
+            storage.put(COL_CONFIG, config.toRecord())
+            storage.flush(COL_CONFIG)
+        }
+        refresh()
+    }
+
+    fun delete(modelId: String) {
+        val records = storage.queryString(COL_MODELS, TAG_ID, modelId)
+        records.forEach { storage.delete(COL_MODELS, it.id) }
+        val configs = storage.queryString(COL_CONFIG, TAG_CONFIG_MODEL_ID, modelId)
+        configs.forEach { storage.delete(COL_CONFIG, it.id) }
+        storage.flushAll()
+        refresh()
+    }
+
+    fun getConfig(modelId: String): ModelConfig? {
+        val records = storage.queryString(COL_CONFIG, TAG_CONFIG_MODEL_ID, modelId)
+        return records.firstOrNull()?.toModelConfig()
+    }
+
+    fun setActive(modelId: String) {
+        val all = storage.getAll(COL_MODELS)
+        all.forEach { record ->
+            val wasActive = record.getBool(TAG_IS_ACTIVE)
+            val isTarget = record.getString(TAG_ID) == modelId
+            if (wasActive || isTarget) {
+                record.putBool(TAG_IS_ACTIVE, isTarget)
+                storage.update(COL_MODELS, record)
+            }
+        }
+        storage.flush(COL_MODELS)
+        refresh()
+    }
+
+    fun getModelById(modelId: String): ModelInfo? {
+        return storage.queryString(COL_MODELS, TAG_ID, modelId)
+            .firstOrNull()?.toModelInfo()
+    }
+
+    fun getModelsDir(): File {
+        val dir = File(context.filesDir, "models")
+        dir.mkdirs()
+        return dir
+    }
+
+    fun modelFile(modelId: String): File {
+        val name = if (modelId.endsWith(".gguf", ignoreCase = true)) modelId else "$modelId.gguf"
+        return File(getModelsDir(), name)
+    }
+
+    // ── HXS tag constants ──
+
+    companion object {
+        private const val COL_MODELS = "models"
+        private const val COL_CONFIG = "model_config"
+
+        private const val TAG_ID = 1
+        private const val TAG_NAME = 2
+        private const val TAG_PATH = 3
+        private const val TAG_PATH_TYPE = 4
+        private const val TAG_PROVIDER_TYPE = 5
+        private const val TAG_FILE_SIZE = 6
+        private const val TAG_IS_ACTIVE = 7
+
+        private const val TAG_CONFIG_ID = 1
+        private const val TAG_CONFIG_MODEL_ID = 2
+        private const val TAG_CONFIG_LOADING = 3
+        private const val TAG_CONFIG_INFERENCE = 4
+    }
+
+    // ── Serialization ──
+
+    private fun ModelInfo.toRecord(): HxsRecord {
+        val m = this
+        return HxsRecord.build {
+            putString(TAG_ID, m.id)
+            putString(TAG_NAME, m.name)
+            putString(TAG_PATH, m.path)
+            putString(TAG_PATH_TYPE, m.pathType.name)
+            putString(TAG_PROVIDER_TYPE, m.providerType.name)
+            putTimestamp(TAG_FILE_SIZE, m.fileSize)
+            putBool(TAG_IS_ACTIVE, m.isActive)
+        }
+    }
+
+    private fun HxsRecord.toModelInfo(): ModelInfo = ModelInfo(
+        id = getString(TAG_ID),
+        name = getString(TAG_NAME),
+        path = getString(TAG_PATH),
+        pathType = try { PathType.valueOf(getString(TAG_PATH_TYPE)) } catch (_: Exception) { PathType.FILE },
+        providerType = try { ProviderType.valueOf(getString(TAG_PROVIDER_TYPE)) } catch (_: Exception) { ProviderType.GGUF },
+        fileSize = getTimestamp(TAG_FILE_SIZE),
+        isActive = getBool(TAG_IS_ACTIVE),
+    )
+
+    private fun ModelConfig.toRecord(): HxsRecord {
+        val c = this
+        return HxsRecord.build {
+            putString(TAG_CONFIG_ID, c.id)
+            putString(TAG_CONFIG_MODEL_ID, c.modelId)
+            putString(TAG_CONFIG_LOADING, c.loadingParamsJson)
+            putString(TAG_CONFIG_INFERENCE, c.inferenceParamsJson)
+        }
+    }
+
+    private fun HxsRecord.toModelConfig(): ModelConfig = ModelConfig(
+        id = getString(TAG_CONFIG_ID),
+        modelId = getString(TAG_CONFIG_MODEL_ID),
+        loadingParamsJson = getString(TAG_CONFIG_LOADING),
+        inferenceParamsJson = getString(TAG_CONFIG_INFERENCE),
+    )
+}

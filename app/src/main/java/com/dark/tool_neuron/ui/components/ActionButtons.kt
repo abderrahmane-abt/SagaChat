@@ -50,8 +50,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.dark.tool_neuron.models.ui.ActionIcon
-import com.dark.tool_neuron.models.ui.ActionItem
+import com.dark.tool_neuron.model.ui.ActionIcon
+import com.dark.tool_neuron.model.ui.ActionItem
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.DefaultTnShapes
 import com.dark.tool_neuron.ui.theme.LocalDimens

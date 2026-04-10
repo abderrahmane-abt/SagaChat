@@ -1,9 +1,11 @@
 package com.dark.tool_neuron.ui.navigation
 
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -14,9 +16,11 @@ import com.dark.tool_neuron.ui.screens.dev_notes.DevNotesScreen
 import com.dark.tool_neuron.ui.screens.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.screens.intro_screen.IntroScreen
 import com.dark.tool_neuron.ui.screens.password_screen.PasswordScreen
+import com.dark.tool_neuron.ui.screens.model_store.ModelStoreScreen
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupPasswordScreen
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupScreen
 import com.dark.tool_neuron.ui.theme.rememberNavTransitions
+import com.dark.tool_neuron.viewmodel.ModelStoreViewModel
 import com.dark.tool_neuron.viewmodel.PasswordViewModel
 import com.dark.tool_neuron.viewmodel.SetupViewModel
 import kotlinx.coroutines.delay
@@ -97,6 +101,11 @@ fun TNavigation(
                     }
                 )
             }
+        }
+        composable(NavScreens.ModelStore.route) {
+            val activity = LocalContext.current as ComponentActivity
+            val viewModel: ModelStoreViewModel = hiltViewModel(activity)
+            ModelStoreScreen(innerPadding = innerPadding, viewModel = viewModel)
         }
         composable(NavScreens.PasswordScreen.route) {
             val viewModel: PasswordViewModel = hiltViewModel()
