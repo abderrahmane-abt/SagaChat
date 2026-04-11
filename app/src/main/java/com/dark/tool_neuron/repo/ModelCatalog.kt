@@ -26,16 +26,18 @@ class ModelCatalog @Inject constructor(
         forceRefresh: Boolean = false
     ): List<HuggingFaceModel> {
         if (!forceRefresh) {
-            memoryCache?.let { return it }
-            loadDiskCache()?.let { memoryCache = it; return it }
+            memoryCache?.let { return it + getBuiltInModels() }
+            loadDiskCache()?.let { memoryCache = it; return it + getBuiltInModels() }
         }
         val models = repos.filter { it.isEnabled }.flatMap { repo ->
             try { fetchRepo(repo) } catch (_: Exception) { emptyList() }
         }
         memoryCache = models
         saveDiskCache(models)
-        return models
+        return models + getBuiltInModels()
     }
+
+    fun getBuiltInModels(): List<HuggingFaceModel> = BUILT_IN_MODELS
 
     fun clearCache() {
         memoryCache = null
@@ -59,7 +61,9 @@ class ModelCatalog @Inject constructor(
             for (i in 0 until tree.length()) {
                 val file = tree.getJSONObject(i)
                 val path = file.optString("path", "")
-                if (!path.endsWith(".gguf", ignoreCase = true)) continue
+                val isGguf = path.endsWith(".gguf", ignoreCase = true)
+                val isZip = path.endsWith(".zip", ignoreCase = true)
+                if (!isGguf && !isZip) continue
                 if (path.contains("mmproj", ignoreCase = true)) continue
                 if (path.contains("projector", ignoreCase = true)) continue
 
@@ -79,7 +83,8 @@ class ModelCatalog @Inject constructor(
                         add(author)
                         if (isGated) add("Gated")
                         if (downloads > 1000) add("${downloads / 1000}k+ downloads")
-                    }
+                    },
+                    modelType = if (isZip) "sd" else "gguf",
                 ))
             }
             models.sortedBy { it.sizeBytes }
@@ -160,6 +165,7 @@ class ModelCatalog @Inject constructor(
         put("sizeBytes", sizeBytes); put("repoId", repoId)
         put("quantization", quantization)
         put("tags", JSONArray(tags))
+        put("modelType", modelType)
     }
 
     private fun JSONObject.toModel(): HuggingFaceModel = HuggingFaceModel(
@@ -171,10 +177,42 @@ class ModelCatalog @Inject constructor(
         quantization = optString("quantization"),
         tags = optJSONArray("tags")?.let { arr ->
             (0 until arr.length()).map { arr.getString(it) }
-        } ?: emptyList()
+        } ?: emptyList(),
+        modelType = optString("modelType", "gguf"),
     )
 
     companion object {
         private const val CACHE_TTL_MS = 24 * 60 * 60 * 1000L
+
+        private val BUILT_IN_MODELS = listOf(
+            HuggingFaceModel(
+                id = "vits-piper-en-libritts", name = "Piper LibriTTS (English)",
+                fileName = "vits-piper-en-libritts", fileUri = "",
+                approximateSize = "~60 MB", sizeBytes = 0,
+                repoId = "built-in-tts", quantization = "",
+                tags = listOf("TTS", "English", "Piper"), modelType = "tts",
+            ),
+            HuggingFaceModel(
+                id = "vits-piper-en-amy", name = "Piper Amy (English)",
+                fileName = "vits-piper-en-amy", fileUri = "",
+                approximateSize = "~30 MB", sizeBytes = 0,
+                repoId = "built-in-tts", quantization = "",
+                tags = listOf("TTS", "English", "Piper"), modelType = "tts",
+            ),
+            HuggingFaceModel(
+                id = "whisper-tiny-en", name = "Whisper Tiny (English)",
+                fileName = "whisper-tiny-en", fileUri = "",
+                approximateSize = "~75 MB", sizeBytes = 0,
+                repoId = "built-in-stt", quantization = "",
+                tags = listOf("STT", "English", "Whisper"), modelType = "stt",
+            ),
+            HuggingFaceModel(
+                id = "zipformer-en-2023-04-01", name = "Zipformer (English)",
+                fileName = "zipformer-en-2023-04-01", fileUri = "",
+                approximateSize = "~70 MB", sizeBytes = 0,
+                repoId = "built-in-stt", quantization = "",
+                tags = listOf("STT", "English", "Zipformer"), modelType = "stt",
+            ),
+        )
     }
 }
