@@ -92,6 +92,7 @@ class SetupViewModel @Inject constructor(
 
         security.setPassword(pwd)
         prefs.setupDone = true
+        prefs.securitySetupDone = true
         prefs.onboardingComplete = true
         return true
     }
@@ -110,6 +111,7 @@ class SetupViewModel @Inject constructor(
     fun completeWithNoLock() {
         security.disableLock()
         prefs.setupDone = true
+        prefs.securitySetupDone = true
         prefs.onboardingComplete = true
     }
 }
