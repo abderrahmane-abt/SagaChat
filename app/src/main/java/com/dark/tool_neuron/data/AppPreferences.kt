@@ -122,6 +122,18 @@ class AppPreferences @Inject constructor(
         get() = getBytes(KEY_PASSWORD_HASH)
         set(value) { if (value != null) putBytes(KEY_PASSWORD_HASH, value) }
 
+    var securitySetupDone: Boolean
+        get() = getBoolean(KEY_SECURITY_SETUP_DONE)
+        set(value) = putBoolean(KEY_SECURITY_SETUP_DONE, value)
+
+    var modelSetupDone: Boolean
+        get() = getBoolean(KEY_MODEL_SETUP_DONE)
+        set(value) = putBoolean(KEY_MODEL_SETUP_DONE, value)
+
+    var guideShown: Boolean
+        get() = getBoolean(KEY_GUIDE_SHOWN)
+        set(value) = putBoolean(KEY_GUIDE_SHOWN, value)
+
     companion object {
         private const val COLLECTION = "app_prefs"
         private const val TAG_KEY = 1
@@ -135,6 +147,9 @@ class AppPreferences @Inject constructor(
         const val KEY_SECURITY_MODE = "security_mode"
         const val KEY_PASSWORD_SALT = "password_salt"
         const val KEY_PASSWORD_HASH = "password_hash"
+        const val KEY_SECURITY_SETUP_DONE = "security_setup_done"
+        const val KEY_MODEL_SETUP_DONE = "model_setup_done"
+        const val KEY_GUIDE_SHOWN = "guide_shown"
 
         private const val TAG = "AppPreferences"
 
