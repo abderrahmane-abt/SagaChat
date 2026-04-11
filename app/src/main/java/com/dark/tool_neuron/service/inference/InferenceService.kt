@@ -10,8 +10,22 @@ import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.os.Process
 import android.util.Log
+import com.dark.ai_sherpa.OfflineModelConfig
+import com.dark.ai_sherpa.OfflineRecognizer
+import com.dark.ai_sherpa.OfflineRecognizerConfig
+import com.dark.ai_sherpa.OfflineTts
+import com.dark.ai_sherpa.OfflineTtsConfig
+import com.dark.ai_sherpa.OfflineTtsModelConfig
+import com.dark.ai_sherpa.OfflineTtsVitsModelConfig
+import com.dark.ai_sherpa.OfflineWhisperModelConfig
+import com.dark.ai_sd.DiffusionGenerationParams
+import com.dark.ai_sd.DiffusionGenerationResult
+import com.dark.ai_sd.DiffusionModelConfig
+import com.dark.ai_sd.DiffusionRuntimeConfig
+import com.dark.ai_sd.StableDiffusionManager
 import com.dark.gguf_lib.GGMLEngine
 import com.dark.gguf_lib.models.GenerationEvent
+import com.dark.tool_neuron.R
 import com.dark.tool_neuron.service.IGenerationCallback
 import com.dark.tool_neuron.service.IInferenceService
 import com.dark.tool_neuron.service.IModelLoadCallback
@@ -28,6 +42,11 @@ class InferenceService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val engine = GGMLEngine()
+    private val ttsLock = Any()
+    private val sttLock = Any()
+    private var tts: OfflineTts? = null
+    private var stt: OfflineRecognizer? = null
+    private var sdManager: StableDiffusionManager? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -43,6 +62,10 @@ class InferenceService : Service() {
         runBlocking(Dispatchers.IO) {
             if (engine.isLoaded) engine.unload()
         }
+        synchronized(ttsLock) { tts?.close(); tts = null }
+        synchronized(sttLock) { stt?.close(); stt = null }
+        sdManager?.cleanup()
+        sdManager = null
         scope.cancel()
         Log.d(TAG, "InferenceService destroyed")
         super.onDestroy()
@@ -223,6 +246,214 @@ class InferenceService : Service() {
         override fun generateVlm(messagesJson: String, maxTokens: Int, callback: IGenerationCallback) {
             collectFlow(engine.generateVlmFlow(messagesJson, emptyList(), maxTokens), callback)
         }
+
+        // TTS
+
+        override fun loadTtsModel(configJson: String): Boolean {
+            return synchronized(ttsLock) {
+                try {
+                    tts?.close()
+                    val cfg = parseConfig(configJson)
+                    val ttsConfig = OfflineTtsConfig(
+                        model = OfflineTtsModelConfig(
+                            vits = OfflineTtsVitsModelConfig(
+                                model = cfg.getString("model"),
+                                tokens = cfg.getString("tokens"),
+                                dataDir = cfg.optString("dataDir", "")
+                            ),
+                            numThreads = cfg.optInt("numThreads", 2)
+                        )
+                    )
+                    tts = OfflineTts.fromFile(ttsConfig)
+                    true
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to load TTS model", e)
+                    tts = null
+                    false
+                }
+            }
+        }
+
+        override fun unloadTtsModel() {
+            synchronized(ttsLock) {
+                tts?.close()
+                tts = null
+            }
+        }
+
+        override fun isTtsLoaded(): Boolean = synchronized(ttsLock) { tts != null }
+
+        override fun synthesize(text: String, speakerId: Int, speed: Float): FloatArray? {
+            return synchronized(ttsLock) {
+                try {
+                    val audio = tts?.generate(text, sid = speakerId, speed = speed)
+                    audio?.samples
+                } catch (e: Exception) {
+                    Log.e(TAG, "TTS synthesis failed", e)
+                    null
+                }
+            }
+        }
+
+        override fun getTtsSampleRate(): Int = synchronized(ttsLock) { tts?.sampleRate ?: 0 }
+
+        // STT
+
+        override fun loadSttModel(configJson: String): Boolean {
+            return synchronized(sttLock) {
+                try {
+                    stt?.close()
+                    val cfg = parseConfig(configJson)
+                    val type = cfg.optString("type", "whisper")
+                    val recognizerConfig = when (type) {
+                        "whisper" -> OfflineRecognizerConfig(
+                            modelConfig = OfflineModelConfig(
+                                whisper = OfflineWhisperModelConfig(
+                                    encoder = cfg.getString("encoder"),
+                                    decoder = cfg.getString("decoder")
+                                ),
+                                tokens = cfg.getString("tokens"),
+                                numThreads = cfg.optInt("numThreads", 2)
+                            )
+                        )
+                        else -> throw IllegalArgumentException("Unsupported STT type: $type")
+                    }
+                    stt = OfflineRecognizer.fromFile(recognizerConfig)
+                    true
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to load STT model", e)
+                    stt = null
+                    false
+                }
+            }
+        }
+
+        override fun unloadSttModel() {
+            synchronized(sttLock) {
+                stt?.close()
+                stt = null
+            }
+        }
+
+        override fun isSttLoaded(): Boolean = synchronized(sttLock) { stt != null }
+
+        override fun recognize(samples: FloatArray, sampleRate: Int): String? {
+            return synchronized(sttLock) {
+                val recognizer = stt ?: return@synchronized null
+                try {
+                    val stream = recognizer.createStream()
+                    stream.acceptWaveform(sampleRate = sampleRate, samples = samples)
+                    recognizer.decode(stream)
+                    val result = recognizer.getResult(stream).text
+                    stream.close()
+                    result
+                } catch (e: Exception) {
+                    Log.e(TAG, "STT recognition failed", e)
+                    null
+                }
+            }
+        }
+
+        // ── SD (Stable Diffusion) ──
+
+        override fun initSdRuntime(configJson: String): Boolean {
+            val sd = createSdManager(this@InferenceService)
+            sdManager = sd
+            return try {
+                runBlocking(Dispatchers.IO) {
+                    val cfg = parseConfig(configJson)
+                    sd.initialize(DiffusionRuntimeConfig(
+                        runtimeDir = cfg.optString("runtimeDir", "runtime_libs"),
+                        safetyCheckerEnabled = cfg.optBoolean("safetyChecker", true),
+                    ))
+                }
+                true
+            } catch (e: Exception) {
+                Log.e(TAG, "SD runtime init failed", e)
+                false
+            }
+        }
+
+        override fun loadSdModel(configJson: String): Boolean {
+            val sd = sdManager ?: return false
+            return try {
+                val cfg = parseConfig(configJson)
+                sd.loadModel(
+                    DiffusionModelConfig(
+                        name = cfg.optString("name", "sd"),
+                        modelDir = cfg.getString("modelDir"),
+                        textEmbeddingSize = cfg.optInt("textEmbeddingSize", 768),
+                        runOnCpu = cfg.optBoolean("runOnCpu", false),
+                        useCpuClip = cfg.optBoolean("useCpuClip", false),
+                        isPony = cfg.optBoolean("isPony", false),
+                        safetyMode = cfg.optBoolean("safetyMode", false),
+                    ),
+                    width = cfg.optInt("width", 512),
+                    height = cfg.optInt("height", 512),
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "SD model load failed", e)
+                false
+            }
+        }
+
+        override fun generateSdImage(paramsJson: String, callback: IGenerationCallback) {
+            val sd = sdManager ?: run {
+                try { callback.onError("SD not initialized") } catch (_: Exception) {}
+                return
+            }
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val cfg = parseConfig(paramsJson)
+                    val params = DiffusionGenerationParams(
+                        prompt = cfg.optString("prompt", ""),
+                        negativePrompt = cfg.optString("negativePrompt", ""),
+                        steps = cfg.optInt("steps", 28),
+                        cfgScale = cfg.optDouble("cfgScale", 7.0).toFloat(),
+                        seed = if (cfg.has("seed")) cfg.optLong("seed") else null,
+                        width = cfg.optInt("width", 512),
+                        height = cfg.optInt("height", 512),
+                        scheduler = cfg.optString("scheduler", "dpm"),
+                        useOpenCL = cfg.optBoolean("useOpenCL", false),
+                    )
+                    val result = sd.generateImageSync(params)
+                    when (result) {
+                        is DiffusionGenerationResult.Success -> {
+                            safeCallback(callback) { it.onDone() }
+                        }
+                        is DiffusionGenerationResult.Failure -> {
+                            safeCallback(callback) { it.onError(result.error) }
+                        }
+                    }
+                } catch (e: Exception) {
+                    safeCallback(callback) { it.onError(e.message ?: "SD generation failed") }
+                }
+            }
+        }
+
+        override fun stopSdGeneration() {
+            sdManager?.cancelGeneration()
+        }
+
+        override fun unloadSdModel() {
+            sdManager?.stopBackend()
+            updateNotification("Inference ready")
+        }
+
+        override fun isSdModelLoaded(): Boolean = sdManager?.isBackendRunning() ?: false
+
+        override fun getSdModelInfo(): String? {
+            val model = sdManager?.getCurrentModel() ?: return null
+            return JSONObject().apply {
+                put("name", model.name)
+                put("modelDir", model.modelDir)
+                put("runOnCpu", model.runOnCpu)
+            }.toString()
+        }
+
+        override fun getSocInfo(): String = try {
+            createSdManager(this@InferenceService).getSocInfo()
+        } catch (_: Exception) { "{}" }
     }
 
     // ── Internal helpers ──
@@ -303,7 +534,7 @@ class InferenceService : Service() {
 
     private fun buildNotification(text: String): Notification =
         Notification.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_menu_manage)
+            .setSmallIcon(R.drawable.inference_leaf)
             .setContentTitle("Tool Neuron")
             .setContentText(text)
             .setOngoing(true)
@@ -312,6 +543,14 @@ class InferenceService : Service() {
     private fun updateNotification(text: String) {
         getSystemService(NotificationManager::class.java)
             .notify(NOTIFICATION_ID, buildNotification(text))
+    }
+
+    private fun createSdManager(ctx: android.content.Context): StableDiffusionManager {
+        val ctor = StableDiffusionManager::class.java.declaredConstructors.first {
+            it.parameterCount == 2
+        }
+        ctor.isAccessible = true
+        return ctor.newInstance(ctx.applicationContext, null) as StableDiffusionManager
     }
 
     companion object {
