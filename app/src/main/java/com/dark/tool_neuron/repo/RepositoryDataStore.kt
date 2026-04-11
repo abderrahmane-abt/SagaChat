@@ -82,6 +82,9 @@ class RepositoryDataStore @Inject constructor(
             HFRepository("qwen3-0.6b", "Qwen3 0.6B", "Qwen/Qwen3-0.6B-GGUF"),
             HFRepository("unsloth-qwen3_5-0_8b", "Qwen3.5 0.8B", "unsloth/Qwen3.5-0.8B-GGUF"),
             HFRepository("unsloth-qwen3_5-4b", "Qwen3.5 4B", "unsloth/Qwen3.5-4B-GGUF"),
+            HFRepository("sd-qnn", "Stable Diffusion (NPU)", "xororz/sd-qnn", category = ModelCategory.GENERAL),
+            HFRepository("sd-mnn", "Stable Diffusion (CPU)", "xororz/sd-mnn", category = ModelCategory.GENERAL),
+            HFRepository("sd-cyberrealistic-qnn", "CyberRealistic Classic (NPU)", "Mr-J-369/cyberrealistic-classic-SD1.5-qnn2.28", category = ModelCategory.UNCENSORED),
         )
     }
 }
