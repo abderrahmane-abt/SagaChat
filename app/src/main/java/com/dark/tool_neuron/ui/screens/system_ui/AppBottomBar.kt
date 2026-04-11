@@ -18,6 +18,7 @@ fun AppBottomBar(
         NavScreens.HomeScreen.route -> HomeScreenBottomBar(navController)
         NavScreens.DevNotes.route -> DevNotesBottomBar(navController, onContinue = onOnboardingComplete)
         NavScreens.PasswordScreen.route -> PasswordScreenBottomBar()
+        NavScreens.ModelSetup.route -> Unit
         else -> Unit
     }
 }

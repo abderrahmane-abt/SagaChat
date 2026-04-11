@@ -16,7 +16,9 @@ import com.dark.tool_neuron.ui.screens.dev_notes.DevNotesScreen
 import com.dark.tool_neuron.ui.screens.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.screens.intro_screen.IntroScreen
 import com.dark.tool_neuron.ui.screens.password_screen.PasswordScreen
+import com.dark.tool_neuron.ui.screens.guide.AppGuideScreen
 import com.dark.tool_neuron.ui.screens.model_store.ModelStoreScreen
+import com.dark.tool_neuron.ui.screens.setup_screen.ModelSetupScreen
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupPasswordScreen
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupScreen
 import com.dark.tool_neuron.ui.theme.rememberNavTransitions
@@ -35,6 +37,7 @@ fun TNavigation(
     onActionWindowDismiss: () -> Unit,
     onUnlocked: () -> Unit = {},
     onSetupComplete: () -> Unit = {},
+    onModelSetupComplete: () -> Unit = {},
 ) {
     val transitions = rememberNavTransitions()
 
@@ -109,6 +112,29 @@ fun TNavigation(
                 innerPadding = innerPadding,
                 viewModel = viewModel,
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable(NavScreens.ModelSetup.route) {
+            val activity = LocalContext.current as ComponentActivity
+            val storeVm: ModelStoreViewModel = hiltViewModel(activity)
+            val catalogModels by storeVm.filteredModels.collectAsStateWithLifecycle()
+
+            ModelSetupScreen(
+                innerPadding = innerPadding,
+                onModelSelected = { modelId ->
+                    val model = catalogModels.firstOrNull { it.id.startsWith(modelId) }
+                        ?: catalogModels.firstOrNull { it.repoId == modelId }
+                    if (model != null) storeVm.downloadModel(model)
+                    onModelSetupComplete()
+                },
+                onOpenStore = { navController.navigate(NavScreens.ModelStore.route) },
+                onImportLocal = { },
+                onSkip = { onModelSetupComplete() }
+            )
+        }
+        composable(NavScreens.AppGuide.route) {
+            AppGuideScreen(
+                onClose = { navController.popBackStack() }
             )
         }
         composable(NavScreens.PasswordScreen.route) {

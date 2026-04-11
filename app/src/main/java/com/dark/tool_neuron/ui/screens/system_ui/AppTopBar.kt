@@ -12,19 +12,25 @@ fun AppTopBar(
     currentRoute: String?,
     actionWindowExpanded: Boolean,
     onActionWindowToggle: () -> Unit,
+    onMenuClick: () -> Unit = {},
     onBack: () -> Unit = {},
     onNavigateToStore: () -> Unit = {},
+    onNavigateToGuide: () -> Unit = {},
 ) {
     when (currentRoute) {
         NavScreens.HomeScreen.route -> HomeScreenTopbar(
             expanded = actionWindowExpanded,
             onToggle = onActionWindowToggle,
+            onMenuClick = onMenuClick,
             onStoreClick = onNavigateToStore,
+            onGuideClick = onNavigateToGuide,
         )
         NavScreens.DevNotes.route -> DevNotesTopBar()
         NavScreens.PasswordScreen.route -> PasswordScreenTopBar()
         NavScreens.SetupScreen.route -> SetupScreenTopBar()
+        NavScreens.ModelSetup.route -> SetupScreenTopBar()
         NavScreens.ModelStore.route -> Unit
+        NavScreens.AppGuide.route -> Unit
         else -> Unit
     }
 }
