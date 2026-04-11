@@ -15,21 +15,22 @@ import com.dark.tool_neuron.ui.theme.LocalDimens
 fun HomeScreenTopbar(
     expanded: Boolean,
     onToggle: () -> Unit,
+    onMenuClick: () -> Unit = {},
     onStoreClick: () -> Unit = {},
+    onGuideClick: () -> Unit = {},
 ) {
     val dimens = LocalDimens.current
 
     CenterAlignedTopAppBar(
         title = {
             ActionWindowPill(
-                modelName = "Qwen-1.5B-250M",
                 expanded = expanded,
                 onToggle = onToggle
             )
         },
         navigationIcon = {
             ActionButton(
-                onClickListener = {},
+                onClickListener = onMenuClick,
                 icon = TnIcons.Menu,
                 contentDescription = "Menu",
                 modifier = Modifier.padding(start = dimens.screenPadding)
@@ -40,6 +41,12 @@ fun HomeScreenTopbar(
                 onClickListener = {},
                 icon = TnIcons.HatGlasses,
                 contentDescription = "Persona",
+                modifier = Modifier.padding(end = dimens.spacingSm)
+            )
+            ActionButton(
+                onClickListener = onGuideClick,
+                icon = TnIcons.BookOpen,
+                contentDescription = "Guide",
                 modifier = Modifier.padding(end = dimens.spacingSm)
             )
             ActionButton(
