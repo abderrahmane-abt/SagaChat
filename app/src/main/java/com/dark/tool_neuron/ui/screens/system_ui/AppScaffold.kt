@@ -44,6 +44,7 @@ fun AppScaffold() {
     val scope = rememberCoroutineScope()
 
     ModalNavigationDrawer(
+        modifier = Modifier.imePadding(),
         drawerState = drawerState,
         gesturesEnabled = showDrawer,
         drawerContent = {
@@ -74,7 +75,7 @@ fun AppScaffold() {
         }
     ) {
         Scaffold(
-            modifier = Modifier.imePadding(),
+            modifier = Modifier,
             topBar = {
                 if (!isFullscreen) AppTopBar(
                     currentRoute = currentRoute,

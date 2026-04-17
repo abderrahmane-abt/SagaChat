@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.net.Uri
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.util.Log
@@ -154,7 +155,7 @@ object InferenceClient {
         }
     }
 
-    suspend fun loadModelFromUri(context: Context, uri: android.net.Uri, configJson: String = "{}"): Result<String> {
+    suspend fun loadModelFromUri(context: Context, uri: Uri, configJson: String = "{}"): Result<String> {
         val svc = ensureBound()
         val pfd = context.contentResolver.openFileDescriptor(uri, "r")
             ?: return Result.failure(IllegalArgumentException("Cannot open URI: $uri"))

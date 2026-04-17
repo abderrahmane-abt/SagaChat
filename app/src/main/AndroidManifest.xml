@@ -28,6 +28,13 @@
             </intent-filter>
         </activity>
 
+
+        <activity
+            android:name=".activity.TempActivity"
+            android:exported="true"
+            android:theme="@style/Theme.ToolNeuron">
+        </activity>
+
         <service
             android:name="com.dark.download_manager.HxdService"
             android:exported="false"

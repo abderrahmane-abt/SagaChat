@@ -1,7 +1,6 @@
 package com.dark.tool_neuron.ui.components.action_window
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -31,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,8 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
+import com.dark.tool_neuron.model.ChatDocument
 import com.dark.tool_neuron.service.inference.InferenceClient
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionTextButton
@@ -50,6 +49,7 @@ import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.ui.theme.Motion
+import kotlinx.coroutines.launch
 
 @Composable
 fun ActionWindowPill(
@@ -110,7 +110,7 @@ fun ActionWindowOverlay(
     onGuideClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onLoadDocument: () -> Unit = {},
-    documents: List<com.dark.tool_neuron.model.ChatDocument> = emptyList(),
+    documents: List<ChatDocument> = emptyList(),
     onRemoveDocument: (String) -> Unit = {},
 ) {
     val dimens = LocalDimens.current
@@ -173,7 +173,7 @@ private fun ActionWindowContent(
     onGuideClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onLoadDocument: () -> Unit,
-    documents: List<com.dark.tool_neuron.model.ChatDocument>,
+    documents: List<ChatDocument>,
     onRemoveDocument: (String) -> Unit,
 ) {
     val dimens = LocalDimens.current
@@ -226,7 +226,8 @@ private fun ModelsTab() {
     val isTtsLoaded by InferenceClient.isTtsLoaded.collectAsStateWithLifecycle()
     val isSttLoaded by InferenceClient.isSttLoaded.collectAsStateWithLifecycle()
 
-    val llmName = if (isLlmLoaded) (InferenceClient.getModelInfo()?.let { parseModelName(it) } ?: "LLM") else null
+    val llmName = if (isLlmLoaded) (InferenceClient.getModelInfo()?.let { parseModelName(it) }
+        ?: "LLM") else null
     val ttsName = if (isTtsLoaded) "TTS Model" else null
     val sttName = if (isSttLoaded) "STT Model" else null
 
@@ -374,7 +375,7 @@ private fun ToolsTab(
     onGuideClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onLoadDocument: () -> Unit,
-    documents: List<com.dark.tool_neuron.model.ChatDocument>,
+    documents: List<ChatDocument>,
     onRemoveDocument: (String) -> Unit,
 ) {
     val dimens = LocalDimens.current
@@ -402,7 +403,10 @@ private fun ToolsTab(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = dimens.spacingSm, vertical = dimens.spacingXxs),
+                            modifier = Modifier.padding(
+                                horizontal = dimens.spacingSm,
+                                vertical = dimens.spacingXxs
+                            ),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
