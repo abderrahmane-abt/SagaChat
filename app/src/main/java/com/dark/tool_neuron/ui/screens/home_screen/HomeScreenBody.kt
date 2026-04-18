@@ -8,14 +8,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.model.ChatDocument
@@ -41,6 +37,13 @@ fun HomeScreen(
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val streaming by viewModel.streamingFragment.collectAsStateWithLifecycle()
     val isGenerating by viewModel.isGenerating.collectAsStateWithLifecycle()
+    val installedModels by viewModel.installedModels.collectAsStateWithLifecycle()
+    val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
+    val generationStatus by viewModel.generationStatus.collectAsStateWithLifecycle()
+    val activeModel by viewModel.activeModel.collectAsStateWithLifecycle()
+    val contextUsage by viewModel.contextUsage.collectAsStateWithLifecycle()
+    val lastTextMetrics by viewModel.lastTextMetrics.collectAsStateWithLifecycle()
+    val lastMemoryMetrics by viewModel.lastMemoryMetrics.collectAsStateWithLifecycle()
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -77,31 +80,30 @@ fun HomeScreen(
             .fillMaxSize()
             .padding(innerPadding),
     ) {
-        if (messages.isEmpty() && streaming == null) {
-            Text(
-                text = "No model loaded.\nDownload one to get started.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.align(Alignment.Center),
-            )
-        } else {
-            ChatMessageList(
-                messages = messages,
-                streaming = streaming,
-                isGenerating = isGenerating,
-                onRegenerate = viewModel::regenerateLast,
-                onDelete = viewModel::deleteMessage,
-                contentPadding = PaddingValues(
-                    horizontal = dimens.spacingLg,
-                    vertical = dimens.spacingMd,
-                ),
-            )
-        }
+        ChatMessageList(
+            messages = messages,
+            streaming = streaming,
+            isGenerating = isGenerating,
+            generationStatus = generationStatus,
+            onRegenerate = viewModel::regenerateLast,
+            onDelete = viewModel::deleteMessage,
+            contentPadding = PaddingValues(
+                horizontal = dimens.spacingLg,
+                vertical = dimens.spacingMd,
+            ),
+        )
 
         ActionWindowOverlay(
             expanded = actionWindowExpanded,
             onDismiss = onActionWindowDismiss,
+            installedModels = installedModels,
+            modelLoadState = modelLoadState,
+            activeModel = activeModel,
+            contextUsage = contextUsage,
+            lastTextMetrics = lastTextMetrics,
+            lastMemoryMetrics = lastMemoryMetrics,
+            onLoadModel = { viewModel.loadModel(it) },
+            onUnloadModel = { viewModel.unloadModel() },
             onStoreClick = onStoreClick,
             onGuideClick = onGuideClick,
             onSettingsClick = onSettingsClick,

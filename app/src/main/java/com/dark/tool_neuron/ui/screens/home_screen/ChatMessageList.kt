@@ -30,17 +30,20 @@ import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.ui.theme.Motion
+import com.dark.tool_neuron.viewmodel.GenerationStatus
 import com.dark.tool_neuron.viewmodel.StreamingFragment
 import kotlinx.coroutines.launch
 
 private const val ROLE_ASSISTANT = "assistant"
 private const val STREAMING_ITEM_KEY = "__streaming__"
+private const val STATUS_ITEM_KEY = "__status__"
 
 @Composable
 fun ChatMessageList(
     messages: List<ChatMessage>,
     streaming: StreamingFragment?,
     isGenerating: Boolean,
+    generationStatus: GenerationStatus,
     onRegenerate: () -> Unit,
     onDelete: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -51,7 +54,15 @@ fun ChatMessageList(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    val totalItems = messages.size + if (streaming != null) 1 else 0
+    val showStatus = when (generationStatus) {
+        GenerationStatus.Hidden,
+        is GenerationStatus.GeneratingText,
+        is GenerationStatus.Thinking -> false
+        else -> true
+    }
+    val totalItems = messages.size +
+            (if (streaming != null) 1 else 0) +
+            (if (showStatus) 1 else 0)
     val lastAssistantId = messages.lastOrNull { it.role == ROLE_ASSISTANT }?.id
 
     val isAtBottom by remember {
@@ -116,7 +127,7 @@ fun ChatMessageList(
                 },
                 icon = TnIcons.ChevronDown,
                 contentDescription = "Jump to bottom",
-                shape = tnShapes.full,
+                shape = tnShapes.actionIcon,
                 colors = IconButtonDefaults.filledIconButtonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,

@@ -11,6 +11,35 @@ data class Chat(
     val isPinned: Boolean = false,
 )
 
+enum class MessageKind {
+    Text,
+    Image,
+    ToolResult;
+
+    companion object {
+        fun from(id: Int): MessageKind = entries.getOrNull(id) ?: Text
+    }
+}
+
+data class TextMetrics(
+    val tokensPerSecond: Double = 0.0,
+    val timeToFirstTokenMs: Long = 0L,
+    val totalTimeMs: Long = 0L,
+    val promptTokens: Int = 0,
+    val generatedTokens: Int = 0,
+) {
+    companion object
+}
+
+data class MemoryMetrics(
+    val modelSizeMB: Double = 0.0,
+    val contextSizeMB: Double = 0.0,
+    val peakMemoryMB: Double = 0.0,
+    val usagePercent: Double = 0.0,
+) {
+    companion object
+}
+
 data class ChatMessage(
     val id: String,
     val chatId: String,
@@ -20,4 +49,8 @@ data class ChatMessage(
     val tokenCount: Int = 0,
     val thinkingContent: String = "",
     val imageUris: List<String> = emptyList(),
+    val kind: MessageKind = MessageKind.Text,
+    val modelName: String = "",
+    val textMetrics: TextMetrics? = null,
+    val memoryMetrics: MemoryMetrics? = null,
 )

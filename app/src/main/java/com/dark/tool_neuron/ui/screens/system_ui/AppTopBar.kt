@@ -6,10 +6,12 @@ import com.dark.tool_neuron.ui.screens.dev_notes.DevNotesTopBar
 import com.dark.tool_neuron.ui.screens.home_screen.HomeScreenTopbar
 import com.dark.tool_neuron.ui.screens.password_screen.PasswordScreenTopBar
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupScreenTopBar
+import com.dark.tool_neuron.viewmodel.PillState
 
 @Composable
 fun AppTopBar(
     currentRoute: String?,
+    pillState: PillState,
     actionWindowExpanded: Boolean,
     onActionWindowToggle: () -> Unit,
     onMenuClick: () -> Unit = {},
@@ -19,6 +21,7 @@ fun AppTopBar(
 ) {
     when (currentRoute) {
         NavScreens.HomeScreen.route -> HomeScreenTopbar(
+            pillState = pillState,
             expanded = actionWindowExpanded,
             onToggle = onActionWindowToggle,
             onMenuClick = onMenuClick,

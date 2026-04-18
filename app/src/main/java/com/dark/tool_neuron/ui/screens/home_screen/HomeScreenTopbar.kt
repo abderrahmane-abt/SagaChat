@@ -9,10 +9,12 @@ import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.action_window.ActionWindowPill
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
+import com.dark.tool_neuron.viewmodel.PillState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreenTopbar(
+    pillState: PillState,
     expanded: Boolean,
     onToggle: () -> Unit,
     onMenuClick: () -> Unit = {},
@@ -24,8 +26,9 @@ fun HomeScreenTopbar(
     CenterAlignedTopAppBar(
         title = {
             ActionWindowPill(
+                state = pillState,
                 expanded = expanded,
-                onToggle = onToggle
+                onToggle = onToggle,
             )
         },
         navigationIcon = {

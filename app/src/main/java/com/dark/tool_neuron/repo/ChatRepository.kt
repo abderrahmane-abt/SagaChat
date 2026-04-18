@@ -5,11 +5,15 @@ import com.dark.hxs.HexStorage
 import com.dark.hxs.HxsRecord
 import com.dark.tool_neuron.model.Chat
 import com.dark.tool_neuron.model.ChatMessage
+import com.dark.tool_neuron.model.MemoryMetrics
+import com.dark.tool_neuron.model.MessageKind
+import com.dark.tool_neuron.model.TextMetrics
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 import javax.inject.Inject
@@ -151,6 +155,10 @@ class ChatRepository @Inject constructor(
         private const val TAG_MSG_TOKEN_COUNT = 6
         private const val TAG_MSG_THINKING = 7
         private const val TAG_MSG_IMAGES = 8
+        private const val TAG_MSG_KIND = 9
+        private const val TAG_MSG_MODEL_NAME = 10
+        private const val TAG_MSG_TEXT_METRICS = 11
+        private const val TAG_MSG_MEMORY_METRICS = 12
     }
 
     private fun Chat.toRecord(): HxsRecord {
@@ -189,6 +197,10 @@ class ChatRepository @Inject constructor(
             putTimestamp(TAG_MSG_TOKEN_COUNT, m.tokenCount.toLong())
             putString(TAG_MSG_THINKING, m.thinkingContent)
             putString(TAG_MSG_IMAGES, JSONArray(m.imageUris).toString())
+            putInt(TAG_MSG_KIND, m.kind.ordinal.toLong())
+            putString(TAG_MSG_MODEL_NAME, m.modelName)
+            m.textMetrics?.let { putString(TAG_MSG_TEXT_METRICS, it.toJson()) }
+            m.memoryMetrics?.let { putString(TAG_MSG_MEMORY_METRICS, it.toJson()) }
         }
     }
 
@@ -200,6 +212,8 @@ class ChatRepository @Inject constructor(
         } else {
             emptyList()
         }
+        val textJson = getString(TAG_MSG_TEXT_METRICS)
+        val memoryJson = getString(TAG_MSG_MEMORY_METRICS)
         return ChatMessage(
             id = getString(TAG_MSG_ID),
             chatId = getString(TAG_MSG_CHAT_ID),
@@ -209,6 +223,46 @@ class ChatRepository @Inject constructor(
             tokenCount = getTimestamp(TAG_MSG_TOKEN_COUNT).toInt(),
             thinkingContent = getString(TAG_MSG_THINKING),
             imageUris = uris,
+            kind = MessageKind.from(getInt(TAG_MSG_KIND, 0L).toInt()),
+            modelName = getString(TAG_MSG_MODEL_NAME),
+            textMetrics = textJson.takeIf { it.isNotEmpty() }?.let { TextMetrics.fromJson(it) },
+            memoryMetrics = memoryJson.takeIf { it.isNotEmpty() }?.let { MemoryMetrics.fromJson(it) },
+        )
+    }
+
+    private fun TextMetrics.toJson(): String = JSONObject().apply {
+        put("tps", tokensPerSecond)
+        put("ttft", timeToFirstTokenMs)
+        put("total", totalTimeMs)
+        put("prompt", promptTokens)
+        put("gen", generatedTokens)
+    }.toString()
+
+    private fun MemoryMetrics.toJson(): String = JSONObject().apply {
+        put("model", modelSizeMB)
+        put("ctx", contextSizeMB)
+        put("peak", peakMemoryMB)
+        put("usage", usagePercent)
+    }.toString()
+
+    private fun TextMetrics.Companion.fromJson(json: String): TextMetrics {
+        val o = JSONObject(json)
+        return TextMetrics(
+            tokensPerSecond = o.optDouble("tps", 0.0),
+            timeToFirstTokenMs = o.optLong("ttft", 0L),
+            totalTimeMs = o.optLong("total", 0L),
+            promptTokens = o.optInt("prompt", 0),
+            generatedTokens = o.optInt("gen", 0),
+        )
+    }
+
+    private fun MemoryMetrics.Companion.fromJson(json: String): MemoryMetrics {
+        val o = JSONObject(json)
+        return MemoryMetrics(
+            modelSizeMB = o.optDouble("model", 0.0),
+            contextSizeMB = o.optDouble("ctx", 0.0),
+            peakMemoryMB = o.optDouble("peak", 0.0),
+            usagePercent = o.optDouble("usage", 0.0),
         )
     }
 }

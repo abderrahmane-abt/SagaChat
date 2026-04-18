@@ -32,14 +32,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.compositeOver
@@ -87,26 +84,14 @@ fun HomeScreenBottomBar(
     val loadModelWindow by viewModel.loadModelWindows.collectAsStateWithLifecycle()
     val installedModels by viewModel.installedModels.collectAsStateWithLifecycle()
     val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
-
-    val messageCount by remember { derivedStateOf { viewModel.messages.value.size } }
+    val contextUsage by viewModel.contextUsage.collectAsStateWithLifecycle()
 
     val canSend by remember {
         derivedStateOf { text.isNotBlank() && isModelLoaded && !isGenerating }
     }
 
-    var contextUsage by remember { mutableFloatStateOf(-1f) }
-    LaunchedEffect(isModelLoaded, isGenerating, messageCount) {
-        if (!isModelLoaded) {
-            contextUsage = -1f
-            return@LaunchedEffect
-        }
-        contextUsage = InferenceClient.getContextUsage()
-        while (isGenerating) {
-            delay(250)
-            contextUsage = InferenceClient.getContextUsage()
-        }
-    }
-    val contextText = if (contextUsage >= 0f) "${(contextUsage * 100).toInt()}%" else "--"
+    val contextText = if (isModelLoaded) "${(contextUsage * 100).toInt()}%" else "--"
+    val contextProgress = if (isModelLoaded) contextUsage else 0f
 
     val filePicker =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -277,7 +262,7 @@ fun HomeScreenBottomBar(
 
                     ContextIndicator(
                         text = contextText,
-                        progress = if (contextUsage >= 0f) contextUsage else 0f,
+                        progress = contextProgress,
                         isActive = isModelLoaded,
                     )
 

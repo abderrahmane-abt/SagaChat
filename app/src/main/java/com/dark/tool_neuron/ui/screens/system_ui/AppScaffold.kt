@@ -31,6 +31,7 @@ fun AppScaffold() {
     val homeViewModel: HomeViewModel = hiltViewModel()
     val scaffoldViewModel: ScaffoldViewModel = hiltViewModel()
     val actionWindowExpanded by homeViewModel.actionWindowExpanded.collectAsStateWithLifecycle()
+    val pillState by homeViewModel.pillState.collectAsStateWithLifecycle()
     val chats by homeViewModel.chats.collectAsStateWithLifecycle()
     val currentChatId by homeViewModel.currentChatId.collectAsStateWithLifecycle()
 
@@ -78,6 +79,7 @@ fun AppScaffold() {
             topBar = {
                 if (!isFullscreen) AppTopBar(
                     currentRoute = currentRoute,
+                    pillState = pillState,
                     actionWindowExpanded = actionWindowExpanded,
                     onActionWindowToggle = homeViewModel::toggleActionWindow,
                     onMenuClick = { scope.launch { drawerState.open() } },

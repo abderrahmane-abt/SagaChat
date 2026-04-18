@@ -189,6 +189,7 @@ private fun AssistantBubble(
                     MarkdownText(text = message.content)
                 }
             }
+            MessageFooter(message = message)
             MessageActions(
                 message = message,
                 canRegenerate = canRegenerate,
