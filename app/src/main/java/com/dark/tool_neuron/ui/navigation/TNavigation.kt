@@ -18,6 +18,7 @@ import com.dark.tool_neuron.ui.screens.intro_screen.IntroScreen
 import com.dark.tool_neuron.ui.screens.password_screen.PasswordScreen
 import com.dark.tool_neuron.ui.screens.guide.AppGuideScreen
 import com.dark.tool_neuron.ui.screens.model_store.ModelStoreScreen
+import com.dark.tool_neuron.ui.screens.plugin_hub.PluginHubScreen
 import com.dark.tool_neuron.ui.screens.setup_screen.ModelSetupScreen
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupPasswordScreen
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupScreen
@@ -138,6 +139,11 @@ fun TNavigation(
         }
         composable(NavScreens.AppGuide.route) {
             AppGuideScreen(
+                onClose = { navController.popBackStack() }
+            )
+        }
+        composable(NavScreens.PluginHub.route) {
+            PluginHubScreen(
                 onClose = { navController.popBackStack() }
             )
         }
