@@ -15,7 +15,7 @@ import com.dark.tool_neuron.ui.components.SectionHeader
 import com.dark.tool_neuron.ui.components.model_list.InstalledModelList
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
-import com.dark.tool_neuron.viewmodel.ModelLoadState
+import com.dark.tool_neuron.viewmodel.home_vm.ModelLoadState
 
 private val WindowHeight = 240.dp
 

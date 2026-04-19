@@ -9,7 +9,7 @@ import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.action_window.ActionWindowPill
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
-import com.dark.tool_neuron.viewmodel.PillState
+import com.dark.tool_neuron.viewmodel.home_vm.PillState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

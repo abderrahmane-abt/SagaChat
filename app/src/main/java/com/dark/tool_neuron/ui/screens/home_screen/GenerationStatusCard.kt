@@ -33,7 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
-import com.dark.tool_neuron.viewmodel.GenerationStatus
+import com.dark.tool_neuron.viewmodel.home_vm.GenerationStatus
 
 @Composable
 fun GenerationStatusBubble(

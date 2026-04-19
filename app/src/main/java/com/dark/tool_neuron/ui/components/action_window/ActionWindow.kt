@@ -56,8 +56,8 @@ import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.ui.theme.Motion
-import com.dark.tool_neuron.viewmodel.ModelLoadState
-import com.dark.tool_neuron.viewmodel.PillState
+import com.dark.tool_neuron.viewmodel.home_vm.ModelLoadState
+import com.dark.tool_neuron.viewmodel.home_vm.PillState
 
 @Composable
 fun ActionWindowPill(

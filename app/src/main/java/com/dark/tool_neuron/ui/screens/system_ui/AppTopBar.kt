@@ -6,7 +6,7 @@ import com.dark.tool_neuron.ui.screens.dev_notes.DevNotesTopBar
 import com.dark.tool_neuron.ui.screens.home_screen.HomeScreenTopbar
 import com.dark.tool_neuron.ui.screens.password_screen.PasswordScreenTopBar
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupScreenTopBar
-import com.dark.tool_neuron.viewmodel.PillState
+import com.dark.tool_neuron.viewmodel.home_vm.PillState
 
 @Composable
 fun AppTopBar(
