@@ -1,11 +1,12 @@
 package com.dark.tool_neuron.ui.screens.home_screen
 
 import android.content.Intent
+import android.net.Uri
 import android.provider.OpenableColumns
+import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonColors
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -40,7 +42,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.compositeOver
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
@@ -68,8 +69,6 @@ fun HomeScreenBottomBar(
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val dimens = LocalDimens.current
-    val tnShapes = LocalTnShapes.current
-    val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     var text by remember { mutableStateOf("") }
 
@@ -90,39 +89,7 @@ fun HomeScreenBottomBar(
         derivedStateOf { text.isNotBlank() && isModelLoaded && !isGenerating }
     }
 
-    val contextText = if (isModelLoaded) "${(contextUsage * 100).toInt()}%" else "--"
-    val contextProgress = if (isModelLoaded) contextUsage else 0f
-
-    val filePicker =
-        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-            if (uri != null) {
-                context.contentResolver.takePersistableUriPermission(
-                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-                val cursor = context.contentResolver.query(uri, null, null, null, null)
-                var fileName = "Document"
-                var fileSize = 0L
-                cursor?.use {
-                    if (it.moveToFirst()) {
-                        val nameIdx = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                        val sizeIdx = it.getColumnIndex(OpenableColumns.SIZE)
-                        if (nameIdx >= 0) fileName = it.getString(nameIdx) ?: "Document"
-                        if (sizeIdx >= 0) fileSize = it.getLong(sizeIdx)
-                    }
-                }
-                val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
-                viewModel.addDocument(
-                    ChatDocument(
-                        id = UUID.randomUUID().toString(),
-                        chatId = currentChatId,
-                        name = fileName,
-                        mimeType = mimeType,
-                        chunkCount = 0,
-                        sizeBytes = fileSize,
-                    )
-                )
-            }
-        }
+    val filePicker = rememberDocumentPicker(currentChatId, viewModel::addDocument)
 
     Column(
         modifier = Modifier
@@ -130,7 +97,7 @@ fun HomeScreenBottomBar(
             .navigationBarsPadding()
             .imePadding()
             .padding(horizontal = dimens.spacingMd)
-            .padding(bottom = dimens.spacingXs)
+            .padding(bottom = dimens.spacingXs),
     ) {
         AnimatedVisibility(
             visible = plusMenuExpanded,
@@ -142,8 +109,8 @@ fun HomeScreenBottomBar(
                 thinkingEnabled = thinkingEnabled,
                 showThinking = supportsThinking,
                 documentCount = chatDocuments.size,
-                onWebSearchToggle = { viewModel.toggleWebSearch() },
-                onThinkingToggle = { viewModel.toggleThinking() },
+                onWebSearchToggle = viewModel::toggleWebSearch,
+                onThinkingToggle = viewModel::toggleThinking,
                 onDocumentsClick = {
                     viewModel.dismissPlusMenu()
                     filePicker.launch(arrayOf("text/*", "application/pdf", "application/json"))
@@ -152,26 +119,10 @@ fun HomeScreenBottomBar(
             )
         }
 
-        AnimatedVisibility(
-            visible = chatDocuments.isNotEmpty(),
-            enter = fadeIn(Motion.state()) + expandVertically(Motion.content()),
-            exit = fadeOut(Motion.state()) + shrinkVertically(Motion.content()),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(bottom = dimens.spacingXs),
-                horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
-            ) {
-                chatDocuments.forEach { doc ->
-                    DocumentChip(
-                        name = doc.name,
-                        onRemove = { viewModel.removeDocument(doc.id) },
-                    )
-                }
-            }
-        }
+        DocumentChipsRow(
+            documents = chatDocuments,
+            onRemove = viewModel::removeDocument,
+        )
 
         AnimatedVisibility(
             visible = loadModelWindow,
@@ -181,7 +132,7 @@ fun HomeScreenBottomBar(
             LoadModelWindow(
                 models = installedModels,
                 loadState = modelLoadState,
-                onLoad = { viewModel.loadModel(it) },
+                onLoad = viewModel::loadModel,
                 onUnload = { viewModel.unloadModel() },
                 onBrowseStore = {
                     viewModel.toggleLoadModelWindow()
@@ -190,100 +141,221 @@ fun HomeScreenBottomBar(
             )
         }
 
-        Surface(
-            shape = tnShapes.xl,
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.09f)
-                .compositeOver(MaterialTheme.colorScheme.surface),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Column {
-                TnTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    placeholder = "Send a message...",
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 5,
+        InputBar(
+            text = text,
+            onTextChange = { text = it },
+            canSend = canSend,
+            isGenerating = isGenerating,
+            isModelLoaded = isModelLoaded,
+            contextUsage = contextUsage,
+            plusMenuExpanded = plusMenuExpanded,
+            webSearchEnabled = webSearchEnabled,
+            documentCount = chatDocuments.size,
+            onPlusClick = viewModel::togglePlusMenu,
+            onLoadModelClick = viewModel::toggleLoadModelWindow,
+            onWebSearchClick = viewModel::toggleWebSearch,
+            onSend = {
+                focusManager.clearFocus()
+                val toSend = text
+                text = ""
+                viewModel.sendMessage(toSend)
+            },
+            onStop = viewModel::stopGeneration,
+        )
+    }
+}
+
+@Composable
+private fun InputBar(
+    text: String,
+    onTextChange: (String) -> Unit,
+    canSend: Boolean,
+    isGenerating: Boolean,
+    isModelLoaded: Boolean,
+    contextUsage: Float,
+    plusMenuExpanded: Boolean,
+    webSearchEnabled: Boolean,
+    documentCount: Int,
+    onPlusClick: () -> Unit,
+    onLoadModelClick: () -> Unit,
+    onWebSearchClick: () -> Unit,
+    onSend: () -> Unit,
+    onStop: () -> Unit,
+) {
+    val dimens = LocalDimens.current
+    val tnShapes = LocalTnShapes.current
+    val contextText = if (isModelLoaded) "${(contextUsage * 100).toInt()}%" else "--"
+    val contextProgress = if (isModelLoaded) contextUsage else 0f
+
+    Surface(
+        shape = tnShapes.xl,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.09f)
+            .compositeOver(MaterialTheme.colorScheme.surface),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column {
+            TnTextField(
+                value = text,
+                onValueChange = onTextChange,
+                placeholder = "Send a message...",
+                modifier = Modifier.fillMaxWidth(),
+                maxLines = 5,
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = dimens.spacingSm,
+                        end = dimens.spacingSm,
+                        bottom = dimens.spacingSm,
+                    ),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+            ) {
+                PlusButton(
+                    expanded = plusMenuExpanded,
+                    badgeCount = documentCount,
+                    onClick = onPlusClick,
                 )
+                ActionButton(
+                    onClickListener = onLoadModelClick,
+                    icon = TnIcons.Leaf,
+                    contentDescription = "Load Model",
+                )
+                ActionButton(
+                    onClickListener = onWebSearchClick,
+                    icon = TnIcons.Globe,
+                    contentDescription = if (webSearchEnabled) "Disable web search" else "Enable web search",
+                    colors = toggleIconColors(webSearchEnabled),
+                )
+                Spacer(Modifier.weight(1f))
+                ContextIndicator(
+                    text = contextText,
+                    progress = contextProgress,
+                    isActive = isModelLoaded,
+                )
+                Spacer(Modifier.width(dimens.spacingXs))
+                SendOrStopButton(
+                    canSend = canSend,
+                    isGenerating = isGenerating,
+                    onSend = onSend,
+                    onStop = onStop,
+                )
+            }
+        }
+    }
+}
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(
-                            start = dimens.spacingSm,
-                            end = dimens.spacingSm,
-                            bottom = dimens.spacingSm,
-                        ),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
-                ) {
-                    Box {
-                        ActionButton(
-                            onClickListener = { viewModel.togglePlusMenu() },
-                            icon = TnIcons.Plus,
-                            contentDescription = "More options",
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = if (plusMenuExpanded)
-                                    MaterialTheme.colorScheme.primary
-                                else
-                                    MaterialTheme.colorScheme.primary.copy(0.08f),
-                                contentColor = if (plusMenuExpanded)
-                                    MaterialTheme.colorScheme.onPrimary
-                                else
-                                    MaterialTheme.colorScheme.primary,
-                            ),
-                        )
-                        if (chatDocuments.isNotEmpty()) {
-                            Surface(
-                                shape = tnShapes.full,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .size(16.dp),
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text(
-                                        text = "${chatDocuments.size}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                        fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.85f,
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    ActionButton(
-                        onClickListener = { viewModel.toggleLoadModelWindow() },
-                        icon = TnIcons.Leaf,
-                        contentDescription = "Load Model",
-                    )
-
-                    Spacer(Modifier.weight(1f))
-
-                    ContextIndicator(
-                        text = contextText,
-                        progress = contextProgress,
-                        isActive = isModelLoaded,
-                    )
-
-                    Spacer(Modifier.width(dimens.spacingXs))
-
-                    SendOrStopButton(
-                        canSend = canSend,
-                        isGenerating = isGenerating,
-                        onSend = {
-                            focusManager.clearFocus()
-                            val toSend = text
-                            text = ""
-                            viewModel.sendMessage(toSend)
-                        },
-                        onStop = { viewModel.stopGeneration() },
+@Composable
+private fun PlusButton(
+    expanded: Boolean,
+    badgeCount: Int,
+    onClick: () -> Unit,
+) {
+    val tnShapes = LocalTnShapes.current
+    Box {
+        ActionButton(
+            onClickListener = onClick,
+            icon = TnIcons.Plus,
+            contentDescription = "More options",
+            colors = toggleIconColors(expanded),
+        )
+        if (badgeCount > 0) {
+            Surface(
+                shape = tnShapes.full,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(16.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "$badgeCount",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.85f,
                     )
                 }
             }
         }
     }
 }
+
+@Composable
+private fun DocumentChipsRow(
+    documents: List<ChatDocument>,
+    onRemove: (String) -> Unit,
+) {
+    val dimens = LocalDimens.current
+    AnimatedVisibility(
+        visible = documents.isNotEmpty(),
+        enter = fadeIn(Motion.state()) + expandVertically(Motion.content()),
+        exit = fadeOut(Motion.state()) + shrinkVertically(Motion.content()),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(bottom = dimens.spacingXs),
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+        ) {
+            documents.forEach { doc ->
+                DocumentChip(
+                    name = doc.name,
+                    onRemove = { onRemove(doc.id) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun rememberDocumentPicker(
+    currentChatId: String?,
+    onPicked: (ChatDocument) -> Unit,
+): ManagedActivityResultLauncher<Array<String>, Uri?> {
+    val context = LocalContext.current
+    return rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        context.contentResolver.takePersistableUriPermission(
+            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION,
+        )
+        var name = "Document"
+        var size = 0L
+        context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+            if (c.moveToFirst()) {
+                val nameIdx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                val sizeIdx = c.getColumnIndex(OpenableColumns.SIZE)
+                if (nameIdx >= 0) name = c.getString(nameIdx) ?: name
+                if (sizeIdx >= 0) size = c.getLong(sizeIdx)
+            }
+        }
+        val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
+        onPicked(
+            ChatDocument(
+                id = UUID.randomUUID().toString(),
+                chatId = currentChatId,
+                name = name,
+                mimeType = mime,
+                chunkCount = 0,
+                sizeBytes = size,
+            )
+        )
+    }
+}
+
+@Composable
+private fun toggleIconColors(active: Boolean): IconButtonColors =
+    IconButtonDefaults.filledIconButtonColors(
+        containerColor = if (active)
+            MaterialTheme.colorScheme.primary
+        else
+            MaterialTheme.colorScheme.primary.copy(0.08f),
+        contentColor = if (active)
+            MaterialTheme.colorScheme.onPrimary
+        else
+            MaterialTheme.colorScheme.primary,
+    )
 
 @Composable
 private fun SendOrStopButton(
@@ -414,144 +486,3 @@ private fun ContextIndicator(
     }
 }
 
-@Composable
-private fun PlusMenuCard(
-    webSearchEnabled: Boolean,
-    thinkingEnabled: Boolean,
-    showThinking: Boolean,
-    documentCount: Int,
-    onWebSearchToggle: () -> Unit,
-    onThinkingToggle: () -> Unit,
-    onDocumentsClick: () -> Unit,
-    onImageClick: () -> Unit,
-) {
-    val dimens = LocalDimens.current
-    val tnShapes = LocalTnShapes.current
-
-    Surface(
-        shape = tnShapes.xl,
-        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        modifier = Modifier.padding(bottom = dimens.spacingSm),
-    ) {
-        Column(
-            modifier = Modifier.padding(dimens.spacingSm),
-            verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
-        ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
-            ) {
-                PlusMenuItem(
-                    modifier = Modifier.weight(0.5f),
-                    icon = TnIcons.Search,
-                    label = "Web Search",
-                    isToggled = webSearchEnabled,
-                    onClick = onWebSearchToggle,
-                )
-                if (showThinking) {
-                    PlusMenuItem(
-                        modifier = Modifier.weight(0.5f),
-                        icon = TnIcons.Sparkles,
-                        label = "Thinking",
-                        isToggled = thinkingEnabled,
-                        onClick = onThinkingToggle,
-                    )
-                } else {
-                    Spacer(modifier = Modifier.weight(0.5f))
-                }
-            }
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
-            ) {
-                PlusMenuItem(
-                    modifier = Modifier.weight(0.5f),
-                    icon = TnIcons.BookOpen,
-                    label = if (documentCount > 0) "Documents ($documentCount)" else "Documents",
-                    isToggled = documentCount > 0,
-                    onClick = onDocumentsClick,
-                )
-                PlusMenuItem(
-                    modifier = Modifier.weight(0.5f),
-                    icon = TnIcons.Photo,
-                    label = "Image",
-                    isToggled = false,
-                    onClick = onImageClick,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlusMenuItem(
-    modifier: Modifier,
-    icon: ImageVector,
-    label: String,
-    isToggled: Boolean,
-    onClick: () -> Unit,
-) {
-    val dimens = LocalDimens.current
-    val tnShapes = LocalTnShapes.current
-
-    val bgColor by animateColorAsState(
-        targetValue = if (isToggled)
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-        else
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-        animationSpec = Motion.state(),
-        label = "plusItemBg",
-    )
-    val contentColor by animateColorAsState(
-        targetValue = if (isToggled)
-            MaterialTheme.colorScheme.primary
-        else
-            MaterialTheme.colorScheme.onSurface,
-        animationSpec = Motion.state(),
-        label = "plusItemContent",
-    )
-
-    Surface(
-        shape = tnShapes.md,
-        color = bgColor,
-        modifier = modifier
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            ),
-    ) {
-        Row(
-            modifier = Modifier.padding(
-                horizontal = dimens.spacingMd,
-                vertical = dimens.spacingSm,
-            ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(dimens.iconMd),
-                tint = contentColor,
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = contentColor,
-                modifier = Modifier.weight(1f),
-            )
-            if (isToggled) {
-                Icon(
-                    imageVector = TnIcons.Check,
-                    contentDescription = null,
-                    modifier = Modifier.size(dimens.iconSm),
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
-    }
-}
