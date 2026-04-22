@@ -70,9 +70,9 @@ fun AppScaffold() {
                         scope.launch { drawerState.close() }
                         navController.navigate(NavScreens.AppGuide.route)
                     },
-                    onNavigateToPlugins = {
+                    onNavigateToDevNotes = {
                         scope.launch { drawerState.close() }
-                        navController.navigate(NavScreens.PluginHub.route)
+                        navController.navigate(NavScreens.DevNotes.route)
                     },
                 )
             }
