@@ -27,8 +27,10 @@ fun MessageActions(
     message: ChatMessage,
     canRegenerate: Boolean,
     canDelete: Boolean,
+    canEdit: Boolean,
     onRegenerate: () -> Unit,
     onDelete: (String) -> Unit,
+    onEdit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -52,6 +54,15 @@ fun MessageActions(
                 contentDescription = "Copy",
             )
         )
+        if (canEdit) {
+            add(
+                ActionItem(
+                    icon = ActionIcon.Vector(TnIcons.Edit),
+                    onClick = onEdit,
+                    contentDescription = "Edit",
+                )
+            )
+        }
         if (message.role == ROLE_ASSISTANT && canRegenerate) {
             add(
                 ActionItem(

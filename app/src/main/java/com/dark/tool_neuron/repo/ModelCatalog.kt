@@ -48,7 +48,7 @@ class ModelCatalog @Inject constructor(
         withContext(Dispatchers.IO) {
             val meta = fetchJson("https://huggingface.co/api/models/${repo.repoPath}")
                 ?: return@withContext emptyList()
-            val tree = fetchJsonArray("https://huggingface.co/api/models/${repo.repoPath}/tree/main")
+            val tree = fetchJsonArray("https://huggingface.co/api/models/${repo.repoPath}/tree/main?recursive=true")
                 ?: return@withContext emptyList()
 
             val author = meta.optString("author", repo.repoPath.substringBefore("/"))
@@ -211,6 +211,18 @@ class ModelCatalog @Inject constructor(
                 approximateSize = "~70 MB", sizeBytes = 0,
                 repoId = "built-in-stt", quantization = "",
                 tags = listOf("STT", "English", "Zipformer"), modelType = "stt",
+            ),
+            HuggingFaceModel(
+                id = "nomic-embed-text-v1.5-q4_k_m",
+                name = "Nomic Embed Text v1.5 (Q4)",
+                fileName = "nomic-embed-text-v1.5.Q4_K_M.gguf",
+                fileUri = "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf",
+                approximateSize = "~84 MB",
+                sizeBytes = 84_106_624L,
+                repoId = "embedding-built-in",
+                quantization = "Q4_K_M",
+                tags = listOf("Embedding", "RAG", "Matryoshka", "Apache-2.0", "Nomic"),
+                modelType = "embedding",
             ),
         )
     }

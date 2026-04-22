@@ -80,7 +80,7 @@ fun HomeScreenBottomBar(
     val chatDocuments by viewModel.chatDocuments.collectAsStateWithLifecycle()
     val currentChatId by viewModel.currentChatId.collectAsStateWithLifecycle()
     val loadModelWindow by viewModel.loadModelWindows.collectAsStateWithLifecycle()
-    val installedModels by viewModel.installedModels.collectAsStateWithLifecycle()
+    val installedModels by viewModel.chatModels.collectAsStateWithLifecycle()
     val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
     val contextUsage by viewModel.contextUsage.collectAsStateWithLifecycle()
 
@@ -88,7 +88,11 @@ fun HomeScreenBottomBar(
         derivedStateOf { text.isNotBlank() && isModelLoaded && !isGenerating }
     }
 
-    val filePicker = rememberDocumentPicker(currentChatId, viewModel::addDocument)
+    val filePicker = rememberDocumentPicker(viewModel::addDocument)
+    val isIngesting by viewModel.isIngestingDocument.collectAsStateWithLifecycle()
+    val documentError by viewModel.documentError.collectAsStateWithLifecycle()
+    val ragReady by viewModel.ragReady.collectAsStateWithLifecycle()
+    val activeEmbeddingName by viewModel.activeEmbeddingName.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -110,7 +114,18 @@ fun HomeScreenBottomBar(
                 onThinkingToggle = viewModel::toggleThinking,
                 onDocumentsClick = {
                     viewModel.dismissPlusMenu()
-                    filePicker.launch(arrayOf("text/*", "application/pdf", "application/json"))
+                    filePicker.launch(arrayOf(
+                        "text/*",
+                        "application/pdf",
+                        "application/json",
+                        "application/xml",
+                        "application/rtf",
+                        "application/epub+zip",
+                        "application/vnd.oasis.opendocument.text",
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    ))
                 },
             )
         }
@@ -118,6 +133,15 @@ fun HomeScreenBottomBar(
         DocumentChipsRow(
             documents = chatDocuments,
             onRemove = viewModel::removeDocument,
+        )
+
+        RagStatusBanner(
+            isIngesting = isIngesting,
+            error = documentError,
+            ragReady = ragReady,
+            embeddingName = activeEmbeddingName,
+            docCount = chatDocuments.size,
+            onDismissError = viewModel::clearDocumentError,
         )
 
         AnimatedVisibility(
@@ -146,6 +170,9 @@ fun HomeScreenBottomBar(
             contextUsage = contextUsage,
             plusMenuExpanded = plusMenuExpanded,
             documentCount = chatDocuments.size,
+            supportsThinking = supportsThinking,
+            thinkingEnabled = thinkingEnabled,
+            onThinkingToggle = viewModel::toggleThinking,
             onPlusClick = viewModel::togglePlusMenu,
             onLoadModelClick = viewModel::toggleLoadModelWindow,
             onSend = {
@@ -169,6 +196,9 @@ private fun InputBar(
     contextUsage: Float,
     plusMenuExpanded: Boolean,
     documentCount: Int,
+    supportsThinking: Boolean,
+    thinkingEnabled: Boolean,
+    onThinkingToggle: () -> Unit,
     onPlusClick: () -> Unit,
     onLoadModelClick: () -> Unit,
     onSend: () -> Unit,
@@ -213,6 +243,11 @@ private fun InputBar(
                     onClickListener = onLoadModelClick,
                     icon = TnIcons.Leaf,
                     contentDescription = "Load Model",
+                )
+                ThinkingToggleButton(
+                    supported = supportsThinking,
+                    enabled = thinkingEnabled,
+                    onClick = onThinkingToggle,
                 )
                 Spacer(Modifier.weight(1f))
                 ContextIndicator(
@@ -297,15 +332,16 @@ private fun DocumentChipsRow(
 
 @Composable
 private fun rememberDocumentPicker(
-    currentChatId: String?,
-    onPicked: (ChatDocument) -> Unit,
+    onPicked: (Uri, String, Long, String?) -> Unit,
 ): ManagedActivityResultLauncher<Array<String>, Uri?> {
     val context = LocalContext.current
     return rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        context.contentResolver.takePersistableUriPermission(
-            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION,
-        )
+        runCatching {
+            context.contentResolver.takePersistableUriPermission(
+                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        }
         var name = "Document"
         var size = 0L
         context.contentResolver.query(uri, null, null, null, null)?.use { c ->
@@ -316,18 +352,37 @@ private fun rememberDocumentPicker(
                 if (sizeIdx >= 0) size = c.getLong(sizeIdx)
             }
         }
-        val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
-        onPicked(
-            ChatDocument(
-                id = UUID.randomUUID().toString(),
-                chatId = currentChatId,
-                name = name,
-                mimeType = mime,
-                chunkCount = 0,
-                sizeBytes = size,
-            )
+        val mime = context.contentResolver.getType(uri)
+        onPicked(uri, name, size, mime)
+    }
+}
+
+@Composable
+private fun ThinkingToggleButton(
+    supported: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = when {
+        !supported -> IconButtonDefaults.filledIconButtonColors(
+            containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
+            contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+        )
+        enabled -> IconButtonDefaults.filledIconButtonColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+        )
+        else -> IconButtonDefaults.filledIconButtonColors(
+            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+            contentColor = MaterialTheme.colorScheme.primary,
         )
     }
+    ActionButton(
+        onClickListener = { if (supported) onClick() },
+        icon = TnIcons.Sparkles,
+        contentDescription = if (supported) "Toggle thinking" else "Thinking not supported by this model",
+        colors = colors,
+    )
 }
 
 @Composable
@@ -378,6 +433,87 @@ private fun SendOrStopButton(
                     MaterialTheme.colorScheme.primary.copy(0.4f),
             ),
         )
+    }
+}
+
+@Composable
+private fun RagStatusBanner(
+    isIngesting: Boolean,
+    error: String?,
+    ragReady: Boolean,
+    embeddingName: String?,
+    docCount: Int,
+    onDismissError: () -> Unit,
+) {
+    val dimens = LocalDimens.current
+    val tnShapes = LocalTnShapes.current
+    val visible = isIngesting || error != null || (ragReady && docCount > 0 && embeddingName != null)
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(Motion.state()) + expandVertically(Motion.content()),
+        exit = fadeOut(Motion.state()) + shrinkVertically(Motion.content()),
+    ) {
+        val bg = when {
+            error != null -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
+            isIngesting   -> MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+            else          -> MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)
+        }
+        val fg = when {
+            error != null -> MaterialTheme.colorScheme.error
+            else          -> MaterialTheme.colorScheme.primary
+        }
+        Surface(
+            shape = tnShapes.lg,
+            color = bg,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = dimens.spacingXs),
+        ) {
+            Row(
+                modifier = Modifier.padding(
+                    horizontal = dimens.spacingMd,
+                    vertical = dimens.spacingSm,
+                ),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+            ) {
+                if (isIngesting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(dimens.iconSm),
+                        strokeWidth = 2.dp,
+                        color = fg,
+                    )
+                }
+                val msg = when {
+                    error != null -> error
+                    isIngesting   -> "Parsing and indexing document..."
+                    else          -> "RAG active via $embeddingName · $docCount doc${if (docCount == 1) "" else "s"}"
+                }
+                Text(
+                    text = msg,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = fg,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (error != null) {
+                    Icon(
+                        imageVector = TnIcons.X,
+                        contentDescription = "Dismiss",
+                        tint = fg,
+                        modifier = Modifier
+                            .size(dimens.iconSm)
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() },
+                                onClick = onDismissError,
+                            ),
+                    )
+                }
+            }
+        }
     }
 }
 

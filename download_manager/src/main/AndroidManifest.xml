@@ -25,11 +25,7 @@
             android:name=".HxdService"
             android:exported="false"
             android:foregroundServiceType="dataSync"
-            android:stopWithTask="false" />
-            <!--
-                stopWithTask="false": the service survives the user swiping away the app
-                from the recents screen. Downloads continue until the queue is empty.
-            -->
+            android:stopWithTask="true" />
     </application>
 
 </manifest>

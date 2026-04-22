@@ -63,8 +63,67 @@ object InferenceClient {
     private val _isSttLoaded = MutableStateFlow(false)
     val isSttLoaded: StateFlow<Boolean> = _isSttLoaded.asStateFlow()
 
+    private val _lastCrashInfo = MutableStateFlow<CrashInfo?>(null)
+    val lastCrashInfo: StateFlow<CrashInfo?> = _lastCrashInfo.asStateFlow()
+
+    fun dismissCrashInfo() { _lastCrashInfo.value = null }
+
+    private fun ingestCrashFromSvc(svc: IInferenceService) {
+        try {
+            val candidates = mutableListOf<CrashInfo>()
+            CrashInfo.fromJson("gguf_lib", svc.drainCrashLogJson(), CrashInfo.Source.NATIVE_CRASH)
+                ?.let { candidates += it }
+            CrashInfo.fromJson("ai_sherpa", svc.drainSherpaCrashLogJson(), CrashInfo.Source.NATIVE_CRASH)
+                ?.let { candidates += it }
+            CrashInfo.fromJson("gguf_lib", svc.lastErrorJson ?: "", CrashInfo.Source.LIVE_ERROR)
+                ?.let { candidates += it }
+            CrashInfo.fromJson("ai_sherpa", svc.sherpaLastErrorJson ?: "", CrashInfo.Source.LIVE_ERROR)
+                ?.let { candidates += it }
+            val newest = candidates.maxByOrNull { it.timestamp }
+            if (newest != null) _lastCrashInfo.value = newest
+        } catch (_: Exception) {}
+    }
+
+    fun reportLiveError() {
+        val svc = _service.value ?: return
+        try {
+            val candidates = mutableListOf<CrashInfo>()
+            CrashInfo.fromJson("gguf_lib", svc.lastErrorJson ?: "", CrashInfo.Source.LIVE_ERROR)
+                ?.let { candidates += it; svc.clearLastError() }
+            CrashInfo.fromJson("ai_sherpa", svc.sherpaLastErrorJson ?: "", CrashInfo.Source.LIVE_ERROR)
+                ?.let { candidates += it; svc.clearSherpaLastError() }
+            val newest = candidates.maxByOrNull { it.timestamp }
+            if (newest != null) _lastCrashInfo.value = newest
+        } catch (_: Exception) {}
+    }
+
     private var appContext: Context? = null
     @Volatile private var isBinding = false
+
+    private val pendingLoads = mutableSetOf<CancellableContinuation<Result<String>>>()
+    private val pendingLoadsLock = Any()
+
+    private fun trackLoad(cont: CancellableContinuation<Result<String>>) {
+        synchronized(pendingLoadsLock) { pendingLoads.add(cont) }
+        cont.invokeOnCancellation {
+            synchronized(pendingLoadsLock) { pendingLoads.remove(cont) }
+        }
+    }
+
+    private fun untrackLoad(cont: CancellableContinuation<Result<String>>) {
+        synchronized(pendingLoadsLock) { pendingLoads.remove(cont) }
+    }
+
+    private fun failPendingLoads(reason: String) {
+        val toFail = synchronized(pendingLoadsLock) {
+            val snapshot = pendingLoads.toList()
+            pendingLoads.clear()
+            snapshot
+        }
+        toFail.forEach { cont ->
+            if (cont.isActive) cont.resume(Result.failure(RuntimeException(reason)))
+        }
+    }
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
@@ -74,6 +133,7 @@ object InferenceClient {
             isBinding = false
             try { _isTtsLoaded.value = svc.isTtsLoaded } catch (_: Exception) {}
             try { _isSttLoaded.value = svc.isSttLoaded } catch (_: Exception) {}
+            ingestCrashFromSvc(svc)
             Log.d(TAG, "Service connected")
         }
 
@@ -84,6 +144,7 @@ object InferenceClient {
             _isSttLoaded.value = false
             _state.value = ServiceState.Crashed("Service process died")
             isBinding = false
+            failPendingLoads("Inference service crashed during model load")
             Log.w(TAG, "Service disconnected — will auto-rebind")
             rebind()
         }
@@ -95,6 +156,7 @@ object InferenceClient {
             _isSttLoaded.value = false
             _state.value = ServiceState.Crashed("Service binding died")
             isBinding = false
+            failPendingLoads("Inference service binding died")
             Log.e(TAG, "Binding died — rebinding")
             rebind()
         }
@@ -146,6 +208,7 @@ object InferenceClient {
     suspend fun loadModel(modelPath: String, configJson: String = "{}"): Result<String> {
         val svc = ensureBound()
         return suspendCancellableCoroutine { cont ->
+            trackLoad(cont)
             svc.loadModel(modelPath, configJson, loadCallback(cont))
         }
     }
@@ -155,16 +218,20 @@ object InferenceClient {
         val pfd = context.contentResolver.openFileDescriptor(uri, "r")
             ?: return Result.failure(IllegalArgumentException("Cannot open URI: $uri"))
         return suspendCancellableCoroutine { cont ->
+            trackLoad(cont)
             cont.invokeOnCancellation { pfd.close() }
             svc.loadModelFromFd(pfd, configJson, object : IModelLoadCallback.Stub() {
                 override fun onSuccess(modelInfoJson: String) {
                     pfd.close()
+                    untrackLoad(cont)
                     _isModelLoaded.value = true
                     cont.resume(Result.success(modelInfoJson))
                 }
                 override fun onError(message: String) {
                     pfd.close()
+                    untrackLoad(cont)
                     _isModelLoaded.value = false
+                    reportLiveError()
                     cont.resume(Result.failure(RuntimeException(message)))
                 }
             })
@@ -325,12 +392,15 @@ object InferenceClient {
     private fun loadCallback(cont: CancellableContinuation<Result<String>>) =
         object : IModelLoadCallback.Stub() {
             override fun onSuccess(modelInfoJson: String) {
+                untrackLoad(cont)
                 _isModelLoaded.value = true
-                cont.resume(Result.success(modelInfoJson))
+                if (cont.isActive) cont.resume(Result.success(modelInfoJson))
             }
             override fun onError(message: String) {
+                untrackLoad(cont)
                 _isModelLoaded.value = false
-                cont.resume(Result.failure(RuntimeException(message)))
+                reportLiveError()
+                if (cont.isActive) cont.resume(Result.failure(RuntimeException(message)))
             }
         }
 
@@ -339,7 +409,10 @@ object InferenceClient {
             override fun onToken(token: String) { emit(InferenceEvent.Token(token)) }
             override fun onToolCall(name: String, argsJson: String) { emit(InferenceEvent.ToolCall(name, argsJson)) }
             override fun onDone() { emit(InferenceEvent.Done) }
-            override fun onError(message: String) { emit(InferenceEvent.Error(message)) }
+            override fun onError(message: String) {
+                emit(InferenceEvent.Error(message))
+                reportLiveError()
+            }
             override fun onMetrics(metricsJson: String) { emit(InferenceEvent.Metrics(metricsJson)) }
             override fun onProgress(progress: Float) { emit(InferenceEvent.Progress(progress)) }
         }

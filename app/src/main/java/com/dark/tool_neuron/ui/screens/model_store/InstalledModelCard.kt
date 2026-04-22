@@ -33,6 +33,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -52,6 +53,8 @@ import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.ui.theme.maple
+import com.dark.tool_neuron.util.extractParameterCount
+import com.dark.tool_neuron.util.extractQuantization
 import com.dark.tool_neuron.util.formatBytes
 import com.dark.tool_neuron.viewmodel.ModelStoreViewModel
 import kotlinx.coroutines.Dispatchers
@@ -69,9 +72,13 @@ internal fun InstalledModelsTab(
 ) {
     val dimens = LocalDimens.current
     val context = LocalContext.current
+    val defaultEmbeddingId by viewModel.defaultEmbeddingModelId.collectAsStateWithLifecycle()
 
     var selectedModel by remember { mutableStateOf<ModelInfo?>(null) }
     var showDeleteDialog by remember { mutableStateOf<ModelInfo?>(null) }
+    var pendingImport by remember {
+        mutableStateOf<Triple<android.net.Uri, String, Long>?>(null)
+    }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -89,7 +96,7 @@ internal fun InstalledModelsTab(
                     if (sizeIdx >= 0) size = it.getLong(sizeIdx)
                 }
             }
-            viewModel.importLocalModel(uri, name, size)
+            pendingImport = Triple(uri, name, size)
         }
     }
 
@@ -116,13 +123,21 @@ internal fun InstalledModelsTab(
             }
 
             items(models, key = { it.id }) { model ->
+                val isDefaultEmbedding = model.providerType == ProviderType.EMBEDDING &&
+                    model.id == defaultEmbeddingId
                 InstalledModelCard(
                     model = model,
                     isDeleting = deleteInProgress == model.id,
+                    isDefaultEmbedding = isDefaultEmbedding,
                     onShowDetails = { selectedModel = model },
                     onDelete = { showDeleteDialog = model },
                     onLoad = { onLoad(model) },
                     onUnload = onUnload,
+                    onToggleDefaultEmbedding = {
+                        viewModel.setDefaultEmbeddingModel(
+                            if (isDefaultEmbedding) null else model.id
+                        )
+                    },
                 )
             }
         }
@@ -145,6 +160,51 @@ internal fun InstalledModelsTab(
             }
         )
     }
+
+    pendingImport?.let { (uri, name, size) ->
+        ImportTypePicker(
+            fileName = name,
+            onPick = { type ->
+                viewModel.importLocalModel(uri, name, size, type)
+                pendingImport = null
+            },
+            onDismiss = { pendingImport = null },
+        )
+    }
+}
+
+@Composable
+private fun ImportTypePicker(
+    fileName: String,
+    onPick: (ProviderType) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Import as…") },
+        text = {
+            Column {
+                Text(
+                    text = fileName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(LocalDimens.current.spacingMd))
+                Text(
+                    "Pick what kind of model this file is.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onPick(ProviderType.GGUF) }) { Text("Chat (GGUF)") }
+        },
+        dismissButton = {
+            TextButton(onClick = { onPick(ProviderType.EMBEDDING) }) { Text("Embedding (RAG)") }
+        },
+    )
 }
 
 @Composable
@@ -163,8 +223,8 @@ private fun ImportLocalCard(onClick: () -> Unit) {
         ) {
             Icon(TnIcons.Download, null, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
             Column {
-                Text("Import local GGUF", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                Text("Pick a .gguf file from storage", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Import local model", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Text("Pick a .gguf chat or embedding model from storage", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -174,13 +234,16 @@ private fun ImportLocalCard(onClick: () -> Unit) {
 internal fun InstalledModelCard(
     model: ModelInfo,
     isDeleting: Boolean,
+    isDefaultEmbedding: Boolean,
     onShowDetails: () -> Unit,
     onDelete: () -> Unit,
     onLoad: () -> Unit,
     onUnload: () -> Unit,
+    onToggleDefaultEmbedding: () -> Unit,
 ) {
     val dimens = LocalDimens.current
     val shapes = LocalTnShapes.current
+    val isEmbedding = model.providerType == ProviderType.EMBEDDING
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -195,18 +258,30 @@ internal fun InstalledModelCard(
             Icon(
                 TnIcons.Sparkles, null,
                 Modifier.size(dimens.iconMd),
-                tint = if (model.isActive) MaterialTheme.colorScheme.primary
+                tint = if (model.isActive || isDefaultEmbedding) MaterialTheme.colorScheme.primary
                        else MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    model.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(dimens.spacingXxs),
+                ) {
+                    Text(
+                        model.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    val quant = remember(model.path, model.name) {
+                        extractQuantization(model.path) ?: extractQuantization(model.name)
+                    }
+                    val params = remember(model.name) { extractParameterCount(model.name) }
+                    if (!params.isNullOrBlank()) ModelTag(text = params)
+                    if (!quant.isNullOrBlank()) ModelTag(text = quant)
+                }
                 val sizeText by produceState("Calculating...", model.path) {
                     value = withContext(Dispatchers.IO) {
                         if (model.fileSize > 0) {
@@ -224,10 +299,12 @@ internal fun InstalledModelCard(
                 CaptionText(text = sizeText)
             }
 
-            StatusBadge(
-                text = if (model.isActive) "Active" else "",
-                isActive = model.isActive
-            )
+            val badgeText = when {
+                isEmbedding && isDefaultEmbedding -> "Default"
+                model.isActive -> "Active"
+                else -> ""
+            }
+            StatusBadge(text = badgeText, isActive = model.isActive || isDefaultEmbedding)
 
             if (isDeleting) {
                 Box(Modifier.size(dimens.actionIconSize), contentAlignment = Alignment.Center) {
@@ -236,6 +313,11 @@ internal fun InstalledModelCard(
             } else {
                 MultiActionButton(
                     actions = buildList {
+                        if (isEmbedding) {
+                            val starIcon = if (isDefaultEmbedding) TnIcons.Star else TnIcons.StarOutline
+                            val starLabel = if (isDefaultEmbedding) "Unset default" else "Set as default"
+                            add(ActionItem(ActionIcon.Vector(starIcon), onToggleDefaultEmbedding, starLabel))
+                        }
                         if (model.isActive) {
                             add(ActionItem(ActionIcon.Vector(TnIcons.PlayerStop), onUnload, "Unload"))
                         }
@@ -275,6 +357,7 @@ internal fun ModelDetailsDialog(
                     ProviderType.GGUF -> "GGUF (LLM)"
                     ProviderType.TTS -> "Text-to-Speech"
                     ProviderType.STT -> "Speech-to-Text"
+                    ProviderType.EMBEDDING -> "Embedding (RAG)"
                 })
                 DetailRow("Status", if (model.isActive) "Active" else "Inactive")
 
@@ -305,6 +388,22 @@ internal fun ModelDetailsDialog(
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
     )
+}
+
+@Composable
+private fun ModelTag(text: String) {
+    Surface(
+        shape = LocalTnShapes.current.full,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+        )
+    }
 }
 
 @Composable

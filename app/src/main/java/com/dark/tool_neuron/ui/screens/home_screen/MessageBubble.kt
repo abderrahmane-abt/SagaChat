@@ -11,10 +11,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -35,8 +42,10 @@ fun MessageBubble(
     message: ChatMessage,
     canRegenerate: Boolean,
     canDelete: Boolean,
+    canEdit: Boolean,
     onRegenerate: () -> Unit,
     onDelete: (String) -> Unit,
+    onEdit: (messageId: String, newContent: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when {
@@ -46,7 +55,9 @@ fun MessageBubble(
             UserBubble(
                 message = message,
                 canDelete = canDelete,
+                canEdit = canEdit,
                 onDelete = onDelete,
+                onEdit = { newContent -> onEdit(message.id, newContent) },
                 modifier = modifier,
             )
         else ->
@@ -124,11 +135,14 @@ private fun StreamingThinkingPreview(text: String) {
 private fun UserBubble(
     message: ChatMessage,
     canDelete: Boolean,
+    canEdit: Boolean,
     onDelete: (String) -> Unit,
+    onEdit: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
+    var editing by remember(message.id) { mutableStateOf(false) }
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -156,10 +170,54 @@ private fun UserBubble(
             message = message,
             canRegenerate = false,
             canDelete = canDelete,
+            canEdit = canEdit,
             onRegenerate = {},
             onDelete = onDelete,
+            onEdit = { editing = true },
         )
     }
+
+    if (editing) {
+        EditMessageDialog(
+            initialText = message.content,
+            onConfirm = { newContent ->
+                editing = false
+                onEdit(newContent)
+            },
+            onDismiss = { editing = false },
+        )
+    }
+}
+
+@Composable
+private fun EditMessageDialog(
+    initialText: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by remember { mutableStateOf(initialText) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit message") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 3,
+                maxLines = 10,
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(text) },
+                enabled = text.trim().isNotEmpty() && text.trim() != initialText.trim(),
+            ) { Text("Save & regenerate") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
 
 @Composable
@@ -199,8 +257,10 @@ private fun AssistantBubble(
                 message = message,
                 canRegenerate = canRegenerate,
                 canDelete = canDelete,
+                canEdit = false,
                 onRegenerate = onRegenerate,
                 onDelete = onDelete,
+                onEdit = {},
             )
         }
     }

@@ -14,11 +14,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.dark.tool_neuron.model.ChatDocument
+import com.dark.tool_neuron.service.inference.InferenceClient
 import com.dark.tool_neuron.ui.components.action_window.ActionWindowOverlay
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.viewmodel.HomeViewModel
-import java.util.UUID
 
 @Composable
 fun HomeScreen(
@@ -28,8 +27,10 @@ fun HomeScreen(
     onStoreClick: () -> Unit = {},
     onGuideClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
+    onOpenModelManager: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
+    val lastCrash by InferenceClient.lastCrashInfo.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val dimens = LocalDimens.current
     val chatDocuments by viewModel.chatDocuments.collectAsStateWithLifecycle()
@@ -37,7 +38,7 @@ fun HomeScreen(
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val streaming by viewModel.streamingFragment.collectAsStateWithLifecycle()
     val isGenerating by viewModel.isGenerating.collectAsStateWithLifecycle()
-    val installedModels by viewModel.installedModels.collectAsStateWithLifecycle()
+    val installedModels by viewModel.chatModels.collectAsStateWithLifecycle()
     val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
     val generationStatus by viewModel.generationStatus.collectAsStateWithLifecycle()
     val activeModel by viewModel.activeModel.collectAsStateWithLifecycle()
@@ -47,9 +48,11 @@ fun HomeScreen(
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            context.contentResolver.takePersistableUriPermission(
-                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
             val cursor = context.contentResolver.query(uri, null, null, null, null)
             var fileName = "Document"
             var fileSize = 0L
@@ -61,17 +64,8 @@ fun HomeScreen(
                     if (sizeIdx >= 0) fileSize = it.getLong(sizeIdx)
                 }
             }
-            val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
-            viewModel.addDocument(
-                ChatDocument(
-                    id = UUID.randomUUID().toString(),
-                    chatId = currentChatId,
-                    name = fileName,
-                    mimeType = mimeType,
-                    chunkCount = 0,
-                    sizeBytes = fileSize,
-                )
-            )
+            val mimeType = context.contentResolver.getType(uri)
+            viewModel.addDocument(uri, fileName, fileSize, mimeType)
         }
     }
 
@@ -87,6 +81,7 @@ fun HomeScreen(
             generationStatus = generationStatus,
             onRegenerate = viewModel::regenerateLast,
             onDelete = viewModel::deleteMessage,
+            onEditUserMessage = viewModel::editUserMessage,
             contentPadding = PaddingValues(
                 horizontal = dimens.spacingLg,
                 vertical = dimens.spacingMd,
@@ -108,10 +103,29 @@ fun HomeScreen(
             onGuideClick = onGuideClick,
             onSettingsClick = onSettingsClick,
             onLoadDocument = {
-                filePicker.launch(arrayOf("text/*", "application/pdf", "application/json"))
+                filePicker.launch(arrayOf(
+                    "text/*",
+                    "application/pdf",
+                    "application/json",
+                    "application/xml",
+                    "application/rtf",
+                    "application/epub+zip",
+                    "application/vnd.oasis.opendocument.text",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ))
             },
             documents = chatDocuments,
             onRemoveDocument = { viewModel.removeDocument(it) },
         )
+
+        lastCrash?.let { crash ->
+            InferenceCrashDialog(
+                crash = crash,
+                onDismiss = { InferenceClient.dismissCrashInfo() },
+                onOpenModelManager = onOpenModelManager,
+            )
+        }
     }
 }

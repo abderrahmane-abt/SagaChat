@@ -18,6 +18,7 @@ fun AppTopBar(
     onBack: () -> Unit = {},
     onNavigateToStore: () -> Unit = {},
     onNavigateToGuide: () -> Unit = {},
+    onNavigateToModelManager: () -> Unit = {},
 ) {
     when (currentRoute) {
         NavScreens.HomeScreen.route -> HomeScreenTopbar(
@@ -27,6 +28,7 @@ fun AppTopBar(
             onMenuClick = onMenuClick,
             onStoreClick = onNavigateToStore,
             onGuideClick = onNavigateToGuide,
+            onModelManagerClick = onNavigateToModelManager,
         )
         NavScreens.DevNotes.route -> DevNotesTopBar()
         NavScreens.PasswordScreen.route -> PasswordScreenTopBar()
@@ -34,6 +36,11 @@ fun AppTopBar(
         NavScreens.ModelSetup.route -> SetupScreenTopBar()
         NavScreens.ModelStore.route -> Unit
         NavScreens.AppGuide.route -> Unit
-        else -> Unit
+        NavScreens.ModelManager.route -> Unit
+        NavScreens.Settings.route -> Unit
+        else -> {
+            if (currentRoute?.startsWith("model_config/") == true) Unit
+            else Unit
+        }
     }
 }

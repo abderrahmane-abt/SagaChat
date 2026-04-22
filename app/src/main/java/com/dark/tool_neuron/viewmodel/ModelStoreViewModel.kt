@@ -20,6 +20,7 @@ import com.dark.tool_neuron.repo.ExplorerRepo
 import com.dark.tool_neuron.repo.HuggingFaceExplorer
 import com.dark.tool_neuron.repo.ModelCatalog
 import com.dark.tool_neuron.repo.ModelRepository
+import com.dark.tool_neuron.repo.RagManager
 import com.dark.tool_neuron.repo.RepositoryDataStore
 import com.dark.tool_neuron.repo.RepositoryValidator
 import com.dark.tool_neuron.repo.ValidationResult
@@ -57,10 +58,16 @@ class ModelStoreViewModel @Inject constructor(
     private val repoDataStore: RepositoryDataStore,
     private val explorer: HuggingFaceExplorer,
     private val validator: RepositoryValidator,
+    private val ragManager: RagManager,
 ) : ViewModel() {
 
     val installedModels: StateFlow<List<ModelInfo>> = modelRepo.models
     val repositories: StateFlow<List<HFRepository>> = repoDataStore.repositories
+    val defaultEmbeddingModelId: StateFlow<String?> = ragManager.defaultEmbeddingModelId
+
+    fun setDefaultEmbeddingModel(modelId: String?) {
+        ragManager.setDefaultEmbeddingModelId(modelId)
+    }
 
     private val _selectedTab = MutableStateFlow(StoreTab.MODELS)
     val selectedTab: StateFlow<StoreTab> = _selectedTab.asStateFlow()
@@ -325,6 +332,7 @@ class ModelStoreViewModel @Inject constructor(
                         val provider = when (model.modelType) {
                             "tts" -> ProviderType.TTS
                             "stt" -> ProviderType.STT
+                            "embedding" -> ProviderType.EMBEDDING
                             else -> ProviderType.GGUF
                         }
                         modelRepo.insert(ModelInfo(
@@ -385,16 +393,25 @@ class ModelStoreViewModel @Inject constructor(
         viewModelScope.launch { InferenceClient.unloadModel() }
     }
 
-    fun importLocalModel(uri: Uri, fileName: String, fileSize: Long) {
+    fun importLocalModel(
+        uri: Uri,
+        fileName: String,
+        fileSize: Long,
+        providerType: ProviderType = ProviderType.GGUF,
+    ) {
         modelRepo.insert(ModelInfo(
             id = checksumId(uri.toString(), fileName, fileSize),
             name = fileName.removeSuffix(".gguf"),
             path = uri.toString(), pathType = PathType.CONTENT_URI,
-            providerType = ProviderType.GGUF, fileSize = fileSize,
+            providerType = providerType, fileSize = fileSize,
         ))
     }
 
     suspend fun getModelConfig(modelId: String): ModelConfig? = modelRepo.getConfig(modelId)
+
+    fun saveModelConfig(config: ModelConfig) {
+        modelRepo.updateConfig(config)
+    }
 
     // ── Repository management ──
 

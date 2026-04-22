@@ -18,8 +18,11 @@ import com.dark.ai_sherpa.OfflineTtsConfig
 import com.dark.ai_sherpa.OfflineTtsModelConfig
 import com.dark.ai_sherpa.OfflineTtsVitsModelConfig
 import com.dark.ai_sherpa.OfflineWhisperModelConfig
+import com.dark.ai_sherpa.SherpaLib
 import com.dark.gguf_lib.GGMLEngine
+import com.dark.gguf_lib.GGUFNativeLib
 import com.dark.gguf_lib.models.GenerationEvent
+import java.io.File
 import com.dark.tool_neuron.R
 import com.dark.tool_neuron.service.IGenerationCallback
 import com.dark.tool_neuron.service.IInferenceService
@@ -42,15 +45,44 @@ class InferenceService : Service() {
     private var tts: OfflineTts? = null
     private var stt: OfflineRecognizer? = null
 
+    private val crashLogFile: File by lazy {
+        File(filesDir, "inference_crash.json").also { it.parentFile?.mkdirs() }
+    }
+    private val sherpaCrashLogFile: File by lazy {
+        File(filesDir, "sherpa_crash.json").also { it.parentFile?.mkdirs() }
+    }
+    private val ktErrorLock = Any()
+    @Volatile private var ktLastErrorJson: String? = null
+
     override fun onCreate() {
         super.onCreate()
         Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
         setupNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification("Inference ready"))
+        engine.setTokenBatchSize(STREAMING_TOKEN_BATCH_BYTES)
+        try {
+            GGUFNativeLib.nativeErrorInit()
+            GGUFNativeLib.nativeErrorSetCrashLogPath(crashLogFile.absolutePath)
+        } catch (t: Throwable) {
+            Log.e(TAG, "gguf error tracker init failed", t)
+        }
+        try {
+            SherpaLib.nativeErrorInit()
+            SherpaLib.nativeErrorSetCrashLogPath(sherpaCrashLogFile.absolutePath)
+        } catch (t: Throwable) {
+            Log.e(TAG, "sherpa error tracker init failed", t)
+        }
         Log.d(TAG, "InferenceService created (pid=${Process.myPid()})")
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        Log.d(TAG, "onTaskRemoved: stopping foreground + self")
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+        super.onTaskRemoved(rootIntent)
+    }
 
     override fun onDestroy() {
         runBlocking(Dispatchers.IO) {
@@ -85,12 +117,17 @@ class InferenceService : Service() {
                         updateNotification("Model loaded")
                         safeCallback(callback) { it.onSuccess(engine.getModelInfoJson() ?: "{}") }
                     } else {
-                        safeCallback(callback) { it.onError("Failed to load model") }
+                        val nativeMsg = nativeErrorOrFallback("Model load returned false")
+                        captureKt("loadModel", "path=$modelPath", "ModelLoad", nativeMsg)
+                        safeCallback(callback) { it.onError(nativeMsg) }
                     }
                 } catch (e: OutOfMemoryError) {
                     try { engine.unload() } catch (_: Throwable) {}
+                    captureKt("loadModel", "path=$modelPath", "OOM",
+                        "JVM out of memory while loading the model. Try a smaller quant or lower Context Size.")
                     safeCallback(callback) { it.onError("Out of memory") }
                 } catch (e: Exception) {
+                    captureKt("loadModel", "path=$modelPath", "ModelLoad", e.message ?: e.javaClass.simpleName)
                     safeCallback(callback) { it.onError(e.message ?: "Unknown error") }
                 }
             }
@@ -260,6 +297,8 @@ class InferenceService : Service() {
                     true
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to load TTS model", e)
+                    captureKt("loadTtsModel", configJson.take(200), "TTS",
+                        e.message ?: e.javaClass.simpleName)
                     tts = null
                     false
                 }
@@ -282,6 +321,8 @@ class InferenceService : Service() {
                     audio?.samples
                 } catch (e: Exception) {
                     Log.e(TAG, "TTS synthesis failed", e)
+                    captureKt("synthesize", "speakerId=$speakerId speed=$speed", "TTS",
+                        e.message ?: e.javaClass.simpleName)
                     null
                 }
             }
@@ -314,6 +355,8 @@ class InferenceService : Service() {
                     true
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to load STT model", e)
+                    captureKt("loadSttModel", configJson.take(200), "STT",
+                        e.message ?: e.javaClass.simpleName)
                     stt = null
                     false
                 }
@@ -341,8 +384,51 @@ class InferenceService : Service() {
                     result
                 } catch (e: Exception) {
                     Log.e(TAG, "STT recognition failed", e)
+                    captureKt("recognize", "sampleRate=$sampleRate", "STT", e.message ?: e.javaClass.simpleName)
                     null
                 }
+            }
+        }
+
+        override fun getLastErrorJson(): String = readNativeOrKtError()
+
+        override fun clearLastError() {
+            synchronized(ktErrorLock) { ktLastErrorJson = null }
+            try { GGUFNativeLib.nativeErrorClear() } catch (_: Throwable) {}
+        }
+
+        override fun drainCrashLogJson(): String {
+            return try {
+                if (!crashLogFile.exists()) return ""
+                val content = crashLogFile.readText()
+                crashLogFile.delete()
+                content
+            } catch (e: Throwable) {
+                Log.e(TAG, "Failed to drain crash log", e)
+                ""
+            }
+        }
+
+        override fun getSherpaLastErrorJson(): String {
+            return try {
+                val raw = SherpaLib.nativeErrorGetLastJson()
+                if (raw == "{}" || raw.isBlank()) "" else raw
+            } catch (_: Throwable) { "" }
+        }
+
+        override fun clearSherpaLastError() {
+            try { SherpaLib.nativeErrorClear() } catch (_: Throwable) {}
+        }
+
+        override fun drainSherpaCrashLogJson(): String {
+            return try {
+                if (!sherpaCrashLogFile.exists()) return ""
+                val content = sherpaCrashLogFile.readText()
+                sherpaCrashLogFile.delete()
+                content
+            } catch (e: Throwable) {
+                Log.e(TAG, "Failed to drain sherpa crash log", e)
+                ""
             }
         }
 
@@ -406,6 +492,22 @@ class InferenceService : Service() {
                 seed = config.optInt("seed", -1),
             )
         }
+
+        val advanced = JSONObject()
+        for (key in ADVANCED_SAMPLING_KEYS) {
+            if (config.has(key)) advanced.put(key, config.get(key))
+        }
+        if (advanced.length() > 0) engine.updateSamplerParams(advanced.toString())
+
+        val nWindow = config.optInt("kvWindow", 0)
+        if (nWindow > 0) {
+            engine.setKvPolicy(
+                nSink = config.optInt("kvSink", 4),
+                nWindow = nWindow,
+                evictAtFull = config.optBoolean("kvEvictAtFull", true),
+            )
+        }
+
         val system = config.optString("systemPrompt", "")
         if (system.isNotEmpty()) engine.setSystemPrompt(system)
         val template = config.optString("chatTemplate", "")
@@ -414,6 +516,34 @@ class InferenceService : Service() {
 
     private inline fun <T> safeCallback(target: T, block: (T) -> Unit) {
         try { block(target) } catch (_: DeadObjectException) {}
+    }
+
+    private fun nativeErrorOrFallback(fallback: String): String {
+        return try {
+            val j = JSONObject(GGUFNativeLib.nativeErrorGetLastJson())
+            j.optString("message").takeIf { it.isNotBlank() } ?: fallback
+        } catch (_: Throwable) { fallback }
+    }
+
+    private fun captureKt(op: String, detail: String?, category: String, message: String) {
+        fun esc(s: String?): String = s.orEmpty()
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
+        val ts = System.currentTimeMillis()
+        val json = """{"code":1,"category":"${esc(category)}","message":"${esc(message)}","op_at_time":{"op":"${esc(op)}","detail":"${esc(detail)}","started_ms":$ts},"timestamp":$ts}"""
+        synchronized(ktErrorLock) { ktLastErrorJson = json }
+    }
+
+    private fun readNativeOrKtError(): String {
+        val kt = synchronized(ktErrorLock) { ktLastErrorJson }
+        if (!kt.isNullOrBlank()) return kt
+        return try {
+            val native = GGUFNativeLib.nativeErrorGetLastJson()
+            if (native == "{}" || native.isBlank()) "" else native
+        } catch (_: Throwable) { "" }
     }
 
     private fun setupNotificationChannel() {
@@ -441,5 +571,12 @@ class InferenceService : Service() {
         private const val TAG = "InferenceService"
         private const val CHANNEL_ID = "tn_inference"
         private const val NOTIFICATION_ID = 0x544E4953 // TNIS
+        private const val STREAMING_TOKEN_BATCH_BYTES = 8
+
+        private val ADVANCED_SAMPLING_KEYS = arrayOf(
+            "repeatPenalty", "frequencyPenalty", "presencePenalty", "penaltyLastN",
+            "dryMultiplier", "dryBase", "dryAllowedLength", "dryPenaltyLastN",
+            "xtcProbability", "xtcThreshold",
+        )
     }
 }

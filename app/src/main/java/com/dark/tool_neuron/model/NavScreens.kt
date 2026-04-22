@@ -10,4 +10,10 @@ sealed class NavScreens(val route: String) {
     object ModelSetup : NavScreens("model_setup")
     object AppGuide : NavScreens("app_guide")
     object PluginHub : NavScreens("plugin_hub")
+    object ModelManager : NavScreens("model_manager")
+    object Settings : NavScreens("settings")
+    object ModelConfig : NavScreens("model_config/{modelId}") {
+        const val ARG_MODEL_ID = "modelId"
+        fun routeFor(modelId: String) = "model_config/$modelId"
+    }
 }

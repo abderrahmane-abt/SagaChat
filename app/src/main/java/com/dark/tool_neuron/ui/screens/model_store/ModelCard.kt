@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -31,6 +30,8 @@ import com.dark.download_manager.HxdStatus
 import com.dark.tool_neuron.model.HuggingFaceModel
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionProgressButton
+import com.dark.tool_neuron.ui.components.TnIndeterminateProgressBar
+import com.dark.tool_neuron.ui.components.TnProgressBar
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
@@ -208,19 +209,13 @@ private fun DownloadProgress(state: HxdState) {
     Column(modifier = Modifier.padding(top = dimens.spacingSm)) {
         val progress = state.progress
         if (progress >= 0f) {
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp)),
+            TnProgressBar(
+                progress = progress,
+                modifier = Modifier.fillMaxWidth(),
             )
         } else {
-            LinearProgressIndicator(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp)),
+            TnIndeterminateProgressBar(
+                modifier = Modifier.fillMaxWidth(),
             )
         }
         Spacer(Modifier.height(4.dp))

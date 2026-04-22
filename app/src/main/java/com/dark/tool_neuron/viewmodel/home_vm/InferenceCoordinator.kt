@@ -5,6 +5,7 @@ import com.dark.tool_neuron.model.ChatMessage
 import com.dark.tool_neuron.model.MemoryMetrics
 import com.dark.tool_neuron.model.TextMetrics
 import com.dark.tool_neuron.repo.ChatRepository
+import com.dark.tool_neuron.repo.RagManager
 import com.dark.tool_neuron.service.inference.InferenceClient
 import com.dark.tool_neuron.service.inference.InferenceEvent
 import kotlinx.coroutines.flow.transformWhile
@@ -14,7 +15,6 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "InferenceCoordinator"
-private const val MAX_TOKENS = 2048
 private const val MAX_TOOL_ITERATIONS = 3
 private const val ROLE_USER = "user"
 private const val ROLE_ASSISTANT = "assistant"
@@ -37,6 +37,8 @@ data class GenerationOutcome(
 class InferenceCoordinator @Inject constructor(
     private val chatRepo: ChatRepository,
     private val toolCallCoordinator: ToolCallCoordinator,
+    private val ragManager: RagManager,
+    private val modelSession: ModelSessionManager,
 ) {
     suspend fun run(
         chatId: String,
@@ -55,9 +57,11 @@ class InferenceCoordinator @Inject constructor(
             var rawAssistant = ""
             var pendingToolCall: InferenceEvent.ToolCall? = null
 
-            val historyJson = buildMessagesJson(chatRepo.getMessages(chatId))
+            val rawMessages = chatRepo.getMessages(chatId)
+            val messages = if (iteration == 0) augmentLastUser(chatId, rawMessages) else rawMessages
+            val historyJson = buildMessagesJson(messages)
 
-            InferenceClient.generateMultiTurn(historyJson, MAX_TOKENS)
+            InferenceClient.generateMultiTurn(historyJson, modelSession.maxTokens.value)
                 .transformWhile { event ->
                     emit(event)
                     event !is InferenceEvent.Done && event !is InferenceEvent.Error
@@ -117,6 +121,19 @@ class InferenceCoordinator @Inject constructor(
             textMetrics = textMetrics,
             memoryMetrics = memoryMetrics,
         )
+    }
+
+    private suspend fun augmentLastUser(chatId: String, messages: List<ChatMessage>): List<ChatMessage> {
+        if (!ragManager.isReady.value) return messages
+        val lastUserIdx = messages.indexOfLast { it.role == ROLE_USER }
+        if (lastUserIdx < 0) return messages
+        val original = messages[lastUserIdx]
+        val augmented = ragManager.buildAugmentedPrompt(chatId, original.content, original.content)
+        if (augmented == original.content) return messages
+        Log.i(TAG, "prompt augmented with RAG context (len ${original.content.length} -> ${augmented.length})")
+        return messages.toMutableList().also {
+            it[lastUserIdx] = original.copy(content = augmented)
+        }
     }
 
     private fun buildMessagesJson(messages: List<ChatMessage>): String {

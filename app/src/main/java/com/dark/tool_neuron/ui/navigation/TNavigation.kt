@@ -5,16 +5,24 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.dark.tool_neuron.model.NavScreens
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.ui.screens.dev_notes.DevNotesScreen
 import com.dark.tool_neuron.ui.screens.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.screens.intro_screen.IntroScreen
+import com.dark.tool_neuron.ui.screens.model_config.ModelConfigScreen
+import com.dark.tool_neuron.ui.screens.model_manager.ModelManagerScreen
+import com.dark.tool_neuron.ui.screens.settings.SettingsScreen
 import com.dark.tool_neuron.ui.screens.password_screen.PasswordScreen
 import com.dark.tool_neuron.ui.screens.guide.AppGuideScreen
 import com.dark.tool_neuron.ui.screens.model_store.ModelStoreScreen
@@ -26,6 +34,7 @@ import com.dark.tool_neuron.ui.theme.rememberNavTransitions
 import com.dark.tool_neuron.viewmodel.HomeViewModel
 import com.dark.tool_neuron.viewmodel.ModelStoreViewModel
 import com.dark.tool_neuron.viewmodel.PasswordViewModel
+import com.dark.tool_neuron.viewmodel.SettingsViewModel
 import com.dark.tool_neuron.viewmodel.SetupViewModel
 import kotlinx.coroutines.delay
 
@@ -68,6 +77,7 @@ fun TNavigation(
                 innerPadding = innerPadding,
                 actionWindowExpanded = actionWindowExpanded,
                 onActionWindowDismiss = onActionWindowDismiss,
+                onOpenModelManager = { navController.navigate(NavScreens.ModelManager.route) },
                 viewModel = homeViewModel,
             )
         }
@@ -146,6 +156,59 @@ fun TNavigation(
             PluginHubScreen(
                 onClose = { navController.popBackStack() }
             )
+        }
+        composable(NavScreens.Settings.route) {
+            val viewModel: SettingsViewModel = hiltViewModel()
+            SettingsScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(NavScreens.ModelManager.route) {
+            val activity = LocalContext.current as ComponentActivity
+            val viewModel: ModelStoreViewModel = hiltViewModel(activity)
+            ModelManagerScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+                onEditModel = { modelId ->
+                    navController.navigate(NavScreens.ModelConfig.routeFor(modelId))
+                },
+            )
+        }
+        composable(
+            route = NavScreens.ModelConfig.route,
+            arguments = listOf(navArgument(NavScreens.ModelConfig.ARG_MODEL_ID) {
+                type = NavType.StringType
+            }),
+        ) { backStackEntry ->
+            val activity = LocalContext.current as ComponentActivity
+            val viewModel: ModelStoreViewModel = hiltViewModel(activity)
+            val installed by viewModel.installedModels.collectAsStateWithLifecycle()
+            val modelId = backStackEntry.arguments?.getString(NavScreens.ModelConfig.ARG_MODEL_ID)
+            val model = installed.firstOrNull { it.id == modelId }
+            if (model == null) {
+                LaunchedEffect(Unit) { navController.popBackStack() }
+            } else {
+                var initialConfig by remember(model.id) {
+                    mutableStateOf<com.dark.tool_neuron.model.ModelConfig?>(null)
+                }
+                var loaded by remember(model.id) { mutableStateOf(false) }
+                LaunchedEffect(model.id) {
+                    initialConfig = viewModel.getModelConfig(model.id)
+                    loaded = true
+                }
+                if (loaded) {
+                    ModelConfigScreen(
+                        modelInfo = model,
+                        initialConfig = initialConfig,
+                        onSave = { config ->
+                            viewModel.saveModelConfig(config)
+                            navController.popBackStack()
+                        },
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+            }
         }
         composable(NavScreens.PasswordScreen.route) {
             val viewModel: PasswordViewModel = hiltViewModel()

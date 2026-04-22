@@ -9,8 +9,11 @@ import com.dark.tool_neuron.model.MemoryMetrics
 import com.dark.tool_neuron.model.MessageKind
 import com.dark.tool_neuron.model.ModelInfo
 import com.dark.tool_neuron.model.TextMetrics
+import com.dark.tool_neuron.model.enums.ProviderType
+import android.net.Uri
 import com.dark.tool_neuron.repo.ChatRepository
 import com.dark.tool_neuron.repo.ModelRepository
+import com.dark.tool_neuron.repo.RagManager
 import com.dark.tool_neuron.service.inference.InferenceClient
 import com.dark.tool_neuron.viewmodel.home_vm.GenerationOutcome
 import com.dark.tool_neuron.viewmodel.home_vm.GenerationStatus
@@ -47,9 +50,14 @@ class HomeViewModel @Inject constructor(
     private val modelSession: ModelSessionManager,
     private val toolCallCoordinator: ToolCallCoordinator,
     private val inferenceCoordinator: InferenceCoordinator,
+    private val ragManager: RagManager,
 ) : ViewModel() {
 
     val installedModels: StateFlow<List<ModelInfo>> = modelRepo.models
+
+    val chatModels: StateFlow<List<ModelInfo>> = modelRepo.models
+        .map { list -> list.filter { it.providerType == ProviderType.GGUF } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val chats: StateFlow<List<Chat>> = chatRepo.chats
     val modelLoadState: StateFlow<ModelLoadState> = modelSession.loadState
     val supportsThinking: StateFlow<Boolean> = modelSession.supportsThinking
@@ -81,6 +89,15 @@ class HomeViewModel @Inject constructor(
 
     private val _chatDocuments = MutableStateFlow<List<ChatDocument>>(emptyList())
     val chatDocuments: StateFlow<List<ChatDocument>> = _chatDocuments.asStateFlow()
+
+    private val _documentError = MutableStateFlow<String?>(null)
+    val documentError: StateFlow<String?> = _documentError.asStateFlow()
+
+    private val _isIngestingDocument = MutableStateFlow(false)
+    val isIngestingDocument: StateFlow<Boolean> = _isIngestingDocument.asStateFlow()
+
+    val ragReady: StateFlow<Boolean> = ragManager.isReady
+    val activeEmbeddingName: StateFlow<String?> = ragManager.activeEmbeddingName
 
     private val _currentChatId = MutableStateFlow<String?>(null)
     val currentChatId: StateFlow<String?> = _currentChatId.asStateFlow()
@@ -181,17 +198,52 @@ class HomeViewModel @Inject constructor(
     fun toggleThinking() { _thinkingEnabled.value = !_thinkingEnabled.value }
     fun toggleLoadModelWindow() { _loadModelWindow.value = !_loadModelWindow.value }
 
-    fun addDocument(document: ChatDocument) { _chatDocuments.value += document }
-    fun removeDocument(docId: String) { _chatDocuments.value = _chatDocuments.value.filter { it.id != docId } }
+    fun addDocument(uri: Uri, name: String, size: Long, mimeType: String?) {
+        val active = activeModel.value ?: run {
+            _documentError.value = "Load a chat model before adding documents."
+            return
+        }
+        val chatId = _currentChatId.value ?: ensureChat(active)
+        viewModelScope.launch {
+            _isIngestingDocument.value = true
+            _documentError.value = null
+            val result = ragManager.ingestDocument(chatId, uri, name, size, mimeType)
+            _isIngestingDocument.value = false
+            result.onSuccess { doc ->
+                _chatDocuments.value = _chatDocuments.value + doc
+            }.onFailure { err ->
+                _documentError.value = err.message ?: "Failed to add document"
+            }
+        }
+    }
+
+    fun removeDocument(docId: String) {
+        viewModelScope.launch {
+            ragManager.removeDocument(docId)
+            _chatDocuments.value = _chatDocuments.value.filter { it.id != docId }
+        }
+    }
+
+    fun clearDocumentError() { _documentError.value = null }
+
+    fun prepareRagIfAvailable() {
+        viewModelScope.launch { ragManager.ensureReady() }
+    }
 
     fun selectChat(chatId: String) {
         _currentChatId.value = chatId
         _messages.value = chatRepo.getMessages(chatId)
+        val docs = ragManager.documentsForChat(chatId)
+        _chatDocuments.value = docs
+        if (docs.isNotEmpty()) {
+            viewModelScope.launch { ragManager.ensureReady() }
+        }
     }
 
     fun createNewChat() {
         _currentChatId.value = null
         _messages.value = emptyList()
+        _chatDocuments.value = emptyList()
     }
 
     fun deleteChat(chatId: String) {
@@ -214,7 +266,10 @@ class HomeViewModel @Inject constructor(
     fun sendMessage(text: String) {
         val trimmed = text.trim()
         if (trimmed.isEmpty() || _isGenerating.value) return
-        val active = activeModel.value ?: return
+        val active = activeModel.value ?: run {
+            _loadModelWindow.value = true
+            return
+        }
 
         val chatId = ensureChat(active)
         val userMessage = ChatMessage(
@@ -233,7 +288,10 @@ class HomeViewModel @Inject constructor(
     fun regenerateLast() {
         if (_isGenerating.value) return
         val chatId = _currentChatId.value ?: return
-        if (activeModel.value == null) return
+        if (activeModel.value == null) {
+            _loadModelWindow.value = true
+            return
+        }
         val lastAssistant = chatRepo.getMessages(chatId).lastOrNull { it.role == ROLE_ASSISTANT }
             ?: return
         chatRepo.deleteMessage(lastAssistant.id)
@@ -244,6 +302,31 @@ class HomeViewModel @Inject constructor(
         val chatId = _currentChatId.value ?: return
         chatRepo.deleteMessage(messageId)
         _messages.value = chatRepo.getMessages(chatId)
+    }
+
+    fun editUserMessage(messageId: String, newContent: String) {
+        if (_isGenerating.value) return
+        val chatId = _currentChatId.value ?: return
+        val trimmed = newContent.trim()
+        if (trimmed.isEmpty()) return
+
+        val all = chatRepo.getMessages(chatId)
+        val target = all.firstOrNull { it.id == messageId } ?: return
+        if (target.role != ROLE_USER) return
+        if (target.content == trimmed) return
+
+        chatRepo.updateMessage(target.copy(content = trimmed))
+
+        all.filter { it.timestamp > target.timestamp }
+            .forEach { chatRepo.deleteMessage(it.id) }
+
+        _messages.value = chatRepo.getMessages(chatId)
+
+        if (activeModel.value != null) {
+            runGeneration(chatId, isFirstTurn = false, userText = trimmed)
+        } else {
+            _loadModelWindow.value = true
+        }
     }
 
     fun stopGeneration() {
@@ -264,6 +347,7 @@ class HomeViewModel @Inject constructor(
         generationJob = viewModelScope.launch {
             var outcome: GenerationOutcome? = null
             var fallbackError: String? = null
+            var wasStopped = false
             try {
                 outcome = inferenceCoordinator.run(
                     chatId = chatId,
@@ -277,19 +361,25 @@ class HomeViewModel @Inject constructor(
                     },
                 )
             } catch (e: CancellationException) {
-                throw e
+                wasStopped = true
             } catch (e: Exception) {
                 fallbackError = e.message
             } finally {
+                val partial = _streamingFragment.value
+                val resolvedContent = outcome?.content?.takeIf { it.isNotBlank() }
+                    ?: partial?.content.orEmpty()
+                val resolvedThinking = outcome?.thinking?.takeIf { it.isNotBlank() }
+                    ?: partial?.thinkingContent.orEmpty()
                 finalizeAssistantMessage(
                     chatId = chatId,
-                    content = outcome?.content.orEmpty(),
-                    thinking = outcome?.thinking.orEmpty(),
-                    error = outcome?.error ?: fallbackError,
+                    content = resolvedContent,
+                    thinking = resolvedThinking,
+                    error = if (wasStopped) null else (outcome?.error ?: fallbackError),
                     isFirstTurn = isFirstTurn,
                     userText = userText,
                     textMetrics = outcome?.textMetrics,
                     memoryMetrics = outcome?.memoryMetrics,
+                    wasStopped = wasStopped,
                 )
             }
         }
@@ -312,10 +402,17 @@ class HomeViewModel @Inject constructor(
         userText: String,
         textMetrics: TextMetrics?,
         memoryMetrics: MemoryMetrics?,
+        wasStopped: Boolean = false,
     ) {
+        if (wasStopped && content.isBlank() && thinking.isBlank()) {
+            _streamingFragment.value = null
+            _isGenerating.value = false
+            return
+        }
         val finalContent = when {
             error != null && content.isBlank() -> "Error: $error"
             error != null -> "$content\n\n_Error: ${error}_"
+            wasStopped -> "$content\n\n_Stopped_"
             else -> content
         }
         val finalMessage = ChatMessage(

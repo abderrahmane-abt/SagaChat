@@ -26,6 +26,8 @@ import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
+import com.dark.tool_neuron.util.extractParameterCount
+import com.dark.tool_neuron.util.extractQuantization
 import com.dark.tool_neuron.viewmodel.home_vm.ModelLoadState
 
 @Composable
@@ -113,14 +115,26 @@ private fun InstalledModelRow(
             horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = model.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(dimens.spacingXxs),
+                ) {
+                    Text(
+                        text = model.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    val params = remember(model.name) { extractParameterCount(model.name) }
+                    val quant = remember(model.path, model.name) {
+                        extractQuantization(model.path) ?: extractQuantization(model.name)
+                    }
+                    if (!params.isNullOrBlank()) ModelInfoChip(text = params)
+                    if (!quant.isNullOrBlank()) ModelInfoChip(text = quant)
+                }
                 if (rowState is RowState.Error) {
                     Text(
                         text = rowState.message,
@@ -164,6 +178,22 @@ private fun InstalledModelRow(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ModelInfoChip(text: String) {
+    Surface(
+        shape = LocalTnShapes.current.full,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+        )
     }
 }
 

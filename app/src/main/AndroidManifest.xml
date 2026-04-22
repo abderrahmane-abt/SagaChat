@@ -36,18 +36,24 @@
             android:theme="@style/Theme.ToolNeuron">
         </activity>
 
+        <activity
+            android:name=".activity.ColorShowcaseActivity"
+            android:exported="true"
+            android:theme="@style/Theme.ToolNeuron">
+        </activity>
+
         <service
             android:name="com.dark.download_manager.HxdService"
             android:exported="false"
             android:foregroundServiceType="dataSync"
-            android:stopWithTask="false" />
+            android:stopWithTask="true" />
 
         <service
             android:name=".service.inference.InferenceService"
             android:process=":inference"
             android:exported="false"
             android:foregroundServiceType="dataSync"
-            android:stopWithTask="false" />
+            android:stopWithTask="true" />
     </application>
 
 </manifest>

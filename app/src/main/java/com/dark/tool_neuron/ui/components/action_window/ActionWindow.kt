@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Surface
@@ -51,6 +50,7 @@ import com.dark.tool_neuron.service.inference.InferenceClient
 import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.components.CaptionText
 import com.dark.tool_neuron.ui.components.SectionHeader
+import com.dark.tool_neuron.ui.components.TnProgressBar
 import com.dark.tool_neuron.ui.components.model_list.InstalledModelList
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
@@ -333,14 +333,12 @@ private fun StatsTab(
         SectionHeader(title = "Context")
         StatRow("Usage", if (isModelLoaded) contextPercent else "--")
         if (isModelLoaded) {
-            LinearProgressIndicator(
-                progress = { contextUsage.coerceIn(0f, 1f) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp),
-                color = if (contextUsage > 0.85f) MaterialTheme.colorScheme.error
-                else MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+            TnProgressBar(
+                progress = contextUsage.coerceIn(0f, 1f),
+                modifier = Modifier.fillMaxWidth(),
+                fillColor = if (contextUsage > 0.85f) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.onSurface,
             )
         }
 

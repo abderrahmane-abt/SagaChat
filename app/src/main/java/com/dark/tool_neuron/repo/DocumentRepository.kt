@@ -50,6 +50,12 @@ class DocumentRepository @Inject constructor(
         storage.flush(COLLECTION)
     }
 
+    fun clearAll() {
+        val records = storage.getAll(COLLECTION)
+        records.forEach { storage.delete(COLLECTION, it.id) }
+        storage.flush(COLLECTION)
+    }
+
     companion object {
         private const val COLLECTION = "chat_documents"
 

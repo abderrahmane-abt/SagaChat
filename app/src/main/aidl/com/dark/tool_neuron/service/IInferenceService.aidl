@@ -66,4 +66,12 @@ interface IInferenceService {
     void unloadSttModel();
     boolean isSttLoaded();
     String recognize(in float[] samples, int sampleRate);
+
+    // Errors / crash diagnostics
+    String getLastErrorJson();
+    void clearLastError();
+    String drainCrashLogJson();
+    String getSherpaLastErrorJson();
+    void clearSherpaLastError();
+    String drainSherpaCrashLogJson();
 }

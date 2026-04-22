@@ -11,8 +11,11 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private const val DEFAULT_MAX_TOKENS = 2048
 
 @Singleton
 class ModelSessionManager @Inject constructor(
@@ -25,9 +28,14 @@ class ModelSessionManager @Inject constructor(
     private val _supportsThinking = MutableStateFlow(false)
     val supportsThinking: StateFlow<Boolean> = _supportsThinking.asStateFlow()
 
+    private val _maxTokens = MutableStateFlow(DEFAULT_MAX_TOKENS)
+    val maxTokens: StateFlow<Int> = _maxTokens.asStateFlow()
+
     suspend fun load(model: ModelInfo) {
         _loadState.value = ModelLoadState.Loading(model.id)
-        val configJson = buildConfigJson(modelRepo.getConfig(model.id))
+        val config = modelRepo.getConfig(model.id)
+        _maxTokens.value = readMaxTokens(config)
+        val configJson = buildConfigJson(config)
         val result = when (model.pathType) {
             PathType.FILE -> InferenceClient.loadModel(model.path, configJson)
             PathType.CONTENT_URI -> InferenceClient.loadModelFromUri(
@@ -58,6 +66,16 @@ class ModelSessionManager @Inject constructor(
 
     fun stopGeneration() {
         InferenceClient.stopGeneration()
+    }
+
+    private fun readMaxTokens(config: ModelConfig?): Int {
+        if (config == null) return DEFAULT_MAX_TOKENS
+        return try {
+            val inf = JSONObject(config.inferenceParamsJson.ifBlank { "{}" })
+            inf.optInt("maxTokens", DEFAULT_MAX_TOKENS).coerceIn(64, 32768)
+        } catch (_: Exception) {
+            DEFAULT_MAX_TOKENS
+        }
     }
 
     private fun buildConfigJson(config: ModelConfig?): String {

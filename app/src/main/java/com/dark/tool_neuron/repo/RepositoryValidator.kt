@@ -32,7 +32,7 @@ class RepositoryValidator @Inject constructor() {
                 }
             }
 
-            val filesConn = (URL("https://huggingface.co/api/models/${repo.repoPath}/tree/main").openConnection() as HttpURLConnection).apply {
+            val filesConn = (URL("https://huggingface.co/api/models/${repo.repoPath}/tree/main?recursive=true").openConnection() as HttpURLConnection).apply {
                 connectTimeout = 15_000; readTimeout = 15_000
                 setRequestProperty("Accept", "application/json")
             }

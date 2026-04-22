@@ -46,6 +46,7 @@ fun ChatMessageList(
     generationStatus: GenerationStatus,
     onRegenerate: () -> Unit,
     onDelete: (String) -> Unit,
+    onEditUserMessage: (messageId: String, newContent: String) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
@@ -93,8 +94,10 @@ fun ChatMessageList(
                     message = message,
                     canRegenerate = !isGenerating && message.id == lastAssistantId,
                     canDelete = !isGenerating,
+                    canEdit = !isGenerating && message.role == "user",
                     onRegenerate = onRegenerate,
                     onDelete = onDelete,
+                    onEdit = onEditUserMessage,
                 )
             }
             if (streaming != null) {

@@ -72,6 +72,13 @@ class ModelRepository @Inject constructor(
         return records.firstOrNull()?.toModelConfig()
     }
 
+    fun updateConfig(config: ModelConfig) {
+        val existing = storage.queryString(COL_CONFIG, TAG_CONFIG_MODEL_ID, config.modelId)
+        existing.forEach { storage.delete(COL_CONFIG, it.id) }
+        storage.put(COL_CONFIG, config.toRecord())
+        storage.flush(COL_CONFIG)
+    }
+
     fun setActive(modelId: String) {
         val all = storage.getAll(COL_MODELS)
         all.forEach { record ->
