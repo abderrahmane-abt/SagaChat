@@ -1,60 +1,163 @@
 package com.dark.tool_neuron.data
 
-import android.util.Log
+import com.dark.hxs_encryptor.AuthNative
 import com.dark.hxs_encryptor.HxsEncryptor
+import com.dark.hxs_encryptor.PolicyEngine
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class SecurityManager @Inject constructor(
-    private val prefs: AppPreferences
+    private val prefs: AppPreferences,
+    private val session: SessionHolder,
+    private val encryptor: HxsEncryptor,
+    private val keyStore: AppKeyStore,
 ) {
-    private val encryptor = HxsEncryptor()
+
+    init {
+        val state = prefs.readAuthState()
+        PolicyEngine.setPassthrough(state.securityMode != AppPreferences.SECURITY_APP_PASSWORD)
+    }
 
     val isLockEnabled: Boolean
-        get() = prefs.securityMode == AppPreferences.SECURITY_APP_PASSWORD
+        get() = prefs.readAuthState().securityMode == AppPreferences.SECURITY_APP_PASSWORD
 
-    val isAppPassword: Boolean
-        get() = prefs.securityMode == AppPreferences.SECURITY_APP_PASSWORD
+    fun snapshotLockoutState(): AuthState = prefs.readAuthState()
 
     fun setPassword(password: String) {
-        val salt = encryptor.randomBytes(16)
-        val hash = deriveKey(password.toByteArray(), salt)
-        prefs.passwordSalt = salt
-        prefs.passwordHash = hash
-        prefs.securityMode = AppPreferences.SECURITY_APP_PASSWORD
+        val pin = password.toByteArray(Charsets.UTF_8)
+        try {
+            val result = AuthNative.setup(pin)
+            prefs.writeAuthState(
+                AuthState(
+                    securityMode = AppPreferences.SECURITY_APP_PASSWORD,
+                    salt = result.salt,
+                    hash = result.hash,
+                    failedAttempts = 0,
+                    nextAttemptAtMs = 0L,
+                ),
+            )
+            encryptor.secureWipe(result.hash)
+            PolicyEngine.setPassthrough(false)
+        } finally {
+            encryptor.secureWipe(pin)
+        }
     }
 
-    fun verifyPassword(password: String): Boolean {
-        val salt = prefs.passwordSalt ?: return false
-        val storedHash = prefs.passwordHash ?: return false
-        val hash = deriveKey(password.toByteArray(), salt)
-        return hash.contentEquals(storedHash)
+    fun verifyPassword(password: String, nowMs: Long = System.currentTimeMillis()): VerifyResult {
+        val state = prefs.readAuthState()
+        if (state.securityMode != AppPreferences.SECURITY_APP_PASSWORD) {
+            return VerifyResult.NoLock
+        }
+        if (state.salt.isEmpty() || state.hash.isEmpty()) {
+            return VerifyResult.NoLock
+        }
+
+        val clockRolledBack = state.lastSeenNowMs > 0L && nowMs + CLOCK_SKEW_GRACE_MS < state.lastSeenNowMs
+
+        if (state.nextAttemptAtMs > nowMs && !clockRolledBack) {
+            return VerifyResult.LockedOut(state.nextAttemptAtMs)
+        }
+
+        val pin = password.toByteArray(Charsets.UTF_8)
+        try {
+            val token = AuthNative.verify(pin, state.salt, state.hash)
+            if (token != null && !clockRolledBack) {
+                session.set(token)
+                prefs.writeAuthState(
+                    state.copy(
+                        failedAttempts = 0,
+                        nextAttemptAtMs = 0L,
+                        lastSeenNowMs = maxOf(nowMs, state.lastSeenNowMs),
+                    ),
+                )
+                return VerifyResult.Success
+            }
+            if (token != null) {
+                encryptor.secureWipe(token)
+            }
+
+            if (state.hasPanic) {
+                val panicToken = AuthNative.verify(pin, state.panicSalt, state.panicHash)
+                if (panicToken != null) {
+                    encryptor.secureWipe(panicToken)
+                    hardWipe()
+                    return VerifyResult.Wiped
+                }
+            }
+
+            val bump = if (clockRolledBack) 2 else 1
+            val nextAttempts = state.failedAttempts + bump
+            if (nextAttempts >= LockoutPolicy.WIPE_THRESHOLD) {
+                hardWipe()
+                return VerifyResult.Wiped
+            }
+
+            val backoff = LockoutPolicy.backoffMillis(nextAttempts)
+            val baseNow = maxOf(nowMs, state.lastSeenNowMs)
+            val retryAt = if (backoff == 0L) 0L else baseNow + backoff
+            prefs.writeAuthState(
+                state.copy(
+                    failedAttempts = nextAttempts,
+                    nextAttemptAtMs = retryAt,
+                    lastSeenNowMs = baseNow,
+                ),
+            )
+            return if (retryAt > baseNow) VerifyResult.LockedOut(retryAt) else VerifyResult.WrongPin
+        } finally {
+            encryptor.secureWipe(pin)
+        }
     }
 
-    private fun deriveKey(password: ByteArray, salt: ByteArray): ByteArray {
-        return encryptor.argon2id(
-            password = password,
-            salt = salt,
-            tCost = 2,
-            mCost = 16384,
-            parallelism = 2,
-            hashLen = 32
-        )
+    fun setPanicPin(panicPin: String): Boolean {
+        if (!session.isAllowed(PolicyEngine.Feature.AUTH_DISABLE)) return false
+        val current = prefs.readAuthState()
+        if (current.securityMode != AppPreferences.SECURITY_APP_PASSWORD) return false
+
+        val pinBytes = panicPin.toByteArray(Charsets.UTF_8)
+        try {
+            val result = AuthNative.setup(pinBytes)
+            prefs.writeAuthState(current.copy(panicSalt = result.salt, panicHash = result.hash))
+            encryptor.secureWipe(result.hash)
+            return true
+        } finally {
+            encryptor.secureWipe(pinBytes)
+        }
     }
 
-    fun disableLock() {
-        prefs.securityMode = AppPreferences.SECURITY_NONE
-    }
-
-    fun runAntiTamperChecks(): Boolean {
-        if (encryptor.isDebuggerAttached()) return false
-        if (encryptor.isFridaPresent()) return false
-        if (encryptor.isXposedPresent()) return false
+    fun clearPanicPin(): Boolean {
+        if (!session.isAllowed(PolicyEngine.Feature.AUTH_DISABLE)) return false
+        val current = prefs.readAuthState()
+        prefs.writeAuthState(current.copy(panicSalt = ByteArray(0), panicHash = ByteArray(0)))
         return true
     }
 
+    fun disableLock(): Boolean {
+        if (!session.isAllowed(PolicyEngine.Feature.AUTH_DISABLE)) return false
+        prefs.writeAuthState(AuthState.DEFAULT)
+        session.clear()
+        PolicyEngine.setPassthrough(true)
+        return true
+    }
+
+    fun setupWithoutLock() {
+        val current = prefs.readAuthState()
+        if (current.securityMode == AppPreferences.SECURITY_APP_PASSWORD) {
+            throw SecurityException("Password is set — use disableLock with an active session")
+        }
+        prefs.writeAuthState(AuthState.DEFAULT)
+        PolicyEngine.setPassthrough(true)
+    }
+
+    fun hardWipe() {
+        session.clear()
+        PolicyEngine.invalidateSession()
+        PolicyEngine.markTampered()
+        prefs.clearAuthState()
+        keyStore.wipe()
+    }
+
     companion object {
-        private const val TAG = "SecurityManager"
+        private const val CLOCK_SKEW_GRACE_MS = 5 * 60_000L
     }
 }

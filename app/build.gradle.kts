@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -5,6 +7,19 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.google.dagger.hilt)
 }
+
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val tnKeystorePath: String? = localProps.getProperty("TN_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
+val tnKeystorePassword: String? = localProps.getProperty("TN_KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() }
+val tnKeyAlias: String? = localProps.getProperty("TN_KEY_ALIAS")?.takeIf { it.isNotBlank() }
+val tnKeyPassword: String? = localProps.getProperty("TN_KEY_PASSWORD")?.takeIf { it.isNotBlank() }
+val hasReleaseSigning = tnKeystorePath != null &&
+    tnKeystorePassword != null &&
+    tnKeyAlias != null &&
+    tnKeyPassword != null
 
 android {
     namespace = "com.dark.tool_neuron"
@@ -28,6 +43,20 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    if (hasReleaseSigning) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(tnKeystorePath!!)
+                storePassword = tnKeystorePassword
+                keyAlias = tnKeyAlias
+                keyPassword = tnKeyPassword
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -36,6 +65,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            isDebuggable = false
+            isJniDebuggable = false
         }
     }
 
@@ -90,6 +124,7 @@ dependencies {
     // Core
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.activity.compose)
     implementation(libs.capsule)
 

@@ -52,7 +52,8 @@ interface IInferenceService {
     void releaseVlmProjector();
     boolean isVlmLoaded();
     String getVlmInfo();
-    void generateVlm(String messagesJson, int maxTokens, IGenerationCallback callback);
+    String getVlmDefaultMarker();
+    void generateVlm(String messagesJson, in ParcelFileDescriptor[] imageFds, int maxTokens, IGenerationCallback callback);
 
     // TTS
     boolean loadTtsModel(String configJson);

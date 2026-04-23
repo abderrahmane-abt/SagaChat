@@ -2,17 +2,57 @@ package com.dark.tool_neuron.viewmodel
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.data.AppPreferences
+import com.dark.tool_neuron.data.RootGuard
 import com.dark.tool_neuron.data.SecurityManager
+import com.dark.tool_neuron.data.SessionHolder
 import com.dark.tool_neuron.model.NavScreens
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 @HiltViewModel
 class ScaffoldViewModel @Inject constructor(
     private val prefs: AppPreferences,
-    private val security: SecurityManager
+    private val security: SecurityManager,
+    private val rootGuard: RootGuard,
+    session: SessionHolder,
 ) : ViewModel() {
+
+    val shouldLock: StateFlow<Boolean> = combine(
+        session.active,
+        MutableStateFlow(security.isLockEnabled),
+    ) { active, _ ->
+        security.isLockEnabled && !active
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = security.isLockEnabled && !session.active.value,
+    )
+
+    private val _rootWarning = MutableStateFlow<RootWarning?>(resolveInitialRootWarning())
+    val rootWarning: StateFlow<RootWarning?> = _rootWarning.asStateFlow()
+
+    data class RootWarning(val evidence: Set<String>)
+
+    private fun resolveInitialRootWarning(): RootWarning? {
+        if (prefs.rootWarningShown) return null
+        return when (val r = rootGuard.scan()) {
+            is RootGuard.Result.Rooted -> RootWarning(r.evidence)
+            else -> null
+        }
+    }
+
+    fun acknowledgeRootWarning() {
+        prefs.rootWarningShown = true
+        _rootWarning.value = null
+    }
 
     fun resolveStartDestination(): String {
         val onboarded = prefs.onboardingComplete
@@ -22,7 +62,7 @@ class ScaffoldViewModel @Inject constructor(
         if (!onboarded) return NavScreens.DevNotes.route
         if (!secDone) return NavScreens.SetupScreen.route
         if (!modelDone) return NavScreens.ModelSetup.route
-        if (security.isAppPassword) return NavScreens.PasswordScreen.route
+        if (security.isLockEnabled) return NavScreens.PasswordScreen.route
         return NavScreens.HomeScreen.route
     }
 

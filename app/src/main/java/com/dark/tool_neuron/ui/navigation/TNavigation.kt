@@ -25,11 +25,20 @@ import com.dark.tool_neuron.ui.screens.model_manager.ModelManagerScreen
 import com.dark.tool_neuron.ui.screens.settings.SettingsScreen
 import com.dark.tool_neuron.ui.screens.password_screen.PasswordScreen
 import com.dark.tool_neuron.ui.screens.guide.AppGuideScreen
+import com.dark.tool_neuron.ui.screens.guide.GuideChatScreen
+import com.dark.tool_neuron.ui.screens.guide.GuideEntryKeys
+import com.dark.tool_neuron.ui.screens.guide.GuideModelsScreen
+import com.dark.tool_neuron.ui.screens.guide.GuideRagScreen
+import com.dark.tool_neuron.ui.screens.guide.GuideSecurityScreen
+import com.dark.tool_neuron.ui.screens.guide.GuideThemesScreen
+import com.dark.tool_neuron.ui.screens.guide.GuideVlmScreen
+import com.dark.tool_neuron.ui.screens.guide.GuideVoiceScreen
 import com.dark.tool_neuron.ui.screens.model_store.ModelStoreScreen
 import com.dark.tool_neuron.ui.screens.plugin_hub.PluginHubScreen
 import com.dark.tool_neuron.ui.screens.setup_screen.ModelSetupScreen
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupPasswordScreen
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupScreen
+import com.dark.tool_neuron.ui.screens.setup_screen.SetupThemeScreen
 import com.dark.tool_neuron.ui.theme.rememberNavTransitions
 import com.dark.tool_neuron.viewmodel.HomeViewModel
 import com.dark.tool_neuron.viewmodel.ModelStoreViewModel
@@ -37,6 +46,8 @@ import com.dark.tool_neuron.viewmodel.PasswordViewModel
 import com.dark.tool_neuron.viewmodel.SettingsViewModel
 import com.dark.tool_neuron.viewmodel.SetupViewModel
 import kotlinx.coroutines.delay
+
+private val QUICK_START_QUANTS = listOf("Q4_K_M", "Q4_K_S", "Q4_0", "Q5_K_M", "Q5_K_S", "Q8_0")
 
 @Composable
 fun TNavigation(
@@ -120,6 +131,9 @@ fun TNavigation(
                 )
             }
         }
+        composable(NavScreens.SetupTheme.route) {
+            SetupThemeScreen(innerPadding = innerPadding)
+        }
         composable(NavScreens.ModelStore.route) {
             val activity = LocalContext.current as ComponentActivity
             val viewModel: ModelStoreViewModel = hiltViewModel(activity)
@@ -137,21 +151,47 @@ fun TNavigation(
             ModelSetupScreen(
                 innerPadding = innerPadding,
                 onModelSelected = { modelId ->
-                    val model = catalogModels.firstOrNull { it.id.startsWith(modelId) }
-                        ?: catalogModels.firstOrNull { it.repoId == modelId }
-                    if (model != null) storeVm.downloadModel(model)
+                    val candidates = catalogModels.filter { it.repoId == modelId || it.id.startsWith(modelId) }
+                    val preferred = QUICK_START_QUANTS.firstNotNullOfOrNull { q ->
+                        candidates.firstOrNull { it.quantization.equals(q, ignoreCase = true) }
+                    } ?: candidates.filter { it.sizeBytes > 0 }.minByOrNull { it.sizeBytes }
+                        ?: candidates.firstOrNull()
+                    if (preferred != null) storeVm.downloadModel(preferred)
                     onModelSetupComplete()
                 },
                 onOpenStore = { navController.navigate(NavScreens.ModelStore.route) },
-                onImportLocal = { },
+                onLocalImport = { uri, name, size, type ->
+                    storeVm.importLocalModel(uri, name, size, type)
+                    onModelSetupComplete()
+                },
                 onSkip = { onModelSetupComplete() }
             )
         }
         composable(NavScreens.AppGuide.route) {
             AppGuideScreen(
-                onClose = { navController.popBackStack() }
+                innerPadding = innerPadding,
+                onOpenEntry = { key ->
+                    val route = when (key) {
+                        GuideEntryKeys.CHAT -> NavScreens.GuideChat.route
+                        GuideEntryKeys.MODELS -> NavScreens.GuideModels.route
+                        GuideEntryKeys.VOICE -> NavScreens.GuideVoice.route
+                        GuideEntryKeys.RAG -> NavScreens.GuideRag.route
+                        GuideEntryKeys.VLM -> NavScreens.GuideVlm.route
+                        GuideEntryKeys.SECURITY -> NavScreens.GuideSecurity.route
+                        GuideEntryKeys.THEMES -> NavScreens.GuideThemes.route
+                        else -> null
+                    }
+                    route?.let { navController.navigate(it) }
+                },
             )
         }
+        composable(NavScreens.GuideChat.route) { GuideChatScreen(innerPadding) }
+        composable(NavScreens.GuideModels.route) { GuideModelsScreen(innerPadding) }
+        composable(NavScreens.GuideRag.route) { GuideRagScreen(innerPadding) }
+        composable(NavScreens.GuideVlm.route) { GuideVlmScreen(innerPadding) }
+        composable(NavScreens.GuideVoice.route) { GuideVoiceScreen(innerPadding) }
+        composable(NavScreens.GuideSecurity.route) { GuideSecurityScreen(innerPadding) }
+        composable(NavScreens.GuideThemes.route) { GuideThemesScreen(innerPadding) }
         composable(NavScreens.PluginHub.route) {
             PluginHubScreen(
                 onClose = { navController.popBackStack() }

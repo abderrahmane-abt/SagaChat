@@ -36,14 +36,15 @@ import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.ui.theme.Motion
 
 @Composable
-fun PinDotRow(length: Int, minDots: Int = 4) {
-    val count = length.coerceAtLeast(minDots)
+fun PinDotRow(length: Int, dots: Int = 6) {
+    val fixedDots = dots.coerceAtLeast(1)
+    val clamped = length.coerceIn(0, fixedDots)
     Row(
         horizontalArrangement = Arrangement.Center,
         modifier = Modifier.fillMaxWidth()
     ) {
-        repeat(count) { i ->
-            val filled = i < length
+        repeat(fixedDots) { i ->
+            val filled = i < clamped
             val scale by animateFloatAsState(
                 targetValue = if (filled) 1f else 0.6f,
                 animationSpec = Motion.interactive(),

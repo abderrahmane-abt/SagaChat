@@ -272,8 +272,26 @@ class InferenceService : Service() {
 
         override fun getVlmInfo(): String? = engine.getVlmInfoJson()
 
-        override fun generateVlm(messagesJson: String, maxTokens: Int, callback: IGenerationCallback) {
-            collectFlow(engine.generateVlmFlow(messagesJson, emptyList(), maxTokens), callback)
+        override fun getVlmDefaultMarker(): String = engine.getVlmDefaultMarker()
+
+        override fun generateVlm(
+            messagesJson: String,
+            imageFds: Array<ParcelFileDescriptor>?,
+            maxTokens: Int,
+            callback: IGenerationCallback,
+        ) {
+            val images: List<ByteArray> = try {
+                imageFds
+                    ?.map { pfd ->
+                        ParcelFileDescriptor.AutoCloseInputStream(pfd).use { it.readBytes() }
+                    }
+                    ?: emptyList()
+            } catch (e: Exception) {
+                captureKt("generateVlm", "pfdRead", "VLM", e.message ?: e.javaClass.simpleName)
+                safeCallback(callback) { it.onError("Failed to read image bytes: ${e.message}") }
+                return
+            }
+            collectFlow(engine.generateVlmFlow(messagesJson, images, maxTokens), callback)
         }
 
         // TTS

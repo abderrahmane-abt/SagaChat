@@ -1,120 +1,128 @@
 #include "integrity.h"
-#include "memory_guard.h"
+#include "xor_str.h"
 
 #include <openssl/sha.h>
 #include <openssl/crypto.h>
 
 #include <cstdio>
 #include <cstring>
-#include <fstream>
+#include <cstdlib>
 #include <sys/ptrace.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <dirent.h>
 
-#include <android/log.h>
-
-#define LOG_TAG "HXS_Integrity"
-
 namespace hxs {
 
 bool IntegrityGuard::is_debugger_attached() {
-    // Method 1: Check /proc/self/status for TracerPid
-    FILE* f = fopen("/proc/self/status", "r");
+    HXS_OBF(status_path, "/proc/self/status");
+    HXS_OBF(tracer_pid, "TracerPid:");
+
+    FILE* f = fopen(status_path, "r");
     if (!f) return false;
 
     char line[256];
+    bool detected = false;
     while (fgets(line, sizeof(line), f)) {
-        if (strncmp(line, "TracerPid:", 10) == 0) {
-            int pid = atoi(line + 10);
-            fclose(f);
-            return pid != 0;
+        if (strstr(line, tracer_pid) == line) {
+            int pid = atoi(line + strlen(tracer_pid));
+            detected = pid != 0;
+            break;
         }
     }
     fclose(f);
-    return false;
+    return detected;
 }
 
 bool IntegrityGuard::block_debugger() {
-    // ptrace self-trace: if another debugger is already attached, this fails
     long ret = ptrace(PTRACE_TRACEME, 0, nullptr, nullptr);
-    if (ret == -1) {
-        return false; // debugger already attached
-    }
-    return true;
+    return ret != -1;
 }
 
 bool IntegrityGuard::is_frida_present() {
-    // Method 1: Scan /proc/self/maps for frida signatures
-    FILE* f = fopen("/proc/self/maps", "r");
-    if (!f) return false;
+    HXS_OBF(maps_path, "/proc/self/maps");
+    HXS_OBF(tcp_path, "/proc/net/tcp");
+    HXS_OBF(fd_dir, "/proc/self/fd");
+    HXS_OBF(pat_frida, "frida");
+    HXS_OBF(pat_gadget, "gadget");
+    HXS_OBF(pat_linjector, "linjector");
+    HXS_OBF(port_upper, "69A2");
+    HXS_OBF(port_lower, "69a2");
 
-    char line[512];
-    bool found = false;
-    while (fgets(line, sizeof(line), f)) {
-        if (strstr(line, "frida") ||
-            strstr(line, "gadget") ||
-            strstr(line, "linjector")) {
-            found = true;
-            break;
+    FILE* f = fopen(maps_path, "r");
+    if (f) {
+        char line[512];
+        bool found = false;
+        while (fgets(line, sizeof(line), f)) {
+            if (strstr(line, pat_frida) ||
+                strstr(line, pat_gadget) ||
+                strstr(line, pat_linjector)) {
+                found = true;
+                break;
+            }
         }
+        fclose(f);
+        if (found) return true;
     }
-    fclose(f);
-    if (found) return true;
 
-    // Method 2: Check for default Frida server port (27042)
-    char path[64];
-    snprintf(path, sizeof(path), "/proc/net/tcp");
-    f = fopen(path, "r");
-    if (!f) return false;
-
-    while (fgets(line, sizeof(line), f)) {
-        // Frida default port 27042 = 0x69A2
-        if (strstr(line, "69A2") || strstr(line, "69a2")) {
-            found = true;
-            break;
+    f = fopen(tcp_path, "r");
+    if (f) {
+        char line[512];
+        bool found = false;
+        while (fgets(line, sizeof(line), f)) {
+            if (strstr(line, port_upper) || strstr(line, port_lower)) {
+                found = true;
+                break;
+            }
         }
+        fclose(f);
+        if (found) return true;
     }
-    fclose(f);
-    if (found) return true;
 
-    // Method 3: Check /proc/self/fd for Frida named pipes
-    DIR* dir = opendir("/proc/self/fd");
+    DIR* dir = opendir(fd_dir);
     if (!dir) return false;
 
+    bool found = false;
     struct dirent* entry;
     while ((entry = readdir(dir)) != nullptr) {
         char fd_path[128];
         char link_target[256];
-        snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%s", entry->d_name);
+        snprintf(fd_path, sizeof(fd_path), "%s/%s", fd_dir, entry->d_name);
         ssize_t len = readlink(fd_path, link_target, sizeof(link_target) - 1);
         if (len > 0) {
             link_target[len] = '\0';
-            if (strstr(link_target, "frida") || strstr(link_target, "linjector")) {
-                closedir(dir);
-                return true;
+            if (strstr(link_target, pat_frida) || strstr(link_target, pat_linjector)) {
+                found = true;
+                break;
             }
         }
     }
     closedir(dir);
 
-    return false;
+    return found;
 }
 
 bool IntegrityGuard::is_xposed_present() {
-    // Check /proc/self/maps for Xposed/LSPosed libraries
-    FILE* f = fopen("/proc/self/maps", "r");
+    HXS_OBF(maps_path, "/proc/self/maps");
+    HXS_OBF(p_xposed_lc, "xposed");
+    HXS_OBF(p_xposed_uc, "XposedBridge");
+    HXS_OBF(p_lspd, "lspd");
+    HXS_OBF(p_lsposed, "LSPosed");
+    HXS_OBF(p_edxp, "edxp");
+    HXS_OBF(p_riru, "riru");
+
+    FILE* f = fopen(maps_path, "r");
     if (!f) return false;
 
     char line[512];
     bool found = false;
     while (fgets(line, sizeof(line), f)) {
-        if (strstr(line, "xposed") ||
-            strstr(line, "XposedBridge") ||
-            strstr(line, "lspd") ||
-            strstr(line, "LSPosed") ||
-            strstr(line, "edxp") ||
-            strstr(line, "riru")) {
+        if (strstr(line, p_xposed_lc) ||
+            strstr(line, p_xposed_uc) ||
+            strstr(line, p_lspd) ||
+            strstr(line, p_lsposed) ||
+            strstr(line, p_edxp) ||
+            strstr(line, p_riru)) {
             found = true;
             break;
         }
@@ -160,8 +168,8 @@ IntegrityResult IntegrityGuard::run_all_checks(
     result.signature_valid = (expected_sig_hash && actual_sig_hash)
         ? verify_apk_signature(expected_sig_hash, 32, actual_sig_hash, 32)
         : false;
-    result.libs_intact = true; // caller must verify individual .so hashes
+    result.libs_intact = true;
     return result;
 }
 
-} // namespace hxs
+}

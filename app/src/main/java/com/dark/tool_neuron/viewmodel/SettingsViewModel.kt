@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.data.SecurityManager
 import com.dark.tool_neuron.data.ThemeController
+import com.dark.tool_neuron.data.VerifyResult
 import com.dark.tool_neuron.model.ModelInfo
 import com.dark.tool_neuron.model.enums.ProviderType
 import com.dark.tool_neuron.repo.DocumentRepository
@@ -236,8 +237,8 @@ class SettingsViewModel @Inject constructor(
     private fun openPinDialog(isChange: Boolean) {
         _dialog.value = SettingsDialog.PinEntry(
             title = if (isChange) "Change PIN" else "Set app lock",
-            message = "Enter a PIN of at least 4 digits.",
-            minLength = 4,
+            message = "Enter a PIN of at least 6 digits.",
+            minLength = 6,
             onSubmit = { pin ->
                 security.setPassword(pin)
                 _lockEnabled.value = true
@@ -251,17 +252,33 @@ class SettingsViewModel @Inject constructor(
         _dialog.value = SettingsDialog.PinEntry(
             title = "Disable app lock",
             message = "Enter your current PIN to confirm.",
-            minLength = 4,
+            minLength = 6,
             confirmLabel = "Disable",
             onSubmit = { pin ->
-                if (security.verifyPassword(pin)) {
-                    security.disableLock()
-                    _lockEnabled.value = false
-                    _dialog.value = null
-                    _snackbar.value = "App lock disabled"
-                } else {
-                    _dialog.value = null
-                    _snackbar.value = "Incorrect PIN"
+                when (val outcome = security.verifyPassword(pin)) {
+                    VerifyResult.Success -> {
+                        security.disableLock()
+                        _lockEnabled.value = false
+                        _dialog.value = null
+                        _snackbar.value = "App lock disabled"
+                    }
+                    VerifyResult.WrongPin -> {
+                        _dialog.value = null
+                        _snackbar.value = "Incorrect PIN"
+                    }
+                    is VerifyResult.LockedOut -> {
+                        _dialog.value = null
+                        _snackbar.value = "Too many tries — locked until ${outcome.retryAtMs}"
+                    }
+                    VerifyResult.Wiped -> {
+                        _dialog.value = null
+                        _lockEnabled.value = false
+                        _snackbar.value = "Vault wiped"
+                    }
+                    VerifyResult.NoLock -> {
+                        _dialog.value = null
+                        _lockEnabled.value = false
+                    }
                 }
             },
         )

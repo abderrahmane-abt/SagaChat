@@ -29,3 +29,20 @@
 -dontwarn com.dark.hxs.**
 -dontwarn com.dark.hxs_encryptor.**
 -dontwarn com.dark.download_manager.**
+
+# Release-mode log stripping — R8 treats these calls as having no side effects,
+# deletes them, and drops the string arguments that would otherwise leak paths,
+# keys, or diagnostics into logcat.
+-assumenosideeffects class android.util.Log {
+    public static int d(...);
+    public static int v(...);
+    public static int i(...);
+}
+-assumenosideeffects class java.io.PrintStream {
+    public void println(...);
+    public void print(...);
+}
+
+# Obfuscate everything we own except the JNI surface kept above.
+-repackageclasses ''
+-allowaccessmodification

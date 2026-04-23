@@ -1,5 +1,7 @@
 package com.dark.tool_neuron.ui.screens.model_store
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -40,9 +42,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -53,6 +57,7 @@ import com.dark.tool_neuron.model.ui.ActionIcon
 import com.dark.tool_neuron.model.ui.ActionItem
 import com.dark.tool_neuron.repo.ExplorerRepo
 import com.dark.tool_neuron.repo.ValidationResult
+import com.dark.tool_neuron.service.inference.InferenceClient
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionSwitch
 import com.dark.tool_neuron.ui.components.CaptionText
@@ -67,6 +72,7 @@ import com.dark.tool_neuron.ui.theme.Motion
 import com.dark.tool_neuron.ui.theme.maple
 import com.dark.tool_neuron.viewmodel.ModelStoreViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 internal fun SettingsTab(
@@ -90,6 +96,8 @@ internal fun SettingsTab(
         verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)
     ) {
         item { DeviceInfoCard(deviceInfo) }
+
+        item { VlmProjectorCard() }
 
         item {
             ExplorerRepositoriesCard(
@@ -489,4 +497,99 @@ internal fun EditRepositoryDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
+}
+
+@Composable
+internal fun VlmProjectorCard() {
+    val dimens = LocalDimens.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val isVlmLoaded by InferenceClient.isVlmLoaded.collectAsStateWithLifecycle()
+    val isModelLoaded by InferenceClient.isModelLoaded.collectAsStateWithLifecycle()
+    var isLoading by remember { mutableStateOf(false) }
+    var lastError by remember { mutableStateOf<String?>(null) }
+    var vlmInfo by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(isVlmLoaded) {
+        vlmInfo = if (isVlmLoaded) InferenceClient.getVlmInfo() else null
+    }
+
+    val projectorPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            isLoading = true
+            lastError = null
+            val ok = runCatching {
+                InferenceClient.loadVlmProjectorFromUri(context, uri, threads = 2)
+            }.getOrElse {
+                lastError = it.message ?: "Failed to load projector"
+                false
+            }
+            if (!ok && lastError == null) {
+                lastError = "Projector load returned false. Check the file is a compatible mmproj."
+            }
+            isLoading = false
+        }
+    }
+
+    StandardCard(
+        title = "VLM Projector (mmproj)",
+        icon = TnIcons.Eye,
+        trailing = {
+            StatusBadge(
+                text = if (isVlmLoaded) "Loaded" else "Idle",
+                isActive = isVlmLoaded,
+            )
+        },
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)) {
+            CaptionText(
+                text = when {
+                    !isModelLoaded ->
+                        "Load a GGUF chat model first. The projector attaches on top of it."
+                    isVlmLoaded ->
+                        "Ready. Attach an image on the home screen to run vision inference."
+                    else ->
+                        "Load an .mmproj/.gguf projector file to enable image input on the active model."
+                },
+            )
+            vlmInfo?.takeIf { it.isNotBlank() && it != "{}" }?.let { info ->
+                CaptionText(
+                    text = info,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                )
+            }
+            lastError?.let { err ->
+                CaptionText(text = err, color = MaterialTheme.colorScheme.error)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)) {
+                Button(
+                    onClick = {
+                        lastError = null
+                        projectorPicker.launch(arrayOf("*/*"))
+                    },
+                    enabled = !isLoading && isModelLoaded,
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 1.5.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    } else {
+                        Text(if (isVlmLoaded) "Replace" else "Load projector")
+                    }
+                }
+                if (isVlmLoaded) {
+                    TextButton(
+                        onClick = {
+                            scope.launch { InferenceClient.releaseVlmProjector() }
+                        },
+                    ) { Text("Release") }
+                }
+            }
+        }
+    }
 }

@@ -33,6 +33,7 @@ import com.dark.tool_neuron.ui.components.PinAction
 import com.dark.tool_neuron.ui.components.PinActionRow
 import com.dark.tool_neuron.ui.components.PinDotRow
 import com.dark.tool_neuron.ui.components.PinNumberPad
+import com.dark.tool_neuron.ui.components.SecureScreen
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.Motion
@@ -49,6 +50,23 @@ fun SetupPasswordScreen(
     onClear: () -> Unit,
     onSubmit: () -> Unit,
     onBack: () -> Unit
+) {
+    SecureScreen {
+        SetupPasswordScreenContent(innerPadding, password, isConfirmStep, error, onDigit, onDelete, onClear, onSubmit, onBack)
+    }
+}
+
+@Composable
+private fun SetupPasswordScreenContent(
+    innerPadding: PaddingValues,
+    password: String,
+    isConfirmStep: Boolean,
+    error: String?,
+    onDigit: (Char) -> Unit,
+    onDelete: () -> Unit,
+    onClear: () -> Unit,
+    onSubmit: () -> Unit,
+    onBack: () -> Unit,
 ) {
     val dimens = LocalDimens.current
     var visible by remember { mutableStateOf(false) }
@@ -88,7 +106,7 @@ fun SetupPasswordScreen(
                 Spacer(Modifier.height(dimens.spacingXs))
 
                 Text(
-                    text = if (isConfirmStep) "Enter the same password again" else "At least 4 digits",
+                    text = if (isConfirmStep) "Enter the same password again" else "At least 6 digits",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

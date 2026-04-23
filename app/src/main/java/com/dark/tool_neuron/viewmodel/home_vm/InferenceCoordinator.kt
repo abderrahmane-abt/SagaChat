@@ -1,5 +1,7 @@
 package com.dark.tool_neuron.viewmodel.home_vm
 
+import android.app.Application
+import android.net.Uri
 import android.util.Log
 import com.dark.tool_neuron.model.ChatMessage
 import com.dark.tool_neuron.model.MemoryMetrics
@@ -8,6 +10,7 @@ import com.dark.tool_neuron.repo.ChatRepository
 import com.dark.tool_neuron.repo.RagManager
 import com.dark.tool_neuron.service.inference.InferenceClient
 import com.dark.tool_neuron.service.inference.InferenceEvent
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.transformWhile
 import org.json.JSONArray
 import org.json.JSONObject
@@ -35,6 +38,7 @@ data class GenerationOutcome(
 
 @Singleton
 class InferenceCoordinator @Inject constructor(
+    private val app: Application,
     private val chatRepo: ChatRepository,
     private val toolCallCoordinator: ToolCallCoordinator,
     private val ragManager: RagManager,
@@ -59,9 +63,26 @@ class InferenceCoordinator @Inject constructor(
 
             val rawMessages = chatRepo.getMessages(chatId)
             val messages = if (iteration == 0) augmentLastUser(chatId, rawMessages) else rawMessages
-            val historyJson = buildMessagesJson(messages)
 
-            InferenceClient.generateMultiTurn(historyJson, modelSession.maxTokens.value)
+            val lastUser = messages.lastOrNull { it.role == ROLE_USER }
+            val userImages = lastUser?.imageUris.orEmpty()
+            val vlmRoute = iteration == 0 &&
+                userImages.isNotEmpty() &&
+                InferenceClient.isVlmLoaded.value
+
+            val historyJson = buildMessagesJson(
+                messages = messages,
+                vlmLastUserId = if (vlmRoute) lastUser?.id else null,
+            )
+
+            val stream: Flow<InferenceEvent> = if (vlmRoute) {
+                val uris = userImages.mapNotNull { runCatching { Uri.parse(it) }.getOrNull() }
+                InferenceClient.generateVlm(app, historyJson, uris, modelSession.maxTokens.value)
+            } else {
+                InferenceClient.generateMultiTurn(historyJson, modelSession.maxTokens.value)
+            }
+
+            stream
                 .transformWhile { event ->
                     emit(event)
                     event !is InferenceEvent.Done && event !is InferenceEvent.Error
@@ -136,14 +157,23 @@ class InferenceCoordinator @Inject constructor(
         }
     }
 
-    private fun buildMessagesJson(messages: List<ChatMessage>): String {
+    private fun buildMessagesJson(
+        messages: List<ChatMessage>,
+        vlmLastUserId: String? = null,
+    ): String {
+        val marker = if (vlmLastUserId != null) InferenceClient.getVlmDefaultMarker() else ""
         val arr = JSONArray()
         messages.forEach { msg ->
             when (msg.role) {
                 ROLE_USER, ROLE_ASSISTANT, ROLE_TOOL -> {
+                    val content = if (msg.id == vlmLastUserId && marker.isNotEmpty()) {
+                        if (msg.content.isBlank()) marker else "$marker\n${msg.content}"
+                    } else {
+                        msg.content
+                    }
                     arr.put(JSONObject().apply {
                         put("role", msg.role)
-                        put("content", msg.content)
+                        put("content", content)
                         if (msg.role == ROLE_TOOL && msg.modelName.isNotEmpty()) {
                             put("name", msg.modelName)
                         }

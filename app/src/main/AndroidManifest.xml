@@ -8,7 +8,7 @@
 
     <application
         android:name=".TNApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
@@ -32,13 +32,13 @@
 
         <activity
             android:name=".activity.TempActivity"
-            android:exported="true"
+            android:exported="false"
             android:theme="@style/Theme.ToolNeuron">
         </activity>
 
         <activity
             android:name=".activity.ColorShowcaseActivity"
-            android:exported="true"
+            android:exported="false"
             android:theme="@style/Theme.ToolNeuron">
         </activity>
 

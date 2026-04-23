@@ -1,7 +1,5 @@
 package com.dark.tool_neuron.ui.screens.home_screen
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.runtime.Composable
@@ -17,6 +15,7 @@ import com.dark.tool_neuron.model.ui.ActionIcon
 import com.dark.tool_neuron.model.ui.ActionItem
 import com.dark.tool_neuron.ui.components.MultiActionButton
 import com.dark.tool_neuron.ui.icons.TnIcons
+import com.dark.tool_neuron.util.SecureClipboard
 import kotlinx.coroutines.delay
 
 private const val ROLE_ASSISTANT = "assistant"
@@ -87,7 +86,6 @@ fun MessageActions(
 }
 
 private fun copyToClipboard(context: Context, text: String) {
-    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    cm.setPrimaryClip(ClipData.newPlainText("message", text))
+    SecureClipboard.copy(context, "message", text)
     Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
 }

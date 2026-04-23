@@ -7,6 +7,7 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -16,6 +17,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.dark.tool_neuron.model.NavScreens
+import com.dark.tool_neuron.ui.components.RootWarningDialog
 import com.dark.tool_neuron.ui.navigation.TNavigation
 import com.dark.tool_neuron.ui.screens.home_screen.ChatDrawerContent
 import com.dark.tool_neuron.viewmodel.HomeViewModel
@@ -36,6 +38,27 @@ fun AppScaffold() {
     val currentChatId by homeViewModel.currentChatId.collectAsStateWithLifecycle()
 
     val nextDestination = remember { scaffoldViewModel.resolveStartDestination() }
+    val shouldLock by scaffoldViewModel.shouldLock.collectAsStateWithLifecycle()
+    val rootWarning by scaffoldViewModel.rootWarning.collectAsStateWithLifecycle()
+
+    rootWarning?.let { warning ->
+        RootWarningDialog(
+            evidence = warning.evidence,
+            onAcknowledge = scaffoldViewModel::acknowledgeRootWarning,
+        )
+    }
+
+    LaunchedEffect(shouldLock, currentRoute) {
+        if (shouldLock && currentRoute != null &&
+            currentRoute != NavScreens.PasswordScreen.route &&
+            currentRoute != NavScreens.SetupScreen.route &&
+            currentRoute != NavScreens.IntroScreen.route
+        ) {
+            navController.navigate(NavScreens.PasswordScreen.route) {
+                popUpTo(0) { inclusive = true }
+            }
+        }
+    }
 
     val isFullscreen = currentRoute == NavScreens.IntroScreen.route
             || currentRoute == NavScreens.PasswordScreen.route
@@ -101,7 +124,12 @@ fun AppScaffold() {
                 if (!isFullscreen) AppBottomBar(
                     currentRoute = currentRoute,
                     navController = navController,
-                    onOnboardingComplete = { scaffoldViewModel.markOnboardingComplete() }
+                    onOnboardingComplete = { scaffoldViewModel.markOnboardingComplete() },
+                    onThemeSetupComplete = {
+                        navController.navigate(NavScreens.ModelSetup.route) {
+                            popUpTo(NavScreens.SetupTheme.route) { inclusive = true }
+                        }
+                    },
                 )
             },
         ) { innerPadding ->
@@ -118,7 +146,7 @@ fun AppScaffold() {
                     }
                 },
                 onSetupComplete = {
-                    navController.navigate(NavScreens.ModelSetup.route) {
+                    navController.navigate(NavScreens.SetupTheme.route) {
                         popUpTo(NavScreens.SetupScreen.route) { inclusive = true }
                     }
                 },

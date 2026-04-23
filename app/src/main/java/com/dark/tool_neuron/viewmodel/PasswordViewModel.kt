@@ -3,6 +3,7 @@ package com.dark.tool_neuron.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.data.SecurityManager
+import com.dark.tool_neuron.data.VerifyResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,7 +28,14 @@ class PasswordViewModel @Inject constructor(
     private val _unlocked = MutableStateFlow(false)
     val unlocked = _unlocked.asStateFlow()
 
-    val maxLength = 16
+    private val _wiped = MutableStateFlow(false)
+    val wiped = _wiped.asStateFlow()
+
+    private val _lockedUntilMs = MutableStateFlow(0L)
+    val lockedUntilMs = _lockedUntilMs.asStateFlow()
+
+    val maxLength = MIN_PIN_LENGTH
+    val minLength = MIN_PIN_LENGTH
 
     fun appendDigit(digit: Char) {
         if (_password.value.length < maxLength) {
@@ -54,25 +62,47 @@ class PasswordViewModel @Inject constructor(
         _error.value = null
         _isVerifying.value = false
         _unlocked.value = false
+        _wiped.value = false
+        _lockedUntilMs.value = 0L
     }
 
     fun submit() {
         val pwd = _password.value
-        if (pwd.length < 4) {
-            _error.value = "At least 4 characters"
+        if (pwd.length < MIN_PIN_LENGTH) {
+            _error.value = "At least $MIN_PIN_LENGTH digits"
             return
         }
 
         _isVerifying.value = true
         viewModelScope.launch(Dispatchers.Default) {
-            val valid = securityManager.verifyPassword(pwd)
+            val outcome = securityManager.verifyPassword(pwd)
             _isVerifying.value = false
-            if (valid) {
-                _unlocked.value = true
-            } else {
-                _password.value = ""
-                _error.value = "Wrong password"
+            when (outcome) {
+                VerifyResult.Success -> {
+                    _unlocked.value = true
+                }
+                VerifyResult.WrongPin -> {
+                    _password.value = ""
+                    _error.value = "Wrong PIN"
+                }
+                is VerifyResult.LockedOut -> {
+                    _password.value = ""
+                    _lockedUntilMs.value = outcome.retryAtMs
+                    _error.value = "Locked — try again later"
+                }
+                VerifyResult.Wiped -> {
+                    _password.value = ""
+                    _wiped.value = true
+                    _error.value = "Too many attempts — vault wiped"
+                }
+                VerifyResult.NoLock -> {
+                    _unlocked.value = true
+                }
             }
         }
+    }
+
+    companion object {
+        const val MIN_PIN_LENGTH = 6
     }
 }

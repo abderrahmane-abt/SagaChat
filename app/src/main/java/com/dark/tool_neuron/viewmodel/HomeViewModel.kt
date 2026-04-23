@@ -1,5 +1,7 @@
 package com.dark.tool_neuron.viewmodel
 
+import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.model.Chat
@@ -10,7 +12,6 @@ import com.dark.tool_neuron.model.MessageKind
 import com.dark.tool_neuron.model.ModelInfo
 import com.dark.tool_neuron.model.TextMetrics
 import com.dark.tool_neuron.model.enums.ProviderType
-import android.net.Uri
 import com.dark.tool_neuron.repo.ChatRepository
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.repo.RagManager
@@ -45,6 +46,7 @@ private val WHITESPACE = "\\s+".toRegex()
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
+    private val app: Application,
     private val modelRepo: ModelRepository,
     private val chatRepo: ChatRepository,
     private val modelSession: ModelSessionManager,
@@ -89,6 +91,17 @@ class HomeViewModel @Inject constructor(
 
     private val _chatDocuments = MutableStateFlow<List<ChatDocument>>(emptyList())
     val chatDocuments: StateFlow<List<ChatDocument>> = _chatDocuments.asStateFlow()
+
+    private val _pendingImages = MutableStateFlow<List<Uri>>(emptyList())
+    val pendingImages: StateFlow<List<Uri>> = _pendingImages.asStateFlow()
+
+    private val _vlmError = MutableStateFlow<String?>(null)
+    val vlmError: StateFlow<String?> = _vlmError.asStateFlow()
+
+    private val _isLoadingProjector = MutableStateFlow(false)
+    val isLoadingProjector: StateFlow<Boolean> = _isLoadingProjector.asStateFlow()
+
+    val isVlmLoaded: StateFlow<Boolean> = InferenceClient.isVlmLoaded
 
     private val _documentError = MutableStateFlow<String?>(null)
     val documentError: StateFlow<String?> = _documentError.asStateFlow()
@@ -198,6 +211,45 @@ class HomeViewModel @Inject constructor(
     fun toggleThinking() { _thinkingEnabled.value = !_thinkingEnabled.value }
     fun toggleLoadModelWindow() { _loadModelWindow.value = !_loadModelWindow.value }
 
+    fun addImage(uri: Uri) {
+        runCatching {
+            app.contentResolver.takePersistableUriPermission(
+                uri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        }
+        _pendingImages.value = _pendingImages.value + uri
+    }
+
+    fun removeImage(uri: Uri) {
+        _pendingImages.value = _pendingImages.value.filterNot { it == uri }
+    }
+
+    fun clearPendingImages() { _pendingImages.value = emptyList() }
+
+    fun loadVlmProjector(uri: Uri) {
+        viewModelScope.launch {
+            _isLoadingProjector.value = true
+            _vlmError.value = null
+            val ok = try {
+                InferenceClient.loadVlmProjectorFromUri(app, uri, threads = 2)
+            } catch (e: Exception) {
+                _vlmError.value = e.message ?: "Failed to load projector"
+                false
+            }
+            if (!ok && _vlmError.value == null) {
+                _vlmError.value = "Projector load returned false. Check the file is a compatible mmproj."
+            }
+            _isLoadingProjector.value = false
+        }
+    }
+
+    fun releaseVlmProjector() {
+        viewModelScope.launch { InferenceClient.releaseVlmProjector() }
+    }
+
+    fun clearVlmError() { _vlmError.value = null }
+
     fun addDocument(uri: Uri, name: String, size: Long, mimeType: String?) {
         val active = activeModel.value ?: run {
             _documentError.value = "Load a chat model before adding documents."
@@ -265,7 +317,9 @@ class HomeViewModel @Inject constructor(
 
     fun sendMessage(text: String) {
         val trimmed = text.trim()
-        if (trimmed.isEmpty() || _isGenerating.value) return
+        val images = _pendingImages.value
+        if (_isGenerating.value) return
+        if (trimmed.isEmpty() && images.isEmpty()) return
         val active = activeModel.value ?: run {
             _loadModelWindow.value = true
             return
@@ -278,8 +332,11 @@ class HomeViewModel @Inject constructor(
             role = ROLE_USER,
             content = trimmed,
             timestamp = System.currentTimeMillis(),
+            imageUris = images.map { it.toString() },
+            kind = if (images.isNotEmpty()) MessageKind.Image else MessageKind.Text,
         )
         chatRepo.addMessage(userMessage)
+        _pendingImages.value = emptyList()
 
         val isFirstTurn = chatRepo.getMessages(chatId).count { it.role == ROLE_USER } == 1
         runGeneration(chatId, isFirstTurn, trimmed)

@@ -1,12 +1,17 @@
 #include <jni.h>
 #include <cstring>
 #include <algorithm>
+#include <string>
+#include <vector>
 
 #include "crypto_engine.h"
 #include "memory_guard.h"
 #include "integrity.h"
 #include "pq_kem.h"
 #include "pq_sign.h"
+#include "policy_engine.h"
+#include "auth.h"
+#include "boot_integrity.h"
 
 static hxs::CryptoEngine g_engine;
 
@@ -381,6 +386,213 @@ Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeHybridVerify(
     return static_cast<jboolean>(
         hxs::HybridSign::verify(msg.data(), msg.size(), sig.data(), sig.size(), pk.data(), pk.size())
     );
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_dark_hxs_1encryptor_PolicyEngine_nativeIsAllowed(
+    JNIEnv* env, jclass, jint feature_id, jbyteArray token
+) {
+    JniBytes t(env, token);
+    return static_cast<jboolean>(
+        hxs::policy::is_allowed(
+            static_cast<uint32_t>(feature_id),
+            t.ptr ? t.data() : nullptr,
+            t.ptr ? t.size() : 0
+        )
+    );
+}
+
+JNIEXPORT void JNICALL
+Java_com_dark_hxs_1encryptor_PolicyEngine_nativeSetPassthrough(
+    JNIEnv*, jclass, jboolean passthrough
+) {
+    hxs::policy::set_passthrough(static_cast<bool>(passthrough));
+}
+
+JNIEXPORT void JNICALL
+Java_com_dark_hxs_1encryptor_PolicyEngine_nativeMarkTampered(
+    JNIEnv*, jclass
+) {
+    hxs::policy::mark_tampered();
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_dark_hxs_1encryptor_PolicyEngine_nativeIsTampered(
+    JNIEnv*, jclass
+) {
+    return static_cast<jboolean>(hxs::policy::is_tampered());
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_dark_hxs_1encryptor_PolicyEngine_nativeHasSession(
+    JNIEnv*, jclass
+) {
+    return static_cast<jboolean>(hxs::policy::has_session());
+}
+
+JNIEXPORT void JNICALL
+Java_com_dark_hxs_1encryptor_PolicyEngine_nativeInvalidateSession(
+    JNIEnv*, jclass
+) {
+    hxs::policy::invalidate_session();
+}
+
+JNIEXPORT void JNICALL
+Java_com_dark_hxs_1encryptor_PolicyEngine_nativeResetForTesting(
+    JNIEnv*, jclass
+) {
+    hxs::policy::reset_for_testing();
+}
+
+JNIEXPORT jint JNICALL
+Java_com_dark_hxs_1encryptor_BootIntegrity_nativeBootVerify(
+    JNIEnv* env, jclass, jobjectArray lib_paths, jobjectArray lib_hashes
+) {
+    if (lib_paths == nullptr || lib_hashes == nullptr) {
+        return static_cast<jint>(hxs::boot::FAIL_BAD_INPUT);
+    }
+    jsize count = env->GetArrayLength(lib_paths);
+    if (env->GetArrayLength(lib_hashes) != count) {
+        return static_cast<jint>(hxs::boot::FAIL_BAD_INPUT);
+    }
+
+    std::vector<std::string> path_storage;
+    std::vector<std::vector<uint8_t>> hash_storage;
+    std::vector<hxs::boot::LibCheck> checks;
+    path_storage.reserve(static_cast<size_t>(count));
+    hash_storage.reserve(static_cast<size_t>(count));
+    checks.reserve(static_cast<size_t>(count));
+
+    for (jsize i = 0; i < count; i++) {
+        auto path_obj = reinterpret_cast<jstring>(env->GetObjectArrayElement(lib_paths, i));
+        auto hash_obj = reinterpret_cast<jbyteArray>(env->GetObjectArrayElement(lib_hashes, i));
+        if (path_obj == nullptr || hash_obj == nullptr) {
+            return static_cast<jint>(hxs::boot::FAIL_BAD_INPUT);
+        }
+        const char* utf = env->GetStringUTFChars(path_obj, nullptr);
+        if (!utf) return static_cast<jint>(hxs::boot::FAIL_BAD_INPUT);
+        path_storage.emplace_back(utf);
+        env->ReleaseStringUTFChars(path_obj, utf);
+
+        jsize hlen = env->GetArrayLength(hash_obj);
+        if (hlen != 32) {
+            return static_cast<jint>(hxs::boot::FAIL_BAD_INPUT);
+        }
+        std::vector<uint8_t> h(32);
+        env->GetByteArrayRegion(hash_obj, 0, 32, reinterpret_cast<jbyte*>(h.data()));
+        hash_storage.emplace_back(std::move(h));
+    }
+    for (jsize i = 0; i < count; i++) {
+        hxs::boot::LibCheck c{ path_storage[i].c_str(), hash_storage[i].data() };
+        checks.emplace_back(c);
+    }
+
+    uint32_t reasons = hxs::boot::boot_verify(checks.data(), checks.size());
+    return static_cast<jint>(reasons);
+}
+
+JNIEXPORT void JNICALL
+Java_com_dark_hxs_1encryptor_BootIntegrity_nativeHardFail(
+    JNIEnv*, jclass, jint reason
+) {
+    hxs::boot::hard_fail(static_cast<uint32_t>(reason));
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_dark_hxs_1encryptor_BootIntegrity_nativeSetRelaxedForTesting(
+    JNIEnv*, jclass, jboolean relaxed
+) {
+    return static_cast<jboolean>(
+        hxs::boot::set_relaxed_for_testing(static_cast<bool>(relaxed))
+    );
+}
+
+JNIEXPORT void JNICALL
+Java_com_dark_hxs_1encryptor_BootIntegrity_nativeInstallPtrace(
+    JNIEnv*, jclass
+) {
+    hxs::boot::install_ptrace_self_trace();
+}
+
+JNIEXPORT jint JNICALL
+Java_com_dark_hxs_1encryptor_BootIntegrity_nativeScanEnvironment(
+    JNIEnv*, jclass
+) {
+    return static_cast<jint>(hxs::boot::scan_process_environment());
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_com_dark_hxs_1encryptor_BootIntegrity_nativeHashFile(
+    JNIEnv* env, jclass, jstring path
+) {
+    if (!path) return nullptr;
+    const char* p = env->GetStringUTFChars(path, nullptr);
+    if (!p) return nullptr;
+    uint8_t hash[32];
+    bool ok = hxs::IntegrityGuard::hash_file(p, hash);
+    env->ReleaseStringUTFChars(path, p);
+    return ok ? to_jbyteArray(env, hash, 32) : nullptr;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_dark_hxs_1encryptor_BootIntegrity_nativeVerifyHookBaselines(
+    JNIEnv*, jclass
+) {
+    return static_cast<jboolean>(hxs::boot::verify_hook_baselines());
+}
+
+jint JNI_OnLoad(JavaVM*, void*) {
+    hxs::boot::install_ptrace_self_trace();
+    hxs::boot::capture_hook_baselines();
+    return JNI_VERSION_1_6;
+}
+
+JNIEXPORT jobjectArray JNICALL
+Java_com_dark_hxs_1encryptor_AuthNative_nativeSetup(
+    JNIEnv* env, jclass, jbyteArray pin
+) {
+    JniBytes p(env, pin);
+    if (!p.ptr || p.size() == 0) return nullptr;
+
+    auto r = hxs::auth::setup(p.data(), p.size());
+    if (!r.success) return nullptr;
+
+    jclass byteArrayClass = env->FindClass("[B");
+    jobjectArray result = env->NewObjectArray(2, byteArrayClass, nullptr);
+    env->SetObjectArrayElement(result, 0,
+        to_jbyteArray(env, r.salt.data(), r.salt.size()));
+    env->SetObjectArrayElement(result, 1,
+        to_jbyteArray(env, r.hash.data(), r.hash.size()));
+    hxs::secure_zero(r.hash.data(), r.hash.size());
+    return result;
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_com_dark_hxs_1encryptor_AuthNative_nativeVerify(
+    JNIEnv* env, jclass, jbyteArray pin, jbyteArray salt, jbyteArray stored_hash
+) {
+    JniBytes p(env, pin);
+    JniBytes s(env, salt);
+    JniBytes h(env, stored_hash);
+    if (!p.ptr || !s.ptr || !h.ptr) return nullptr;
+
+    auto r = hxs::auth::verify(
+        p.data(), p.size(),
+        s.data(), s.size(),
+        h.data(), h.size()
+    );
+    if (!r.success) return nullptr;
+
+    jbyteArray out = to_jbyteArray(env, r.token.data(), r.token.size());
+    hxs::secure_zero(r.token.data(), r.token.size());
+    return out;
+}
+
+JNIEXPORT void JNICALL
+Java_com_dark_hxs_1encryptor_AuthNative_nativeInvalidate(
+    JNIEnv*, jclass
+) {
+    hxs::auth::invalidate();
 }
 
 } // extern "C"

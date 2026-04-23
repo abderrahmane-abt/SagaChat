@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,8 +32,13 @@ internal fun PlusMenuCard(
     thinkingEnabled: Boolean,
     showThinking: Boolean,
     documentCount: Int,
+    pendingImageCount: Int,
+    isVlmLoaded: Boolean,
+    isLoadingProjector: Boolean,
     onThinkingToggle: () -> Unit,
     onDocumentsClick: () -> Unit,
+    onAttachImageClick: () -> Unit,
+    onProjectorClick: () -> Unit,
 ) {
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
@@ -44,29 +50,57 @@ internal fun PlusMenuCard(
         shadowElevation = 0.dp,
         modifier = Modifier.padding(bottom = dimens.spacingSm),
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(dimens.spacingSm),
-            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
         ) {
-            PlusMenuItem(
-                modifier = Modifier.weight(0.5f),
-                icon = TnIcons.BookOpen,
-                label = if (documentCount > 0) "Documents ($documentCount)" else "Documents",
-                isToggled = documentCount > 0,
-                onClick = onDocumentsClick,
-            )
-            if (showThinking) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+            ) {
                 PlusMenuItem(
                     modifier = Modifier.weight(0.5f),
-                    icon = TnIcons.Sparkles,
-                    label = "Thinking",
-                    isToggled = thinkingEnabled,
-                    onClick = onThinkingToggle,
+                    icon = TnIcons.BookOpen,
+                    label = if (documentCount > 0) "Documents ($documentCount)" else "Documents",
+                    isToggled = documentCount > 0,
+                    onClick = onDocumentsClick,
                 )
-            } else {
-                Spacer(modifier = Modifier.weight(0.5f))
+                if (showThinking) {
+                    PlusMenuItem(
+                        modifier = Modifier.weight(0.5f),
+                        icon = TnIcons.Sparkles,
+                        label = "Thinking",
+                        isToggled = thinkingEnabled,
+                        onClick = onThinkingToggle,
+                    )
+                } else {
+                    Spacer(modifier = Modifier.weight(0.5f))
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+            ) {
+                PlusMenuItem(
+                    modifier = Modifier.weight(0.5f),
+                    icon = TnIcons.Photo,
+                    label = if (pendingImageCount > 0) "Image ($pendingImageCount)" else "Attach image",
+                    isToggled = pendingImageCount > 0,
+                    onClick = onAttachImageClick,
+                )
+                PlusMenuItem(
+                    modifier = Modifier.weight(0.5f),
+                    icon = TnIcons.Eye,
+                    label = when {
+                        isLoadingProjector -> "Loading…"
+                        isVlmLoaded -> "VLM on"
+                        else -> "Load projector"
+                    },
+                    isToggled = isVlmLoaded,
+                    onClick = onProjectorClick,
+                )
             }
         }
     }

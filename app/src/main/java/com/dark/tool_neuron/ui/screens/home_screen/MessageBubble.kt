@@ -1,6 +1,10 @@
 package com.dark.tool_neuron.ui.screens.home_screen
 
+import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.AlertDialog
@@ -24,6 +29,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.model.ChatMessage
@@ -149,21 +157,26 @@ private fun UserBubble(
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
     ) {
-        Surface(
-            shape = tnShapes.lg,
-            color = MaterialTheme.colorScheme.primaryContainer,
-            modifier = Modifier.widthIn(max = UserBubbleMaxWidth),
-        ) {
-            SelectionContainer {
-                Text(
-                    text = message.content,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(
-                        horizontal = dimens.spacingMd,
-                        vertical = dimens.spacingSm,
-                    ),
-                )
+        if (message.imageUris.isNotEmpty()) {
+            UserImageThumbnails(uris = message.imageUris)
+        }
+        if (message.content.isNotBlank()) {
+            Surface(
+                shape = tnShapes.lg,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.widthIn(max = UserBubbleMaxWidth),
+            ) {
+                SelectionContainer {
+                    Text(
+                        text = message.content,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(
+                            horizontal = dimens.spacingMd,
+                            vertical = dimens.spacingSm,
+                        ),
+                    )
+                }
             }
         }
         MessageActions(
@@ -274,4 +287,42 @@ private fun AssistantDot() {
             .size(8.dp)
             .background(MaterialTheme.colorScheme.primary, CircleShape)
     )
+}
+
+@Composable
+private fun UserImageThumbnails(uris: List<String>) {
+    val dimens = LocalDimens.current
+    val tnShapes = LocalTnShapes.current
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier
+            .widthIn(max = UserBubbleMaxWidth)
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+    ) {
+        uris.forEach { uriString ->
+            val bitmap = remember(uriString) {
+                runCatching {
+                    val uri = Uri.parse(uriString)
+                    context.contentResolver.openInputStream(uri)?.use {
+                        BitmapFactory.decodeStream(it)
+                    }
+                }.getOrNull()
+            }
+            Surface(
+                shape = tnShapes.md,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                modifier = Modifier.size(96.dp),
+            ) {
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "Attached image",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        }
+    }
 }

@@ -179,10 +179,11 @@ private fun PinEntryDialog(dialog: SettingsDialog.PinEntry, onDismiss: () -> Uni
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                PinDotRow(length = pin.length, minDots = dialog.minLength.coerceAtLeast(4))
+                val maxDigits = dialog.minLength.coerceAtLeast(6)
+                PinDotRow(length = pin.length, dots = maxDigits)
                 PinNumberPad(
                     onDigit = { c ->
-                        if (pin.length < 12) pin += c
+                        if (pin.length < maxDigits) pin += c
                     },
                     onDelete = {
                         if (pin.isNotEmpty()) pin = pin.dropLast(1)

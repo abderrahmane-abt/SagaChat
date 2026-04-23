@@ -19,7 +19,6 @@ android {
             cmake {
                 cppFlags("-std=c++17 -fvisibility=hidden -fstack-protector-strong")
                 arguments(
-                    "-DOPENSSL_NO_ASM=1",
                     "-DANDROID_STL=c++_static",
                 )
             }
@@ -31,11 +30,7 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
+            isMinifyEnabled = false
         }
     }
 

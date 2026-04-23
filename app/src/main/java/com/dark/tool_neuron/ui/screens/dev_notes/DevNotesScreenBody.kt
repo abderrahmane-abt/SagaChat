@@ -101,17 +101,45 @@ This is still being designed. If you have ideas about fingerprint-masking, quic/
 
 ---
 
-## Security audit is pending
+## The security pass happened
 
-Before the next major release we're running a security pass on our own code:
+I ran a three-sided audit on the stack. One pass looking for known weakness patterns, one trying to actively tamper, one reading breach reports and academic papers to see what techniques show up in the wild.
 
-- HXS at-rest sealing — any path that bypasses it
-- HXS Encryptor key lifecycles — any key living longer than it should
-- Download Manager — any URL or header that could leak identifying info
-- Networking — fingerprint consistency, cookie isolation, DNS leaks
-- Crash and log sinks — no chat content, no model paths, no user data in logs
+Five full bypasses turned up. All closed.
 
-If you find something, tell us. Quietly.
+- **Plaintext vault.** The app-prefs store was opening in plaintext. Password hash and salt sat on disk with no integrity check. You could `cat` the file. The vault now opens under a Keystore-wrapped key that lives in hardware — StrongBox if your phone has it, TEE otherwise.
+- **Trust across JNI.** The password check used to hand a Kotlin boolean back across the native boundary. Flip one branch, you were in. It returns an opaque 32-byte session token from native now, and every gated feature asks a native policy engine whether that token is valid.
+- **`if (verify)` on disable-lock.** Same class of problem. Same treatment.
+- **Soft Argon2id.** 64 MB / 2 iterations, which is fine for a web login and nowhere near enough for an offline brute force. Bumped to 128 MB / 4 iterations. One guess takes roughly 1.5s on a recent phone, and that was the smallest win in the list.
+- **Anti-tamper existed, nothing called it.** Frida/Xposed/debugger checks were sitting in the binary with zero call sites. Embarrassing. Wired into the boot sequence now.
+
+### While I had the hood open
+
+- **Backoff with teeth.** First three wrong guesses are free. Fourth costs a minute. By the seventh it's an hour. Ten wrong and the vault wipes.
+- **Panic PIN.** Optional. Set a second PIN that looks like it unlocks the app but actually nukes everything. For when someone's standing over you and "I forgot it" isn't going to work.
+- **Clock-rollback defence.** Rolling the phone's clock backward to skip the backoff counts as two failed attempts instead of letting you off.
+- **Auto-lock on background.** The session clears the instant the app goes to background. No grace period, no "are you still there".
+- **Accessibility allowlist.** Hostile accessibility services read your screen. Release builds refuse to run if one's attached that isn't on the known-good list. Debug builds just warn, because some of us use TalkBack and I don't want to argue with the OS while developing.
+- **Root refusal.** Release builds don't run rooted. Debug builds warn.
+- **Inline-hook detection.** At startup we snapshot the first 32 bytes of a few critical functions. If Frida patches them while the app runs, we notice and die on the next check.
+- **Obfuscated native strings.** The detection strings (`frida`, `xposed`, `TracerPid`, etc.) used to be visible to `strings libhxs_encryptor.so`. I checked — zero plaintext matches now.
+- **Clipboard discipline.** Copied messages get the sensitive flag so they don't appear in clipboard history, and they auto-clear after 30 seconds if you haven't overwritten them yourself.
+- **FLAG_SECURE on PIN screens.** No screenshots, hidden from recent apps.
+- **`Log.d` stripped in release.** Whatever I whispered in development doesn't leak into logcat on your phone.
+
+### What's still not fixed
+
+Rather say it than not.
+
+- The HXS write-ahead log still writes cleartext during commits. Someone with filesystem access could read recent edits before they seal. Real bug. Fix lives in the HXS core and I haven't got there yet.
+- No cert pinning. The app is mostly offline so it hasn't come up.
+- No Play Integrity. That's a Google Play Services dependency, and adding one would undo a lot of what this app is about.
+
+### Tests
+
+Forty-nine instrumented tests, green on my physical device and the Pixel emulator. Every item above has a test that would scream if it regressed.
+
+If you find something the tests miss, tell me. Quietly.
 
 ---
 

@@ -1,7 +1,5 @@
 package com.dark.tool_neuron.ui.components.markdown
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.Canvas
@@ -67,6 +65,7 @@ import com.dark.tool_neuron.ui.components.ActionToggleButton
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.MapleMonoFontFamily
+import com.dark.tool_neuron.util.SecureClipboard
 
 // ── Backward-compat composition local ──
 
@@ -799,8 +798,7 @@ private fun CodeBlockView(code: String, language: String) {
             Row(horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs)) {
                 ActionButton(
                     onClickListener = {
-                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        cm.setPrimaryClip(ClipData.newPlainText(language, code))
+                        SecureClipboard.copy(context, language, code)
                         Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
                     },
                     icon = TnIcons.Copy,

@@ -63,6 +63,9 @@ object InferenceClient {
     private val _isSttLoaded = MutableStateFlow(false)
     val isSttLoaded: StateFlow<Boolean> = _isSttLoaded.asStateFlow()
 
+    private val _isVlmLoaded = MutableStateFlow(false)
+    val isVlmLoaded: StateFlow<Boolean> = _isVlmLoaded.asStateFlow()
+
     private val _lastCrashInfo = MutableStateFlow<CrashInfo?>(null)
     val lastCrashInfo: StateFlow<CrashInfo?> = _lastCrashInfo.asStateFlow()
 
@@ -133,6 +136,7 @@ object InferenceClient {
             isBinding = false
             try { _isTtsLoaded.value = svc.isTtsLoaded } catch (_: Exception) {}
             try { _isSttLoaded.value = svc.isSttLoaded } catch (_: Exception) {}
+            try { _isVlmLoaded.value = svc.isVlmLoaded } catch (_: Exception) {}
             ingestCrashFromSvc(svc)
             Log.d(TAG, "Service connected")
         }
@@ -142,6 +146,7 @@ object InferenceClient {
             _isModelLoaded.value = false
             _isTtsLoaded.value = false
             _isSttLoaded.value = false
+            _isVlmLoaded.value = false
             _state.value = ServiceState.Crashed("Service process died")
             isBinding = false
             failPendingLoads("Inference service crashed during model load")
@@ -154,6 +159,7 @@ object InferenceClient {
             _isModelLoaded.value = false
             _isTtsLoaded.value = false
             _isSttLoaded.value = false
+            _isVlmLoaded.value = false
             _state.value = ServiceState.Crashed("Service binding died")
             isBinding = false
             failPendingLoads("Inference service binding died")
@@ -277,6 +283,65 @@ object InferenceClient {
     fun stopGeneration() {
         try { _service.value?.stopGeneration() } catch (_: Exception) {}
     }
+
+    // ── VLM ──
+
+    suspend fun loadVlmProjectorFromUri(context: Context, uri: Uri, threads: Int = 2): Boolean =
+        withContext(Dispatchers.IO) {
+            val svc = ensureBound()
+            val pfd = context.contentResolver.openFileDescriptor(uri, "r")
+                ?: return@withContext false
+            try {
+                val ok = svc.loadVlmProjectorFromFd(pfd, threads)
+                _isVlmLoaded.value = ok
+                ok
+            } catch (e: Exception) {
+                Log.e(TAG, "loadVlmProjectorFromUri failed", e)
+                false
+            } finally {
+                try { pfd.close() } catch (_: Exception) {}
+            }
+        }
+
+    suspend fun releaseVlmProjector() {
+        _isVlmLoaded.value = false
+        try { ensureBound().releaseVlmProjector() } catch (_: Exception) {}
+    }
+
+    fun getVlmDefaultMarker(): String =
+        try { _service.value?.vlmDefaultMarker.orEmpty() } catch (_: Exception) { "" }
+
+    fun getVlmInfo(): String? =
+        try { _service.value?.getVlmInfo() } catch (_: Exception) { null }
+
+    fun generateVlm(
+        context: Context,
+        messagesJson: String,
+        imageUris: List<Uri>,
+        maxTokens: Int,
+    ): Flow<InferenceEvent> = callbackFlow {
+        val svc = _service.first { it != null }!!
+        val pfds: Array<ParcelFileDescriptor> = try {
+            imageUris.map { uri ->
+                context.contentResolver.openFileDescriptor(uri, "r")
+                    ?: throw IllegalArgumentException("Cannot open image URI: $uri")
+            }.toTypedArray()
+        } catch (e: Exception) {
+            trySend(InferenceEvent.Error(e.message ?: "Cannot open image URI"))
+            close()
+            return@callbackFlow
+        }
+        val cb = generationCallback { event -> trySend(event) }
+        try {
+            svc.generateVlm(messagesJson, pfds, maxTokens, cb)
+        } catch (e: Exception) {
+            trySend(InferenceEvent.Error(e.message ?: "Service error"))
+            close()
+        } finally {
+            pfds.forEach { p -> try { p.close() } catch (_: Exception) {} }
+        }
+        awaitClose {}
+    }.buffer(Channel.UNLIMITED).flowOn(Dispatchers.IO)
 
     // ── Sampling ──
 

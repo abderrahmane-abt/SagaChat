@@ -3,6 +3,7 @@ package com.dark.tool_neuron.ui.screens.system_ui
 import androidx.compose.runtime.Composable
 import com.dark.tool_neuron.model.NavScreens
 import com.dark.tool_neuron.ui.screens.dev_notes.DevNotesTopBar
+import com.dark.tool_neuron.ui.screens.guide.GuideTopBar
 import com.dark.tool_neuron.ui.screens.home_screen.HomeScreenTopbar
 import com.dark.tool_neuron.ui.screens.password_screen.PasswordScreenTopBar
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupScreenTopBar
@@ -35,7 +36,15 @@ fun AppTopBar(
         NavScreens.SetupScreen.route -> SetupScreenTopBar()
         NavScreens.ModelSetup.route -> SetupScreenTopBar()
         NavScreens.ModelStore.route -> Unit
-        NavScreens.AppGuide.route -> Unit
+        NavScreens.AppGuide.route -> GuideTopBar(title = "App Guide", onBack = onBack)
+        NavScreens.GuideChat.route -> GuideTopBar(title = "Chat", onBack = onBack)
+        NavScreens.GuideModels.route -> GuideTopBar(title = "Models", onBack = onBack)
+        NavScreens.GuideRag.route -> GuideTopBar(title = "Documents and RAG", onBack = onBack)
+        NavScreens.GuideVlm.route -> GuideTopBar(title = "Vision (VLM)", onBack = onBack)
+        NavScreens.GuideVoice.route -> GuideTopBar(title = "Voice", onBack = onBack)
+        NavScreens.GuideSecurity.route -> GuideTopBar(title = "Privacy and lock", onBack = onBack)
+        NavScreens.GuideThemes.route -> GuideTopBar(title = "Themes", onBack = onBack)
+        NavScreens.SetupTheme.route -> SetupScreenTopBar()
         NavScreens.ModelManager.route -> Unit
         NavScreens.Settings.route -> Unit
         else -> {

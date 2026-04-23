@@ -33,6 +33,7 @@ import com.dark.tool_neuron.ui.components.PinAction
 import com.dark.tool_neuron.ui.components.PinActionRow
 import com.dark.tool_neuron.ui.components.PinDotRow
 import com.dark.tool_neuron.ui.components.PinNumberPad
+import com.dark.tool_neuron.ui.components.SecureScreen
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.Motion
@@ -48,6 +49,22 @@ fun PasswordScreen(
     onDelete: () -> Unit,
     onClear: () -> Unit,
     onSubmit: () -> Unit
+) {
+    SecureScreen {
+        PasswordScreenContent(innerPadding, password, error, isVerifying, onDigit, onDelete, onClear, onSubmit)
+    }
+}
+
+@Composable
+private fun PasswordScreenContent(
+    innerPadding: PaddingValues,
+    password: String,
+    error: String?,
+    isVerifying: Boolean,
+    onDigit: (Char) -> Unit,
+    onDelete: () -> Unit,
+    onClear: () -> Unit,
+    onSubmit: () -> Unit,
 ) {
     val dimens = LocalDimens.current
     var visible by remember { mutableStateOf(false) }

@@ -2,6 +2,7 @@ package com.dark.tool_neuron.viewmodel
 
 import androidx.lifecycle.ViewModel
 import com.dark.tool_neuron.data.AppPreferences
+import com.dark.tool_neuron.data.PinStrength
 import com.dark.tool_neuron.data.SecurityManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,12 +41,12 @@ class SetupViewModel @Inject constructor(
 
     fun appendDigit(digit: Char) {
         if (_isConfirmStep.value) {
-            if (_confirmPassword.value.length < 16) {
+            if (_confirmPassword.value.length < MIN_PIN_LENGTH) {
                 _confirmPassword.value += digit
                 _error.value = null
             }
         } else {
-            if (_password.value.length < 16) {
+            if (_password.value.length < MIN_PIN_LENGTH) {
                 _password.value += digit
                 _error.value = null
             }
@@ -74,9 +75,24 @@ class SetupViewModel @Inject constructor(
 
     fun submitPassword(): Boolean {
         val pwd = _password.value
-        if (pwd.length < 4) {
-            _error.value = "At least 4 characters"
-            return false
+        when (val eval = PinStrength.evaluate(pwd)) {
+            is PinStrength.Result.TooShort -> {
+                _error.value = "At least ${eval.min} digits"
+                return false
+            }
+            PinStrength.Result.AllSameDigit -> {
+                _error.value = "PIN must use more than one digit"
+                return false
+            }
+            PinStrength.Result.Sequential -> {
+                _error.value = "PIN cannot be sequential"
+                return false
+            }
+            PinStrength.Result.CommonlyUsed -> {
+                _error.value = "PIN is too common"
+                return false
+            }
+            PinStrength.Result.Ok -> Unit
         }
 
         if (!_isConfirmStep.value) {
@@ -109,9 +125,13 @@ class SetupViewModel @Inject constructor(
     }
 
     fun completeWithNoLock() {
-        security.disableLock()
+        security.setupWithoutLock()
         prefs.setupDone = true
         prefs.securitySetupDone = true
         prefs.onboardingComplete = true
+    }
+
+    companion object {
+        const val MIN_PIN_LENGTH = 6
     }
 }

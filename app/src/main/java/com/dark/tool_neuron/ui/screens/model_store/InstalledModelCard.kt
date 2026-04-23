@@ -162,7 +162,7 @@ internal fun InstalledModelsTab(
     }
 
     pendingImport?.let { (uri, name, size) ->
-        ImportTypePicker(
+        ModelImportTypePicker(
             fileName = name,
             onPick = { type ->
                 viewModel.importLocalModel(uri, name, size, type)
@@ -171,40 +171,6 @@ internal fun InstalledModelsTab(
             onDismiss = { pendingImport = null },
         )
     }
-}
-
-@Composable
-private fun ImportTypePicker(
-    fileName: String,
-    onPick: (ProviderType) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Import as…") },
-        text = {
-            Column {
-                Text(
-                    text = fileName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(LocalDimens.current.spacingMd))
-                Text(
-                    "Pick what kind of model this file is.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onPick(ProviderType.GGUF) }) { Text("Chat (GGUF)") }
-        },
-        dismissButton = {
-            TextButton(onClick = { onPick(ProviderType.EMBEDDING) }) { Text("Embedding (RAG)") }
-        },
-    )
 }
 
 @Composable

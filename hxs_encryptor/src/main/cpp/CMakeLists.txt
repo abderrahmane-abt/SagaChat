@@ -40,6 +40,9 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
     integrity.cpp
     pq_kem.cpp
     pq_sign.cpp
+    policy_engine.cpp
+    auth.cpp
+    boot_integrity.cpp
     hxs_encryptor.cpp
 )
 

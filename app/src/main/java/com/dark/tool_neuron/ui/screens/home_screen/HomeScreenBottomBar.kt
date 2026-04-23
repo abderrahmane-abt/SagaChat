@@ -1,16 +1,19 @@
 package com.dark.tool_neuron.ui.screens.home_screen
 
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -41,7 +44,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
@@ -94,6 +99,22 @@ fun HomeScreenBottomBar(
     val ragReady by viewModel.ragReady.collectAsStateWithLifecycle()
     val activeEmbeddingName by viewModel.activeEmbeddingName.collectAsStateWithLifecycle()
 
+    val pendingImages by viewModel.pendingImages.collectAsStateWithLifecycle()
+    val isVlmLoaded by viewModel.isVlmLoaded.collectAsStateWithLifecycle()
+    val isLoadingProjector by viewModel.isLoadingProjector.collectAsStateWithLifecycle()
+    val vlmError by viewModel.vlmError.collectAsStateWithLifecycle()
+
+    val imagePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri -> uri?.let(viewModel::addImage) }
+
+    val projectorPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        viewModel.loadVlmProjector(uri)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -111,6 +132,9 @@ fun HomeScreenBottomBar(
                 thinkingEnabled = thinkingEnabled,
                 showThinking = supportsThinking,
                 documentCount = chatDocuments.size,
+                pendingImageCount = pendingImages.size,
+                isVlmLoaded = isVlmLoaded,
+                isLoadingProjector = isLoadingProjector,
                 onThinkingToggle = viewModel::toggleThinking,
                 onDocumentsClick = {
                     viewModel.dismissPlusMenu()
@@ -127,8 +151,34 @@ fun HomeScreenBottomBar(
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     ))
                 },
+                onAttachImageClick = {
+                    viewModel.dismissPlusMenu()
+                    imagePicker.launch(
+                        PickVisualMediaRequest(
+                            ActivityResultContracts.PickVisualMedia.ImageOnly,
+                        ),
+                    )
+                },
+                onProjectorClick = {
+                    viewModel.dismissPlusMenu()
+                    if (isVlmLoaded) {
+                        viewModel.releaseVlmProjector()
+                    } else {
+                        projectorPicker.launch(arrayOf("*/*"))
+                    }
+                },
             )
         }
+
+        VlmErrorBanner(
+            error = vlmError,
+            onDismiss = viewModel::clearVlmError,
+        )
+
+        PendingImageRow(
+            images = pendingImages,
+            onRemove = viewModel::removeImage,
+        )
 
         DocumentChipsRow(
             documents = chatDocuments,
@@ -297,6 +347,138 @@ private fun PlusButton(
                         fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.85f,
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PendingImageRow(
+    images: List<Uri>,
+    onRemove: (Uri) -> Unit,
+) {
+    val dimens = LocalDimens.current
+    val tnShapes = LocalTnShapes.current
+    val context = LocalContext.current
+    AnimatedVisibility(
+        visible = images.isNotEmpty(),
+        enter = fadeIn(Motion.state()) + expandVertically(Motion.content()),
+        exit = fadeOut(Motion.state()) + shrinkVertically(Motion.content()),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(bottom = dimens.spacingXs),
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+        ) {
+            images.forEach { uri ->
+                val bitmap = remember(uri) {
+                    runCatching {
+                        context.contentResolver.openInputStream(uri)?.use {
+                            BitmapFactory.decodeStream(it)
+                        }
+                    }.getOrNull()
+                }
+                Box(
+                    modifier = Modifier
+                        .size(56.dp),
+                ) {
+                    Surface(
+                        shape = tnShapes.md,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                        modifier = Modifier.size(56.dp),
+                    ) {
+                        if (bitmap != null) {
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = "Attached image",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        } else {
+                            Icon(
+                                imageVector = TnIcons.Photo,
+                                contentDescription = null,
+                                modifier = Modifier.padding(dimens.spacingSm),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                    Surface(
+                        shape = tnShapes.full,
+                        color = MaterialTheme.colorScheme.surface,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(18.dp)
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() },
+                                onClick = { onRemove(uri) },
+                            ),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = TnIcons.X,
+                                contentDescription = "Remove image",
+                                modifier = Modifier.size(12.dp),
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VlmErrorBanner(
+    error: String?,
+    onDismiss: () -> Unit,
+) {
+    val dimens = LocalDimens.current
+    val tnShapes = LocalTnShapes.current
+    AnimatedVisibility(
+        visible = error != null,
+        enter = fadeIn(Motion.state()) + expandVertically(Motion.content()),
+        exit = fadeOut(Motion.state()) + shrinkVertically(Motion.content()),
+    ) {
+        Surface(
+            shape = tnShapes.lg,
+            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = dimens.spacingXs),
+        ) {
+            Row(
+                modifier = Modifier.padding(
+                    horizontal = dimens.spacingMd,
+                    vertical = dimens.spacingSm,
+                ),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+            ) {
+                Text(
+                    text = error.orEmpty(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    imageVector = TnIcons.X,
+                    contentDescription = "Dismiss",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .size(dimens.iconSm)
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() },
+                            onClick = onDismiss,
+                        ),
+                )
             }
         }
     }
