@@ -108,6 +108,7 @@ dependencies {
     implementation(project(":hxs"))
     implementation(project(":download_manager"))
     implementation(project(":networking"))
+    implementation(project(":native-server"))
 
     // AI inference AARs
     implementation(files("../libs/gguf_lib-release.aar"))
@@ -126,6 +127,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.commons.compress)
     implementation(libs.capsule)
 
     // Compose BOM — pins all compose library versions together
