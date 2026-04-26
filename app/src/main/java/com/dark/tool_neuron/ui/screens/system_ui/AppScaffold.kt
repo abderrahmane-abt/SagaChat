@@ -40,6 +40,15 @@ fun AppScaffold() {
     val nextDestination = remember { scaffoldViewModel.resolveStartDestination() }
     val shouldLock by scaffoldViewModel.shouldLock.collectAsStateWithLifecycle()
     val rootWarning by scaffoldViewModel.rootWarning.collectAsStateWithLifecycle()
+    val serverRunning by scaffoldViewModel.serverRunning.collectAsStateWithLifecycle()
+
+    LaunchedEffect(serverRunning, currentRoute) {
+        if (serverRunning && currentRoute != null && currentRoute != NavScreens.ServerScreen.route) {
+            navController.navigate(NavScreens.ServerScreen.route) {
+                popUpTo(0) { inclusive = true }
+            }
+        }
+    }
 
     rootWarning?.let { warning ->
         RootWarningDialog(
@@ -63,7 +72,7 @@ fun AppScaffold() {
     val isFullscreen = currentRoute == NavScreens.IntroScreen.route
             || currentRoute == NavScreens.PasswordScreen.route
 
-    val showDrawer = currentRoute == NavScreens.HomeScreen.route
+    val showDrawer = currentRoute == NavScreens.HomeScreen.route && !serverRunning
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
@@ -100,6 +109,10 @@ fun AppScaffold() {
                     onNavigateToSettings = {
                         scope.launch { drawerState.close() }
                         navController.navigate(NavScreens.Settings.route)
+                    },
+                    onNavigateToServer = {
+                        scope.launch { drawerState.close() }
+                        navController.navigate(NavScreens.ServerScreen.route)
                     },
                 )
             }

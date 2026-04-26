@@ -66,6 +66,7 @@ fun ActionButton(
     icon: Int,
     contentDescription: String = "Description",
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     shape: Shape = DefaultTnShapes.actionIcon,
     colors: IconButtonColors = IconButtonDefaults.filledIconButtonColors(
         containerColor = MaterialTheme.colorScheme.primary.copy(0.08f),
@@ -75,6 +76,7 @@ fun ActionButton(
     val dimens = LocalDimens.current
     FilledIconButton(
         onClick = onClickListener,
+        enabled = enabled,
         colors = colors,
         shape = shape,
         modifier = modifier.size(dimens.actionIconSize)
@@ -124,6 +126,7 @@ fun ActionButton(
     icon: ImageVector,
     contentDescription: String = "Description",
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     shape: Shape = DefaultTnShapes.actionIcon,
     colors: IconButtonColors = IconButtonDefaults.filledIconButtonColors(
         containerColor = MaterialTheme.colorScheme.primary.copy(0.08f),
@@ -133,6 +136,7 @@ fun ActionButton(
     val dimens = LocalDimens.current
     FilledIconButton(
         onClick = onClickListener,
+        enabled = enabled,
         colors = colors,
         shape = shape,
         modifier = modifier.size(dimens.actionIconSize)
@@ -218,25 +222,30 @@ fun MultiActionButton(
                         )
                 ) {
                     if (action.isLoading) {
-                        LoadingIndicator(
-                            modifier = Modifier.size(dimens.actionIconSize - 12.dp),
-                            color = tint
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(dimens.actionIconSize - 4.dp),
+                            color = tint,
+                            strokeWidth = 2.dp,
+                            trackColor = tint.copy(alpha = 0.15f),
                         )
-                    } else {
-                        when (action.icon) {
-                            is ActionIcon.Vector -> Icon(
-                                imageVector = action.icon.imageVector,
-                                contentDescription = action.contentDescription,
-                                tint = tint,
-                                modifier = Modifier.padding(dimens.actionIconPadding)
-                            )
-                            is ActionIcon.Resource -> Icon(
-                                painter = painterResource(action.icon.resId),
-                                contentDescription = action.contentDescription,
-                                tint = tint,
-                                modifier = Modifier.padding(dimens.actionIconPadding)
-                            )
-                        }
+                    }
+                    val iconPad = if (action.isLoading)
+                        dimens.actionIconPadding + 4.dp
+                    else
+                        dimens.actionIconPadding
+                    when (action.icon) {
+                        is ActionIcon.Vector -> Icon(
+                            imageVector = action.icon.imageVector,
+                            contentDescription = action.contentDescription,
+                            tint = tint,
+                            modifier = Modifier.padding(iconPad)
+                        )
+                        is ActionIcon.Resource -> Icon(
+                            painter = painterResource(action.icon.resId),
+                            contentDescription = action.contentDescription,
+                            tint = tint,
+                            modifier = Modifier.padding(iconPad)
+                        )
                     }
                 }
                 if (index < actions.lastIndex) {

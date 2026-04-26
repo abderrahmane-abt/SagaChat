@@ -30,11 +30,16 @@ import com.dark.tool_neuron.ui.screens.guide.GuideEntryKeys
 import com.dark.tool_neuron.ui.screens.guide.GuideModelsScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideRagScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideSecurityScreen
+import com.dark.tool_neuron.ui.screens.guide.GuideServerScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideThemesScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideVlmScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideVoiceScreen
 import com.dark.tool_neuron.ui.screens.model_store.ModelStoreScreen
 import com.dark.tool_neuron.ui.screens.plugin_hub.PluginHubScreen
+import com.dark.tool_neuron.ui.screens.hf_explorer.HfExplorerScreen
+import com.dark.tool_neuron.ui.screens.hf_explorer.HfRepoDetailScreen
+import com.dark.tool_neuron.ui.screens.server.ServerScreen
+import java.net.URLDecoder
 import com.dark.tool_neuron.ui.screens.setup_screen.ModelSetupScreen
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupPasswordScreen
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupScreen
@@ -140,7 +145,8 @@ fun TNavigation(
             ModelStoreScreen(
                 innerPadding = innerPadding,
                 viewModel = viewModel,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToHfExplorer = { navController.navigate(NavScreens.HfExplorer.route) },
             )
         }
         composable(NavScreens.ModelSetup.route) {
@@ -179,6 +185,7 @@ fun TNavigation(
                         GuideEntryKeys.VLM -> NavScreens.GuideVlm.route
                         GuideEntryKeys.SECURITY -> NavScreens.GuideSecurity.route
                         GuideEntryKeys.THEMES -> NavScreens.GuideThemes.route
+                        GuideEntryKeys.SERVER -> NavScreens.GuideServer.route
                         else -> null
                     }
                     route?.let { navController.navigate(it) }
@@ -192,6 +199,7 @@ fun TNavigation(
         composable(NavScreens.GuideVoice.route) { GuideVoiceScreen(innerPadding) }
         composable(NavScreens.GuideSecurity.route) { GuideSecurityScreen(innerPadding) }
         composable(NavScreens.GuideThemes.route) { GuideThemesScreen(innerPadding) }
+        composable(NavScreens.GuideServer.route) { GuideServerScreen(innerPadding) }
         composable(NavScreens.PluginHub.route) {
             PluginHubScreen(
                 onClose = { navController.popBackStack() }
@@ -249,6 +257,17 @@ fun TNavigation(
                     )
                 }
             }
+        }
+        composable(NavScreens.ServerScreen.route) {
+            ServerScreen(innerPadding)
+        }
+        composable(NavScreens.HfExplorer.route) {
+            HfExplorerScreen(innerPadding = innerPadding, navController = navController)
+        }
+        composable(NavScreens.HfRepoDetail.route) { backStack ->
+            val raw = backStack.arguments?.getString(NavScreens.HfRepoDetail.ARG_REPO_PATH).orEmpty()
+            val decoded = URLDecoder.decode(raw, "UTF-8")
+            HfRepoDetailScreen(innerPadding = innerPadding, repoPath = decoded)
         }
         composable(NavScreens.PasswordScreen.route) {
             val viewModel: PasswordViewModel = hiltViewModel()

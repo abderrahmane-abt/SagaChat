@@ -1,6 +1,8 @@
 package com.dark.tool_neuron.ui.components
 
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -18,8 +20,11 @@ fun TnTextField(
     placeholder: String = "",
     maxLines: Int = Int.MAX_VALUE,
     enabled: Boolean = true,
+    singleLine: Boolean = false,
     leadingIcon: @Composable (() -> Unit)? = null,
     trailingIcon: @Composable (() -> Unit)? = null,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
 ) {
     TextField(
         value = value,
@@ -27,9 +32,12 @@ fun TnTextField(
         modifier = modifier.heightIn(max = 200.dp),
         placeholder = { Text(placeholder) },
         enabled = enabled,
+        singleLine = singleLine,
         maxLines = maxLines,
         leadingIcon = leadingIcon,
         trailingIcon = trailingIcon,
+        keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions,
         colors = TextFieldDefaults.colors(
             focusedContainerColor = Color.Transparent,
             unfocusedContainerColor = Color.Transparent,

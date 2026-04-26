@@ -22,7 +22,6 @@ private val TnContinuity = G2Continuity(
 )
 
 data class TnShapes(
-    // ── Radius scale ──
     val sm: Shape,   // 6dp  — badges, small chips
     val md: Shape,   // 8dp  — input fields, toggles
     val lg: Shape,   // 12dp — cards, bottom sheets
@@ -30,7 +29,6 @@ data class TnShapes(
     val xxl: Shape,  // 20dp — nav bars, large panels
     val full: Shape, // capsule — FABs, pills, chips
 
-    // ── Semantic aliases ──
     val card: Shape,
     val cardSmall: Shape,
     val chip: Shape,

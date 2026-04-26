@@ -1,5 +1,7 @@
 package com.dark.tool_neuron.model
 
+import java.net.URLEncoder
+
 sealed class NavScreens(val route: String) {
     object IntroScreen : NavScreens("intro_screen")
     object HomeScreen : NavScreens("home_screen")
@@ -17,9 +19,16 @@ sealed class NavScreens(val route: String) {
     object GuideVoice : NavScreens("guide_voice")
     object GuideSecurity : NavScreens("guide_security")
     object GuideThemes : NavScreens("guide_themes")
+    object GuideServer : NavScreens("guide_server")
     object PluginHub : NavScreens("plugin_hub")
     object ModelManager : NavScreens("model_manager")
     object Settings : NavScreens("settings")
+    object ServerScreen : NavScreens("server_screen")
+    object HfExplorer : NavScreens("hf_explorer")
+    object HfRepoDetail : NavScreens("hf_repo/{repoPath}") {
+        const val ARG_REPO_PATH = "repoPath"
+        fun routeFor(repoPath: String) = "hf_repo/${URLEncoder.encode(repoPath, "UTF-8")}"
+    }
     object ModelConfig : NavScreens("model_config/{modelId}") {
         const val ARG_MODEL_ID = "modelId"
         fun routeFor(modelId: String) = "model_config/$modelId"

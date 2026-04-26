@@ -45,6 +45,14 @@ object TnIcons {
     val Wrench by lazy {
         icon("M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z")
     }
+    val Server by lazy {
+        icon(
+            "M4 4h16v6H4z",
+            "M4 14h16v6H4z",
+            "M7 7h.01",
+            "M7 17h.01"
+        )
+    }
     val PlayerStop by lazy {
         ImageVector.Builder(
             defaultWidth = 24.dp,
@@ -126,6 +134,7 @@ object TnIcons {
     val Database by lazy { icon("M12 2C6.48 2 2 4.02 2 6.5v11C2 19.98 6.48 22 12 22s10-2.02 10-4.5v-11C22 4.02 17.52 2 12 2z", "M2 6.5C2 8.98 6.48 11 12 11s10-2.02 10-4.5", "M2 12c0 2.48 4.48 4.5 10 4.5s10-2.02 10-4.5") }
     val ArrowRight by lazy { icon("M5 12h14", "M12 5l7 7-7 7") }
     val CircleCheck by lazy { icon("M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z", "M9 12l2 2 4-4") }
+    val Circle by lazy { icon("M12 22a10 10 0 1 1 0 -20 10 10 0 0 1 0 20z") }
     val SearchOff by lazy { icon("M5.5 5.5L18.5 18.5", "M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16z") }
     val Prompt by lazy { icon("M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0-4h18") }
     val InfoCircle by lazy { icon("M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z", "M12 16v-4", "M12 8h.01") }

@@ -1,12 +1,5 @@
 package com.dark.tool_neuron.util
 
-fun formatBytes(bytes: Long): String = when {
-    bytes <= 0 -> "Unknown"
-    bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-    bytes < 1024L * 1024 * 1024 -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
-    else -> "%.2f GB".format(bytes / (1024.0 * 1024.0 * 1024.0))
-}
-
 fun extractParameterCount(name: String): String? {
     val match = Regex("""(\d+\.?\d*)\s*[Bb]""").find(name)
     return match?.groupValues?.get(0)?.uppercase()?.replace(" ", "")

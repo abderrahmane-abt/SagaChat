@@ -6,6 +6,7 @@ import com.dark.tool_neuron.ui.screens.dev_notes.DevNotesTopBar
 import com.dark.tool_neuron.ui.screens.guide.GuideTopBar
 import com.dark.tool_neuron.ui.screens.home_screen.HomeScreenTopbar
 import com.dark.tool_neuron.ui.screens.password_screen.PasswordScreenTopBar
+import com.dark.tool_neuron.ui.screens.server.ServerTopBar
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupScreenTopBar
 import com.dark.tool_neuron.viewmodel.home_vm.PillState
 
@@ -44,11 +45,16 @@ fun AppTopBar(
         NavScreens.GuideVoice.route -> GuideTopBar(title = "Voice", onBack = onBack)
         NavScreens.GuideSecurity.route -> GuideTopBar(title = "Privacy and lock", onBack = onBack)
         NavScreens.GuideThemes.route -> GuideTopBar(title = "Themes", onBack = onBack)
+        NavScreens.GuideServer.route -> GuideTopBar(title = "Remote Server", onBack = onBack)
         NavScreens.SetupTheme.route -> SetupScreenTopBar()
         NavScreens.ModelManager.route -> Unit
         NavScreens.Settings.route -> Unit
+        NavScreens.ServerScreen.route -> ServerTopBar()
+        NavScreens.HfExplorer.route -> GuideTopBar(title = "HF Explorer", onBack = onBack)
         else -> {
-            if (currentRoute?.startsWith("model_config/") == true) Unit
+            if (currentRoute?.startsWith("hf_repo/") == true) {
+                GuideTopBar(title = "Repository", onBack = onBack)
+            } else if (currentRoute?.startsWith("model_config/") == true) Unit
             else Unit
         }
     }
