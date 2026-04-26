@@ -1,7 +1,5 @@
 package com.dark.tool_neuron.ui.screens.model_store
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -9,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Arrangement
@@ -42,11 +41,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,7 +54,6 @@ import com.dark.tool_neuron.model.ui.ActionIcon
 import com.dark.tool_neuron.model.ui.ActionItem
 import com.dark.tool_neuron.repo.ExplorerRepo
 import com.dark.tool_neuron.repo.ValidationResult
-import com.dark.tool_neuron.service.inference.InferenceClient
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionSwitch
 import com.dark.tool_neuron.ui.components.CaptionText
@@ -72,21 +68,16 @@ import com.dark.tool_neuron.ui.theme.Motion
 import com.dark.tool_neuron.ui.theme.maple
 import com.dark.tool_neuron.viewmodel.ModelStoreViewModel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 @Composable
 internal fun SettingsTab(
     deviceInfo: Map<String, String>,
-    viewModel: ModelStoreViewModel
+    viewModel: ModelStoreViewModel,
+    onOpenHfExplorer: () -> Unit,
 ) {
     val dimens = LocalDimens.current
     val repositories by viewModel.repositories.collectAsStateWithLifecycle()
     val validationResults by viewModel.validationResults.collectAsStateWithLifecycle()
-    val explorerQuery by viewModel.explorerQuery.collectAsStateWithLifecycle()
-    val explorerResults by viewModel.explorerResults.collectAsStateWithLifecycle()
-    val isExplorerLoading by viewModel.isExplorerLoading.collectAsStateWithLifecycle()
-    val explorerError by viewModel.explorerError.collectAsStateWithLifecycle()
-    val existingRepoPaths = repositories.map { it.repoPath.lowercase() }.toSet()
     var showAddDialog by remember { mutableStateOf(false) }
     var editingRepository by remember { mutableStateOf<HFRepository?>(null) }
 
@@ -97,19 +88,8 @@ internal fun SettingsTab(
     ) {
         item { DeviceInfoCard(deviceInfo) }
 
-        item { VlmProjectorCard() }
-
         item {
-            ExplorerRepositoriesCard(
-                query = explorerQuery,
-                results = explorerResults,
-                isLoading = isExplorerLoading,
-                error = explorerError,
-                existingRepoPaths = existingRepoPaths,
-                onQueryChange = viewModel::setExplorerQuery,
-                onSearch = viewModel::searchExplorerRepositories,
-                onAdd = viewModel::addExplorerRepository
-            )
+            HfExplorerLauncherCard(onOpen = onOpenHfExplorer)
         }
 
         item {
@@ -200,6 +180,69 @@ internal fun DeviceInfoRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+internal fun HfExplorerLauncherCard(onOpen: () -> Unit) {
+    val dimens = LocalDimens.current
+    val tnShapes = LocalTnShapes.current
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+        shape = tnShapes.card,
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                horizontal = dimens.cardPadding,
+                vertical = dimens.cardPadding,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingMd),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                        shape = RoundedCornerShape(50),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = TnIcons.Search,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = "HuggingFace Explorer",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "Browse repos, inspect file sizes, add to your sources.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Icon(
+                imageVector = TnIcons.ArrowRight,
+                contentDescription = "Open HF Explorer",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 
@@ -499,97 +542,3 @@ internal fun EditRepositoryDialog(
     )
 }
 
-@Composable
-internal fun VlmProjectorCard() {
-    val dimens = LocalDimens.current
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val isVlmLoaded by InferenceClient.isVlmLoaded.collectAsStateWithLifecycle()
-    val isModelLoaded by InferenceClient.isModelLoaded.collectAsStateWithLifecycle()
-    var isLoading by remember { mutableStateOf(false) }
-    var lastError by remember { mutableStateOf<String?>(null) }
-    var vlmInfo by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(isVlmLoaded) {
-        vlmInfo = if (isVlmLoaded) InferenceClient.getVlmInfo() else null
-    }
-
-    val projectorPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        scope.launch {
-            isLoading = true
-            lastError = null
-            val ok = runCatching {
-                InferenceClient.loadVlmProjectorFromUri(context, uri, threads = 2)
-            }.getOrElse {
-                lastError = it.message ?: "Failed to load projector"
-                false
-            }
-            if (!ok && lastError == null) {
-                lastError = "Projector load returned false. Check the file is a compatible mmproj."
-            }
-            isLoading = false
-        }
-    }
-
-    StandardCard(
-        title = "VLM Projector (mmproj)",
-        icon = TnIcons.Eye,
-        trailing = {
-            StatusBadge(
-                text = if (isVlmLoaded) "Loaded" else "Idle",
-                isActive = isVlmLoaded,
-            )
-        },
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)) {
-            CaptionText(
-                text = when {
-                    !isModelLoaded ->
-                        "Load a GGUF chat model first. The projector attaches on top of it."
-                    isVlmLoaded ->
-                        "Ready. Attach an image on the home screen to run vision inference."
-                    else ->
-                        "Load an .mmproj/.gguf projector file to enable image input on the active model."
-                },
-            )
-            vlmInfo?.takeIf { it.isNotBlank() && it != "{}" }?.let { info ->
-                CaptionText(
-                    text = info,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                )
-            }
-            lastError?.let { err ->
-                CaptionText(text = err, color = MaterialTheme.colorScheme.error)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)) {
-                Button(
-                    onClick = {
-                        lastError = null
-                        projectorPicker.launch(arrayOf("*/*"))
-                    },
-                    enabled = !isLoading && isModelLoaded,
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(14.dp),
-                            strokeWidth = 1.5.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                    } else {
-                        Text(if (isVlmLoaded) "Replace" else "Load projector")
-                    }
-                }
-                if (isVlmLoaded) {
-                    TextButton(
-                        onClick = {
-                            scope.launch { InferenceClient.releaseVlmProjector() }
-                        },
-                    ) { Text("Release") }
-                }
-            }
-        }
-    }
-}
