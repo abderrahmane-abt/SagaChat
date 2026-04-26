@@ -3,6 +3,7 @@ package com.dark.tool_neuron.viewmodel
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.dark.tool_neuron.data.AppPreferences
 import com.dark.tool_neuron.data.SecurityManager
 import com.dark.tool_neuron.data.ThemeController
 import com.dark.tool_neuron.data.VerifyResult
@@ -12,13 +13,14 @@ import com.dark.tool_neuron.repo.DocumentRepository
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.repo.RagManager
 import com.dark.tool_neuron.ui.icons.TnIcons
+import com.dark.tool_neuron.voice.VoiceModelManager
 import com.dark.tool_neuron.ui.screens.settings.model.SettingsChoiceOption
 import com.dark.tool_neuron.ui.screens.settings.model.SettingsDialog
 import com.dark.tool_neuron.ui.screens.settings.model.SettingsItem
 import com.dark.tool_neuron.ui.screens.settings.model.SettingsSection
 import com.dark.tool_neuron.ui.screens.settings.model.SettingsState
 import com.dark.tool_neuron.ui.theme.ColorPalette
-import com.dark.tool_neuron.util.formatBytes
+import com.dark.download_manager.formatBytes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -40,12 +42,16 @@ class SettingsViewModel @Inject constructor(
     private val ragManager: RagManager,
     private val modelRepo: ModelRepository,
     private val documentRepo: DocumentRepository,
+    private val prefs: AppPreferences,
+    private val voiceManager: VoiceModelManager,
 ) : ViewModel() {
 
     private val _dialog = MutableStateFlow<SettingsDialog?>(null)
     private val _snackbar = MutableStateFlow<String?>(null)
     private val _diskUsage = MutableStateFlow("")
     private val _lockEnabled = MutableStateFlow(security.isLockEnabled)
+    private val _activeTts = MutableStateFlow(prefs.activeTtsModelId)
+    private val _activeStt = MutableStateFlow(prefs.activeSttModelId)
     private val appVersion: String = resolveVersion()
 
     val state: StateFlow<SettingsState> = combine(
@@ -57,6 +63,8 @@ class SettingsViewModel @Inject constructor(
         _lockEnabled,
         _dialog,
         _snackbar,
+        _activeTts,
+        _activeStt,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         val models = values[0] as List<ModelInfo>
@@ -67,9 +75,20 @@ class SettingsViewModel @Inject constructor(
         val lockOn = values[5] as Boolean
         val dialog = values[6] as SettingsDialog?
         val snackbar = values[7] as String?
+        val activeTts = values[8] as String
+        val activeStt = values[9] as String
 
         SettingsState(
-            sections = buildSections(models, defaultEmbedding, themeMode, palette, disk, lockOn),
+            sections = buildSections(
+                models = models,
+                defaultEmbedding = defaultEmbedding,
+                themeMode = themeMode,
+                palette = palette,
+                diskUsage = disk,
+                lockEnabled = lockOn,
+                activeTts = activeTts,
+                activeStt = activeStt,
+            ),
             dialog = dialog,
             snackbarMessage = snackbar,
             appVersion = appVersion,
@@ -92,7 +111,7 @@ class SettingsViewModel @Inject constructor(
             title = item.title,
             options = item.options,
             selectedKey = item.selectedKey,
-            allowClear = item.id == "default_embedding_model",
+            allowClear = item.id in CLEARABLE_CHOICE_IDS,
             onSelect = item.onSelect,
         )
     }
@@ -104,8 +123,11 @@ class SettingsViewModel @Inject constructor(
         palette: ColorPalette,
         diskUsage: String,
         lockEnabled: Boolean,
+        activeTts: String,
+        activeStt: String,
     ): List<SettingsSection> = listOf(
         chatAndRagSection(models, defaultEmbedding),
+        voiceSection(models, activeTts, activeStt),
         appearanceSection(themeMode, palette),
         privacySection(lockEnabled),
         storageSection(diskUsage),
@@ -127,7 +149,7 @@ class SettingsViewModel @Inject constructor(
             icon = TnIcons.MessageCircle,
             items = listOf(
                 SettingsItem.Choice(
-                    id = "default_embedding_model",
+                    id = ID_DEFAULT_EMBEDDING,
                     title = "Default embedding model",
                     subtitle = "Used when you attach a document to a chat.",
                     icon = TnIcons.Database,
@@ -141,6 +163,67 @@ class SettingsViewModel @Inject constructor(
                 ),
             ),
         )
+    }
+
+    private fun voiceSection(
+        models: List<ModelInfo>,
+        activeTts: String,
+        activeStt: String,
+    ): SettingsSection {
+        val ttsModels = models.filter { it.providerType == ProviderType.TTS }
+        val sttModels = models.filter { it.providerType == ProviderType.STT }
+        val ttsOptions = ttsModels.map {
+            SettingsChoiceOption(key = it.id, label = it.name, description = formatBytes(it.fileSize))
+        }
+        val sttOptions = sttModels.map {
+            SettingsChoiceOption(key = it.id, label = it.name, description = formatBytes(it.fileSize))
+        }
+        val resolvedTts = activeTts.takeIf { it.isNotBlank() && ttsModels.any { m -> m.id == it } }
+        val resolvedStt = activeStt.takeIf { it.isNotBlank() && sttModels.any { m -> m.id == it } }
+        return SettingsSection(
+            id = "voice",
+            title = "Voice",
+            description = "Defaults for text-to-speech and speech-to-text.",
+            icon = TnIcons.Volume,
+            items = listOf(
+                SettingsItem.Choice(
+                    id = ID_DEFAULT_TTS,
+                    title = "Default text-to-speech model",
+                    subtitle = "Used when you tap Speak on a reply.",
+                    icon = TnIcons.Volume,
+                    selectedKey = resolvedTts,
+                    options = ttsOptions,
+                    emptyMessage = if (ttsOptions.isEmpty()) "Install one from the Store" else "Auto-pick first",
+                    onSelect = { key -> applyActiveTts(key) },
+                ),
+                SettingsItem.Choice(
+                    id = ID_DEFAULT_STT,
+                    title = "Default speech-to-text model",
+                    subtitle = "Used when you tap the mic.",
+                    icon = TnIcons.Mic,
+                    selectedKey = resolvedStt,
+                    options = sttOptions,
+                    emptyMessage = if (sttOptions.isEmpty()) "Install one from the Store" else "Auto-pick first",
+                    onSelect = { key -> applyActiveStt(key) },
+                ),
+            ),
+        )
+    }
+
+    private fun applyActiveTts(key: String?) {
+        val next = key.orEmpty()
+        prefs.activeTtsModelId = next
+        _activeTts.value = next
+        _dialog.value = null
+        viewModelScope.launch { voiceManager.unloadTts() }
+    }
+
+    private fun applyActiveStt(key: String?) {
+        val next = key.orEmpty()
+        prefs.activeSttModelId = next
+        _activeStt.value = next
+        _dialog.value = null
+        viewModelScope.launch { voiceManager.unloadStt() }
     }
 
     private fun appearanceSection(
@@ -397,4 +480,15 @@ class SettingsViewModel @Inject constructor(
         val info = context.packageManager.getPackageInfo(context.packageName, 0)
         info.versionName ?: "1.0"
     }.getOrDefault("1.0")
+
+    companion object {
+        private const val ID_DEFAULT_EMBEDDING = "default_embedding_model"
+        private const val ID_DEFAULT_TTS = "default_tts_model"
+        private const val ID_DEFAULT_STT = "default_stt_model"
+        private val CLEARABLE_CHOICE_IDS = setOf(
+            ID_DEFAULT_EMBEDDING,
+            ID_DEFAULT_TTS,
+            ID_DEFAULT_STT,
+        )
+    }
 }
