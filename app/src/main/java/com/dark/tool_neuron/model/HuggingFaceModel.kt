@@ -8,9 +8,15 @@ data class HuggingFaceModel(
     val approximateSize: String,
     val sizeBytes: Long = 0,
     val repoId: String = "",
+    val repoPath: String = "",
     val quantization: String = "",
     val tags: List<String> = emptyList(),
     val modelType: String = "gguf",
+    val isVlm: Boolean = false,
+    val isMmproj: Boolean = false,
+    val mmprojFileName: String = "",
+    val mmprojFileUri: String = "",
+    val mmprojSizeBytes: Long = 0,
 )
 
 data class HFRepository(

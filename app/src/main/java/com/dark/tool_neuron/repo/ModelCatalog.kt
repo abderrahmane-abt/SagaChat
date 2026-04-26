@@ -3,14 +3,15 @@ package com.dark.tool_neuron.repo
 import android.content.Context
 import com.dark.tool_neuron.model.HFRepository
 import com.dark.tool_neuron.model.HuggingFaceModel
+import com.dark.tool_neuron.util.VlmPaths
+import com.dark.tool_neuron.util.extractQuantization
+import com.dark.download_manager.formatBytes
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -46,9 +47,9 @@ class ModelCatalog @Inject constructor(
 
     private suspend fun fetchRepo(repo: HFRepository): List<HuggingFaceModel> =
         withContext(Dispatchers.IO) {
-            val meta = fetchJson("https://huggingface.co/api/models/${repo.repoPath}")
+            val meta = HuggingFaceApi.fetchJson(HuggingFaceApi.modelInfoUrl(repo.repoPath))
                 ?: return@withContext emptyList()
-            val tree = fetchJsonArray("https://huggingface.co/api/models/${repo.repoPath}/tree/main?recursive=true")
+            val tree = HuggingFaceApi.fetchJsonArray(HuggingFaceApi.modelTreeUrl(repo.repoPath))
                 ?: return@withContext emptyList()
 
             val author = meta.optString("author", repo.repoPath.substringBefore("/"))
@@ -57,88 +58,57 @@ class ModelCatalog @Inject constructor(
             val gated = meta.opt("gated")
             val isGated = gated != null && gated != false && gated.toString() != "false"
 
-            val models = mutableListOf<HuggingFaceModel>()
-            for (i in 0 until tree.length()) {
+            val allFiles = (0 until tree.length()).mapNotNull { i ->
                 val file = tree.getJSONObject(i)
                 val path = file.optString("path", "")
-                val isGguf = path.endsWith(".gguf", ignoreCase = true)
-                if (!isGguf) continue
-                if (path.contains("mmproj", ignoreCase = true)) continue
-                if (path.contains("projector", ignoreCase = true)) continue
+                if (path.isBlank() || !path.endsWith(".gguf", ignoreCase = true)) return@mapNotNull null
+                path to file.optLong("size", 0)
+            }
+            val mmprojFile = allFiles.firstOrNull { VlmPaths.isMmprojFileName(it.first) }
+            val isVlmRepo = mmprojFile != null
 
-                val size = file.optLong("size", 0)
-                val quant = extractQuantization(path)
+            val models = mutableListOf<HuggingFaceModel>()
+            for ((path, size) in allFiles) {
+                if (path.contains("projector", ignoreCase = true) && !VlmPaths.isMmprojFileName(path)) continue
+
+                val isMmproj = VlmPaths.isMmprojFileName(path)
+                val quant = if (isMmproj) "mmproj" else (extractQuantization(path) ?: "")
 
                 models.add(HuggingFaceModel(
                     id = "${repo.id}__$path",
-                    name = buildDisplayName(repo.name, quant, path),
+                    name = if (isMmproj) "${repo.name} · Projector" else buildDisplayName(repo.name, quant, path),
                     fileName = path,
-                    fileUri = "https://huggingface.co/${repo.repoPath}/resolve/main/$path",
-                    approximateSize = if (size > 0) formatSize(size) else "Unknown",
+                    fileUri = HuggingFaceApi.resolveFileUrl(repo.repoPath, path),
+                    approximateSize = if (size > 0) formatBytes(size) else "Unknown",
                     sizeBytes = size,
                     repoId = repo.id,
+                    repoPath = repo.repoPath,
                     quantization = quant,
                     tags = buildList {
                         add(author)
                         if (isGated) add("Gated")
                         if (downloads > 1000) add("${downloads / 1000}k+ downloads")
+                        if (isVlmRepo) add("VLM")
+                        if (isMmproj) add("mmproj")
                     },
                     modelType = "gguf",
+                    isVlm = isVlmRepo,
+                    isMmproj = isMmproj,
+                    mmprojFileName = mmprojFile?.first.orEmpty(),
+                    mmprojFileUri = mmprojFile?.let {
+                        HuggingFaceApi.resolveFileUrl(repo.repoPath, it.first)
+                    }.orEmpty(),
+                    mmprojSizeBytes = mmprojFile?.second ?: 0L,
                 ))
             }
-            models.sortedBy { it.sizeBytes }
+            models.sortedWith(compareByDescending<HuggingFaceModel> { it.isMmproj }.thenBy { it.sizeBytes })
         }
-
-    private fun fetchJson(urlStr: String): JSONObject? {
-        val conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 15_000; readTimeout = 15_000
-            setRequestProperty("Accept", "application/json")
-        }
-        return try {
-            if (conn.responseCode != 200) return null
-            JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
-        } catch (_: Exception) { null }
-        finally { conn.disconnect() }
-    }
-
-    private fun fetchJsonArray(urlStr: String): JSONArray? {
-        val conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 15_000; readTimeout = 15_000
-            setRequestProperty("Accept", "application/json")
-        }
-        return try {
-            if (conn.responseCode != 200) return null
-            JSONArray(conn.inputStream.bufferedReader().use { it.readText() })
-        } catch (_: Exception) { null }
-        finally { conn.disconnect() }
-    }
 
     private fun buildDisplayName(repoName: String, quant: String, fileName: String): String {
         if (quant.isNotBlank()) return "$repoName $quant"
         return "$repoName (${fileName.removeSuffix(".gguf")})"
     }
 
-    private fun extractQuantization(fileName: String): String {
-        val patterns = listOf(
-            Regex("""[_-](Q\d[\w_]*)""", RegexOption.IGNORE_CASE),
-            Regex("""[_-](IQ\d[\w_]*)""", RegexOption.IGNORE_CASE),
-            Regex("""[_-]([Bb][Ff]16)"""),
-            Regex("""[_-]([Ff]16|[Ff]32)"""),
-        )
-        for (p in patterns) {
-            val match = p.find(fileName)
-            if (match != null) return match.groupValues[1]
-        }
-        return ""
-    }
-
-    private fun formatSize(bytes: Long): String = when {
-        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-        bytes < 1024L * 1024 * 1024 -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
-        else -> "%.2f GB".format(bytes / (1024.0 * 1024.0 * 1024.0))
-    }
-
-    // ── Disk cache ──
 
     private fun loadDiskCache(): List<HuggingFaceModel>? {
         if (!cacheFile.exists()) return null
@@ -162,9 +132,15 @@ class ModelCatalog @Inject constructor(
         put("id", id); put("name", name); put("fileName", fileName)
         put("fileUri", fileUri); put("approximateSize", approximateSize)
         put("sizeBytes", sizeBytes); put("repoId", repoId)
+        put("repoPath", repoPath)
         put("quantization", quantization)
         put("tags", JSONArray(tags))
         put("modelType", modelType)
+        put("isVlm", isVlm)
+        put("isMmproj", isMmproj)
+        put("mmprojFileName", mmprojFileName)
+        put("mmprojFileUri", mmprojFileUri)
+        put("mmprojSizeBytes", mmprojSizeBytes)
     }
 
     private fun JSONObject.toModel(): HuggingFaceModel = HuggingFaceModel(
@@ -173,11 +149,17 @@ class ModelCatalog @Inject constructor(
         approximateSize = optString("approximateSize", "Unknown"),
         sizeBytes = optLong("sizeBytes"),
         repoId = optString("repoId"),
+        repoPath = optString("repoPath"),
         quantization = optString("quantization"),
         tags = optJSONArray("tags")?.let { arr ->
             (0 until arr.length()).map { arr.getString(it) }
         } ?: emptyList(),
         modelType = optString("modelType", "gguf"),
+        isVlm = optBoolean("isVlm", false),
+        isMmproj = optBoolean("isMmproj", false),
+        mmprojFileName = optString("mmprojFileName"),
+        mmprojFileUri = optString("mmprojFileUri"),
+        mmprojSizeBytes = optLong("mmprojSizeBytes"),
     )
 
     companion object {
@@ -185,38 +167,50 @@ class ModelCatalog @Inject constructor(
 
         private val BUILT_IN_MODELS = listOf(
             HuggingFaceModel(
-                id = "vits-piper-en-libritts", name = "Piper LibriTTS (English)",
-                fileName = "vits-piper-en-libritts", fileUri = "",
-                approximateSize = "~60 MB", sizeBytes = 0,
+                id = "vits-piper-en_US-amy-low",
+                name = "Piper Amy · Low (English)",
+                fileName = "vits-piper-en_US-amy-low.tar.bz2",
+                fileUri = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-amy-low.tar.bz2",
+                approximateSize = "~30 MB", sizeBytes = 30_547_968L,
                 repoId = "built-in-tts", quantization = "",
-                tags = listOf("TTS", "English", "Piper"), modelType = "tts",
+                tags = listOf("TTS", "English", "Piper", "Fast"),
+                modelType = "tts",
             ),
             HuggingFaceModel(
-                id = "vits-piper-en-amy", name = "Piper Amy (English)",
-                fileName = "vits-piper-en-amy", fileUri = "",
-                approximateSize = "~30 MB", sizeBytes = 0,
+                id = "vits-piper-en_US-libritts-high",
+                name = "Piper LibriTTS · High (English, multi-speaker)",
+                fileName = "vits-piper-en_US-libritts_r-medium.tar.bz2",
+                fileUri = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-libritts_r-medium.tar.bz2",
+                approximateSize = "~124 MB", sizeBytes = 124_514_304L,
                 repoId = "built-in-tts", quantization = "",
-                tags = listOf("TTS", "English", "Piper"), modelType = "tts",
+                tags = listOf("TTS", "English", "Piper", "Multi-speaker"),
+                modelType = "tts",
             ),
             HuggingFaceModel(
-                id = "whisper-tiny-en", name = "Whisper Tiny (English)",
-                fileName = "whisper-tiny-en", fileUri = "",
-                approximateSize = "~75 MB", sizeBytes = 0,
+                id = "sherpa-onnx-whisper-tiny-en",
+                name = "Whisper Tiny (English)",
+                fileName = "sherpa-onnx-whisper-tiny.en.tar.bz2",
+                fileUri = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny.en.tar.bz2",
+                approximateSize = "~75 MB", sizeBytes = 78_200_832L,
                 repoId = "built-in-stt", quantization = "",
-                tags = listOf("STT", "English", "Whisper"), modelType = "stt",
+                tags = listOf("STT", "English", "Whisper", "Fast"),
+                modelType = "stt",
             ),
             HuggingFaceModel(
-                id = "zipformer-en-2023-04-01", name = "Zipformer (English)",
-                fileName = "zipformer-en-2023-04-01", fileUri = "",
-                approximateSize = "~70 MB", sizeBytes = 0,
+                id = "sherpa-onnx-whisper-tiny",
+                name = "Whisper Tiny (Multilingual)",
+                fileName = "sherpa-onnx-whisper-tiny.tar.bz2",
+                fileUri = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny.tar.bz2",
+                approximateSize = "~82 MB", sizeBytes = 86_030_336L,
                 repoId = "built-in-stt", quantization = "",
-                tags = listOf("STT", "English", "Zipformer"), modelType = "stt",
+                tags = listOf("STT", "Multilingual", "Whisper"),
+                modelType = "stt",
             ),
             HuggingFaceModel(
                 id = "nomic-embed-text-v1.5-q4_k_m",
                 name = "Nomic Embed Text v1.5 (Q4)",
                 fileName = "nomic-embed-text-v1.5.Q4_K_M.gguf",
-                fileUri = "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf",
+                fileUri = HuggingFaceApi.resolveFileUrl("nomic-ai/nomic-embed-text-v1.5-GGUF", "nomic-embed-text-v1.5.Q4_K_M.gguf"),
                 approximateSize = "~84 MB",
                 sizeBytes = 84_106_624L,
                 repoId = "embedding-built-in",

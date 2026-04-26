@@ -7,4 +7,5 @@ interface IGenerationCallback {
     void onError(String message);
     void onMetrics(String metricsJson);
     void onProgress(float progress);
+    void onVlmStageMetrics(float vlmEncodeMs, float vlmDecodeMs, int imageTokens);
 }

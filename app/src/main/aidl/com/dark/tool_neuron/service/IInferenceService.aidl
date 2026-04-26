@@ -47,8 +47,8 @@ interface IInferenceService {
     boolean stateLoadFromFile(String path);
 
     // VLM
-    boolean loadVlmProjector(String path, int threads);
-    boolean loadVlmProjectorFromFd(in ParcelFileDescriptor pfd, int threads);
+    boolean loadVlmProjector(String path, int threads, int imageMinTokens, int imageMaxTokens);
+    boolean loadVlmProjectorFromFd(in ParcelFileDescriptor pfd, int threads, int imageMinTokens, int imageMaxTokens);
     void releaseVlmProjector();
     boolean isVlmLoaded();
     String getVlmInfo();
@@ -67,6 +67,7 @@ interface IInferenceService {
     void unloadSttModel();
     boolean isSttLoaded();
     String recognize(in float[] samples, int sampleRate);
+    String recognizeFromFd(in ParcelFileDescriptor pfd, int sampleCount, int sampleRate);
 
     // Errors / crash diagnostics
     String getLastErrorJson();

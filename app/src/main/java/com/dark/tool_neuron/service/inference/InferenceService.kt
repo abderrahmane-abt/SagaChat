@@ -3,6 +3,7 @@ package com.dark.tool_neuron.service.inference
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.os.DeadObjectException
@@ -35,6 +36,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 class InferenceService : Service() {
 
@@ -72,32 +75,38 @@ class InferenceService : Service() {
         } catch (t: Throwable) {
             Log.e(TAG, "sherpa error tracker init failed", t)
         }
-        Log.d(TAG, "InferenceService created (pid=${Process.myPid()})")
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            try { engine.stopGeneration() } catch (_: Throwable) {}
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
+        return START_NOT_STICKY
+    }
+
     override fun onTaskRemoved(rootIntent: Intent?) {
-        Log.d(TAG, "onTaskRemoved: stopping foreground + self")
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
         super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
-        runBlocking(Dispatchers.IO) {
-            if (engine.isLoaded) engine.unload()
-        }
+        try {
+            runBlocking(Dispatchers.IO) {
+                if (engine.isLoaded) engine.unload()
+            }
+        } catch (_: Throwable) {}
         synchronized(ttsLock) { tts?.close(); tts = null }
         synchronized(sttLock) { stt?.close(); stt = null }
         scope.cancel()
-        Log.d(TAG, "InferenceService destroyed")
         super.onDestroy()
     }
 
     private val binder = object : IInferenceService.Stub() {
-
-        // ── Model lifecycle ──
 
         override fun loadModel(modelPath: String, configJson: String, callback: IModelLoadCallback) {
             scope.launch {
@@ -174,8 +183,6 @@ class InferenceService : Service() {
 
         override fun getModelInfo(): String? = engine.getModelInfoJson()
 
-        // ── Generation ──
-
         override fun generate(prompt: String, maxTokens: Int, callback: IGenerationCallback) {
             collectFlow(engine.generateFlow(prompt, maxTokens), callback)
         }
@@ -188,8 +195,6 @@ class InferenceService : Service() {
             engine.stopGeneration()
         }
 
-        // ── Sampling ──
-
         override fun setSampling(samplingJson: String) {
             engine.updateSamplerParams(samplingJson)
         }
@@ -201,8 +206,6 @@ class InferenceService : Service() {
         override fun setChatTemplate(template: String) {
             engine.setChatTemplate(template)
         }
-
-        // ── Tool calling ──
 
         override fun isToolCallingSupported(): Boolean =
             engine.isLoaded && engine.isToolCallingSupported()
@@ -219,13 +222,9 @@ class InferenceService : Service() {
             engine.clearTools()
         }
 
-        // ── Context ──
-
         override fun getContextUsage(): Float = engine.getContextUsage()
 
         override fun getContextInfo(prompt: String?): String? = null
-
-        // ── Thinking ──
 
         override fun supportsThinking(): Boolean =
             engine.isLoaded && engine.supportsThinking()
@@ -234,19 +233,13 @@ class InferenceService : Service() {
             engine.setThinkingEnabled(enabled)
         }
 
-        // ── Optimizations ──
-
         override fun setPromptCacheDir(path: String) {
             engine.setPromptCacheDir(path)
         }
 
         override fun warmUp(): Boolean = engine.warmUp()
 
-        override fun setThreadMode(mode: Int) {
-            // Thread mode set at load time via config
-        }
-
-        // ── KV state ──
+        override fun setThreadMode(mode: Int) {}
 
         override fun getStateSize(): Long = engine.getStateSize()
 
@@ -254,14 +247,12 @@ class InferenceService : Service() {
 
         override fun stateLoadFromFile(path: String): Boolean = engine.stateLoadFromFile(path)
 
-        // ── VLM ──
+        override fun loadVlmProjector(path: String, threads: Int, imageMinTokens: Int, imageMaxTokens: Int): Boolean =
+            engine.loadVlmProjector(path, threads, imageMinTokens, imageMaxTokens)
 
-        override fun loadVlmProjector(path: String, threads: Int): Boolean =
-            engine.loadVlmProjector(path, threads)
-
-        override fun loadVlmProjectorFromFd(pfd: ParcelFileDescriptor, threads: Int): Boolean {
+        override fun loadVlmProjectorFromFd(pfd: ParcelFileDescriptor, threads: Int, imageMinTokens: Int, imageMaxTokens: Int): Boolean {
             val fd = pfd.detachFd()
-            return engine.loadVlmProjectorFromFd(fd, threads)
+            return engine.loadVlmProjectorFromFd(fd, threads, imageMinTokens, imageMaxTokens)
         }
 
         override fun releaseVlmProjector() {
@@ -293,8 +284,6 @@ class InferenceService : Service() {
             }
             collectFlow(engine.generateVlmFlow(messagesJson, images, maxTokens), callback)
         }
-
-        // TTS
 
         override fun loadTtsModel(configJson: String): Boolean {
             return synchronized(ttsLock) {
@@ -348,8 +337,6 @@ class InferenceService : Service() {
 
         override fun getTtsSampleRate(): Int = synchronized(ttsLock) { tts?.sampleRate ?: 0 }
 
-        // STT
-
         override fun loadSttModel(configJson: String): Boolean {
             return synchronized(sttLock) {
                 try {
@@ -391,6 +378,38 @@ class InferenceService : Service() {
         override fun isSttLoaded(): Boolean = synchronized(sttLock) { stt != null }
 
         override fun recognize(samples: FloatArray, sampleRate: Int): String? {
+            return runRecognize(samples, sampleRate)
+        }
+
+        override fun recognizeFromFd(pfd: ParcelFileDescriptor?, sampleCount: Int, sampleRate: Int): String? {
+            if (pfd == null || sampleCount <= 0) return null
+            val samples = FloatArray(sampleCount)
+            try {
+                ParcelFileDescriptor.AutoCloseInputStream(pfd).use { input ->
+                    val byteBuf = ByteArray(8192)
+                    val totalBytes = sampleCount * 4
+                    var read = 0
+                    val tmp = ByteArray(totalBytes)
+                    while (read < totalBytes) {
+                        val n = input.read(byteBuf)
+                        if (n <= 0) break
+                        val copy = minOf(n, totalBytes - read)
+                        System.arraycopy(byteBuf, 0, tmp, read, copy)
+                        read += copy
+                    }
+                    val bb = ByteBuffer.wrap(tmp).order(ByteOrder.nativeOrder())
+                    val fb = bb.asFloatBuffer()
+                    fb.get(samples, 0, minOf(sampleCount, fb.remaining()))
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "recognizeFromFd FD read failed", e)
+                captureKt("recognizeFromFd", "sampleCount=$sampleCount", "STT", e.message ?: e.javaClass.simpleName)
+                return null
+            }
+            return runRecognize(samples, sampleRate)
+        }
+
+        private fun runRecognize(samples: FloatArray, sampleRate: Int): String? {
             return synchronized(sttLock) {
                 val recognizer = stt ?: return@synchronized null
                 try {
@@ -452,8 +471,6 @@ class InferenceService : Service() {
 
     }
 
-    // ── Internal helpers ──
-
     private fun collectFlow(flow: Flow<GenerationEvent>, callback: IGenerationCallback) {
         scope.launch(Dispatchers.IO) {
             try {
@@ -480,6 +497,8 @@ class InferenceService : Service() {
                                 callback.onMetrics(json.toString())
                             }
                             is GenerationEvent.Progress -> callback.onProgress(event.progress)
+                            is GenerationEvent.VlmStageMetrics ->
+                                callback.onVlmStageMetrics(event.vlmEncodeMs, event.vlmDecodeMs, event.imageTokens)
                         }
                     } catch (_: DeadObjectException) {
                         engine.stopGeneration()
@@ -572,13 +591,21 @@ class InferenceService : Service() {
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
-    private fun buildNotification(text: String): Notification =
-        Notification.Builder(this, CHANNEL_ID)
+    private fun buildNotification(text: String): Notification {
+        val stopPi = PendingIntent.getService(
+            this,
+            1,
+            Intent(this, InferenceService::class.java).setAction(ACTION_STOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.inference_leaf)
             .setContentTitle("Tool Neuron")
             .setContentText(text)
             .setOngoing(true)
+            .addAction(Notification.Action.Builder(null, "Stop", stopPi).build())
             .build()
+    }
 
     private fun updateNotification(text: String) {
         getSystemService(NotificationManager::class.java)
@@ -586,6 +613,8 @@ class InferenceService : Service() {
     }
 
     companion object {
+        const val ACTION_STOP = "com.dark.tool_neuron.inference.ACTION_STOP"
+
         private const val TAG = "InferenceService"
         private const val CHANNEL_ID = "tn_inference"
         private const val NOTIFICATION_ID = 0x544E4953 // TNIS

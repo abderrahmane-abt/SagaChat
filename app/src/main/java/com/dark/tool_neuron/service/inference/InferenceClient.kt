@@ -5,7 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.net.Uri
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import com.dark.tool_neuron.service.IGenerationCallback
@@ -23,9 +25,13 @@ import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import java.io.FileOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlin.coroutines.resume
 
 sealed class InferenceEvent {
@@ -35,6 +41,7 @@ sealed class InferenceEvent {
     data class Error(val message: String) : InferenceEvent()
     data class Metrics(val metricsJson: String) : InferenceEvent()
     data class Progress(val progress: Float) : InferenceEvent()
+    data class VlmStageMetrics(val vlmEncodeMs: Float, val vlmDecodeMs: Float, val imageTokens: Int) : InferenceEvent()
 }
 
 sealed class ServiceState {
@@ -138,7 +145,6 @@ object InferenceClient {
             try { _isSttLoaded.value = svc.isSttLoaded } catch (_: Exception) {}
             try { _isVlmLoaded.value = svc.isVlmLoaded } catch (_: Exception) {}
             ingestCrashFromSvc(svc)
-            Log.d(TAG, "Service connected")
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -201,15 +207,13 @@ object InferenceClient {
     private fun rebind() {
         val ctx = appContext ?: return
         try { ctx.unbindService(connection) } catch (_: Exception) {}
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+        Handler(Looper.getMainLooper()).postDelayed({
             performBind()
         }, REBIND_DELAY_MS)
     }
 
     private suspend fun ensureBound(): IInferenceService =
         withTimeout(BIND_TIMEOUT_MS) { _service.first { it != null }!! }
-
-    // ── Model lifecycle ──
 
     suspend fun loadModel(modelPath: String, configJson: String = "{}"): Result<String> {
         val svc = ensureBound()
@@ -252,8 +256,6 @@ object InferenceClient {
     fun getModelInfo(): String? =
         try { _service.value?.getModelInfo() } catch (_: Exception) { null }
 
-    // ── Generation ──
-
     fun generateMultiTurn(messagesJson: String, maxTokens: Int): Flow<InferenceEvent> =
         callbackFlow {
             val svc = _service.first { it != null }!!
@@ -284,24 +286,22 @@ object InferenceClient {
         try { _service.value?.stopGeneration() } catch (_: Exception) {}
     }
 
-    // ── VLM ──
-
-    suspend fun loadVlmProjectorFromUri(context: Context, uri: Uri, threads: Int = 2): Boolean =
-        withContext(Dispatchers.IO) {
-            val svc = ensureBound()
-            val pfd = context.contentResolver.openFileDescriptor(uri, "r")
-                ?: return@withContext false
-            try {
-                val ok = svc.loadVlmProjectorFromFd(pfd, threads)
-                _isVlmLoaded.value = ok
-                ok
-            } catch (e: Exception) {
-                Log.e(TAG, "loadVlmProjectorFromUri failed", e)
-                false
-            } finally {
-                try { pfd.close() } catch (_: Exception) {}
-            }
+    suspend fun loadVlmProjector(
+        path: String,
+        threads: Int = 2,
+        imageMinTokens: Int = -1,
+        imageMaxTokens: Int = -1,
+    ): Boolean = withContext(Dispatchers.IO) {
+        val svc = ensureBound()
+        try {
+            val ok = svc.loadVlmProjector(path, threads, imageMinTokens, imageMaxTokens)
+            _isVlmLoaded.value = ok
+            ok
+        } catch (e: Exception) {
+            Log.e(TAG, "loadVlmProjector failed", e)
+            false
         }
+    }
 
     suspend fun releaseVlmProjector() {
         _isVlmLoaded.value = false
@@ -343,8 +343,6 @@ object InferenceClient {
         awaitClose {}
     }.buffer(Channel.UNLIMITED).flowOn(Dispatchers.IO)
 
-    // ── Sampling ──
-
     fun setSampling(samplingJson: String) {
         try { _service.value?.setSampling(samplingJson) } catch (_: Exception) {}
     }
@@ -356,8 +354,6 @@ object InferenceClient {
     fun setChatTemplate(template: String) {
         try { _service.value?.setChatTemplate(template) } catch (_: Exception) {}
     }
-
-    // ── Tool calling ──
 
     fun isToolCallingSupported(): Boolean =
         try { _service.value?.isToolCallingSupported() ?: false } catch (_: Exception) { false }
@@ -374,12 +370,8 @@ object InferenceClient {
         try { _service.value?.clearTools() } catch (_: Exception) {}
     }
 
-    // ── Context ──
-
     fun getContextUsage(): Float =
         try { _service.value?.contextUsage ?: 0f } catch (_: Exception) { 0f }
-
-    // ── Thinking ──
 
     fun supportsThinking(): Boolean =
         try { _service.value?.supportsThinking() ?: false } catch (_: Exception) { false }
@@ -388,16 +380,12 @@ object InferenceClient {
         try { _service.value?.setThinkingEnabled(enabled) } catch (_: Exception) {}
     }
 
-    // ── Optimizations ──
-
     fun setPromptCacheDir(path: String) {
         try { _service.value?.setPromptCacheDir(path) } catch (_: Exception) {}
     }
 
     fun warmUp(): Boolean =
         try { _service.value?.warmUp() ?: false } catch (_: Exception) { false }
-
-    // ── TTS ──
 
     suspend fun loadTtsModel(configJson: String): Boolean = withContext(Dispatchers.IO) {
         try {
@@ -426,8 +414,6 @@ object InferenceClient {
     fun getTtsSampleRate(): Int =
         try { _service.value?.ttsSampleRate ?: 0 } catch (_: Exception) { 0 }
 
-    // ── STT ──
-
     suspend fun loadSttModel(configJson: String): Boolean = withContext(Dispatchers.IO) {
         try {
             val result = ensureBound().loadSttModel(configJson)
@@ -446,13 +432,41 @@ object InferenceClient {
 
     suspend fun recognize(samples: FloatArray, sampleRate: Int = 16000): String? =
         withContext(Dispatchers.IO) {
-            try { ensureBound().recognize(samples, sampleRate) } catch (e: Exception) {
+            val byteSize = samples.size * 4
+            if (byteSize < 800_000) {
+                try { return@withContext ensureBound().recognize(samples, sampleRate) }
+                catch (e: Exception) {
+                    Log.e(TAG, "recognize failed", e)
+                    return@withContext null
+                }
+            }
+            val pipe = ParcelFileDescriptor.createPipe()
+            val readEnd = pipe[0]
+            val writeEnd = pipe[1]
+            val writer = launch(Dispatchers.IO) {
+                try {
+                    FileOutputStream(writeEnd.fileDescriptor).use { out ->
+                        val bb = ByteBuffer.allocate(samples.size * 4)
+                            .order(ByteOrder.nativeOrder())
+                        bb.asFloatBuffer().put(samples)
+                        out.write(bb.array())
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "recognize FD write failed", e)
+                } finally {
+                    runCatching { writeEnd.close() }
+                }
+            }
+            try {
+                ensureBound().recognizeFromFd(readEnd, samples.size, sampleRate)
+            } catch (e: Exception) {
                 Log.e(TAG, "recognize failed", e)
                 null
+            } finally {
+                runCatching { readEnd.close() }
+                writer.join()
             }
         }
-
-    // ── Internal helpers ──
 
     private fun loadCallback(cont: CancellableContinuation<Result<String>>) =
         object : IModelLoadCallback.Stub() {
@@ -480,5 +494,8 @@ object InferenceClient {
             }
             override fun onMetrics(metricsJson: String) { emit(InferenceEvent.Metrics(metricsJson)) }
             override fun onProgress(progress: Float) { emit(InferenceEvent.Progress(progress)) }
+            override fun onVlmStageMetrics(vlmEncodeMs: Float, vlmDecodeMs: Float, imageTokens: Int) {
+                emit(InferenceEvent.VlmStageMetrics(vlmEncodeMs, vlmDecodeMs, imageTokens))
+            }
         }
 }
