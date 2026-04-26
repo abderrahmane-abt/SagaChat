@@ -26,7 +26,7 @@ class AppPreferences @Inject constructor(
 
         val dek = keyStore.unwrapOrCreateDek()
         val userKey = encryptor.deriveKey(ikm = dek, salt = dek, info = USER_KEY_INFO)
-        val ukFp = fingerprint(userKey)
+        val ukFp = keyFingerprint(userKey)
 
         val existed = storage.exists(basePath)
         val opened = if (existed) {
@@ -139,6 +139,49 @@ class AppPreferences @Inject constructor(
         get() = getBoolean(KEY_ROOT_WARNING_SHOWN)
         set(value) = putBoolean(KEY_ROOT_WARNING_SHOWN, value)
 
+    var serverToken: String
+        get() = getString(KEY_SERVER_TOKEN)
+        set(value) = putString(KEY_SERVER_TOKEN, value)
+
+    var serverPort: Int
+        get() {
+            val raw = getString(KEY_SERVER_PORT, DEFAULT_SERVER_PORT.toString()).toIntOrNull()
+                ?: return DEFAULT_SERVER_PORT
+            return if (raw in 1024..65535) raw else DEFAULT_SERVER_PORT
+        }
+        set(value) {
+            val clamped = value.coerceIn(1024, 65535)
+            putString(KEY_SERVER_PORT, clamped.toString())
+        }
+
+    var serverBindMode: String
+        get() = getString(KEY_SERVER_BIND_MODE, DEFAULT_BIND_MODE)
+        set(value) = putString(KEY_SERVER_BIND_MODE, value)
+
+    var serverAutoStart: Boolean
+        get() = getBoolean(KEY_SERVER_AUTO_START)
+        set(value) = putBoolean(KEY_SERVER_AUTO_START, value)
+
+    var serverConfigured: Boolean
+        get() = getBoolean(KEY_SERVER_CONFIGURED)
+        set(value) = putBoolean(KEY_SERVER_CONFIGURED, value)
+
+    var serverSelectedModelId: String
+        get() = getString(KEY_SERVER_SELECTED_MODEL)
+        set(value) = putString(KEY_SERVER_SELECTED_MODEL, value)
+
+    var hfSearchHistory: String
+        get() = getString(KEY_HF_SEARCH_HISTORY)
+        set(value) = putString(KEY_HF_SEARCH_HISTORY, value)
+
+    var activeTtsModelId: String
+        get() = getString(KEY_ACTIVE_TTS_MODEL)
+        set(value) = putString(KEY_ACTIVE_TTS_MODEL, value)
+
+    var activeSttModelId: String
+        get() = getString(KEY_ACTIVE_STT_MODEL)
+        set(value) = putString(KEY_ACTIVE_STT_MODEL, value)
+
     fun readAuthState(): AuthState {
         val sealed = getBytes(KEY_AUTH_STATE) ?: return AuthState.DEFAULT
         val plaintext = try {
@@ -172,12 +215,6 @@ class AppPreferences @Inject constructor(
         return encryptor.deriveKey(ikm = dek, salt = dek, info = AUTH_KEY_INFO)
     }
 
-    private fun fingerprint(bytes: ByteArray): String {
-        val md = java.security.MessageDigest.getInstance("SHA-256")
-        val h = md.digest(bytes)
-        return h.take(4).joinToString("") { "%02x".format(it) }
-    }
-
     companion object {
         private const val TAG = "AppPrefs"
         private const val COLLECTION = "app_prefs"
@@ -193,6 +230,17 @@ class AppPreferences @Inject constructor(
         const val KEY_MODEL_SETUP_DONE = "model_setup_done"
         const val KEY_GUIDE_SHOWN = "guide_shown"
         const val KEY_ROOT_WARNING_SHOWN = "root_warning_shown"
+        const val KEY_SERVER_TOKEN = "server_token"
+        const val KEY_SERVER_PORT = "server_port"
+        const val KEY_SERVER_BIND_MODE = "server_bind_mode"
+        const val KEY_SERVER_AUTO_START = "server_auto_start"
+        const val KEY_SERVER_CONFIGURED = "server_configured"
+        const val KEY_SERVER_SELECTED_MODEL = "server_selected_model"
+        const val KEY_HF_SEARCH_HISTORY = "hf_search_history"
+        const val KEY_ACTIVE_TTS_MODEL = "active_tts_model"
+        const val KEY_ACTIVE_STT_MODEL = "active_stt_model"
+        const val DEFAULT_SERVER_PORT = 11434
+        const val DEFAULT_BIND_MODE = "ALL_INTERFACES"
         private const val KEY_AUTH_STATE = "auth_state_v1"
 
         const val SECURITY_NONE = "none"

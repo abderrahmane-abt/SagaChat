@@ -42,7 +42,7 @@ class AppKeyStore @Inject constructor(
     @Synchronized
     fun unwrapOrCreateDek(): ByteArray {
         cachedDek?.let {
-            Log.i(TAG, "unwrapOrCreateDek cached fp=${fingerprint(it)}")
+            Log.i(TAG, "unwrapOrCreateDek cached fp=${keyFingerprint(it)}")
             return it
         }
         val fromDisk = bootstrapFile.exists()
@@ -57,7 +57,7 @@ class AppKeyStore @Inject constructor(
             fresh
         }
         cachedDek = dek
-        Log.i(TAG, "unwrapOrCreateDek fromDisk=$fromDisk fp=${fingerprint(dek)}")
+        Log.i(TAG, "unwrapOrCreateDek fromDisk=$fromDisk fp=${keyFingerprint(dek)}")
         return dek
     }
 
@@ -210,12 +210,6 @@ class AppKeyStore @Inject constructor(
         } catch (_: Throwable) {
         }
         Log.i(TAG, "migrated: wiped legacy bootstrap + prefs, keystore alias reset")
-    }
-
-    private fun fingerprint(bytes: ByteArray): String {
-        val md = java.security.MessageDigest.getInstance("SHA-256")
-        val h = md.digest(bytes)
-        return h.take(4).joinToString("") { "%02x".format(it) }
     }
 
     companion object {
