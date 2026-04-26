@@ -44,7 +44,10 @@ import com.dark.tool_neuron.ui.components.StandardCard
 import com.dark.tool_neuron.ui.components.SwitchRow
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
+import com.dark.tool_neuron.util.VlmPaths
+import com.dark.download_manager.formatBytes
 import org.json.JSONObject
+import java.io.File
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -108,6 +111,14 @@ fun ModelConfigScreen(
     var sttThreads by remember { mutableIntStateOf(loadingJson.optInt("numThreads", 2)) }
     var language by remember { mutableStateOf(inferenceJson.optString("language", "en")) }
 
+    // VLM projector
+    val baseFile = remember(modelInfo.path) { File(modelInfo.path) }
+    val projectorCandidates = remember(modelInfo.path) { VlmPaths.listColocatedMmprojs(baseFile) }
+    val isVlmBase = projectorCandidates.isNotEmpty()
+    var selectedProjector by remember {
+        mutableStateOf(loadingJson.optString("vlmProjector", ""))
+    }
+
     // Section toggles
     var showAdvancedSampling by remember { mutableStateOf(false) }
     var showMemory by remember { mutableStateOf(false) }
@@ -135,6 +146,9 @@ fun ModelConfigScreen(
                 loading.put("flashAttn", flashAttn)
                 loading.put("cacheTypeK", cacheTypeK)
                 loading.put("cacheTypeV", cacheTypeV)
+                if (isVlmBase && selectedProjector.isNotBlank()) {
+                    loading.put("vlmProjector", selectedProjector)
+                }
 
                 inference.put("temperature", temperature)
                 inference.put("topK", topK)
@@ -171,15 +185,18 @@ fun ModelConfigScreen(
                 }
             }
             ProviderType.TTS -> {
+                copyJson(loadingJson, loading)
                 loading.put("numThreads", ttsThreads)
                 inference.put("speed", speed)
                 inference.put("speakerId", speakerId)
             }
             ProviderType.STT -> {
+                copyJson(loadingJson, loading)
                 loading.put("numThreads", sttThreads)
                 inference.put("language", language)
             }
             ProviderType.EMBEDDING -> {
+                copyJson(loadingJson, loading)
                 loading.put("numThreads", sttThreads)
             }
         }
@@ -288,6 +305,62 @@ fun ModelConfigScreen(
                                     onSelect = { cacheTypeV = it },
                                     explanation = "Same as keys, but for the value half of attention. Match Keys unless you know why.",
                                 )
+                            }
+                        }
+                    }
+
+                    if (isVlmBase) {
+                        item {
+                            StandardCard(title = "Projector (VLM)") {
+                                Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)) {
+                                    Text(
+                                        text = "Pick which projector file this model loads for image input. " +
+                                            "Leave default to use the first one found in the VLM folder.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    val firstName = projectorCandidates.first().name
+                                    val effectiveSelection = selectedProjector.ifBlank { firstName }
+                                    projectorCandidates.forEach { file ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable { selectedProjector = file.name },
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+                                        ) {
+                                            Icon(
+                                                imageVector = if (effectiveSelection.equals(file.name, ignoreCase = true))
+                                                    TnIcons.CircleCheck else TnIcons.Circle,
+                                                contentDescription = null,
+                                                tint = if (effectiveSelection.equals(file.name, ignoreCase = true))
+                                                    MaterialTheme.colorScheme.primary
+                                                else
+                                                    MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(20.dp),
+                                            )
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = file.name,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.Medium,
+                                                )
+                                                Text(
+                                                    text = formatBytes(file.length()),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                        }
+                                    }
+                                    if (projectorCandidates.size == 1) {
+                                        Text(
+                                            text = "Only one projector in this folder — download more from the repo to switch.",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -810,4 +883,12 @@ private fun ExplanationText(text: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 4.dp),
     )
+}
+
+private fun copyJson(src: JSONObject, dst: JSONObject) {
+    val keys = src.keys()
+    while (keys.hasNext()) {
+        val k = keys.next()
+        dst.put(k, src.get(k))
+    }
 }
