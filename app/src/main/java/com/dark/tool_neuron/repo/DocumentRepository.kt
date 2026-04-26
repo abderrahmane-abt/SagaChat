@@ -33,7 +33,14 @@ class DocumentRepository @Inject constructor(
         return storage.queryString(COLLECTION, TAG_CHAT_ID, chatId).map { it.toChatDocument() }
     }
 
+    fun getAllDocuments(): List<ChatDocument> {
+        return storage.getAll(COLLECTION).map { it.toChatDocument() }
+    }
+
     fun addDocument(doc: ChatDocument) {
+        storage.queryString(COLLECTION, TAG_ID, doc.id).forEach {
+            storage.delete(COLLECTION, it.id)
+        }
         storage.put(COLLECTION, doc.toRecord())
         storage.flush(COLLECTION)
     }
@@ -56,6 +63,13 @@ class DocumentRepository @Inject constructor(
         storage.flush(COLLECTION)
     }
 
+    fun countWithSource(sourceId: String): Int {
+        if (sourceId.isBlank()) return 0
+        return storage.getAll(COLLECTION).count { rec ->
+            rec.getString(TAG_SOURCE_ID) == sourceId
+        }
+    }
+
     companion object {
         private const val COLLECTION = "chat_documents"
 
@@ -66,6 +80,7 @@ class DocumentRepository @Inject constructor(
         private const val TAG_CHUNK_COUNT = 5
         private const val TAG_SIZE_BYTES = 6
         private const val TAG_ADDED_AT = 7
+        private const val TAG_SOURCE_ID = 8
     }
 
     private fun ChatDocument.toRecord(): HxsRecord {
@@ -78,6 +93,7 @@ class DocumentRepository @Inject constructor(
             putTimestamp(TAG_CHUNK_COUNT, d.chunkCount.toLong())
             putTimestamp(TAG_SIZE_BYTES, d.sizeBytes)
             putTimestamp(TAG_ADDED_AT, d.addedAt)
+            putString(TAG_SOURCE_ID, d.sourceId)
         }
     }
 
@@ -89,5 +105,6 @@ class DocumentRepository @Inject constructor(
         chunkCount = getTimestamp(TAG_CHUNK_COUNT).toInt(),
         sizeBytes = getTimestamp(TAG_SIZE_BYTES),
         addedAt = getTimestamp(TAG_ADDED_AT),
+        sourceId = getString(TAG_SOURCE_ID),
     )
 }

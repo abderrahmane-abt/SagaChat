@@ -3,6 +3,7 @@ package com.dark.tool_neuron.model
 data class ChatDocument(
     val id: String,
     val chatId: String?,
+    val sourceId: String,
     val name: String,
     val mimeType: String,
     val chunkCount: Int,

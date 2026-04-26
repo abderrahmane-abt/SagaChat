@@ -42,13 +42,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dark.download_manager.formatBytes
 import com.dark.tool_neuron.model.ChatDocument
 import com.dark.tool_neuron.model.MemoryMetrics
 import com.dark.tool_neuron.model.ModelInfo
 import com.dark.tool_neuron.model.TextMetrics
 import com.dark.tool_neuron.service.inference.InferenceClient
-import com.dark.tool_neuron.ui.components.ActionTextButton
-import com.dark.tool_neuron.ui.components.CaptionText
 import com.dark.tool_neuron.ui.components.SectionHeader
 import com.dark.tool_neuron.ui.components.TnProgressBar
 import com.dark.tool_neuron.ui.components.model_list.InstalledModelList
@@ -153,9 +152,7 @@ fun ActionWindowOverlay(
     onLoadModel: (ModelInfo) -> Unit,
     onUnloadModel: (ModelInfo) -> Unit,
     onStoreClick: () -> Unit = {},
-    onGuideClick: () -> Unit = {},
-    onSettingsClick: () -> Unit = {},
-    onLoadDocument: () -> Unit = {},
+    onAddAttachment: () -> Unit = {},
     documents: List<ChatDocument> = emptyList(),
     onRemoveDocument: (String) -> Unit = {},
 ) {
@@ -210,9 +207,7 @@ fun ActionWindowOverlay(
                     onLoadModel = onLoadModel,
                     onUnloadModel = onUnloadModel,
                     onStoreClick = onStoreClick,
-                    onGuideClick = onGuideClick,
-                    onSettingsClick = onSettingsClick,
-                    onLoadDocument = onLoadDocument,
+                    onAddAttachment = onAddAttachment,
                     documents = documents,
                     onRemoveDocument = onRemoveDocument,
                 )
@@ -232,15 +227,13 @@ private fun ActionWindowContent(
     onLoadModel: (ModelInfo) -> Unit,
     onUnloadModel: (ModelInfo) -> Unit,
     onStoreClick: () -> Unit,
-    onGuideClick: () -> Unit,
-    onSettingsClick: () -> Unit,
-    onLoadDocument: () -> Unit,
+    onAddAttachment: () -> Unit,
     documents: List<ChatDocument>,
     onRemoveDocument: (String) -> Unit,
 ) {
     val dimens = LocalDimens.current
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Models", "Stats", "Tools")
+    val tabs = listOf("Models", "Stats", "Attach")
 
     Column(modifier = Modifier.fillMaxWidth()) {
         SecondaryTabRow(selectedTabIndex = selectedTab) {
@@ -278,13 +271,10 @@ private fun ActionWindowContent(
                     textMetrics = lastTextMetrics,
                     memoryMetrics = lastMemoryMetrics,
                 )
-                2 -> ToolsTab(
-                    onStoreClick = onStoreClick,
-                    onGuideClick = onGuideClick,
-                    onSettingsClick = onSettingsClick,
-                    onLoadDocument = onLoadDocument,
+                2 -> AttachmentsTab(
                     documents = documents,
-                    onRemoveDocument = onRemoveDocument,
+                    onAddAttachment = onAddAttachment,
+                    onRemoveAttachment = onRemoveDocument,
                 )
             }
         }
@@ -379,13 +369,6 @@ private fun StatsTab(
     }
 }
 
-private fun formatBytes(bytes: Long): String {
-    val mb = bytes / (1024.0 * 1024.0)
-    if (mb < 1024) return "%.0f MB".format(mb)
-    val gb = mb / 1024.0
-    return "%.2f GB".format(gb)
-}
-
 private fun formatDuration(ms: Long): String =
     if (ms < 1000) "$ms ms" else "%.2f s".format(ms / 1000.0)
 
@@ -411,116 +394,6 @@ private fun StatRow(label: String, value: String) {
 }
 
 @Composable
-private fun ToolsTab(
-    onStoreClick: () -> Unit,
-    onGuideClick: () -> Unit,
-    onSettingsClick: () -> Unit,
-    onLoadDocument: () -> Unit,
-    documents: List<ChatDocument>,
-    onRemoveDocument: (String) -> Unit,
-) {
-    val dimens = LocalDimens.current
-    val tnShapes = LocalTnShapes.current
-
-    Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)) {
-        SectionHeader(title = "Actions")
-        ActionTextButton(
-            onClickListener = onLoadDocument,
-            icon = TnIcons.BookOpen,
-            text = if (documents.isNotEmpty()) "Load Document (${documents.size})" else "Load Document",
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        AnimatedVisibility(
-            visible = documents.isNotEmpty(),
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingXxs)) {
-                documents.forEach { doc ->
-                    Surface(
-                        shape = tnShapes.cardSmall,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(
-                                horizontal = dimens.spacingSm,
-                                vertical = dimens.spacingXxs
-                            ),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = TnIcons.BookOpen,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(Modifier.width(dimens.spacingXs))
-                            Text(
-                                text = doc.name,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-                            CaptionText(text = formatFileSize(doc.sizeBytes))
-                            Spacer(Modifier.width(dimens.spacingXs))
-                            Icon(
-                                imageVector = TnIcons.X,
-                                contentDescription = "Remove",
-                                modifier = Modifier
-                                    .size(14.dp)
-                                    .clickable(
-                                        indication = null,
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        onClick = { onRemoveDocument(doc.id) }
-                                    ),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        ActionTextButton(
-            onClickListener = {},
-            icon = TnIcons.Edit,
-            text = "System Prompt",
-            modifier = Modifier.fillMaxWidth()
-        )
-        ActionTextButton(
-            onClickListener = {},
-            icon = TnIcons.Code,
-            text = "Chat Template",
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(Modifier.height(dimens.spacingXs))
-        SectionHeader(title = "Quick Links")
-        Row(horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)) {
-            ActionTextButton(
-                onClickListener = onStoreClick,
-                icon = TnIcons.Download,
-                text = "Store"
-            )
-            ActionTextButton(
-                onClickListener = onGuideClick,
-                icon = TnIcons.Compass,
-                text = "Guide"
-            )
-            ActionTextButton(
-                onClickListener = onSettingsClick,
-                icon = TnIcons.Settings,
-                text = "Settings"
-            )
-        }
-    }
-}
-
-@Composable
 private fun pillAccentColor(state: PillState): Color = when (state) {
     PillState.Loaded, PillState.Generating, PillState.Thinking, PillState.ToolCalling,
     PillState.Loading, PillState.Image, PillState.Rag -> MaterialTheme.colorScheme.primary
@@ -540,10 +413,3 @@ private fun pillIcon(state: PillState): ImageVector = when (state) {
     PillState.Loading -> TnIcons.Leaf
 }
 
-private fun formatFileSize(bytes: Long): String {
-    if (bytes < 1024) return "$bytes B"
-    val kb = bytes / 1024.0
-    if (kb < 1024) return "%.0f KB".format(kb)
-    val mb = kb / 1024.0
-    return "%.1f MB".format(mb)
-}

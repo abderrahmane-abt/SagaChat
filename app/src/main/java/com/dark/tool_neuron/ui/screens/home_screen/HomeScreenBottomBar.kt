@@ -1,18 +1,18 @@
 package com.dark.tool_neuron.ui.screens.home_screen
 
-import android.content.Intent
+import android.Manifest
 import android.graphics.BitmapFactory
 import android.net.Uri
-import android.provider.OpenableColumns
-import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -37,6 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -77,7 +78,6 @@ fun HomeScreenBottomBar(
     val focusManager = LocalFocusManager.current
     var text by remember { mutableStateOf("") }
 
-    val plusMenuExpanded by viewModel.plusMenuExpanded.collectAsStateWithLifecycle()
     val thinkingEnabled by viewModel.thinkingEnabled.collectAsStateWithLifecycle()
     val supportsThinking by viewModel.supportsThinking.collectAsStateWithLifecycle()
     val isModelLoaded by InferenceClient.isModelLoaded.collectAsStateWithLifecycle()
@@ -93,7 +93,6 @@ fun HomeScreenBottomBar(
         derivedStateOf { text.isNotBlank() && isModelLoaded && !isGenerating }
     }
 
-    val filePicker = rememberDocumentPicker(viewModel::addDocument)
     val isIngesting by viewModel.isIngestingDocument.collectAsStateWithLifecycle()
     val documentError by viewModel.documentError.collectAsStateWithLifecycle()
     val ragReady by viewModel.ragReady.collectAsStateWithLifecycle()
@@ -101,19 +100,40 @@ fun HomeScreenBottomBar(
 
     val pendingImages by viewModel.pendingImages.collectAsStateWithLifecycle()
     val isVlmLoaded by viewModel.isVlmLoaded.collectAsStateWithLifecycle()
-    val isLoadingProjector by viewModel.isLoadingProjector.collectAsStateWithLifecycle()
     val vlmError by viewModel.vlmError.collectAsStateWithLifecycle()
+
+    val isRecording by viewModel.isRecording.collectAsStateWithLifecycle()
+    val isTranscribing by viewModel.isTranscribing.collectAsStateWithLifecycle()
+    val transcribedText by viewModel.transcribedText.collectAsStateWithLifecycle()
+    val voiceError by viewModel.voiceError.collectAsStateWithLifecycle()
+    val recordingAmplitude by viewModel.recordingAmplitude.collectAsStateWithLifecycle()
+    val voiceSttAvailable = viewModel.voiceSttAvailable()
+
+    LaunchedEffect(transcribedText) {
+        val t = transcribedText ?: return@LaunchedEffect
+        text = if (text.isBlank()) t else "$text $t"
+        viewModel.consumeTranscribedText()
+    }
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) viewModel.startRecording()
+    }
+
+    val onMicClick: () -> Unit = {
+        if (!voiceSttAvailable) {
+            navController.navigate(NavScreens.ModelStore.route)
+        } else if (viewModel.voiceMicGranted()) {
+            viewModel.startRecording()
+        } else {
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     val imagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri -> uri?.let(viewModel::addImage) }
-
-    val projectorPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        viewModel.loadVlmProjector(uri)
-    }
 
     Column(
         modifier = Modifier
@@ -123,56 +143,14 @@ fun HomeScreenBottomBar(
             .padding(horizontal = dimens.spacingMd)
             .padding(bottom = dimens.spacingXs),
     ) {
-        AnimatedVisibility(
-            visible = plusMenuExpanded,
-            enter = fadeIn(Motion.state()) + expandVertically(Motion.content()),
-            exit = fadeOut(Motion.state()) + shrinkVertically(Motion.content()),
-        ) {
-            PlusMenuCard(
-                thinkingEnabled = thinkingEnabled,
-                showThinking = supportsThinking,
-                documentCount = chatDocuments.size,
-                pendingImageCount = pendingImages.size,
-                isVlmLoaded = isVlmLoaded,
-                isLoadingProjector = isLoadingProjector,
-                onThinkingToggle = viewModel::toggleThinking,
-                onDocumentsClick = {
-                    viewModel.dismissPlusMenu()
-                    filePicker.launch(arrayOf(
-                        "text/*",
-                        "application/pdf",
-                        "application/json",
-                        "application/xml",
-                        "application/rtf",
-                        "application/epub+zip",
-                        "application/vnd.oasis.opendocument.text",
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    ))
-                },
-                onAttachImageClick = {
-                    viewModel.dismissPlusMenu()
-                    imagePicker.launch(
-                        PickVisualMediaRequest(
-                            ActivityResultContracts.PickVisualMedia.ImageOnly,
-                        ),
-                    )
-                },
-                onProjectorClick = {
-                    viewModel.dismissPlusMenu()
-                    if (isVlmLoaded) {
-                        viewModel.releaseVlmProjector()
-                    } else {
-                        projectorPicker.launch(arrayOf("*/*"))
-                    }
-                },
-            )
-        }
-
         VlmErrorBanner(
             error = vlmError,
             onDismiss = viewModel::clearVlmError,
+        )
+
+        VlmErrorBanner(
+            error = voiceError,
+            onDismiss = viewModel::clearVoiceError,
         )
 
         PendingImageRow(
@@ -211,28 +189,57 @@ fun HomeScreenBottomBar(
             )
         }
 
-        InputBar(
-            text = text,
-            onTextChange = { text = it },
-            canSend = canSend,
-            isGenerating = isGenerating,
-            isModelLoaded = isModelLoaded,
-            contextUsage = contextUsage,
-            plusMenuExpanded = plusMenuExpanded,
-            documentCount = chatDocuments.size,
-            supportsThinking = supportsThinking,
-            thinkingEnabled = thinkingEnabled,
-            onThinkingToggle = viewModel::toggleThinking,
-            onPlusClick = viewModel::togglePlusMenu,
-            onLoadModelClick = viewModel::toggleLoadModelWindow,
-            onSend = {
-                focusManager.clearFocus()
-                val toSend = text
-                text = ""
-                viewModel.sendMessage(toSend)
+        AnimatedContent(
+            targetState = isRecording || isTranscribing,
+            transitionSpec = {
+                (fadeIn(Motion.state()) togetherWith fadeOut(Motion.state()))
             },
-            onStop = viewModel::stopGeneration,
-        )
+            label = "bottom_bar_state",
+        ) { showEqualizer ->
+            if (showEqualizer) {
+                RecordingEqualizer(
+                    amplitude = recordingAmplitude,
+                    isTranscribing = isTranscribing,
+                    onCancel = viewModel::cancelRecording,
+                    onSubmit = viewModel::stopRecordingAndTranscribe,
+                )
+            } else {
+                InputBar(
+                    text = text,
+                    onTextChange = { text = it },
+                    canSend = canSend,
+                    isGenerating = isGenerating,
+                    isModelLoaded = isModelLoaded,
+                    contextUsage = contextUsage,
+                    supportsThinking = supportsThinking,
+                    thinkingEnabled = thinkingEnabled,
+                    onAttachImage = {
+                        if (isVlmLoaded) {
+                            imagePicker.launch(
+                                PickVisualMediaRequest(
+                                    ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                ),
+                            )
+                        }
+                    },
+                    canAttachImage = isVlmLoaded,
+                    onMicClick = onMicClick,
+                    onThinkingToggle = viewModel::toggleThinking,
+                    onLoadModelClick = viewModel::toggleLoadModelWindow,
+                    onSend = {
+                        if (canSend) {
+                            focusManager.clearFocus()
+                            val toSend = text
+                            text = ""
+                            viewModel.sendMessage(toSend)
+                        } else if (!isModelLoaded && text.isNotBlank() && !loadModelWindow) {
+                            viewModel.toggleLoadModelWindow()
+                        }
+                    },
+                    onStop = viewModel::stopGeneration,
+                )
+            }
+        }
     }
 }
 
@@ -244,12 +251,12 @@ private fun InputBar(
     isGenerating: Boolean,
     isModelLoaded: Boolean,
     contextUsage: Float,
-    plusMenuExpanded: Boolean,
-    documentCount: Int,
     supportsThinking: Boolean,
     thinkingEnabled: Boolean,
+    onAttachImage: () -> Unit,
+    canAttachImage: Boolean,
+    onMicClick: () -> Unit,
     onThinkingToggle: () -> Unit,
-    onPlusClick: () -> Unit,
     onLoadModelClick: () -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
@@ -284,10 +291,11 @@ private fun InputBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
             ) {
-                PlusButton(
-                    expanded = plusMenuExpanded,
-                    badgeCount = documentCount,
-                    onClick = onPlusClick,
+                ActionButton(
+                    onClickListener = onAttachImage,
+                    icon = TnIcons.Photo,
+                    contentDescription = if (canAttachImage) "Attach image" else "Attach image (load a VLM model first)",
+                    enabled = canAttachImage,
                 )
                 ActionButton(
                     onClickListener = onLoadModelClick,
@@ -306,47 +314,18 @@ private fun InputBar(
                     isActive = isModelLoaded,
                 )
                 Spacer(Modifier.width(dimens.spacingXs))
+                ActionButton(
+                    onClickListener = onMicClick,
+                    icon = TnIcons.Mic,
+                    contentDescription = "Voice input",
+                )
+                Spacer(Modifier.width(dimens.spacingXs))
                 SendOrStopButton(
                     canSend = canSend,
                     isGenerating = isGenerating,
                     onSend = onSend,
                     onStop = onStop,
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlusButton(
-    expanded: Boolean,
-    badgeCount: Int,
-    onClick: () -> Unit,
-) {
-    val tnShapes = LocalTnShapes.current
-    Box {
-        ActionButton(
-            onClickListener = onClick,
-            icon = TnIcons.Plus,
-            contentDescription = "More options",
-            colors = toggleIconColors(expanded),
-        )
-        if (badgeCount > 0) {
-            Surface(
-                shape = tnShapes.full,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(16.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "$badgeCount",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.85f,
-                    )
-                }
             }
         }
     }
@@ -513,33 +492,6 @@ private fun DocumentChipsRow(
 }
 
 @Composable
-private fun rememberDocumentPicker(
-    onPicked: (Uri, String, Long, String?) -> Unit,
-): ManagedActivityResultLauncher<Array<String>, Uri?> {
-    val context = LocalContext.current
-    return rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        runCatching {
-            context.contentResolver.takePersistableUriPermission(
-                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION,
-            )
-        }
-        var name = "Document"
-        var size = 0L
-        context.contentResolver.query(uri, null, null, null, null)?.use { c ->
-            if (c.moveToFirst()) {
-                val nameIdx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                val sizeIdx = c.getColumnIndex(OpenableColumns.SIZE)
-                if (nameIdx >= 0) name = c.getString(nameIdx) ?: name
-                if (sizeIdx >= 0) size = c.getLong(sizeIdx)
-            }
-        }
-        val mime = context.contentResolver.getType(uri)
-        onPicked(uri, name, size, mime)
-    }
-}
-
-@Composable
 private fun ThinkingToggleButton(
     supported: Boolean,
     enabled: Boolean,
@@ -566,19 +518,6 @@ private fun ThinkingToggleButton(
         colors = colors,
     )
 }
-
-@Composable
-private fun toggleIconColors(active: Boolean): IconButtonColors =
-    IconButtonDefaults.filledIconButtonColors(
-        containerColor = if (active)
-            MaterialTheme.colorScheme.primary
-        else
-            MaterialTheme.colorScheme.primary.copy(0.08f),
-        contentColor = if (active)
-            MaterialTheme.colorScheme.onPrimary
-        else
-            MaterialTheme.colorScheme.primary,
-    )
 
 @Composable
 private fun SendOrStopButton(

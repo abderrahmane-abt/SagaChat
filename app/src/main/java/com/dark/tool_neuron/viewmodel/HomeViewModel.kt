@@ -15,6 +15,7 @@ import com.dark.tool_neuron.model.enums.ProviderType
 import com.dark.tool_neuron.repo.ChatRepository
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.repo.RagManager
+import com.dark.tool_neuron.service.server.ServerController
 import com.dark.tool_neuron.service.inference.InferenceClient
 import com.dark.tool_neuron.viewmodel.home_vm.GenerationOutcome
 import com.dark.tool_neuron.viewmodel.home_vm.GenerationStatus
@@ -24,6 +25,7 @@ import com.dark.tool_neuron.viewmodel.home_vm.ModelSessionManager
 import com.dark.tool_neuron.viewmodel.home_vm.PillState
 import com.dark.tool_neuron.viewmodel.home_vm.StreamingFragment
 import com.dark.tool_neuron.viewmodel.home_vm.ToolCallCoordinator
+import com.dark.tool_neuron.voice.VoiceModelManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -53,7 +55,79 @@ class HomeViewModel @Inject constructor(
     private val toolCallCoordinator: ToolCallCoordinator,
     private val inferenceCoordinator: InferenceCoordinator,
     private val ragManager: RagManager,
+    private val voiceManager: VoiceModelManager,
+    private val serverController: ServerController,
 ) : ViewModel() {
+
+    val speakingMessageId: StateFlow<String?> = voiceManager.speakingId
+    val isRecording: StateFlow<Boolean> = voiceManager.isRecording
+    val recordingAmplitude: StateFlow<Float> = voiceManager.recordingAmplitude
+    val voiceError: StateFlow<String?> = voiceManager.error
+
+    private val _loadingSpeakId = MutableStateFlow<String?>(null)
+    val loadingSpeakId: StateFlow<String?> = _loadingSpeakId.asStateFlow()
+    private var speakJob: Job? = null
+
+    private val _transcribedText = MutableStateFlow<String?>(null)
+    val transcribedText: StateFlow<String?> = _transcribedText.asStateFlow()
+
+    private val _isTranscribing = MutableStateFlow(false)
+    val isTranscribing: StateFlow<Boolean> = _isTranscribing.asStateFlow()
+
+    fun clearVoiceError() { voiceManager.clearError() }
+    fun consumeTranscribedText() { _transcribedText.value = null }
+
+    fun speakMessage(messageId: String, text: String) {
+        startSpeakJob(messageId, text)
+    }
+
+    fun stopSpeaking() {
+        speakJob?.cancel()
+        speakJob = null
+        _loadingSpeakId.value = null
+        voiceManager.stopSpeaking()
+    }
+
+    fun toggleSpeakMessage(messageId: String, text: String) {
+        if (voiceManager.speakingId.value == messageId || _loadingSpeakId.value == messageId) {
+            stopSpeaking()
+        } else {
+            startSpeakJob(messageId, text)
+        }
+    }
+
+    private fun startSpeakJob(messageId: String, text: String) {
+        speakJob?.cancel()
+        _loadingSpeakId.value = messageId
+        speakJob = viewModelScope.launch {
+            try {
+                voiceManager.speak(messageId, text)
+            } finally {
+                if (_loadingSpeakId.value == messageId) _loadingSpeakId.value = null
+            }
+        }
+    }
+
+    fun startRecording(): Boolean = voiceManager.startRecording()
+
+    fun cancelRecording() { voiceManager.cancelRecording() }
+
+    fun stopRecordingAndTranscribe() {
+        viewModelScope.launch {
+            _isTranscribing.value = true
+            try {
+                val text = voiceManager.stopRecordingAndRecognize()?.trim()
+                if (!text.isNullOrEmpty()) _transcribedText.value = text
+            } finally {
+                _isTranscribing.value = false
+                voiceManager.unloadStt()
+            }
+        }
+    }
+
+    fun voiceSttAvailable(): Boolean = voiceManager.hasStt()
+    fun voiceTtsAvailable(): Boolean = voiceManager.hasTts()
+    fun voiceMicGranted(): Boolean = voiceManager.sttPermissionGranted()
 
     val installedModels: StateFlow<List<ModelInfo>> = modelRepo.models
 
@@ -80,9 +154,6 @@ class HomeViewModel @Inject constructor(
     private val _actionWindowExpanded = MutableStateFlow(false)
     val actionWindowExpanded = _actionWindowExpanded.asStateFlow()
 
-    private val _plusMenuExpanded = MutableStateFlow(false)
-    val plusMenuExpanded = _plusMenuExpanded.asStateFlow()
-
     private val _webSearchEnabled = MutableStateFlow(false)
     val webSearchEnabled = _webSearchEnabled.asStateFlow()
 
@@ -95,11 +166,7 @@ class HomeViewModel @Inject constructor(
     private val _pendingImages = MutableStateFlow<List<Uri>>(emptyList())
     val pendingImages: StateFlow<List<Uri>> = _pendingImages.asStateFlow()
 
-    private val _vlmError = MutableStateFlow<String?>(null)
-    val vlmError: StateFlow<String?> = _vlmError.asStateFlow()
-
-    private val _isLoadingProjector = MutableStateFlow(false)
-    val isLoadingProjector: StateFlow<Boolean> = _isLoadingProjector.asStateFlow()
+    val vlmError: StateFlow<String?> = modelSession.vlmAutoLoadError
 
     val isVlmLoaded: StateFlow<Boolean> = InferenceClient.isVlmLoaded
 
@@ -205,8 +272,6 @@ class HomeViewModel @Inject constructor(
 
     fun toggleActionWindow() { _actionWindowExpanded.value = !_actionWindowExpanded.value }
     fun collapseActionWindow() { _actionWindowExpanded.value = false }
-    fun togglePlusMenu() { _plusMenuExpanded.value = !_plusMenuExpanded.value }
-    fun dismissPlusMenu() { _plusMenuExpanded.value = false }
     fun toggleWebSearch() { _webSearchEnabled.value = !_webSearchEnabled.value }
     fun toggleThinking() { _thinkingEnabled.value = !_thinkingEnabled.value }
     fun toggleLoadModelWindow() { _loadModelWindow.value = !_loadModelWindow.value }
@@ -227,28 +292,7 @@ class HomeViewModel @Inject constructor(
 
     fun clearPendingImages() { _pendingImages.value = emptyList() }
 
-    fun loadVlmProjector(uri: Uri) {
-        viewModelScope.launch {
-            _isLoadingProjector.value = true
-            _vlmError.value = null
-            val ok = try {
-                InferenceClient.loadVlmProjectorFromUri(app, uri, threads = 2)
-            } catch (e: Exception) {
-                _vlmError.value = e.message ?: "Failed to load projector"
-                false
-            }
-            if (!ok && _vlmError.value == null) {
-                _vlmError.value = "Projector load returned false. Check the file is a compatible mmproj."
-            }
-            _isLoadingProjector.value = false
-        }
-    }
-
-    fun releaseVlmProjector() {
-        viewModelScope.launch { InferenceClient.releaseVlmProjector() }
-    }
-
-    fun clearVlmError() { _vlmError.value = null }
+    fun clearVlmError() { modelSession.clearVlmAutoLoadError() }
 
     fun addDocument(uri: Uri, name: String, size: Long, mimeType: String?) {
         val active = activeModel.value ?: run {
@@ -288,8 +332,56 @@ class HomeViewModel @Inject constructor(
         val docs = ragManager.documentsForChat(chatId)
         _chatDocuments.value = docs
         if (docs.isNotEmpty()) {
-            viewModelScope.launch { ragManager.ensureReady() }
+            viewModelScope.launch {
+                val hydrated = ragManager.hydrateChat(chatId)
+                if (_currentChatId.value == chatId) _chatDocuments.value = hydrated
+            }
         }
+    }
+
+    fun attachDocumentFromPrevChat(source: ChatDocument) {
+        val active = activeModel.value ?: run {
+            _documentError.value = "Load a chat model before adding documents."
+            return
+        }
+        val chatId = _currentChatId.value ?: ensureChat(active)
+        viewModelScope.launch {
+            _isIngestingDocument.value = true
+            _documentError.value = null
+            val result = ragManager.attachExisting(chatId, source)
+            _isIngestingDocument.value = false
+            result.onSuccess { doc ->
+                if (_currentChatId.value == chatId) {
+                    val current = _chatDocuments.value
+                    if (current.none { it.id == doc.id }) {
+                        _chatDocuments.value = current + doc
+                    }
+                }
+            }.onFailure { err ->
+                _documentError.value = err.message ?: "Failed to attach document"
+            }
+        }
+    }
+
+    fun documentsByChat(): List<Pair<Chat, List<ChatDocument>>> {
+        val activeChatId = _currentChatId.value
+        val activeSourceIds = activeChatId?.let { id ->
+            ragManager.documentsForChat(id).mapNotNullTo(mutableSetOf()) { it.sourceId.takeIf { s -> s.isNotBlank() } }
+        } ?: emptySet()
+        val docsByChatId = ragManager.allDocuments()
+            .asSequence()
+            .filter { it.sourceId.isNotBlank() }
+            .filter { it.chatId != null && it.chatId != activeChatId }
+            .filter { it.sourceId !in activeSourceIds }
+            .groupBy { it.chatId!! }
+        return chatRepo.chats.value
+            .asSequence()
+            .filter { it.id != activeChatId }
+            .mapNotNull { chat ->
+                val docs = docsByChatId[chat.id].orEmpty().sortedByDescending { it.addedAt }
+                if (docs.isEmpty()) null else chat to docs
+            }
+            .toList()
     }
 
     fun createNewChat() {
@@ -308,14 +400,17 @@ class HomeViewModel @Inject constructor(
     }
 
     fun loadModel(model: ModelInfo) {
+        if (serverController.isBusy) return
         viewModelScope.launch { modelSession.load(model) }
     }
 
     fun unloadModel() {
+        if (serverController.isBusy) return
         viewModelScope.launch { modelSession.unload() }
     }
 
     fun sendMessage(text: String) {
+        if (serverController.isBusy) return
         val trimmed = text.trim()
         val images = _pendingImages.value
         if (_isGenerating.value) return
