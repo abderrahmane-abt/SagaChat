@@ -1,6 +1,7 @@
 package com.dark.tool_neuron.ui.screens.system_ui
 
 import androidx.compose.runtime.Composable
+import com.dark.tool_neuron.model.DownloadProgress
 import com.dark.tool_neuron.model.NavScreens
 import com.dark.tool_neuron.ui.screens.dev_notes.DevNotesTopBar
 import com.dark.tool_neuron.ui.screens.guide.GuideTopBar
@@ -15,6 +16,7 @@ fun AppTopBar(
     currentRoute: String?,
     pillState: PillState,
     actionWindowExpanded: Boolean,
+    downloadProgress: DownloadProgress? = null,
     onActionWindowToggle: () -> Unit,
     onMenuClick: () -> Unit = {},
     onBack: () -> Unit = {},
@@ -26,6 +28,7 @@ fun AppTopBar(
         NavScreens.HomeScreen.route -> HomeScreenTopbar(
             pillState = pillState,
             expanded = actionWindowExpanded,
+            downloadProgress = downloadProgress,
             onToggle = onActionWindowToggle,
             onMenuClick = onMenuClick,
             onStoreClick = onNavigateToStore,

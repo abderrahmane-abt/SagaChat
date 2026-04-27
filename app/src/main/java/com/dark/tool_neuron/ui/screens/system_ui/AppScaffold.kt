@@ -41,6 +41,7 @@ fun AppScaffold() {
     val shouldLock by scaffoldViewModel.shouldLock.collectAsStateWithLifecycle()
     val rootWarning by scaffoldViewModel.rootWarning.collectAsStateWithLifecycle()
     val serverRunning by scaffoldViewModel.serverRunning.collectAsStateWithLifecycle()
+    val downloadProgress by scaffoldViewModel.downloadProgress.collectAsStateWithLifecycle()
 
     LaunchedEffect(serverRunning, currentRoute) {
         if (serverRunning && currentRoute != null && currentRoute != NavScreens.ServerScreen.route) {
@@ -125,6 +126,7 @@ fun AppScaffold() {
                     currentRoute = currentRoute,
                     pillState = pillState,
                     actionWindowExpanded = actionWindowExpanded,
+                    downloadProgress = downloadProgress,
                     onActionWindowToggle = homeViewModel::toggleActionWindow,
                     onMenuClick = { scope.launch { drawerState.open() } },
                     onBack = { navController.popBackStack() },

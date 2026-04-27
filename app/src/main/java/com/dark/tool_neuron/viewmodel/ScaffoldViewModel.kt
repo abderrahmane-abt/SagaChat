@@ -1,12 +1,14 @@
 package com.dark.tool_neuron.viewmodel
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.dark.download_manager.HxdManager
+import com.dark.download_manager.HxdStatus
 import com.dark.tool_neuron.data.AppPreferences
 import com.dark.tool_neuron.data.RootGuard
 import com.dark.tool_neuron.data.SecurityManager
 import com.dark.tool_neuron.data.SessionHolder
+import com.dark.tool_neuron.model.DownloadProgress
 import com.dark.tool_neuron.model.NavScreens
 import com.dark.tool_neuron.service.server.ServerController
 import com.dark.tool_neuron.service.server.ServerState
@@ -47,6 +49,22 @@ class ScaffoldViewModel @Inject constructor(
         started = SharingStarted.Eagerly,
         initialValue = security.isLockEnabled && !session.active.value,
     )
+
+    val downloadProgress: StateFlow<DownloadProgress?> = HxdManager.tasks
+        .map { tasks ->
+            val active = tasks.filter {
+                it.status == HxdStatus.QUEUED ||
+                    it.status == HxdStatus.CONNECTING ||
+                    it.status == HxdStatus.DOWNLOADING
+            }
+            if (active.isEmpty()) return@map null
+            val totals = active.sumOf { it.totalBytes.coerceAtLeast(0L) }
+            val anyUnknown = active.any { it.totalBytes <= 0L }
+            if (anyUnknown || totals <= 0L) return@map DownloadProgress.Indeterminate
+            val downloaded = active.sumOf { it.downloadedBytes.coerceAtLeast(0L) }
+            DownloadProgress.Determinate((downloaded.toFloat() / totals.toFloat()).coerceIn(0f, 1f))
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private val _rootWarning = MutableStateFlow<RootWarning?>(resolveInitialRootWarning())
     val rootWarning: StateFlow<RootWarning?> = _rootWarning.asStateFlow()
