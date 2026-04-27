@@ -52,8 +52,6 @@ import com.dark.tool_neuron.viewmodel.SettingsViewModel
 import com.dark.tool_neuron.viewmodel.SetupViewModel
 import kotlinx.coroutines.delay
 
-private val QUICK_START_QUANTS = listOf("Q4_K_M", "Q4_K_S", "Q4_0", "Q5_K_M", "Q5_K_S", "Q8_0")
-
 @Composable
 fun TNavigation(
     navController: NavHostController,
@@ -152,17 +150,11 @@ fun TNavigation(
         composable(NavScreens.ModelSetup.route) {
             val activity = LocalContext.current as ComponentActivity
             val storeVm: ModelStoreViewModel = hiltViewModel(activity)
-            val catalogModels by storeVm.filteredModels.collectAsStateWithLifecycle()
 
             ModelSetupScreen(
                 innerPadding = innerPadding,
                 onModelSelected = { modelId ->
-                    val candidates = catalogModels.filter { it.repoId == modelId || it.id.startsWith(modelId) }
-                    val preferred = QUICK_START_QUANTS.firstNotNullOfOrNull { q ->
-                        candidates.firstOrNull { it.quantization.equals(q, ignoreCase = true) }
-                    } ?: candidates.filter { it.sizeBytes > 0 }.minByOrNull { it.sizeBytes }
-                        ?: candidates.firstOrNull()
-                    if (preferred != null) storeVm.downloadModel(preferred)
+                    storeVm.downloadByQuickStartId(modelId)
                     onModelSetupComplete()
                 },
                 onOpenStore = { navController.navigate(NavScreens.ModelStore.route) },

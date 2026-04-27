@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.security.MessageDigest
@@ -328,6 +329,23 @@ class ModelStoreViewModel @Inject constructor(
     fun getModelsForRepo(repoKey: String): List<HuggingFaceModel> =
         _filteredModels.value.filter { it.repoId == repoKey }
 
+
+    fun downloadByQuickStartId(modelId: String) {
+        viewModelScope.launch {
+            val pool = _filteredModels.value.takeIf { it.isNotEmpty() }
+                ?: _filteredModels.first { it.isNotEmpty() }
+            val candidates = pool.filter { it.repoId == modelId || it.id.startsWith(modelId) }
+            val preferred = QUICK_START_QUANT_PRIORITY.firstNotNullOfOrNull { q ->
+                candidates.firstOrNull { it.quantization.equals(q, ignoreCase = true) }
+            } ?: candidates.filter { it.sizeBytes > 0 }.minByOrNull { it.sizeBytes }
+                ?: candidates.firstOrNull()
+            if (preferred != null) downloadModel(preferred)
+        }
+    }
+
+    companion object {
+        val QUICK_START_QUANT_PRIORITY = listOf("Q4_K_M", "Q4_K_S", "Q4_0", "Q5_K_M", "Q5_K_S", "Q8_0")
+    }
 
     fun downloadModel(model: HuggingFaceModel) {
         if (_downloadIds.value.containsKey(model.id)) return
