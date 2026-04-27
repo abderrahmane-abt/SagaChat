@@ -3,7 +3,7 @@
 # Build plugins
 agp = "9.2.0"
 capsule = "2.1.3"
-kotlin = "2.3.20"
+kotlin = "2.3.21"
 ksp = "2.3.6"
 dagger-hilt = "2.59.2"
 
@@ -11,12 +11,12 @@ dagger-hilt = "2.59.2"
 coreKtx = "1.18.0"
 lifecycleRuntimeKtx = "2.10.0"
 activityCompose = "1.13.0"
-commonsCompress = "1.26.2"
+commonsCompress = "1.28.0"
 
 # Compose
-composeBom = "2026.03.01"
-m3-expressive = "1.5.0-alpha17"
-a-c-nav = "2.9.7"
+composeBom = "2026.04.01"
+m3-expressive = "1.5.0-alpha18"
+a-c-nav = "2.9.8"
 dagger-hilt-nav = "1.3.0"
 
 # Testing
