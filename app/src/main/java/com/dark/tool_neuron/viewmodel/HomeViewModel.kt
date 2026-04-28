@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.model.Chat
 import com.dark.tool_neuron.model.ChatDocument
 import com.dark.tool_neuron.model.ChatMessage
+import com.dark.tool_neuron.model.Citation
 import com.dark.tool_neuron.model.MemoryMetrics
 import com.dark.tool_neuron.model.MessageKind
 import com.dark.tool_neuron.model.ModelInfo
@@ -178,6 +179,9 @@ class HomeViewModel @Inject constructor(
 
     val ragReady: StateFlow<Boolean> = ragManager.isReady
     val activeEmbeddingName: StateFlow<String?> = ragManager.activeEmbeddingName
+    val retrievalStatus: StateFlow<RagManager.RetrievalStatus> = ragManager.retrievalStatus
+    val deepIndexing: StateFlow<Set<String>> = ragManager.deepIndexing
+    val raptorBuilding: StateFlow<Set<String>> = ragManager.raptorBuilding
 
     private val _currentChatId = MutableStateFlow<String?>(null)
     val currentChatId: StateFlow<String?> = _currentChatId.asStateFlow()
@@ -274,7 +278,13 @@ class HomeViewModel @Inject constructor(
     fun collapseActionWindow() { _actionWindowExpanded.value = false }
     fun toggleWebSearch() { _webSearchEnabled.value = !_webSearchEnabled.value }
     fun toggleThinking() { _thinkingEnabled.value = !_thinkingEnabled.value }
-    fun toggleLoadModelWindow() { _loadModelWindow.value = !_loadModelWindow.value }
+    fun toggleLoadModelWindow() {
+        if (_isGenerating.value) {
+            _loadModelWindow.value = false
+            return
+        }
+        _loadModelWindow.value = !_loadModelWindow.value
+    }
 
     fun addImage(uri: Uri) {
         runCatching {
@@ -317,6 +327,31 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             ragManager.removeDocument(docId)
             _chatDocuments.value = _chatDocuments.value.filter { it.id != docId }
+        }
+    }
+
+    fun deepIndexDocument(docId: String) {
+        viewModelScope.launch {
+            _documentError.value = null
+            val result = ragManager.deepIndex(docId)
+            result.onSuccess { updated ->
+                _chatDocuments.value = _chatDocuments.value.map { if (it.id == updated.id) updated else it }
+            }.onFailure { err ->
+                _documentError.value = err.message ?: "Deep index failed"
+            }
+        }
+    }
+
+    fun buildRaptor(docId: String) {
+        if (raptorBuilding.value.contains(docId)) return
+        viewModelScope.launch {
+            _documentError.value = null
+            val result = ragManager.buildRaptorTree(docId)
+            result.onSuccess { updated ->
+                _chatDocuments.value = _chatDocuments.value.map { if (it.id == updated.id) updated else it }
+            }.onFailure { err ->
+                _documentError.value = err.message ?: "RAPTOR build failed"
+            }
         }
     }
 
@@ -401,11 +436,13 @@ class HomeViewModel @Inject constructor(
 
     fun loadModel(model: ModelInfo) {
         if (serverController.isBusy) return
+        if (_isGenerating.value) return
         viewModelScope.launch { modelSession.load(model) }
     }
 
     fun unloadModel() {
         if (serverController.isBusy) return
+        if (_isGenerating.value) return
         viewModelScope.launch { modelSession.unload() }
     }
 
@@ -498,6 +535,7 @@ class HomeViewModel @Inject constructor(
         _messages.value = chatRepo.getMessages(chatId)
         _streamingFragment.value = StreamingFragment(chatId, "", "")
         _isGenerating.value = true
+        _loadModelWindow.value = false
 
         val thinkingOn = _thinkingEnabled.value && modelSession.supportsThinking.value
         modelSession.setThinkingEnabled(thinkingOn)
@@ -538,6 +576,7 @@ class HomeViewModel @Inject constructor(
                     userText = userText,
                     textMetrics = outcome?.textMetrics,
                     memoryMetrics = outcome?.memoryMetrics,
+                    citations = outcome?.citations.orEmpty(),
                     wasStopped = wasStopped,
                 )
             }
@@ -561,6 +600,7 @@ class HomeViewModel @Inject constructor(
         userText: String,
         textMetrics: TextMetrics?,
         memoryMetrics: MemoryMetrics?,
+        citations: List<Citation> = emptyList(),
         wasStopped: Boolean = false,
     ) {
         if (wasStopped && content.isBlank() && thinking.isBlank()) {
@@ -585,6 +625,7 @@ class HomeViewModel @Inject constructor(
             modelName = activeModel.value?.name.orEmpty(),
             textMetrics = textMetrics,
             memoryMetrics = memoryMetrics,
+            citations = citations,
         )
         chatRepo.addMessage(finalMessage)
         if (isFirstTurn) chatRepo.autoTitle(chatId, userText)

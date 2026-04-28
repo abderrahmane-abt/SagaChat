@@ -232,7 +232,7 @@ fun HomeScreenBottomBar(
                             val toSend = text
                             text = ""
                             viewModel.sendMessage(toSend)
-                        } else if (!isModelLoaded && text.isNotBlank() && !loadModelWindow) {
+                        } else if (!isGenerating && !isModelLoaded && text.isNotBlank() && !loadModelWindow) {
                             viewModel.toggleLoadModelWindow()
                         }
                     },
@@ -301,6 +301,7 @@ private fun InputBar(
                     onClickListener = onLoadModelClick,
                     icon = TnIcons.Leaf,
                     contentDescription = "Load Model",
+                    enabled = !isGenerating,
                 )
                 ThinkingToggleButton(
                     supported = supportsThinking,

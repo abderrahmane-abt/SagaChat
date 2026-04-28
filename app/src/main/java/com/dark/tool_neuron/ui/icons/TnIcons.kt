@@ -257,6 +257,32 @@ object TnIcons {
         )
     }
 
+    val HardDrive by lazy {
+        icon(
+            "M3 4m0 3a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v10a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3z",
+            "M8 16h.01",
+            "M12 16h.01",
+            "M3 11h18",
+        )
+    }
+
+    val FileText by lazy {
+        icon(
+            "M14 3v4a1 1 0 0 0 1 1h4",
+            "M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z",
+            "M9 9l1 0",
+            "M9 13l6 0",
+            "M9 17l6 0",
+        )
+    }
+
+    val Broom by lazy {
+        icon(
+            "M8 21l8 -8a3 3 0 0 0 -3 -3l-8 8z",
+            "M14 11l3 -3",
+            "M19 14a4 4 0 0 1 -3 -3a4 4 0 0 0 -3 3a4 4 0 0 1 3 3a4 4 0 0 0 3 -3z",
+        )
+    }
 }
 
 private fun icon(vararg paths: String): ImageVector {

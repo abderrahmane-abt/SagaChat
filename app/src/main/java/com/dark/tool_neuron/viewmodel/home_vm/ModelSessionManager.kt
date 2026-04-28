@@ -10,10 +10,13 @@ import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.service.inference.InferenceClient
 import com.dark.tool_neuron.util.VlmPaths
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
@@ -21,6 +24,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val DEFAULT_MAX_TOKENS = 2048
+private const val DEFAULT_CONTEXT_SIZE = 4096
 private const val TAG = "ModelSessionManager"
 private const val VLM_PROJECTOR_THREADS = 2
 
@@ -38,10 +42,28 @@ class ModelSessionManager @Inject constructor(
     private val _maxTokens = MutableStateFlow(DEFAULT_MAX_TOKENS)
     val maxTokens: StateFlow<Int> = _maxTokens.asStateFlow()
 
+    private val _contextSize = MutableStateFlow(DEFAULT_CONTEXT_SIZE)
+    val contextSize: StateFlow<Int> = _contextSize.asStateFlow()
+
     private val _vlmAutoLoadError = MutableStateFlow<String?>(null)
     val vlmAutoLoadError: StateFlow<String?> = _vlmAutoLoadError.asStateFlow()
 
     fun clearVlmAutoLoadError() { _vlmAutoLoadError.value = null }
+
+    private val watchdogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    init {
+        watchdogScope.launch {
+            InferenceClient.isModelLoaded.collect { loaded ->
+                val state = _loadState.value
+                if (!loaded && state is ModelLoadState.Active) {
+                    Log.w(TAG, "service signaled model unloaded — demoting loadState to Idle (was Active(${state.modelId}))")
+                    _supportsThinking.value = false
+                    _loadState.value = ModelLoadState.Idle
+                }
+            }
+        }
+    }
 
     suspend fun load(model: ModelInfo) {
         _loadState.value = ModelLoadState.Loading(model.id)
@@ -51,6 +73,7 @@ class ModelSessionManager @Inject constructor(
         }
         val config = modelRepo.getConfig(model.id)
         _maxTokens.value = readMaxTokens(config)
+        _contextSize.value = readContextSize(config)
         val configJson = buildConfigJson(config)
         val result = when (model.pathType) {
             PathType.FILE -> InferenceClient.loadModel(model.path, configJson)
@@ -127,6 +150,16 @@ class ModelSessionManager @Inject constructor(
             inf.optInt("maxTokens", DEFAULT_MAX_TOKENS).coerceIn(64, 32768)
         } catch (_: Exception) {
             DEFAULT_MAX_TOKENS
+        }
+    }
+
+    private fun readContextSize(config: ModelConfig?): Int {
+        if (config == null) return DEFAULT_CONTEXT_SIZE
+        return try {
+            val loading = JSONObject(config.loadingParamsJson.ifBlank { "{}" })
+            loading.optInt("contextSize", DEFAULT_CONTEXT_SIZE).coerceIn(512, 131_072)
+        } catch (_: Exception) {
+            DEFAULT_CONTEXT_SIZE
         }
     }
 

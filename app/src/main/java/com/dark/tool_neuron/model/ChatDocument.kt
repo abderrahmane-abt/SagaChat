@@ -9,4 +9,6 @@ data class ChatDocument(
     val chunkCount: Int,
     val sizeBytes: Long,
     val addedAt: Long = System.currentTimeMillis(),
+    val isDeepIndexed: Boolean = false,
+    val isRaptorIndexed: Boolean = false,
 )

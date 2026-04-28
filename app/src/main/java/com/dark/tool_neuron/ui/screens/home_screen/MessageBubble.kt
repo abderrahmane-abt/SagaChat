@@ -98,6 +98,7 @@ fun MessageBubble(
 fun StreamingAssistantBubble(
     content: String,
     thinkingContent: String,
+    retrievalLabel: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val dimens = LocalDimens.current
@@ -112,6 +113,9 @@ fun StreamingAssistantBubble(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
         ) {
+            if (retrievalLabel != null) {
+                RetrievalStatusBanner(label = retrievalLabel)
+            }
             if (thinkingContent.isNotBlank()) {
                 StreamingThinkingPreview(text = thinkingContent)
             }
@@ -123,6 +127,34 @@ fun StreamingAssistantBubble(
                     modifier = Modifier.padding(horizontal = dimens.spacingXs),
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun RetrievalStatusBanner(label: String) {
+    val dimens = LocalDimens.current
+    val tnShapes = LocalTnShapes.current
+    Surface(
+        shape = tnShapes.md,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = dimens.spacingSm, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+        ) {
+            androidx.compose.material3.CircularProgressIndicator(
+                modifier = Modifier.size(12.dp),
+                strokeWidth = 1.5.dp,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
     }
 }
@@ -288,6 +320,9 @@ private fun AssistantBubble(
                 SelectionContainer {
                     MarkdownText(text = message.content)
                 }
+            }
+            if (message.citations.isNotEmpty()) {
+                CitationStrip(citations = message.citations)
             }
             MessageFooter(message = message)
             MessageActions(

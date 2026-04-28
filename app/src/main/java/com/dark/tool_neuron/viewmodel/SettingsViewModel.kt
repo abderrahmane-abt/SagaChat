@@ -8,10 +8,11 @@ import com.dark.tool_neuron.data.SecurityManager
 import com.dark.tool_neuron.data.ThemeController
 import com.dark.tool_neuron.data.VerifyResult
 import com.dark.tool_neuron.model.ModelInfo
+import com.dark.tool_neuron.model.NavScreens
 import com.dark.tool_neuron.model.enums.ProviderType
-import com.dark.tool_neuron.repo.DocumentRepository
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.repo.RagManager
+import com.dark.tool_neuron.repo.StorageInspector
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.voice.VoiceModelManager
 import com.dark.tool_neuron.ui.screens.settings.model.SettingsChoiceOption
@@ -24,14 +25,16 @@ import com.dark.download_manager.formatBytes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
@@ -41,10 +44,13 @@ class SettingsViewModel @Inject constructor(
     private val security: SecurityManager,
     private val ragManager: RagManager,
     private val modelRepo: ModelRepository,
-    private val documentRepo: DocumentRepository,
+    private val storageInspector: StorageInspector,
     private val prefs: AppPreferences,
     private val voiceManager: VoiceModelManager,
 ) : ViewModel() {
+
+    private val _navEvents = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val navEvents: SharedFlow<String> = _navEvents.asSharedFlow()
 
     private val _dialog = MutableStateFlow<SettingsDialog?>(null)
     private val _snackbar = MutableStateFlow<String?>(null)
@@ -53,6 +59,9 @@ class SettingsViewModel @Inject constructor(
     private val _panicPinSet = MutableStateFlow(security.hasPanicPin)
     private val _activeTts = MutableStateFlow(prefs.activeTtsModelId)
     private val _activeStt = MutableStateFlow(prefs.activeSttModelId)
+    private val _ragSmartRerank = MutableStateFlow(prefs.ragSmartRerank)
+    private val _ragMultiQuery = MutableStateFlow(prefs.ragMultiQuery)
+    private val _ragDeepResearch = MutableStateFlow(prefs.ragDeepResearch)
     private val appVersion: String = resolveVersion()
 
     val state: StateFlow<SettingsState> = combine(
@@ -67,6 +76,9 @@ class SettingsViewModel @Inject constructor(
         _activeTts,
         _activeStt,
         _panicPinSet,
+        _ragSmartRerank,
+        _ragMultiQuery,
+        _ragDeepResearch,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         val models = values[0] as List<ModelInfo>
@@ -80,6 +92,9 @@ class SettingsViewModel @Inject constructor(
         val activeTts = values[8] as String
         val activeStt = values[9] as String
         val panicSet = values[10] as Boolean
+        val rerank = values[11] as Boolean
+        val multiQuery = values[12] as Boolean
+        val deepResearch = values[13] as Boolean
 
         SettingsState(
             sections = buildSections(
@@ -92,6 +107,9 @@ class SettingsViewModel @Inject constructor(
                 activeTts = activeTts,
                 activeStt = activeStt,
                 panicPinSet = panicSet,
+                ragSmartRerank = rerank,
+                ragMultiQuery = multiQuery,
+                ragDeepResearch = deepResearch,
             ),
             dialog = dialog,
             snackbarMessage = snackbar,
@@ -130,8 +148,11 @@ class SettingsViewModel @Inject constructor(
         activeTts: String,
         activeStt: String,
         panicPinSet: Boolean,
+        ragSmartRerank: Boolean,
+        ragMultiQuery: Boolean,
+        ragDeepResearch: Boolean,
     ): List<SettingsSection> = listOf(
-        chatAndRagSection(models, defaultEmbedding),
+        chatAndRagSection(models, defaultEmbedding, ragSmartRerank, ragMultiQuery, ragDeepResearch),
         voiceSection(models, activeTts, activeStt),
         appearanceSection(themeMode, palette),
         privacySection(lockEnabled, panicPinSet),
@@ -142,6 +163,9 @@ class SettingsViewModel @Inject constructor(
     private fun chatAndRagSection(
         models: List<ModelInfo>,
         defaultEmbedding: String?,
+        ragSmartRerank: Boolean,
+        ragMultiQuery: Boolean,
+        ragDeepResearch: Boolean,
     ): SettingsSection {
         val embeddings = models.filter { it.providerType == ProviderType.EMBEDDING }
         val options = embeddings.map {
@@ -165,6 +189,46 @@ class SettingsViewModel @Inject constructor(
                         ragManager.setDefaultEmbeddingModelId(key)
                         _dialog.value = null
                     },
+                ),
+                SettingsItem.Toggle(
+                    id = ID_RAG_RERANK,
+                    title = "Smart rerank",
+                    subtitle = "Ask the chat model to rescore retrieved chunks (slower, better)",
+                    icon = TnIcons.Database,
+                    checked = ragSmartRerank,
+                    onToggle = { value ->
+                        prefs.ragSmartRerank = value
+                        _ragSmartRerank.value = value
+                    },
+                ),
+                SettingsItem.Toggle(
+                    id = ID_RAG_MULTI_QUERY,
+                    title = "Thorough search",
+                    subtitle = "Rewrite query into 3 variants and fuse results (slower, better recall)",
+                    icon = TnIcons.Database,
+                    checked = ragMultiQuery,
+                    onToggle = { value ->
+                        prefs.ragMultiQuery = value
+                        _ragMultiQuery.value = value
+                    },
+                ),
+                SettingsItem.Toggle(
+                    id = ID_RAG_DEEP_RESEARCH,
+                    title = "Deep research",
+                    subtitle = "Let the model issue follow-up retrievals (slowest, best for hard questions)",
+                    icon = TnIcons.Database,
+                    checked = ragDeepResearch,
+                    onToggle = { value ->
+                        prefs.ragDeepResearch = value
+                        _ragDeepResearch.value = value
+                    },
+                ),
+                SettingsItem.Action(
+                    id = ID_RAG_DEBUG,
+                    title = "Retrieval debug",
+                    subtitle = "Inspect dense, BM25, fused, and final context",
+                    icon = TnIcons.Database,
+                    onClick = { _navEvents.tryEmit(NavScreens.RagDebug.route) },
                 ),
             ),
         )
@@ -448,61 +512,16 @@ class SettingsViewModel @Inject constructor(
     private fun storageSection(diskUsage: String): SettingsSection = SettingsSection(
         id = "storage",
         title = "Storage",
-        description = "Indexed documents and cache live in app-private storage.",
-        icon = TnIcons.Database,
+        description = "What ToolNeuron is using on this device.",
+        icon = TnIcons.HardDrive,
         items = listOf(
-            SettingsItem.Info(
-                id = "disk_usage",
-                title = "Models on device",
-                subtitle = "Total size of downloaded GGUF/ONNX weights.",
-                icon = TnIcons.Package,
-                value = diskUsage.ifBlank { "Calculating…" },
-            ),
             SettingsItem.Action(
-                id = "clear_rag_index",
-                title = "Clear document index",
-                subtitle = "Removes all chat-attached documents and their embeddings.",
-                icon = TnIcons.Trash,
-                destructive = true,
-                onClick = {
-                    _dialog.value = SettingsDialog.Confirm(
-                        title = "Clear document index?",
-                        message = "All documents you attached to chats will be removed. Chats stay; only the RAG index is wiped.",
-                        confirmLabel = "Clear",
-                        destructive = true,
-                        onConfirm = {
-                            documentRepo.clearAll()
-                            viewModelScope.launch { ragManager.release() }
-                            _dialog.value = null
-                            _snackbar.value = "Document index cleared"
-                        },
-                    )
-                },
-            ),
-            SettingsItem.Action(
-                id = "clear_cache",
-                title = "Clear image & network cache",
-                subtitle = "Frees temporary files cached by the app.",
-                icon = TnIcons.Refresh,
-                onClick = {
-                    _dialog.value = SettingsDialog.Confirm(
-                        title = "Clear cache?",
-                        message = "Cached thumbnails and response bodies will be deleted. Your chats and models are untouched.",
-                        confirmLabel = "Clear",
-                        destructive = false,
-                        onConfirm = {
-                            viewModelScope.launch {
-                                withContext(Dispatchers.IO) {
-                                    context.cacheDir.deleteRecursively()
-                                    context.cacheDir.mkdirs()
-                                }
-                                refreshDiskUsage()
-                                _dialog.value = null
-                                _snackbar.value = "Cache cleared"
-                            }
-                        },
-                    )
-                },
+                id = "size_on_device",
+                title = "Size on device",
+                subtitle = "Models, voice, documents, chats, and cache.",
+                icon = TnIcons.HardDrive,
+                trailingText = diskUsage.ifBlank { "Calculating…" },
+                onClick = { _navEvents.tryEmit(NavScreens.Storage.route) },
             ),
         ),
     )
@@ -531,27 +550,9 @@ class SettingsViewModel @Inject constructor(
 
     private fun refreshDiskUsage() {
         viewModelScope.launch {
-            val size = withContext(Dispatchers.IO) {
-                dirSize(File(context.filesDir, "models"))
-            }
-            _diskUsage.value = formatBytes(size)
+            val snap = storageInspector.snapshot()
+            _diskUsage.value = formatBytes(snap.totalBytes)
         }
-    }
-
-    private fun dirSize(dir: File): Long {
-        if (!dir.exists()) return 0L
-        var total = 0L
-        val stack = ArrayDeque<File>()
-        stack.addLast(dir)
-        while (stack.isNotEmpty()) {
-            val f = stack.removeLast()
-            if (f.isDirectory) {
-                f.listFiles()?.forEach { stack.addLast(it) }
-            } else {
-                total += f.length()
-            }
-        }
-        return total
     }
 
     private fun resolveVersion(): String = runCatching {
@@ -563,6 +564,10 @@ class SettingsViewModel @Inject constructor(
         private const val ID_DEFAULT_EMBEDDING = "default_embedding_model"
         private const val ID_DEFAULT_TTS = "default_tts_model"
         private const val ID_DEFAULT_STT = "default_stt_model"
+        private const val ID_RAG_DEBUG = "rag_debug"
+        private const val ID_RAG_RERANK = "rag_smart_rerank"
+        private const val ID_RAG_MULTI_QUERY = "rag_multi_query"
+        private const val ID_RAG_DEEP_RESEARCH = "rag_deep_research"
         private val CLEARABLE_CHOICE_IDS = setOf(
             ID_DEFAULT_EMBEDDING,
             ID_DEFAULT_TTS,

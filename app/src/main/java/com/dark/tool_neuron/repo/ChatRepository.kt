@@ -5,6 +5,7 @@ import com.dark.hxs.HexStorage
 import com.dark.hxs.HxsRecord
 import com.dark.tool_neuron.model.Chat
 import com.dark.tool_neuron.model.ChatMessage
+import com.dark.tool_neuron.model.Citation
 import com.dark.tool_neuron.model.MemoryMetrics
 import com.dark.tool_neuron.model.MessageKind
 import com.dark.tool_neuron.model.TextMetrics
@@ -195,6 +196,7 @@ class ChatRepository @Inject constructor(
         private const val TAG_MSG_MODEL_NAME = 10
         private const val TAG_MSG_TEXT_METRICS = 11
         private const val TAG_MSG_MEMORY_METRICS = 12
+        private const val TAG_MSG_CITATIONS = 13
     }
 
     private fun Chat.toRecord(): HxsRecord {
@@ -239,6 +241,7 @@ class ChatRepository @Inject constructor(
             putString(TAG_MSG_MODEL_NAME, m.modelName)
             m.textMetrics?.let { putString(TAG_MSG_TEXT_METRICS, it.toJson()) }
             m.memoryMetrics?.let { putString(TAG_MSG_MEMORY_METRICS, it.toJson()) }
+            if (m.citations.isNotEmpty()) putString(TAG_MSG_CITATIONS, m.citations.toJson())
         }
     }
 
@@ -252,6 +255,7 @@ class ChatRepository @Inject constructor(
         }
         val textJson = getString(TAG_MSG_TEXT_METRICS)
         val memoryJson = getString(TAG_MSG_MEMORY_METRICS)
+        val citationsJson = getString(TAG_MSG_CITATIONS)
         return ChatMessage(
             id = getString(TAG_MSG_ID),
             chatId = getString(TAG_MSG_CHAT_ID),
@@ -265,7 +269,42 @@ class ChatRepository @Inject constructor(
             modelName = getString(TAG_MSG_MODEL_NAME),
             textMetrics = textJson.takeIf { it.isNotEmpty() }?.let { TextMetrics.fromJson(it) },
             memoryMetrics = memoryJson.takeIf { it.isNotEmpty() }?.let { MemoryMetrics.fromJson(it) },
+            citations = citationsJson.takeIf { it.isNotEmpty() }?.let { citationsFromJson(it) }.orEmpty(),
         )
+    }
+
+    private fun List<Citation>.toJson(): String {
+        val arr = JSONArray()
+        forEach { c ->
+            arr.put(JSONObject().apply {
+                put("sourceId", c.sourceId)
+                put("docId", c.docId)
+                put("chunkIndex", c.chunkIndex)
+                put("score", c.score.toDouble())
+                put("name", c.name)
+                put("mimeType", c.mimeType)
+                put("snippet", c.snippet)
+                put("cited", c.cited)
+            })
+        }
+        return arr.toString()
+    }
+
+    private fun citationsFromJson(json: String): List<Citation> {
+        val arr = JSONArray(json)
+        return (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            Citation(
+                sourceId = o.optString("sourceId"),
+                docId = o.optString("docId"),
+                chunkIndex = o.optInt("chunkIndex", -1),
+                score = o.optDouble("score", 0.0).toFloat(),
+                name = o.optString("name"),
+                mimeType = o.optString("mimeType"),
+                snippet = o.optString("snippet"),
+                cited = o.optBoolean("cited", false),
+            )
+        }
     }
 
     private fun TextMetrics.toJson(): String = JSONObject().apply {

@@ -155,6 +155,10 @@ fun ActionWindowOverlay(
     onAddAttachment: () -> Unit = {},
     documents: List<ChatDocument> = emptyList(),
     onRemoveDocument: (String) -> Unit = {},
+    deepIndexing: Set<String> = emptySet(),
+    onDeepIndex: (String) -> Unit = {},
+    raptorBuilding: Set<String> = emptySet(),
+    onBuildRaptor: (String) -> Unit = {},
 ) {
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
@@ -210,6 +214,10 @@ fun ActionWindowOverlay(
                     onAddAttachment = onAddAttachment,
                     documents = documents,
                     onRemoveDocument = onRemoveDocument,
+                    deepIndexing = deepIndexing,
+                    onDeepIndex = onDeepIndex,
+                    raptorBuilding = raptorBuilding,
+                    onBuildRaptor = onBuildRaptor,
                 )
             }
         }
@@ -230,6 +238,10 @@ private fun ActionWindowContent(
     onAddAttachment: () -> Unit,
     documents: List<ChatDocument>,
     onRemoveDocument: (String) -> Unit,
+    deepIndexing: Set<String>,
+    onDeepIndex: (String) -> Unit,
+    raptorBuilding: Set<String>,
+    onBuildRaptor: (String) -> Unit,
 ) {
     val dimens = LocalDimens.current
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -275,6 +287,10 @@ private fun ActionWindowContent(
                     documents = documents,
                     onAddAttachment = onAddAttachment,
                     onRemoveAttachment = onRemoveDocument,
+                    deepIndexing = deepIndexing,
+                    onDeepIndex = onDeepIndex,
+                    raptorBuilding = raptorBuilding,
+                    onBuildRaptor = onBuildRaptor,
                 )
             }
         }

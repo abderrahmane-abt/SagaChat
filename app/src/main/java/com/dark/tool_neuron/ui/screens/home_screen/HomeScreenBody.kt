@@ -19,6 +19,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.model.Chat
 import com.dark.tool_neuron.model.ChatDocument
+import com.dark.tool_neuron.repo.RagManager
 import com.dark.tool_neuron.service.inference.InferenceClient
 import com.dark.tool_neuron.ui.components.AttachmentPickerDialog
 import com.dark.tool_neuron.ui.components.PrevChatsPickerDialog
@@ -50,6 +51,7 @@ fun HomeScreen(
     val lastMemoryMetrics by viewModel.lastMemoryMetrics.collectAsStateWithLifecycle()
     val speakingMessageId by viewModel.speakingMessageId.collectAsStateWithLifecycle()
     val loadingSpeakId by viewModel.loadingSpeakId.collectAsStateWithLifecycle()
+    val retrievalStatus by viewModel.retrievalStatus.collectAsStateWithLifecycle()
     val canSpeak = viewModel.voiceTtsAvailable()
 
     var showPickerDialog by remember { mutableStateOf(false) }
@@ -84,6 +86,12 @@ fun HomeScreen(
             .fillMaxSize()
             .padding(innerPadding),
     ) {
+        val retrievalLabel = when (retrievalStatus) {
+            RagManager.RetrievalStatus.RewritingQuery -> "Rewriting query…"
+            RagManager.RetrievalStatus.Searching -> "Searching documents…"
+            RagManager.RetrievalStatus.Reranking -> "Reranking results…"
+            RagManager.RetrievalStatus.Idle -> null
+        }
         ChatMessageList(
             messages = messages,
             streaming = streaming,
@@ -97,12 +105,15 @@ fun HomeScreen(
             onDelete = viewModel::deleteMessage,
             onEditUserMessage = viewModel::editUserMessage,
             onForkFromMessage = viewModel::forkFromMessage,
+            retrievalLabel = retrievalLabel,
             contentPadding = PaddingValues(
                 horizontal = dimens.spacingLg,
                 vertical = dimens.spacingMd,
             ),
         )
 
+        val deepIndexing by viewModel.deepIndexing.collectAsStateWithLifecycle()
+        val raptorBuilding by viewModel.raptorBuilding.collectAsStateWithLifecycle()
         ActionWindowOverlay(
             expanded = actionWindowExpanded,
             onDismiss = onActionWindowDismiss,
@@ -117,6 +128,10 @@ fun HomeScreen(
             onAddAttachment = { showPickerDialog = true },
             documents = chatDocuments,
             onRemoveDocument = { viewModel.removeDocument(it) },
+            deepIndexing = deepIndexing,
+            onDeepIndex = { viewModel.deepIndexDocument(it) },
+            raptorBuilding = raptorBuilding,
+            onBuildRaptor = { viewModel.buildRaptor(it) },
         )
 
         lastCrash?.let { crash ->

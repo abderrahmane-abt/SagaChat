@@ -54,4 +54,5 @@ data class ChatMessage(
     val modelName: String = "",
     val textMetrics: TextMetrics? = null,
     val memoryMetrics: MemoryMetrics? = null,
+    val citations: List<Citation> = emptyList(),
 )

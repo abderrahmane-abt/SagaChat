@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -34,6 +35,10 @@ internal fun AttachmentsTab(
     documents: List<ChatDocument>,
     onAddAttachment: () -> Unit,
     onRemoveAttachment: (String) -> Unit,
+    deepIndexing: Set<String> = emptySet(),
+    onDeepIndex: (String) -> Unit = {},
+    raptorBuilding: Set<String> = emptySet(),
+    onBuildRaptor: (String) -> Unit = {},
 ) {
     val dimens = LocalDimens.current
 
@@ -43,7 +48,14 @@ internal fun AttachmentsTab(
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingXs)) {
                 documents.forEach { doc ->
-                    AttachmentRow(doc = doc, onRemove = { onRemoveAttachment(doc.id) })
+                    AttachmentRow(
+                        doc = doc,
+                        isDeepIndexing = doc.id in deepIndexing,
+                        isRaptorBuilding = doc.id in raptorBuilding,
+                        onRemove = { onRemoveAttachment(doc.id) },
+                        onDeepIndex = { onDeepIndex(doc.id) },
+                        onBuildRaptor = { onBuildRaptor(doc.id) },
+                    )
                 }
             }
         }
@@ -90,6 +102,10 @@ private fun EmptyAttachments() {
 internal fun AttachmentRow(
     doc: ChatDocument,
     onRemove: () -> Unit,
+    isDeepIndexing: Boolean = false,
+    onDeepIndex: () -> Unit = {},
+    isRaptorBuilding: Boolean = false,
+    onBuildRaptor: () -> Unit = {},
 ) {
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
@@ -112,14 +128,23 @@ internal fun AttachmentRow(
                     .weight(1f)
                     .padding(horizontal = dimens.spacingSm),
             ) {
-                Text(
-                    text = doc.name,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = doc.name,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (doc.isDeepIndexed) {
+                        DeepIndexedBadge()
+                    }
+                    if (doc.isRaptorIndexed) {
+                        RaptorIndexedBadge()
+                    }
+                }
                 val sizeText = if (doc.sizeBytes > 0) formatBytes(doc.sizeBytes) else null
                 val chunksText = "${doc.chunkCount} chunk${if (doc.chunkCount == 1) "" else "s"}"
                 val subtitle = listOfNotNull(sizeText, chunksText).joinToString(" • ")
@@ -131,6 +156,18 @@ internal fun AttachmentRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            DeepIndexButton(
+                isIndexing = isDeepIndexing,
+                isAlreadyIndexed = doc.isDeepIndexed,
+                onClick = onDeepIndex,
+            )
+            Box(modifier = Modifier.width(8.dp))
+            RaptorActionIcon(
+                building = isRaptorBuilding,
+                indexed = doc.isRaptorIndexed,
+                onClick = onBuildRaptor,
+            )
+            Box(modifier = Modifier.width(8.dp))
             Icon(
                 imageVector = TnIcons.X,
                 contentDescription = "Remove attachment",
@@ -140,6 +177,98 @@ internal fun AttachmentRow(
                     .clickable(onClick = onRemove),
             )
         }
+    }
+}
+
+@Composable
+private fun DeepIndexButton(
+    isIndexing: Boolean,
+    isAlreadyIndexed: Boolean,
+    onClick: () -> Unit,
+) {
+    if (isAlreadyIndexed) return
+    if (isIndexing) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(18.dp),
+            strokeWidth = 1.5.dp,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        return
+    }
+    Icon(
+        imageVector = TnIcons.Sparkles,
+        contentDescription = "Deep Index (generate doc context)",
+        tint = MaterialTheme.colorScheme.primary,
+        modifier = Modifier
+            .size(18.dp)
+            .clickable(onClick = onClick),
+    )
+}
+
+@Composable
+private fun RaptorActionIcon(
+    building: Boolean,
+    indexed: Boolean,
+    onClick: () -> Unit,
+) {
+    val tint = if (indexed) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        modifier = Modifier.size(22.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (building) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 1.5.dp,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        } else {
+            Icon(
+                imageVector = TnIcons.Database,
+                contentDescription = if (indexed) "RAPTOR indexed" else "Build RAPTOR tree",
+                tint = tint,
+                modifier = Modifier
+                    .size(18.dp)
+                    .clickable(enabled = !indexed, onClick = onClick),
+            )
+        }
+    }
+}
+
+@Composable
+private fun RaptorIndexedBadge() {
+    val tnShapes = LocalTnShapes.current
+    Surface(
+        shape = tnShapes.cardSmall,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+        modifier = Modifier.padding(start = 4.dp),
+    ) {
+        Text(
+            text = "RAPTOR",
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+@Composable
+private fun DeepIndexedBadge() {
+    val tnShapes = LocalTnShapes.current
+    Surface(
+        shape = tnShapes.cardSmall,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+        modifier = Modifier.padding(start = 4.dp),
+    ) {
+        Text(
+            text = "Deep",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+        )
     }
 }
 

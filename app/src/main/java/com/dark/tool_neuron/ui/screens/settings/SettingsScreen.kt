@@ -34,6 +34,7 @@ import com.dark.tool_neuron.viewmodel.SettingsViewModel
 fun SettingsScreen(
     viewModel: SettingsViewModel,
     onBack: () -> Unit,
+    onNavigate: (route: String) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val dimens = LocalDimens.current
@@ -43,6 +44,10 @@ fun SettingsScreen(
         val msg = state.snackbarMessage ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(msg)
         viewModel.clearSnackbar()
+    }
+
+    LaunchedEffect(viewModel) {
+        viewModel.navEvents.collect { route -> onNavigate(route) }
     }
 
     Scaffold(

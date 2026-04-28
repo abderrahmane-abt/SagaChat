@@ -23,6 +23,7 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
     wal.cpp
     collection.cpp
     manifest.cpp
+    rag_keyword.cpp
     hxs.cpp
 )
 

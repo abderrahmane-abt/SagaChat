@@ -174,6 +174,18 @@ class AppPreferences @Inject constructor(
         get() = getString(KEY_ACTIVE_STT_MODEL)
         set(value) = putString(KEY_ACTIVE_STT_MODEL, value)
 
+    var ragSmartRerank: Boolean
+        get() = getBoolean(KEY_RAG_SMART_RERANK)
+        set(value) = putBoolean(KEY_RAG_SMART_RERANK, value)
+
+    var ragMultiQuery: Boolean
+        get() = getBoolean(KEY_RAG_MULTI_QUERY)
+        set(value) = putBoolean(KEY_RAG_MULTI_QUERY, value)
+
+    var ragDeepResearch: Boolean
+        get() = getBoolean(KEY_RAG_DEEP_RESEARCH)
+        set(value) = putBoolean(KEY_RAG_DEEP_RESEARCH, value)
+
     fun readAuthState(): AuthState {
         val sealed = getBytes(KEY_AUTH_STATE) ?: return AuthState.DEFAULT
         val plaintext = try {
@@ -230,6 +242,9 @@ class AppPreferences @Inject constructor(
         const val KEY_HF_SEARCH_HISTORY = "hf_search_history"
         const val KEY_ACTIVE_TTS_MODEL = "active_tts_model"
         const val KEY_ACTIVE_STT_MODEL = "active_stt_model"
+        const val KEY_RAG_SMART_RERANK = "rag_smart_rerank"
+        const val KEY_RAG_MULTI_QUERY = "rag_multi_query"
+        const val KEY_RAG_DEEP_RESEARCH = "rag_deep_research"
         const val DEFAULT_SERVER_PORT = 11434
         const val DEFAULT_BIND_MODE = "ALL_INTERFACES"
         private const val KEY_AUTH_STATE = "auth_state_v1"

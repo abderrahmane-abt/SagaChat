@@ -56,6 +56,7 @@ fun ChatMessageList(
     onDelete: (String) -> Unit,
     onEditUserMessage: (messageId: String, newContent: String) -> Unit,
     onForkFromMessage: (String) -> Unit,
+    retrievalLabel: String? = null,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
@@ -127,12 +128,19 @@ fun ChatMessageList(
             }
             if (streaming != null) {
                 item(key = STREAMING_ITEM_KEY) {
-                    if (streaming.content.isBlank() && streaming.thinkingContent.isBlank()) {
+                    if (retrievalLabel != null && streaming.content.isBlank() && streaming.thinkingContent.isBlank()) {
+                        StreamingAssistantBubble(
+                            content = "",
+                            thinkingContent = "",
+                            retrievalLabel = retrievalLabel,
+                        )
+                    } else if (streaming.content.isBlank() && streaming.thinkingContent.isBlank()) {
                         TypingIndicator()
                     } else {
                         StreamingAssistantBubble(
                             content = streaming.content,
                             thinkingContent = streaming.thinkingContent,
+                            retrievalLabel = retrievalLabel,
                         )
                     }
                 }

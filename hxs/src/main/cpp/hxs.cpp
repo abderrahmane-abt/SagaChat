@@ -9,6 +9,7 @@
 #include "wire_format.h"
 #include "collection.h"
 #include "manifest.h"
+#include "rag_keyword.h"
 
 #include <android/log.h>
 #define TAG "HXS"
@@ -18,6 +19,7 @@
 static std::mutex g_mtx;
 static std::unique_ptr<hxs::Manifest> g_manifest;
 static std::unordered_map<std::string, std::unique_ptr<hxs::Collection>> g_collections;
+static std::unordered_map<std::string, std::unique_ptr<hxs::RagKeywordIndex>> g_rag_indexes;
 static std::string g_base_dir;
 static bool g_open = false;
 static hxs::CryptoCallbacks g_crypto;
@@ -129,6 +131,21 @@ static hxs::Collection* ensure_collection(const std::string& name) {
 
     auto* ptr = coll.get();
     g_collections[name] = std::move(coll);
+    return ptr;
+}
+
+static hxs::RagKeywordIndex* ensure_rag_index(const std::string& name) {
+    auto it = g_rag_indexes.find(name);
+    if (it != g_rag_indexes.end()) return it->second.get();
+
+    auto* coll = ensure_collection(name);
+    if (!coll) return nullptr;
+    coll->add_index(hxs::RagKeywordIndex::TAG_DOC_ID, hxs::WIRE_BYTES);
+    coll->add_index(hxs::RagKeywordIndex::TAG_CHAT_ID, hxs::WIRE_BYTES);
+
+    auto idx = std::make_unique<hxs::RagKeywordIndex>(coll);
+    auto* ptr = idx.get();
+    g_rag_indexes[name] = std::move(idx);
     return ptr;
 }
 
@@ -270,6 +287,7 @@ Java_com_dark_hxs_HexStorage_nativeClose(JNIEnv* env, jobject) {
     }
     g_manifest->save();
 
+    g_rag_indexes.clear();
     g_collections.clear();
     g_manifest.reset();
 
@@ -556,6 +574,94 @@ Java_com_dark_hxs_HexStorage_nativeSetSchemaVersion(
     if (!g_open) return;
     auto* coll = ensure_collection(jstring_to_string(env, collection));
     if (coll) coll->set_schema_version(static_cast<uint32_t>(version));
+}
+
+// ── RAG keyword index (BM25) ──
+
+JNIEXPORT jint JNICALL
+Java_com_dark_hxs_HexStorage_nativeRagIngest(
+    JNIEnv* env, jobject, jstring collection,
+    jstring docId, jstring chatId, jstring sourceId,
+    jint chunkIndex, jstring text
+) {
+    std::lock_guard lock(g_mtx);
+    if (!g_open) return -1;
+    auto* idx = ensure_rag_index(jstring_to_string(env, collection));
+    if (!idx) return -1;
+    return static_cast<jint>(idx->ingest(
+        jstring_to_string(env, docId),
+        jstring_to_string(env, chatId),
+        jstring_to_string(env, sourceId),
+        static_cast<int32_t>(chunkIndex),
+        jstring_to_string(env, text)
+    ));
+}
+
+JNIEXPORT jint JNICALL
+Java_com_dark_hxs_HexStorage_nativeRagRemoveDocument(
+    JNIEnv* env, jobject, jstring collection, jstring docId
+) {
+    std::lock_guard lock(g_mtx);
+    if (!g_open) return 0;
+    auto* idx = ensure_rag_index(jstring_to_string(env, collection));
+    if (!idx) return 0;
+    return static_cast<jint>(idx->remove_document(jstring_to_string(env, docId)));
+}
+
+JNIEXPORT void JNICALL
+Java_com_dark_hxs_HexStorage_nativeRagClear(
+    JNIEnv* env, jobject, jstring collection
+) {
+    std::lock_guard lock(g_mtx);
+    if (!g_open) return;
+    auto* idx = ensure_rag_index(jstring_to_string(env, collection));
+    if (idx) idx->clear_all();
+}
+
+JNIEXPORT jint JNICALL
+Java_com_dark_hxs_HexStorage_nativeRagDocCount(
+    JNIEnv* env, jobject, jstring collection, jstring docId
+) {
+    std::lock_guard lock(g_mtx);
+    if (!g_open) return 0;
+    auto* idx = ensure_rag_index(jstring_to_string(env, collection));
+    if (!idx) return 0;
+    return static_cast<jint>(idx->doc_count(jstring_to_string(env, docId)));
+}
+
+JNIEXPORT jobjectArray JNICALL
+Java_com_dark_hxs_HexStorage_nativeRagQuery(
+    JNIEnv* env, jobject, jstring collection,
+    jstring queryText, jstring chatId, jint topK
+) {
+    std::lock_guard lock(g_mtx);
+    if (!g_open) return nullptr;
+    auto* idx = ensure_rag_index(jstring_to_string(env, collection));
+    if (!idx) return nullptr;
+
+    auto hits = idx->query(
+        jstring_to_string(env, queryText),
+        jstring_to_string(env, chatId),
+        static_cast<int32_t>(topK)
+    );
+
+    jclass byteArrayClass = env->FindClass("[B");
+    jobjectArray out = env->NewObjectArray(static_cast<jint>(hits.size()), byteArrayClass, nullptr);
+    for (size_t i = 0; i < hits.size(); ++i) {
+        const auto& h = hits[i];
+        hxs::Record r;
+        r.put_string(hxs::RagKeywordIndex::TAG_DOC_ID, h.doc_id);
+        r.put_string(hxs::RagKeywordIndex::TAG_CHAT_ID, h.chat_id);
+        r.put_string(hxs::RagKeywordIndex::TAG_SOURCE_ID, h.source_id);
+        r.put_varint(hxs::RagKeywordIndex::TAG_CHUNK_INDEX, h.chunk_index);
+        r.put_string(hxs::RagKeywordIndex::TAG_TEXT, h.text);
+        r.put_double(6, h.score);
+        auto enc = r.encode();
+        jbyteArray arr = to_jbyteArray(env, enc.data(), enc.size());
+        env->SetObjectArrayElement(out, static_cast<jint>(i), arr);
+        env->DeleteLocalRef(arr);
+    }
+    return out;
 }
 
 } // extern "C"

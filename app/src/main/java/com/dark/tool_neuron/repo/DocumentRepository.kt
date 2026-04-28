@@ -1,8 +1,11 @@
 package com.dark.tool_neuron.repo
 
 import android.content.Context
+import android.util.Log
 import com.dark.hxs.HexStorage
 import com.dark.hxs.HxsRecord
+import com.dark.hxs_encryptor.HxsEncryptor
+import com.dark.tool_neuron.data.AppKeyStore
 import com.dark.tool_neuron.model.ChatDocument
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -11,22 +14,64 @@ import javax.inject.Singleton
 
 @Singleton
 class DocumentRepository @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context,
+    private val keyStore: AppKeyStore,
+    private val encryptor: HxsEncryptor,
 ) {
     private val storage = HexStorage()
 
     init {
-        val dir = File(context.filesDir, "chat_documents")
-        dir.mkdirs()
-        val path = dir.absolutePath
-        if (storage.exists(path)) {
-            storage.openPlaintext(path)
+        val secureDir = File(context.filesDir, SECURE_DIR).apply { mkdirs() }
+        val secureBase = secureDir.absolutePath
+
+        val dek = keyStore.unwrapOrCreateDek()
+        val userKey = encryptor.deriveKey(ikm = dek, salt = dek, info = USER_KEY_INFO)
+
+        val opened = if (storage.exists(secureBase)) {
+            storage.openEncrypted(secureBase, dek, userKey, encryptor)
         } else {
-            storage.createPlaintext(path)
+            storage.createEncrypted(secureBase, dek, userKey, encryptor)
         }
+        if (!opened) throw SecurityException("Failed to open encrypted chat_documents vault")
+
         storage.ensureCollection(COLLECTION)
         storage.addIndex(COLLECTION, TAG_ID, HexStorage.WIRE_BYTES)
         storage.addIndex(COLLECTION, TAG_CHAT_ID, HexStorage.WIRE_BYTES)
+
+        migrateLegacyPlaintextIfNeeded()
+    }
+
+    private fun migrateLegacyPlaintextIfNeeded() {
+        val legacyDir = File(context.filesDir, LEGACY_DIR)
+        if (!legacyDir.isDirectory) return
+        val legacyTopFiles = legacyDir.listFiles { f -> f.isFile } ?: return
+        if (legacyTopFiles.isEmpty()) return
+
+        val legacy = HexStorage()
+        try {
+            if (!legacy.exists(legacyDir.absolutePath)) return
+            if (!legacy.openPlaintext(legacyDir.absolutePath)) return
+
+            val records = runCatching { legacy.getAll(COLLECTION) }.getOrNull().orEmpty()
+            if (records.isEmpty()) {
+                legacyTopFiles.forEach { runCatching { it.delete() } }
+                return
+            }
+
+            var migrated = 0
+            records.forEach { rec ->
+                val doc = runCatching { rec.toChatDocument() }.getOrNull() ?: return@forEach
+                runCatching { addDocument(doc) }.onSuccess { migrated++ }
+            }
+            Log.i(TAG, "Migrated $migrated/${records.size} legacy doc records")
+            if (migrated == records.size) {
+                legacyTopFiles.forEach { runCatching { it.delete() } }
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Legacy migration failed", t)
+        } finally {
+            runCatching { legacy.close() }
+        }
     }
 
     fun getDocumentsForChat(chatId: String): List<ChatDocument> {
@@ -44,6 +89,13 @@ class DocumentRepository @Inject constructor(
         storage.put(COLLECTION, doc.toRecord())
         storage.flush(COLLECTION)
     }
+
+    fun updateDocument(doc: ChatDocument) {
+        addDocument(doc)
+    }
+
+    fun getDocument(docId: String): ChatDocument? =
+        storage.queryString(COLLECTION, TAG_ID, docId).firstOrNull()?.toChatDocument()
 
     fun removeDocument(docId: String) {
         val records = storage.queryString(COLLECTION, TAG_ID, docId)
@@ -71,7 +123,13 @@ class DocumentRepository @Inject constructor(
     }
 
     companion object {
+        private const val TAG = "DocumentRepository"
         private const val COLLECTION = "chat_documents"
+
+        private const val SECURE_DIR = "chat_documents_meta_v1"
+        private const val LEGACY_DIR = "chat_documents"
+
+        private const val USER_KEY_INFO = "tn.chat_documents.user_key.v1"
 
         private const val TAG_ID = 1
         private const val TAG_CHAT_ID = 2
@@ -81,6 +139,8 @@ class DocumentRepository @Inject constructor(
         private const val TAG_SIZE_BYTES = 6
         private const val TAG_ADDED_AT = 7
         private const val TAG_SOURCE_ID = 8
+        private const val TAG_IS_DEEP_INDEXED = 9
+        private const val TAG_IS_RAPTOR_INDEXED = 10
     }
 
     private fun ChatDocument.toRecord(): HxsRecord {
@@ -94,6 +154,8 @@ class DocumentRepository @Inject constructor(
             putTimestamp(TAG_SIZE_BYTES, d.sizeBytes)
             putTimestamp(TAG_ADDED_AT, d.addedAt)
             putString(TAG_SOURCE_ID, d.sourceId)
+            putBool(TAG_IS_DEEP_INDEXED, d.isDeepIndexed)
+            putBool(TAG_IS_RAPTOR_INDEXED, d.isRaptorIndexed)
         }
     }
 
@@ -106,5 +168,7 @@ class DocumentRepository @Inject constructor(
         sizeBytes = getTimestamp(TAG_SIZE_BYTES),
         addedAt = getTimestamp(TAG_ADDED_AT),
         sourceId = getString(TAG_SOURCE_ID),
+        isDeepIndexed = getBool(TAG_IS_DEEP_INDEXED, false),
+        isRaptorIndexed = getBool(TAG_IS_RAPTOR_INDEXED, false),
     )
 }

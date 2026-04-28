@@ -3,10 +3,15 @@ package com.dark.tool_neuron.viewmodel.home_vm
 import android.app.Application
 import android.net.Uri
 import android.util.Log
+import com.dark.tool_neuron.data.AppPreferences
 import com.dark.tool_neuron.model.ChatMessage
+import com.dark.tool_neuron.model.Citation
 import com.dark.tool_neuron.model.MemoryMetrics
 import com.dark.tool_neuron.model.TextMetrics
 import com.dark.tool_neuron.repo.ChatRepository
+import com.dark.tool_neuron.repo.RagAugmentation
+import com.dark.tool_neuron.repo.RagChunk
+import com.dark.tool_neuron.repo.RagCitationMatcher
 import com.dark.tool_neuron.repo.RagManager
 import com.dark.tool_neuron.service.inference.InferenceClient
 import com.dark.tool_neuron.service.inference.InferenceEvent
@@ -19,6 +24,7 @@ import javax.inject.Singleton
 
 private const val TAG = "InferenceCoordinator"
 private const val MAX_TOOL_ITERATIONS = 3
+private const val MAX_FOLLOWUPS = 3
 private const val ROLE_USER = "user"
 private const val ROLE_ASSISTANT = "assistant"
 private const val ROLE_TOOL = "tool"
@@ -27,6 +33,12 @@ private val THINK_TAGS = listOf(
     "[THINK]" to "[/THINK]",
     "<reasoning>" to "</reasoning>",
 )
+private val NEED_MORE_REGEX = Regex("""\[NEED_MORE:\s*(.+?)]""", RegexOption.DOT_MATCHES_ALL)
+private const val DEEP_RESEARCH_INSTRUCTION =
+    "Instruction: if the context above is insufficient to fully answer the user's question, " +
+        "do NOT guess. Instead end your response with exactly one line: " +
+        "[NEED_MORE: <a focused query for follow-up retrieval>] and stop. " +
+        "If the context is sufficient, answer normally and DO NOT emit any [NEED_MORE] marker."
 
 data class GenerationOutcome(
     val content: String,
@@ -34,6 +46,7 @@ data class GenerationOutcome(
     val error: String?,
     val textMetrics: TextMetrics?,
     val memoryMetrics: MemoryMetrics?,
+    val citations: List<Citation> = emptyList(),
 )
 
 @Singleton
@@ -43,6 +56,7 @@ class InferenceCoordinator @Inject constructor(
     private val toolCallCoordinator: ToolCallCoordinator,
     private val ragManager: RagManager,
     private val modelSession: ModelSessionManager,
+    private val appPrefs: AppPreferences,
 ) {
     suspend fun run(
         chatId: String,
@@ -50,81 +64,128 @@ class InferenceCoordinator @Inject constructor(
         onToolExecuted: (List<ChatMessage>) -> Unit,
         onMetrics: (TextMetrics?, MemoryMetrics?) -> Unit,
     ): GenerationOutcome {
+        val deepResearchEnabled = appPrefs.ragDeepResearch &&
+            ragManager.documentsForChat(chatId).isNotEmpty()
+
         var cleanContent = ""
         var thinkingContent = ""
         var errorMessage: String? = null
         var textMetrics: TextMetrics? = null
         var memoryMetrics: MemoryMetrics? = null
+        var ragAugmentation: RagAugmentation = RagAugmentation.NONE
         val toolResults = mutableListOf<Pair<String, Boolean>>()
+        val followupBlocks = mutableListOf<String>()
+        val followupChunks = mutableListOf<RagChunk>()
+        var totalCitedChunks = 0
 
-        toolLoop@ for (iteration in 0 until MAX_TOOL_ITERATIONS) {
-            var rawAssistant = ""
-            var pendingToolCall: InferenceEvent.ToolCall? = null
-
-            val rawMessages = chatRepo.getMessages(chatId)
-            val messages = if (iteration == 0) augmentLastUser(chatId, rawMessages) else rawMessages
-
-            val lastUser = messages.lastOrNull { it.role == ROLE_USER }
-            val userImages = lastUser?.imageUris.orEmpty()
-            val vlmRoute = iteration == 0 &&
-                userImages.isNotEmpty() &&
-                InferenceClient.isVlmLoaded.value
-
-            val historyJson = buildMessagesJson(
-                messages = messages,
-                vlmLastUserId = if (vlmRoute) lastUser?.id else null,
-            )
-
-            val stream: Flow<InferenceEvent> = if (vlmRoute) {
-                val uris = userImages.mapNotNull { runCatching { Uri.parse(it) }.getOrNull() }
-                InferenceClient.generateVlm(app, historyJson, uris, modelSession.maxTokens.value)
-            } else {
-                InferenceClient.generateMultiTurn(historyJson, modelSession.maxTokens.value)
-            }
-
-            stream
-                .transformWhile { event ->
-                    emit(event)
-                    event !is InferenceEvent.Done && event !is InferenceEvent.Error
-                }
-                .collect { event ->
-                    when (event) {
-                        is InferenceEvent.Token -> {
-                            rawAssistant += event.text
-                            val (clean, think) = parseThinking(rawAssistant)
-                            cleanContent = clean
-                            thinkingContent = think
-                            onStreamingUpdate(clean, think)
-                        }
-                        is InferenceEvent.ToolCall -> pendingToolCall = event
-                        is InferenceEvent.Metrics -> {
-                            val parsed = parseMetrics(event.metricsJson)
-                            textMetrics = parsed.first
-                            memoryMetrics = parsed.second
-                            onMetrics(parsed.first, parsed.second)
-                        }
-                        is InferenceEvent.Error -> errorMessage = event.message
-                        else -> {}
-                    }
-                }
-
-            val tc = pendingToolCall ?: toolCallCoordinator.parseFromText(cleanContent)
-            if (tc == null || errorMessage != null) break@toolLoop
-
-            Log.i(TAG, "tool call fired: source=${if (pendingToolCall != null) "native" else "text-parse"} name=${tc.name} args=${tc.argsJson.take(200)}")
-
-            val toolMsg = toolCallCoordinator.execute(chatId, tc)
-            val isSuccess = !toolMsg.content.contains("\"error\"")
-            toolResults += toolMsg.id to isSuccess
-            chatRepo.addMessage(toolMsg)
-            onToolExecuted(chatRepo.getMessages(chatId))
-            onStreamingUpdate("", "")
+        researchLoop@ for (round in 0..MAX_FOLLOWUPS) {
             cleanContent = ""
             thinkingContent = ""
 
-            if (isSuccess) {
-                InferenceClient.clearTools()
+            toolLoop@ for (iteration in 0 until MAX_TOOL_ITERATIONS) {
+                var rawAssistant = ""
+                var pendingToolCall: InferenceEvent.ToolCall? = null
+
+                val rawMessages = chatRepo.getMessages(chatId)
+                val messages = if (iteration == 0) {
+                    val (msgs, aug) = augmentLastUser(
+                        chatId = chatId,
+                        messages = rawMessages,
+                        followups = followupBlocks,
+                        deepResearchEnabled = deepResearchEnabled,
+                    )
+                    if (round == 0) {
+                        ragAugmentation = aug
+                        if (aug.chunks.isNotEmpty()) totalCitedChunks = aug.chunks.size
+                    }
+                    msgs
+                } else {
+                    rawMessages
+                }
+
+                val lastUser = messages.lastOrNull { it.role == ROLE_USER }
+                val userImages = lastUser?.imageUris.orEmpty()
+                val vlmRoute = iteration == 0 &&
+                    round == 0 &&
+                    userImages.isNotEmpty() &&
+                    InferenceClient.isVlmLoaded.value
+
+                val historyJson = buildMessagesJson(
+                    messages = messages,
+                    vlmLastUserId = if (vlmRoute) lastUser?.id else null,
+                )
+
+                val stream: Flow<InferenceEvent> = if (vlmRoute) {
+                    val uris = userImages.mapNotNull { runCatching { Uri.parse(it) }.getOrNull() }
+                    InferenceClient.generateVlm(app, historyJson, uris, modelSession.maxTokens.value)
+                } else {
+                    InferenceClient.generateMultiTurn(historyJson, modelSession.maxTokens.value)
+                }
+
+                stream
+                    .transformWhile { event ->
+                        emit(event)
+                        event !is InferenceEvent.Done && event !is InferenceEvent.Error
+                    }
+                    .collect { event ->
+                        when (event) {
+                            is InferenceEvent.Token -> {
+                                rawAssistant += event.text
+                                val (clean, think) = parseThinking(rawAssistant)
+                                cleanContent = stripNeedMoreMarker(clean)
+                                thinkingContent = think
+                                onStreamingUpdate(cleanContent, thinkingContent)
+                            }
+                            is InferenceEvent.ToolCall -> pendingToolCall = event
+                            is InferenceEvent.Metrics -> {
+                                val parsed = parseMetrics(event.metricsJson)
+                                textMetrics = parsed.first
+                                memoryMetrics = parsed.second
+                                onMetrics(parsed.first, parsed.second)
+                            }
+                            is InferenceEvent.Error -> errorMessage = event.message
+                            else -> {}
+                        }
+                    }
+
+                val tc = pendingToolCall ?: toolCallCoordinator.parseFromText(cleanContent)
+                if (tc == null || errorMessage != null) break@toolLoop
+
+                Log.i(TAG, "tool call fired: source=${if (pendingToolCall != null) "native" else "text-parse"} name=${tc.name} args=${tc.argsJson.take(200)}")
+
+                val toolMsg = toolCallCoordinator.execute(chatId, tc)
+                val isSuccess = !toolMsg.content.contains("\"error\"")
+                toolResults += toolMsg.id to isSuccess
+                chatRepo.addMessage(toolMsg)
+                onToolExecuted(chatRepo.getMessages(chatId))
+                onStreamingUpdate("", "")
+                cleanContent = ""
+                thinkingContent = ""
+
+                if (isSuccess) {
+                    InferenceClient.clearTools()
+                }
             }
+
+            if (errorMessage != null) break@researchLoop
+            if (!deepResearchEnabled || round >= MAX_FOLLOWUPS) break@researchLoop
+
+            val rawForMarker = cleanContent
+            val followupQuery = extractNeedMoreQuery(rawForMarker)?.trim().orEmpty()
+            if (followupQuery.isEmpty()) break@researchLoop
+
+            Log.i(TAG, "deep-research follow-up #${round + 1}: query=\"${followupQuery.take(120)}\"")
+
+            val budget = computeRagBudget(chatRepo.getMessages(chatId))
+            val followupAug = ragManager.augment(chatId, followupQuery, "", budget)
+            if (!followupAug.didAugment) break@researchLoop
+
+            val startIndex = totalCitedChunks + 1
+            val block = buildFollowupBlock(followupQuery, followupAug, startIndex)
+            totalCitedChunks = startIndex + followupAug.chunks.size - 1
+            followupBlocks += block
+            followupChunks += followupAug.chunks
+            onStreamingUpdate("", "")
         }
 
         val firstSuccessId = toolResults.firstOrNull { it.second }?.first
@@ -135,26 +196,114 @@ class InferenceCoordinator @Inject constructor(
             onToolExecuted(chatRepo.getMessages(chatId))
         }
 
+        val allChunks = if (followupChunks.isEmpty()) {
+            ragAugmentation.chunks
+        } else {
+            (ragAugmentation.chunks + followupChunks).distinctBy { it.sourceId to it.chunkIndex }
+        }
+        val citations = if (allChunks.isNotEmpty() && cleanContent.isNotBlank()) {
+            RagCitationMatcher.match(cleanContent, allChunks)
+        } else {
+            emptyList()
+        }
+
         return GenerationOutcome(
             content = cleanContent,
             thinking = thinkingContent,
             error = errorMessage,
             textMetrics = textMetrics,
             memoryMetrics = memoryMetrics,
+            citations = citations,
         )
     }
 
-    private suspend fun augmentLastUser(chatId: String, messages: List<ChatMessage>): List<ChatMessage> {
-        if (!ragManager.isReady.value) return messages
+    private suspend fun augmentLastUser(
+        chatId: String,
+        messages: List<ChatMessage>,
+        followups: List<String>,
+        deepResearchEnabled: Boolean,
+    ): Pair<List<ChatMessage>, RagAugmentation> {
         val lastUserIdx = messages.indexOfLast { it.role == ROLE_USER }
-        if (lastUserIdx < 0) return messages
+        if (lastUserIdx < 0) return messages to RagAugmentation.NONE
         val original = messages[lastUserIdx]
-        val augmented = ragManager.buildAugmentedPrompt(chatId, original.content, original.content)
-        if (augmented == original.content) return messages
-        Log.i(TAG, "prompt augmented with RAG context (len ${original.content.length} -> ${augmented.length})")
-        return messages.toMutableList().also {
-            it[lastUserIdx] = original.copy(content = augmented)
+
+        val ragReady = ragManager.isReady.value
+        val budget = computeRagBudget(messages)
+        val aug = if (ragReady) {
+            ragManager.augment(chatId, original.content, original.content, budget)
+        } else {
+            RagAugmentation.NONE
         }
+
+        val ragApplied = aug.didAugment
+        if (!ragApplied && followups.isEmpty()) return messages to RagAugmentation.NONE
+
+        val builder = StringBuilder()
+        builder.append(if (ragApplied) aug.augmentedPrompt else original.content)
+        if (deepResearchEnabled && ragApplied && followups.isEmpty()) {
+            builder.append("\n\n").append(DEEP_RESEARCH_INSTRUCTION)
+        }
+        followups.forEachIndexed { idx, block ->
+            builder.append("\n\n")
+            builder.append(block)
+            val isLast = idx == followups.lastIndex
+            if (deepResearchEnabled && !isLast) {
+                builder.append("\n\n").append(DEEP_RESEARCH_INSTRUCTION)
+            }
+        }
+        if (followups.isNotEmpty()) {
+            builder.append("\n\nNow write the complete answer using all available context. Cite passages inline as [N].")
+        }
+
+        val finalContent = builder.toString()
+        if (finalContent == original.content) return messages to RagAugmentation.NONE
+        Log.i(
+            TAG,
+            "prompt augmented (rag=$ragApplied, deep=$deepResearchEnabled, followups=${followups.size}, len ${original.content.length} -> ${finalContent.length}, budget=$budget tok)",
+        )
+        val updated = messages.toMutableList().also {
+            it[lastUserIdx] = original.copy(content = finalContent)
+        }
+        return updated to aug
+    }
+
+    private fun buildFollowupBlock(
+        followupQuery: String,
+        aug: RagAugmentation,
+        startIndex: Int,
+    ): String = buildString {
+        append("Continue answering the user's question. ")
+        append("Additional context retrieved for \"")
+        append(followupQuery)
+        append("\":\n\n<context>\n")
+        aug.chunks.forEachIndexed { idx, chunk ->
+            append('[')
+            append(startIndex + idx)
+            append("] ")
+            append(chunk.text)
+            append("\n\n")
+        }
+        append("</context>")
+    }
+
+    private fun extractNeedMoreQuery(content: String): String? {
+        val match = NEED_MORE_REGEX.find(content) ?: return null
+        return match.groupValues.getOrNull(1)?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
+    private fun stripNeedMoreMarker(content: String): String {
+        if (!content.contains("[NEED_MORE")) return content
+        return NEED_MORE_REGEX.replace(content, "").trimEnd()
+    }
+
+    private fun computeRagBudget(messages: List<ChatMessage>): Int {
+        val ctx = modelSession.contextSize.value
+        val output = modelSession.maxTokens.value
+        val historyChars = messages.sumOf { it.content.length + it.thinkingContent.length }
+        val historyTokens = (historyChars + 3) / 4
+        val safetyMargin = 256
+        val available = ctx - output - historyTokens - safetyMargin
+        return available.coerceIn(256, 4096)
     }
 
     private fun buildMessagesJson(

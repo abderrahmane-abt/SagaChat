@@ -85,6 +85,29 @@ class HexStorage {
     fun setSchemaVersion(collection: String, version: Int) = nativeSetSchemaVersion(collection, version)
 
 
+    fun ragIngest(
+        collection: String,
+        docId: String,
+        chatId: String,
+        sourceId: String,
+        chunkIndex: Int,
+        text: String,
+    ): Int = nativeRagIngest(collection, docId, chatId, sourceId, chunkIndex, text)
+
+    fun ragRemoveDocument(collection: String, docId: String): Int =
+        nativeRagRemoveDocument(collection, docId)
+
+    fun ragClear(collection: String) = nativeRagClear(collection)
+
+    fun ragDocCount(collection: String, docId: String): Int =
+        nativeRagDocCount(collection, docId)
+
+    fun ragQuery(collection: String, query: String, chatId: String, topK: Int): List<HxsRecord> {
+        val arrays = nativeRagQuery(collection, query, chatId, topK) ?: return emptyList()
+        return arrays.map { HxsRecord.decode(it) }
+    }
+
+
     private external fun nativeCreatePlaintext(basePath: String): Boolean
     private external fun nativeOpenPlaintext(basePath: String): Boolean
     private external fun nativeCreateEncrypted(basePath: String, appKey: ByteArray, userKey: ByteArray, encryptor: Any): Boolean
@@ -115,6 +138,25 @@ class HexStorage {
 
     private external fun nativeGetSchemaVersion(collection: String): Int
     private external fun nativeSetSchemaVersion(collection: String, version: Int)
+
+    private external fun nativeRagIngest(
+        collection: String,
+        docId: String,
+        chatId: String,
+        sourceId: String,
+        chunkIndex: Int,
+        text: String,
+    ): Int
+
+    private external fun nativeRagRemoveDocument(collection: String, docId: String): Int
+    private external fun nativeRagClear(collection: String)
+    private external fun nativeRagDocCount(collection: String, docId: String): Int
+    private external fun nativeRagQuery(
+        collection: String,
+        query: String,
+        chatId: String,
+        topK: Int,
+    ): Array<ByteArray>?
 
     companion object {
         const val WIRE_VARINT  = 0
