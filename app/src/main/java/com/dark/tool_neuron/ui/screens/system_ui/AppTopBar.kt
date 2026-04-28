@@ -9,6 +9,7 @@ import com.dark.tool_neuron.ui.screens.home_screen.HomeScreenTopbar
 import com.dark.tool_neuron.ui.screens.password_screen.PasswordScreenTopBar
 import com.dark.tool_neuron.ui.screens.server.ServerTopBar
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupScreenTopBar
+import com.dark.tool_neuron.ui.screens.storage.StorageTopBar
 import com.dark.tool_neuron.viewmodel.home_vm.PillState
 
 @Composable
@@ -50,8 +51,10 @@ fun AppTopBar(
         NavScreens.GuideThemes.route -> GuideTopBar(title = "Themes", onBack = onBack)
         NavScreens.GuideServer.route -> GuideTopBar(title = "Remote Server", onBack = onBack)
         NavScreens.SetupTheme.route -> SetupScreenTopBar()
+        NavScreens.SetupRag.route -> SetupScreenTopBar()
         NavScreens.ModelManager.route -> Unit
         NavScreens.Settings.route -> Unit
+        NavScreens.Storage.route -> StorageTopBar(onBack = onBack)
         NavScreens.ServerScreen.route -> ServerTopBar()
         NavScreens.HfExplorer.route -> GuideTopBar(title = "HF Explorer", onBack = onBack)
         else -> {

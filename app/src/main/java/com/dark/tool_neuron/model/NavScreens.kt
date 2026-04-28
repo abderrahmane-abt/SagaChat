@@ -9,6 +9,7 @@ sealed class NavScreens(val route: String) {
     object PasswordScreen : NavScreens("password_screen")
     object SetupScreen : NavScreens("setup_screen")
     object SetupTheme : NavScreens("setup_theme")
+    object SetupRag : NavScreens("setup_rag")
     object ModelStore : NavScreens("model_store")
     object ModelSetup : NavScreens("model_setup")
     object AppGuide : NavScreens("app_guide")
@@ -23,6 +24,8 @@ sealed class NavScreens(val route: String) {
     object PluginHub : NavScreens("plugin_hub")
     object ModelManager : NavScreens("model_manager")
     object Settings : NavScreens("settings")
+    object Storage : NavScreens("storage")
+    object RagDebug : NavScreens("rag_debug")
     object ServerScreen : NavScreens("server_screen")
     object HfExplorer : NavScreens("hf_explorer")
     object HfRepoDetail : NavScreens("hf_repo/{repoPath}") {

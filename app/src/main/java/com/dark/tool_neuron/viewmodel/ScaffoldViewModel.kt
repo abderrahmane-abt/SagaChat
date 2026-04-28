@@ -10,6 +10,7 @@ import com.dark.tool_neuron.data.SecurityManager
 import com.dark.tool_neuron.data.SessionHolder
 import com.dark.tool_neuron.model.DownloadProgress
 import com.dark.tool_neuron.model.NavScreens
+import com.dark.tool_neuron.repo.InstallProgressTracker
 import com.dark.tool_neuron.service.server.ServerController
 import com.dark.tool_neuron.service.server.ServerState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -29,6 +30,7 @@ class ScaffoldViewModel @Inject constructor(
     private val rootGuard: RootGuard,
     session: SessionHolder,
     serverController: ServerController,
+    installProgress: InstallProgressTracker,
 ) : ViewModel() {
 
     val serverRunning: StateFlow<Boolean> = serverController.state
@@ -50,20 +52,24 @@ class ScaffoldViewModel @Inject constructor(
         initialValue = security.isLockEnabled && !session.active.value,
     )
 
-    val downloadProgress: StateFlow<DownloadProgress?> = HxdManager.tasks
-        .map { tasks ->
-            val active = tasks.filter {
-                it.status == HxdStatus.QUEUED ||
-                    it.status == HxdStatus.CONNECTING ||
-                    it.status == HxdStatus.DOWNLOADING
-            }
-            if (active.isEmpty()) return@map null
-            val totals = active.sumOf { it.totalBytes.coerceAtLeast(0L) }
-            val anyUnknown = active.any { it.totalBytes <= 0L }
-            if (anyUnknown || totals <= 0L) return@map DownloadProgress.Indeterminate
-            val downloaded = active.sumOf { it.downloadedBytes.coerceAtLeast(0L) }
-            DownloadProgress.Determinate((downloaded.toFloat() / totals.toFloat()).coerceIn(0f, 1f))
+    val downloadProgress: StateFlow<DownloadProgress?> = combine(
+        HxdManager.tasks,
+        installProgress.extracting,
+    ) { tasks, extracting ->
+        val active = tasks.filter {
+            it.status == HxdStatus.QUEUED ||
+                it.status == HxdStatus.CONNECTING ||
+                it.status == HxdStatus.DOWNLOADING
         }
+        if (active.isEmpty()) {
+            return@combine if (extracting.isNotEmpty()) DownloadProgress.Indeterminate else null
+        }
+        val totals = active.sumOf { it.totalBytes.coerceAtLeast(0L) }
+        val anyUnknown = active.any { it.totalBytes <= 0L }
+        if (anyUnknown || totals <= 0L) return@combine DownloadProgress.Indeterminate
+        val downloaded = active.sumOf { it.downloadedBytes.coerceAtLeast(0L) }
+        DownloadProgress.Determinate((downloaded.toFloat() / totals.toFloat()).coerceIn(0f, 1f))
+    }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private val _rootWarning = MutableStateFlow<RootWarning?>(resolveInitialRootWarning())

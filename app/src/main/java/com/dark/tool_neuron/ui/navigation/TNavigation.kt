@@ -14,6 +14,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.dark.tool_neuron.model.ModelConfig
 import com.dark.tool_neuron.model.NavScreens
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -22,7 +23,9 @@ import com.dark.tool_neuron.ui.screens.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.screens.intro_screen.IntroScreen
 import com.dark.tool_neuron.ui.screens.model_config.ModelConfigScreen
 import com.dark.tool_neuron.ui.screens.model_manager.ModelManagerScreen
+import com.dark.tool_neuron.ui.screens.rag_debug.RagDebugScreen
 import com.dark.tool_neuron.ui.screens.settings.SettingsScreen
+import com.dark.tool_neuron.ui.screens.storage.StorageScreen
 import com.dark.tool_neuron.ui.screens.password_screen.PasswordScreen
 import com.dark.tool_neuron.ui.screens.guide.AppGuideScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideChatScreen
@@ -42,14 +45,17 @@ import com.dark.tool_neuron.ui.screens.server.ServerScreen
 import java.net.URLDecoder
 import com.dark.tool_neuron.ui.screens.setup_screen.ModelSetupScreen
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupPasswordScreen
+import com.dark.tool_neuron.ui.screens.setup_screen.SetupRagScreen
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupScreen
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupThemeScreen
 import com.dark.tool_neuron.ui.theme.rememberNavTransitions
 import com.dark.tool_neuron.viewmodel.HomeViewModel
 import com.dark.tool_neuron.viewmodel.ModelStoreViewModel
 import com.dark.tool_neuron.viewmodel.PasswordViewModel
+import com.dark.tool_neuron.viewmodel.RagDebugViewModel
 import com.dark.tool_neuron.viewmodel.SettingsViewModel
 import com.dark.tool_neuron.viewmodel.SetupViewModel
+import com.dark.tool_neuron.viewmodel.StorageViewModel
 import kotlinx.coroutines.delay
 
 @Composable
@@ -63,6 +69,7 @@ fun TNavigation(
     onUnlocked: () -> Unit = {},
     onSetupComplete: () -> Unit = {},
     onModelSetupComplete: () -> Unit = {},
+    onRagSetupComplete: () -> Unit = {},
 ) {
     val transitions = rememberNavTransitions()
 
@@ -137,6 +144,9 @@ fun TNavigation(
         composable(NavScreens.SetupTheme.route) {
             SetupThemeScreen(innerPadding = innerPadding)
         }
+        composable(NavScreens.SetupRag.route) {
+            SetupRagScreen(innerPadding = innerPadding)
+        }
         composable(NavScreens.ModelStore.route) {
             val activity = LocalContext.current as ComponentActivity
             val viewModel: ModelStoreViewModel = hiltViewModel(activity)
@@ -202,6 +212,27 @@ fun TNavigation(
             SettingsScreen(
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() },
+                onNavigate = { route -> navController.navigate(route) },
+            )
+        }
+        composable(NavScreens.RagDebug.route) {
+            val viewModel: RagDebugViewModel = hiltViewModel()
+            RagDebugScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(NavScreens.Storage.route) {
+            val viewModel: StorageViewModel = hiltViewModel()
+            StorageScreen(
+                innerPadding = innerPadding,
+                viewModel = viewModel,
+                onNavigateToModelManager = {
+                    navController.navigate(NavScreens.ModelManager.route)
+                },
+                onNavigateToStore = {
+                    navController.navigate(NavScreens.ModelStore.route)
+                },
             )
         }
         composable(NavScreens.ModelManager.route) {
@@ -230,7 +261,7 @@ fun TNavigation(
                 LaunchedEffect(Unit) { navController.popBackStack() }
             } else {
                 var initialConfig by remember(model.id) {
-                    mutableStateOf<com.dark.tool_neuron.model.ModelConfig?>(null)
+                    mutableStateOf<ModelConfig?>(null)
                 }
                 var loaded by remember(model.id) { mutableStateOf(false) }
                 LaunchedEffect(model.id) {

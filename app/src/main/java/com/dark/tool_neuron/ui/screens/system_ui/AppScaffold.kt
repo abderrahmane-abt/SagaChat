@@ -145,6 +145,12 @@ fun AppScaffold() {
                             popUpTo(NavScreens.SetupTheme.route) { inclusive = true }
                         }
                     },
+                    onRagSetupComplete = {
+                        scaffoldViewModel.markModelSetupDone()
+                        navController.navigate(NavScreens.HomeScreen.route) {
+                            popUpTo(NavScreens.SetupRag.route) { inclusive = true }
+                        }
+                    },
                 )
             },
         ) { innerPadding ->
@@ -166,9 +172,14 @@ fun AppScaffold() {
                     }
                 },
                 onModelSetupComplete = {
+                    navController.navigate(NavScreens.SetupRag.route) {
+                        popUpTo(NavScreens.ModelSetup.route) { inclusive = true }
+                    }
+                },
+                onRagSetupComplete = {
                     scaffoldViewModel.markModelSetupDone()
                     navController.navigate(NavScreens.HomeScreen.route) {
-                        popUpTo(NavScreens.ModelSetup.route) { inclusive = true }
+                        popUpTo(NavScreens.SetupRag.route) { inclusive = true }
                     }
                 }
             )

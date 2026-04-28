@@ -3,7 +3,6 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <chrono>
-#include <algorithm>
 
 namespace hxd {
 
@@ -18,12 +17,9 @@ int64_t DownloadEngine::now_ms() {
 }
 
 int64_t DownloadEngine::calc_speed(TaskCtx& ctx) {
-    if (ctx.speed_samples.size() < 2) return 0;
-    const auto& oldest = ctx.speed_samples.front();
-    const auto& newest = ctx.speed_samples.back();
-    int64_t dt_ms = newest.time_ms - oldest.time_ms;
+    int64_t dt_ms = now_ms() - ctx.session_start_ms;
     if (dt_ms <= 0) return 0;
-    int64_t db = newest.bytes - oldest.bytes;
+    int64_t db = ctx.downloaded_bytes - ctx.session_start_bytes;
     if (db <= 0) return 0;
     return (db * 1000LL) / dt_ms;
 }
@@ -56,12 +52,13 @@ int64_t DownloadEngine::prepare(int id, const char* dest_path) {
 
     std::lock_guard<std::mutex> lk(mutex_);
     TaskCtx ctx;
-    ctx.fd               = fd;
-    ctx.temp_path        = temp;
-    ctx.dest_path        = dest_path;
-    ctx.downloaded_bytes = resume_offset;
-    ctx.speed_samples.push_back({now_ms(), resume_offset});
-    contexts_[id]        = std::move(ctx);
+    ctx.fd                  = fd;
+    ctx.temp_path           = temp;
+    ctx.dest_path           = dest_path;
+    ctx.downloaded_bytes    = resume_offset;
+    ctx.session_start_ms    = now_ms();
+    ctx.session_start_bytes = resume_offset;
+    contexts_[id]           = std::move(ctx);
 
     return resume_offset;
 }
@@ -93,16 +90,6 @@ bool DownloadEngine::write_chunk(int id, const uint8_t* data, int offset, int le
         remaining -= (int)w;
     }
     ctx.downloaded_bytes += len;
-
-    // Update rolling speed window (keep last 5 s, max 30 samples)
-    int64_t t = now_ms();
-    ctx.speed_samples.push_back({t, ctx.downloaded_bytes});
-    while (ctx.speed_samples.size() > 30) ctx.speed_samples.pop_front();
-    while (ctx.speed_samples.size() > 2 &&
-           (t - ctx.speed_samples.front().time_ms) > 5000LL) {
-        ctx.speed_samples.pop_front();
-    }
-
     return true;
 }
 

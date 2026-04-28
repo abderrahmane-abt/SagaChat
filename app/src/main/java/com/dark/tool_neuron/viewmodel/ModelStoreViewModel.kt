@@ -18,6 +18,7 @@ import com.dark.tool_neuron.model.enums.PathType
 import com.dark.tool_neuron.model.enums.ProviderType
 import com.dark.tool_neuron.repo.ExplorerRepo
 import com.dark.tool_neuron.repo.HuggingFaceExplorer
+import com.dark.tool_neuron.repo.InstallProgressTracker
 import com.dark.tool_neuron.repo.ModelCatalog
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.repo.RagManager
@@ -66,6 +67,7 @@ class ModelStoreViewModel @Inject constructor(
     private val ragManager: RagManager,
     private val prefs: AppPreferences,
     private val serverController: ServerController,
+    private val installProgress: InstallProgressTracker,
 ) : ViewModel() {
 
     val installedModels: StateFlow<List<ModelInfo>> = modelRepo.models
@@ -419,6 +421,7 @@ class ModelStoreViewModel @Inject constructor(
     private fun finalizeVoiceDownload(model: HuggingFaceModel, archive: java.io.File) {
         viewModelScope.launch(Dispatchers.IO) {
             _extractingIds.value = _extractingIds.value + model.id
+            installProgress.extractStarted(model.id)
             try {
                 if (!archive.exists()) {
                     _error.value = "Downloaded archive missing for ${model.name}"
@@ -468,6 +471,7 @@ class ModelStoreViewModel @Inject constructor(
                 _extractingFile.value = _extractingFile.value - model.id
                 _downloadIds.value = _downloadIds.value - model.id
                 _downloadStates.value = _downloadStates.value - model.id
+                installProgress.extractFinished(model.id)
             }
         }
     }

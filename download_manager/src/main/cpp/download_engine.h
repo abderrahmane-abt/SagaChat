@@ -3,7 +3,6 @@
 #include <unordered_map>
 #include <mutex>
 #include <string>
-#include <deque>
 
 namespace hxd {
 
@@ -54,8 +53,6 @@ private:
     DownloadEngine(const DownloadEngine&) = delete;
     DownloadEngine& operator=(const DownloadEngine&) = delete;
 
-    struct SpeedSample { int64_t time_ms; int64_t bytes; };
-
     struct TaskCtx {
         int         fd               = -1;
         std::string temp_path;
@@ -64,7 +61,8 @@ private:
         int64_t     total_bytes      = -1;
         bool        cancel_requested = false;
         bool        pause_requested  = false;
-        std::deque<SpeedSample> speed_samples;  // rolling window (last 5 s)
+        int64_t     session_start_ms     = 0;
+        int64_t     session_start_bytes  = 0;
     };
 
     std::unordered_map<int, TaskCtx> contexts_;
