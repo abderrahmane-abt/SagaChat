@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <android/log.h>
 
+#include <cstdint>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -12,8 +13,68 @@ namespace {
 
 constexpr const char* kTag = "networking";
 
+jstring make_jstring(JNIEnv* env, const std::string& s) {
+    std::vector<jchar> u16;
+    u16.reserve(s.size());
+
+    auto put_replacement = [&]() { u16.push_back(static_cast<jchar>(0xFFFD)); };
+
+    const size_t n = s.size();
+    size_t i = 0;
+    while (i < n) {
+        uint8_t b0 = static_cast<uint8_t>(s[i]);
+        uint32_t cp = 0;
+        size_t consumed = 1;
+
+        if (b0 < 0x80) {
+            cp = b0;
+        } else if ((b0 & 0xE0) == 0xC0) {
+            if (i + 1 >= n) { put_replacement(); break; }
+            uint8_t b1 = static_cast<uint8_t>(s[i + 1]);
+            if ((b1 & 0xC0) != 0x80) { put_replacement(); i++; continue; }
+            cp = ((b0 & 0x1Fu) << 6) | (b1 & 0x3Fu);
+            if (cp < 0x80) { put_replacement(); i++; continue; }
+            consumed = 2;
+        } else if ((b0 & 0xF0) == 0xE0) {
+            if (i + 2 >= n) { put_replacement(); break; }
+            uint8_t b1 = static_cast<uint8_t>(s[i + 1]);
+            uint8_t b2 = static_cast<uint8_t>(s[i + 2]);
+            if ((b1 & 0xC0) != 0x80 || (b2 & 0xC0) != 0x80) { put_replacement(); i++; continue; }
+            cp = ((b0 & 0x0Fu) << 12) | ((b1 & 0x3Fu) << 6) | (b2 & 0x3Fu);
+            if (cp < 0x800 || (cp >= 0xD800 && cp <= 0xDFFF)) { put_replacement(); i++; continue; }
+            consumed = 3;
+        } else if ((b0 & 0xF8) == 0xF0) {
+            if (i + 3 >= n) { put_replacement(); break; }
+            uint8_t b1 = static_cast<uint8_t>(s[i + 1]);
+            uint8_t b2 = static_cast<uint8_t>(s[i + 2]);
+            uint8_t b3 = static_cast<uint8_t>(s[i + 3]);
+            if ((b1 & 0xC0) != 0x80 || (b2 & 0xC0) != 0x80 || (b3 & 0xC0) != 0x80) {
+                put_replacement(); i++; continue;
+            }
+            cp = ((b0 & 0x07u) << 18) | ((b1 & 0x3Fu) << 12) | ((b2 & 0x3Fu) << 6) | (b3 & 0x3Fu);
+            if (cp < 0x10000 || cp > 0x10FFFF) { put_replacement(); i++; continue; }
+            consumed = 4;
+        } else {
+            put_replacement(); i++; continue;
+        }
+
+        if (cp == 0) {
+            put_replacement();
+        } else if (cp < 0x10000) {
+            u16.push_back(static_cast<jchar>(cp));
+        } else {
+            uint32_t v = cp - 0x10000;
+            u16.push_back(static_cast<jchar>(0xD800u | (v >> 10)));
+            u16.push_back(static_cast<jchar>(0xDC00u | (v & 0x3FFu)));
+        }
+        i += consumed;
+    }
+
+    return env->NewString(u16.data(), static_cast<jsize>(u16.size()));
+}
+
 jstring to_jstring(JNIEnv* env, const std::string& s) {
-    return env->NewStringUTF(s.c_str());
+    return make_jstring(env, s);
 }
 
 void throw_runtime(JNIEnv* env, const std::string& msg) {
@@ -34,9 +95,9 @@ jobjectArray make_response_triple(JNIEnv* env, const std::string& status,
     if (stringCls == nullptr) return nullptr;
     jobjectArray out = env->NewObjectArray(3, stringCls, nullptr);
     if (out == nullptr) return nullptr;
-    env->SetObjectArrayElement(out, 0, env->NewStringUTF(status.c_str()));
-    env->SetObjectArrayElement(out, 1, env->NewStringUTF(body.c_str()));
-    env->SetObjectArrayElement(out, 2, env->NewStringUTF(error.c_str()));
+    env->SetObjectArrayElement(out, 0, make_jstring(env, status));
+    env->SetObjectArrayElement(out, 1, make_jstring(env, body));
+    env->SetObjectArrayElement(out, 2, make_jstring(env, error));
     return out;
 }
 
@@ -238,7 +299,7 @@ Java_com_dark_networking_WebNative_nativeFetchBytes(
                              const std::string& content_type) -> jobjectArray {
         jobjectArray out = env->NewObjectArray(4, objCls, nullptr);
         if (out == nullptr) return nullptr;
-        env->SetObjectArrayElement(out, 0, env->NewStringUTF(status.c_str()));
+        env->SetObjectArrayElement(out, 0, make_jstring(env, status));
         jbyteArray bodyArr = env->NewByteArray(static_cast<jsize>(body_bytes.size()));
         if (bodyArr == nullptr) return nullptr;
         if (!body_bytes.empty()) {
@@ -247,8 +308,8 @@ Java_com_dark_networking_WebNative_nativeFetchBytes(
                 reinterpret_cast<const jbyte*>(body_bytes.data()));
         }
         env->SetObjectArrayElement(out, 1, bodyArr);
-        env->SetObjectArrayElement(out, 2, env->NewStringUTF(error.c_str()));
-        env->SetObjectArrayElement(out, 3, env->NewStringUTF(content_type.c_str()));
+        env->SetObjectArrayElement(out, 2, make_jstring(env, error));
+        env->SetObjectArrayElement(out, 3, make_jstring(env, content_type));
         return out;
     };
 
