@@ -23,20 +23,6 @@ Generate up to $max NEW follow-up questions that, if answered by web search, wou
 """.trim()
     }
 
-    fun compress(blob: FetchedDoc, question: String): String {
-        val text = blob.extractedText.take(MAX_PAGE_CHARS)
-        return """
-Summarize the following web page in 4-8 sentences, focusing only on information that helps answer:
-"$question"
-
-Page title: ${blob.title}
-URL: ${blob.url}
-
-CONTENT:
-$text
-""".trim()
-    }
-
     fun finalDocument(allCompressed: String, question: String, sources: List<FetchedDoc>): String {
         val sourceList = sources.take(MAX_SOURCES_IN_PROMPT)
             .mapIndexed { i, s -> "[${i + 1}] ${s.title} — ${s.url}" }
@@ -63,6 +49,5 @@ Rules:
 """.trim()
     }
 
-    private const val MAX_PAGE_CHARS = 12_000
     private const val MAX_SOURCES_IN_PROMPT = 30
 }

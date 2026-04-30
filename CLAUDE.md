@@ -563,10 +563,10 @@ The PlusMenu's old "Documents" button is gone — attachments live entirely in t
 
 Multi-iteration on-device research pipeline. The user types `/research <question>` (or flips the Research toggle on the bottom action bar). The app spawns a `ResearchCard` chat-message and a `ResearchCoordinator` run on `viewModelScope`. The coordinator drives this loop, capped by `prefs.researchMaxIterations`:
 
-1. **Search** — `DdgSearch.search(query, prefs.researchResultsPerSearch)` against DuckDuckGo HTML via `:networking` (`WebNative.search`).
-2. **Fetch** — top-N URLs in parallel (concurrency 3) via `WebNative.fetch` JNI; reuses the curl-impersonate Chrome116 fingerprint and CA bundle that the rest of the networking module is configured with.
-3. **Extract** — `HtmlReadability.extract(html)` is a Kotlin Readability-lite (strip script/style/noscript/template/svg, prefer `<article>`/`<main>`/`<section>`, fall back to `<body>`, decode entities, collapse whitespace). Headless WebView is **not** used in v1.
-4. **Compress** — `ResearchModelClient.compress(blobs, question)` summarizes each fetched doc via the active chat LLM (`InferenceClient.generate(prompt, COMPRESS_MAX_TOKENS=320)`).
+1. **Search** — `DdgSearch.search(query, prefs.researchResultsPerSearch, prefs.researchDdgLocale)` against DuckDuckGo HTML via `:networking` (`WebNative.search`). The `kl=` URL param defaults to `wt-wt` (worldwide) when locale is empty; otherwise it uses the configured locale (e.g. `us-en`, `de-de`).
+2. **Fetch** — top-N URLs in parallel (concurrency 3). Each URL goes through `ResearchUrlUtil.canonicalize` first — `arxiv.org/abs/X` is rewritten to `arxiv.org/pdf/X.pdf`. URLs that look binary (`.pdf`/`.epub`/`.docx`/`.odt`/`.rtf` extensions, or matching content-type prefixes) take the **binary fetch path** (`WebNative.fetchBytes` JNI returns `[status, byte[] body, error, content-type]`); HTML/text URLs take the existing string-fetch path. Both paths reuse the curl-impersonate Chrome116 fingerprint + CA bundle.
+3. **Extract** — for HTML, `HtmlReadability.extract(html)` (Kotlin Readability-lite: strip script/style/noscript/template/svg, prefer `<article>`/`<main>`/`<section>`, fall back to `<body>`, decode entities, collapse whitespace). For binary docs, `DocumentExtractor.extract(bytes, mimeHint=contentType, nameHint=urlBasename)` calls `GGUFNativeLib.nativeRagExtractText` — native PDF/DOCX/EPUB/ODT/PPTX/XLSX/RTF/HTML/text extraction via the embedded RAG ingest stack (no embedding model required for the extract path). Headless WebView is intentionally not used.
+4. **Compress** — `ResearchModelClient.compress(blobs, question)` runs each fetched doc through `TextDigest.compress(text, query, targetTokens=200)` — pure-C++ extractive summarization (TF-IDF + TextRank centrality + cosine query relevance + lead bias + NE density + MMR redundancy elimination, sealed inside `gguf_lib`). No LLM call. Replaces the previous LLM-based compress that burned one inference call per fetched doc per iteration.
 5. **Generate questions** — `ResearchModelClient.generateQuestions(ctx, prefs.researchMaxQuestions)` asks the LLM for ≤ N follow-ups; empty response stops the loop.
 6. **Final** — `ResearchModelClient.finalDocument(...)` returns a `StructuredDoc` (title + summary + sections + sources + iteration log + footer). Persisted to the encrypted `research_documents` HXS vault.
 
@@ -582,7 +582,28 @@ interface ResearchModelClient {
 }
 ```
 
-v1 impl is `ChatLlmResearchClient` — wraps `InferenceClient.generate(prompt, maxTokens)`, parses questions line-by-line and final-doc JSON with fence-strip + `{`-find. The bound impl, exclusive — research borrows the active chat GGUF in `:inference`. The single-research lockdown is what keeps this safe (no chat-side `sendMessage` while a run is in flight). v2 (`NativeResearchClient` + a custom `:research` process + `.rmg` engine) was prototyped on 2026-04-29 and pulled — SmolLM2-135M was below the capability threshold for instruction-following summarization. Future v2 candidates would need a 360M+ model; the architecture seam (`ResearchModelClient` interface) is intentionally preserved so the swap remains a one-line `@Binds` change.
+v1 impl is `ChatLlmResearchClient`. **Compress is no longer a model call** — it routes through `com.dark.gguf_lib.TextDigest.compress(text, query)` (pure-CPU C++ extractive summarizer in the `gguf_lib` AAR). `generateQuestions` and `finalDocument` still wrap `InferenceClient.generate(prompt, maxTokens)`, parsing questions line-by-line and final-doc JSON with fence-strip + `{`-find. The bound impl, exclusive — those two phases borrow the active chat GGUF in `:inference`. The single-research lockdown is what keeps that safe (no chat-side `sendMessage` while a run is in flight). v2 (`NativeResearchClient` + a custom `:research` process + `.rmg` engine) was prototyped on 2026-04-29 and pulled — SmolLM2-135M was below the capability threshold for instruction-following summarization. Future v2 candidates would need a 360M+ model; the architecture seam (`ResearchModelClient` interface) is intentionally preserved so the swap remains a one-line `@Binds` change.
+
+### TextDigest — extractive compression engine
+
+Lives entirely in `gguf_lib/src/main/cpp/text_digest/text_digest.{h,cpp}` (~430 LOC, pure C++17 STL, no llama.cpp/ggml/ML dependency) with a Kotlin `object` facade `com.dark.gguf_lib.TextDigest`. Public API: `suspend fun compress(text: String, query: String?, options: TextDigest.Options = …): String`. JNI export is `GGUFNativeLib.nativeTextDigest` — kept by `consumer-rules.pro` (under `native <methods>` of `GGUFNativeLib`) and the explicit `-keep class com.dark.gguf_lib.TextDigest` rule.
+
+Algorithm (per call, all O(N²) over sentences, N ≤ 80):
+
+1. Sentence segmentation — UTF-8-safe walk; sentence-end `.!?` followed by whitespace + uppercase/quote/parenthesis is a split. Abbreviation guard (`Mr|Dr|U.S|e.g|etc|…`) and decimal-period guard (`1.5 million`) prevent false splits. Hard cap at `max_sentences=80`, drop sentences shorter than 20 chars or longer than 600 chars (long ones are subdivided).
+2. Tokenize each sentence — drop stopwords (~150-word English list inline), drop length<2 / length>40, ASCII-lowercase, accept UTF-8 bytes ≥0x80 as token chars (keeps non-English content tokenizing without ICU).
+3. Build TF-IDF — corpus is the document's own sentences. `tf = 1 + log(count)`, `idf = log((N+1)/(df+1)) + 1`. L2-normalize per-sentence vectors. Sparse representation `vector<pair<term_id, weight>>` sorted by term_id.
+4. Pairwise cosine similarity — NxN matrix, sparse-vector dot product (merge-walk).
+5. TextRank centrality — row-normalized similarity matrix, `r ← (1-d)/N + d * Σⱼ (sim[j,i]/rowSum[j]) * rⱼ`, damping `d=0.85`, up to 30 iterations or until `Σ |Δr| < 1e-4`.
+6. Query relevance — query → TF-IDF (same vocab/IDF), cosine to each sentence vector. Skipped if query empty.
+7. Lead bias — `1/(1+i)` decay, favors paragraph-leading sentences (good for HTML/research-paper structure).
+8. NE density — fraction of capitalized non-leading words in the sentence (proxy for "this sentence names entities"). The first word's capitalization is excluded so "The cat sat." doesn't score 1/3.
+9. Combined score — each component normalized to its max=1, then weighted sum: `α·query + β·centrality + γ·lead + δ·NE`. Defaults `α=0.40, β=0.30, γ=0.15, δ=0.15`. When the query is blank, α reweights into β so centrality dominates.
+10. MMR selection — greedy: `mmr_score = λ·score - (1-λ)·max(sim_to_already_picked)`, λ=0.7. Stop when token budget (`chars/4` approx) reached or no candidates remain. Reorder picks by original sentence position before joining.
+
+Verified on a 941-char input: extracted three on-topic sentences (179 chars) for query "How does self-attention work?" — 5x compression with sensible content.
+
+Replacement of LLM compress saves N inference calls per iteration (where N = fetched docs). For a 5-iteration × 5-results-per-search run, that's 25 LLM calls dropped → research finishes in seconds instead of minutes on a Pixel 8 with a 4B model.
 
 ### Persistence
 
@@ -615,7 +636,7 @@ Only one research run at a time. `HomeViewModel.researchActive: StateFlow<Boolea
 - `research_max_iterations` Int default 5 (clamped 1..10)
 - `research_max_questions` Int default 4 (clamped 1..6)
 - `research_results_per_search` Int default 5 (clamped 3..10)
-- `research_ddg_locale` String default "" (empty = system; reserved, not yet plumbed into search)
+- `research_ddg_locale` String default "" (empty → DDG `kl=wt-wt` worldwide; non-empty (`us-en`, `de-de`, `fr-fr`, etc.) is passed straight to the `kl=` URL parameter)
 - `research_cancel_on_bg` Bool default true
 - `active_research_model` String default "" (empty = mirror active chat model)
 
@@ -625,7 +646,7 @@ The Settings → Research section exposes each as a `SettingsItem.Choice` (max-i
 
 - `model/{StructuredDoc,ResearchEvent,ResearchPhase,FetchedDoc,ResearchContext}.kt` — pipeline data classes + `ResearchDocument` aggregate.
 - `repo/ResearchRepository.kt` — encrypted CRUD over both vaults.
-- `repo/research/{ResearchModelClient,ChatLlmResearchClient,HtmlReadability,DdgSearch,ResearchPrompts,ResearchModule}.kt` — pipeline support + Hilt binding.
+- `repo/research/{ResearchModelClient,ChatLlmResearchClient,HtmlReadability,DdgSearch,ResearchPrompts,ResearchModule,DocumentExtractor,ResearchUrlUtil}.kt` — pipeline support + Hilt binding.
 - `viewmodel/{ResearchCoordinator,DocumentViewerViewModel,DocumentsViewModel}.kt`
 - `ui/screens/research/{ResearchCard,ResearchCardStates}.kt`
 - `ui/screens/document/{DocumentViewerScreen,DocumentViewerTopBar}.kt`
@@ -779,6 +800,14 @@ Hub + 7 detail screens, all **single-Scaffold** (accept `innerPadding: PaddingVa
 - Don't expose research from any process other than main. The coordinator depends on `:inference` AIDL via `InferenceClient`, which is bound from the main process; spawning a run from `:server` or `:inference` would deadlock on the binder.
 - Don't drop the `ResearchBackgroundObserver` registration from `TNApplication.onCreate`. Without it, the cancel-on-background pref does nothing and a half-finished run keeps churning network + LLM after the user leaves the app.
 - Don't store the active research model id by mirroring `active_chat_model`. The `active_research_model` key is intentionally separate so v2 can install a dedicated research model alongside (not in place of) the chat GGUF.
+- Don't put the `TextDigest` engine back in Kotlin or `:app`. It lives in `gguf_lib/src/main/cpp/text_digest/` so other consumers (including future v2 / future apps consuming the AAR) get the same compression engine via the same JNI symbol. The Kotlin facade `com.dark.gguf_lib.TextDigest` is required because R8 in the gguf_lib release minifies; the keep rule (`-keep class com.dark.gguf_lib.TextDigest { *; }` in `consumer-rules.pro`) preserves it. The `nativeTextDigest` external fn is preserved by the existing `native <methods>` rule on `GGUFNativeLib`.
+- Don't reintroduce `ResearchPrompts.compress` or its `MAX_PAGE_CHARS` constant. Compress is now `TextDigest.compress(text, query)`; the LLM prompt path is dead. Bringing it back wastes inference calls and re-couples compress to `InferenceClient.isModelLoaded`.
+- Don't drop the binary-fetch path from `ResearchCoordinator.fetchAll`. URLs that look like binary docs (`.pdf`/`.epub`/`.docx`/`.odt`/`.rtf` extensions, or matching `application/pdf|epub|*officedocument*|*opendocument*` content-type prefixes) MUST go through `ddgSearch.fetchBytes` + `DocumentExtractor.extract(bytes, mimeHint, nameHint)`. The existing string-fetch path mangles binary at the JNI `NewStringUTF` boundary (any 0xFF byte becomes U+FFFD, embedded NUL truncates) — feeding that to `extractText` would get noise.
+- Don't bypass `ResearchUrlUtil.canonicalize`. The `arxiv.org/abs/X → arxiv.org/pdf/X.pdf` rewrite is what turns DDG search hits for arXiv abstracts into actually-extractable papers. Skipping it lands you on the abstract HTML page (which Readability extracts to a thin metadata blurb) instead of the full paper PDF.
+- Don't add a `nativeFetchBytes` variant that returns the body as `String`. The whole point of `WebBytesResponse` is that `body: ByteArray` is lossless across the JNI boundary. The C++ side hands the body in as a `std::string` (which curl populates with arbitrary bytes), and the JNI binding wraps it as `byte[]` via `SetByteArrayRegion`. Going through `NewStringUTF` again breaks PDF/DOCX/EPUB extraction.
+- Don't drop the Content-Type header scrape (`find_header(resp->headers, "Content-Type")`) from `nativeFetchBytes`. `ResearchUrlUtil.looksBinaryDoc(url, contentType)` and `DocumentExtractor.extract(bytes, mimeHint=…)` both rely on it; without the actual server-reported MIME, sites that serve `.pdf` URLs with a `text/html` redirect-shim get misrouted, and `nativeRagDetectKind` has to guess from bytes alone (less accurate).
+- Don't pass `wt-wt` as a hard-coded fallback if `prefs.researchDdgLocale` is non-empty. The `kl=` parameter on the DDG HTML endpoint is what scopes results to a region; the user explicitly set it, so respect it. The C++ default (`locale.empty() ? "wt-wt" : locale`) is only for when the pref is genuinely empty.
+- Don't bump the `nativeSearch` arity without bumping the C++ `Java_com_dark_networking_WebNative_nativeSearch` signature in lock-step. Java/Kotlin signature mismatches against the JNI binding fail at runtime via `UnsatisfiedLinkError` ("no implementation found"), not at compile time. Same applies to `nativeFetchBytes`.
 - Don't fall back to `java.net.HttpURLConnection` for any HuggingFace API call — search, model info, tree, raw README, tags-by-type, trending, quicksearch, resolve. Every HF request goes through `:networking` (`WebNative.fetch`) so it inherits the curl-impersonate Chrome116 fingerprint + bundled `cacert.pem` + strict cert verify. The hub is `repo/HuggingFaceApi.kt` (Hilt singleton class, not an object); `repo/hf/HfClient.kt` builds typed endpoints on top. `ModelCatalog` and `RepositoryValidator` inject `HuggingFaceApi`. Same rule applies for any future HF or non-HF HTTP target — `:networking` is the only allowed pipe.
 - Don't change `WebNative.fetch` back to `Result<String>`. The contract is `Result<WebResponse>` where `WebResponse(status: Int, body: String, error: String?)`. Result.failure is reserved for transport-layer issues (DNS, TLS handshake, native call collapse). HTTP non-2xx comes back as `Result.success(WebResponse(status=4xx, ...))` — callers can react to 429 (rate limited) vs 404 (not found) vs 401/403 (auth). Old behavior of returning `null` on non-2xx silently masked HF API bugs (e.g. invalid `expand=` params returning 400) for years.
 - Don't log full URLs (with query string) to `ANDROID_LOG_WARN` from `net_jni.cpp`. Use the `host_of(url)` helper. Search queries are user PII (typed model names, sometimes sensitive). Status code + host is the maximum log surface.

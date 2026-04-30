@@ -10,8 +10,10 @@ import com.dark.tool_neuron.model.ResearchEvent
 import com.dark.tool_neuron.model.ResearchPhase
 import com.dark.tool_neuron.repo.ResearchRepository
 import com.dark.tool_neuron.repo.research.DdgSearch
+import com.dark.tool_neuron.repo.research.DocumentExtractor
 import com.dark.tool_neuron.repo.research.HtmlReadability
 import com.dark.tool_neuron.repo.research.ResearchModelClient
+import com.dark.tool_neuron.repo.research.ResearchUrlUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -124,8 +126,9 @@ class ResearchCoordinator @Inject constructor(
 
                 val perIterFetched = mutableListOf<FetchedDoc>()
 
+                val locale = prefs.researchDdgLocale
                 for (query in currentQueries) {
-                    val searchResult = ddgSearch.search(query, resultsPerSearch).getOrElse {
+                    val searchResult = ddgSearch.search(query, resultsPerSearch, locale).getOrElse {
                         emit(ResearchEvent.Search(runId, iter, maxIterations, query, 0))
                         continue
                     }
@@ -282,40 +285,104 @@ class ResearchCoordinator @Inject constructor(
         maxIterations: Int,
     ): List<FetchedDoc> = coroutineScope {
         val sem = Semaphore(MAX_CONCURRENT_FETCH)
-        urls.map { url ->
+        urls.map { rawUrl ->
             async {
                 sem.withPermit {
-                    val titleHint = titles[url].orEmpty()
-                    val res = ddgSearch.fetch(url, FETCH_TIMEOUT_MS)
-                    val fd = res.fold(
-                        onSuccess = { html ->
-                            val extracted = HtmlReadability.extract(html)
-                            FetchedDoc(
-                                url = url,
-                                title = extracted.title.ifBlank { titleHint },
-                                extractedText = extracted.text,
-                                byteCount = html.length.toLong(),
-                                iteration = iter,
-                                ok = true,
-                            )
-                        },
-                        onFailure = {
-                            FetchedDoc(
-                                url = url,
-                                title = titleHint,
-                                extractedText = "",
-                                byteCount = 0,
-                                iteration = iter,
-                                ok = false,
-                                error = it.message,
-                            )
-                        },
-                    )
-                    emit(ResearchEvent.FetchProgress(runId, iter, maxIterations, url, fd.ok))
+                    val url = ResearchUrlUtil.canonicalize(rawUrl)
+                    val titleHint = titles[rawUrl].orEmpty().ifBlank { titles[url].orEmpty() }
+                    val fd = if (ResearchUrlUtil.looksBinaryDoc(url)) {
+                        fetchBinary(url, titleHint, iter)
+                    } else {
+                        fetchTextOrBinary(url, titleHint, iter)
+                    }
+                    emit(ResearchEvent.FetchProgress(runId, iter, maxIterations, rawUrl, fd.ok))
                     fd
                 }
             }
         }.awaitAll()
+    }
+
+    private suspend fun fetchTextOrBinary(url: String, titleHint: String, iter: Int): FetchedDoc {
+        val res = ddgSearch.fetch(url, FETCH_TIMEOUT_MS)
+        return res.fold(
+            onSuccess = { html ->
+                val extracted = HtmlReadability.extract(html)
+                FetchedDoc(
+                    url = url,
+                    title = extracted.title.ifBlank { titleHint },
+                    extractedText = extracted.text,
+                    byteCount = html.length.toLong(),
+                    iteration = iter,
+                    ok = extracted.text.isNotBlank(),
+                )
+            },
+            onFailure = {
+                FetchedDoc(
+                    url = url,
+                    title = titleHint,
+                    extractedText = "",
+                    byteCount = 0,
+                    iteration = iter,
+                    ok = false,
+                    error = it.message,
+                )
+            },
+        )
+    }
+
+    private suspend fun fetchBinary(url: String, titleHint: String, iter: Int): FetchedDoc {
+        val res = ddgSearch.fetchBytes(url, BINARY_FETCH_TIMEOUT_MS)
+        return res.fold(
+            onSuccess = { resp ->
+                if (!resp.isSuccess || resp.body.isEmpty()) {
+                    return@fold FetchedDoc(
+                        url = url,
+                        title = titleHint,
+                        extractedText = "",
+                        byteCount = resp.body.size.toLong(),
+                        iteration = iter,
+                        ok = false,
+                        error = resp.error ?: "HTTP ${resp.status}",
+                    )
+                }
+                val text = DocumentExtractor.extract(
+                    bytes = resp.body,
+                    mimeHint = resp.contentType,
+                    nameHint = ResearchUrlUtil.nameHintFrom(url),
+                )
+                if (text.isNullOrBlank()) {
+                    FetchedDoc(
+                        url = url,
+                        title = titleHint,
+                        extractedText = "",
+                        byteCount = resp.body.size.toLong(),
+                        iteration = iter,
+                        ok = false,
+                        error = "extraction failed",
+                    )
+                } else {
+                    FetchedDoc(
+                        url = url,
+                        title = titleHint.ifBlank { ResearchUrlUtil.nameHintFrom(url) },
+                        extractedText = text,
+                        byteCount = resp.body.size.toLong(),
+                        iteration = iter,
+                        ok = true,
+                    )
+                }
+            },
+            onFailure = {
+                FetchedDoc(
+                    url = url,
+                    title = titleHint,
+                    extractedText = "",
+                    byteCount = 0,
+                    iteration = iter,
+                    ok = false,
+                    error = it.message,
+                )
+            },
+        )
     }
 
     private suspend fun emit(event: ResearchEvent) {
@@ -339,5 +406,6 @@ class ResearchCoordinator @Inject constructor(
     companion object {
         private const val MAX_CONCURRENT_FETCH = 3
         private const val FETCH_TIMEOUT_MS = 15000
+        private const val BINARY_FETCH_TIMEOUT_MS = 45000
     }
 }

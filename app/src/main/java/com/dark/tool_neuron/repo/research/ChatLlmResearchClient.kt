@@ -1,5 +1,6 @@
 package com.dark.tool_neuron.repo.research
 
+import com.dark.gguf_lib.TextDigest
 import com.dark.tool_neuron.model.DocSection
 import com.dark.tool_neuron.model.DocSource
 import com.dark.tool_neuron.model.FetchedDoc
@@ -29,17 +30,20 @@ class ChatLlmResearchClient @Inject constructor() : ResearchModelClient {
 
     override suspend fun compress(blobs: List<FetchedDoc>, question: String): String {
         if (blobs.isEmpty()) return ""
-        if (!InferenceClient.isModelLoaded.first { true }) return ""
         val parts = StringBuilder()
+        val opts = TextDigest.Options(targetTokens = DIGEST_TARGET_TOKENS)
         for (blob in blobs) {
             if (blob.extractedText.isBlank()) continue
-            val prompt = ResearchPrompts.compress(blob, question)
-            val raw = runInference(prompt, maxTokens = COMPRESS_MAX_TOKENS)
-            if (raw.isBlank()) continue
+            val digest = TextDigest.compress(
+                text = blob.extractedText,
+                query = question,
+                options = opts,
+            )
+            if (digest.isBlank()) continue
             parts.append("• [")
             parts.append(blob.title.take(120).ifBlank { blob.url })
             parts.append("] ")
-            parts.append(raw.trim())
+            parts.append(digest.trim())
             parts.append("\n\n")
         }
         return parts.toString().trim()
@@ -177,7 +181,7 @@ class ChatLlmResearchClient @Inject constructor() : ResearchModelClient {
 
     companion object {
         private const val QUESTION_GEN_MAX_TOKENS = 256
-        private const val COMPRESS_MAX_TOKENS = 320
         private const val FINAL_MAX_TOKENS = 1500
+        private const val DIGEST_TARGET_TOKENS = 200
     }
 }

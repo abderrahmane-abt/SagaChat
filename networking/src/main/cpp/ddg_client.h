@@ -21,6 +21,9 @@ struct SearchOutcome {
     bool ok = false;
 };
 
-SearchOutcome search(const std::string& query, const std::string& user_agent, int max_results);
+SearchOutcome search(const std::string& query,
+                     const std::string& user_agent,
+                     int max_results,
+                     const std::string& locale = "");
 
 }

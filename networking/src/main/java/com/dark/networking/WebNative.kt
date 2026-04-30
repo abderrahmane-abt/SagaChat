@@ -15,6 +15,7 @@ object WebNative {
         query: String,
         userAgent: String,
         maxResults: Int,
+        locale: String,
     ): Array<String>?
 
     @JvmStatic private external fun nativeHasBackend(): Boolean
@@ -32,6 +33,14 @@ object WebNative {
         headerKeys: Array<String>,
         headerVals: Array<String>,
     ): Array<String>?
+
+    @JvmStatic private external fun nativeFetchBytes(
+        url: String,
+        userAgent: String,
+        timeoutMs: Int,
+        headerKeys: Array<String>,
+        headerVals: Array<String>,
+    ): Array<Any>?
 
     val isReady: Boolean by lazy { nativeHasBackend() }
 
@@ -78,13 +87,34 @@ object WebNative {
         }
     }
 
+    suspend fun fetchBytes(
+        url: String,
+        userAgent: String = DefaultUserAgent,
+        timeoutMs: Int = 30000,
+        headers: Map<String, String> = emptyMap(),
+    ): Result<WebBytesResponse> = withContext(Dispatchers.IO) {
+        runCatching {
+            val keys = if (headers.isEmpty()) EmptyStrArr else headers.keys.toTypedArray()
+            val vals = if (headers.isEmpty()) EmptyStrArr else headers.values.toTypedArray()
+            val arr = nativeFetchBytes(url, userAgent, timeoutMs, keys, vals)
+                ?: throw IllegalStateException("native fetchBytes returned null: $url")
+            require(arr.size == 4) { "malformed native bytes response size=${arr.size}" }
+            val status = (arr[0] as String).toIntOrNull() ?: 0
+            val body = arr[1] as ByteArray
+            val err = (arr[2] as String).takeIf { it.isNotEmpty() }
+            val ct = (arr[3] as String).takeIf { it.isNotEmpty() }
+            WebBytesResponse(status = status, body = body, error = err, contentType = ct)
+        }
+    }
+
     suspend fun search(
         query: String,
         userAgent: String = DefaultUserAgent,
         maxResults: Int = 10,
+        locale: String = "",
     ): Result<List<WebSearchResult>> = withContext(Dispatchers.IO) {
         runCatching {
-            val raw = nativeSearch(query, userAgent, maxResults)
+            val raw = nativeSearch(query, userAgent, maxResults, locale)
                 ?: return@runCatching emptyList()
             require(raw.size % 3 == 0) { "malformed native array size=${raw.size}" }
             List(raw.size / 3) { idx ->

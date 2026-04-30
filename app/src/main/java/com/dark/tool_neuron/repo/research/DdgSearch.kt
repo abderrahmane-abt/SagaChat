@@ -1,6 +1,7 @@
 package com.dark.tool_neuron.repo.research
 
 import android.content.Context
+import com.dark.networking.WebBytesResponse
 import com.dark.networking.WebNative
 import com.dark.networking.WebSearchResult
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -15,9 +16,13 @@ class DdgSearch @Inject constructor(
         WebNative.ensureReady(context)
     }
 
-    suspend fun search(query: String, maxResults: Int): Result<List<WebSearchResult>> {
+    suspend fun search(
+        query: String,
+        maxResults: Int,
+        locale: String = "",
+    ): Result<List<WebSearchResult>> {
         ensureReady()
-        return WebNative.search(query = query, maxResults = maxResults)
+        return WebNative.search(query = query, maxResults = maxResults, locale = locale)
     }
 
     suspend fun fetch(url: String, timeoutMs: Int = 15000): Result<String> {
@@ -26,5 +31,10 @@ class DdgSearch @Inject constructor(
             if (!resp.isSuccess) error("HTTP ${resp.status}${resp.error?.let { " ($it)" } ?: ""}")
             resp.body
         }
+    }
+
+    suspend fun fetchBytes(url: String, timeoutMs: Int = 30000): Result<WebBytesResponse> {
+        ensureReady()
+        return WebNative.fetchBytes(url = url, timeoutMs = timeoutMs)
     }
 }

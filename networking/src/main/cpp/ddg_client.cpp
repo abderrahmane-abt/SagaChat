@@ -13,11 +13,13 @@ namespace {
 constexpr const char* kHtmlHost = "https://html.duckduckgo.com/html/";
 constexpr const char* kLiteHost = "https://lite.duckduckgo.com/lite/";
 
-HttpRequest build_post(const std::string& host, const std::string& query, const std::string& ua) {
+HttpRequest build_post(const std::string& host, const std::string& query,
+                       const std::string& ua, const std::string& locale) {
     HttpRequest req;
     req.url = host;
     req.method = "POST";
-    req.body = "q=" + url::encode(query) + "&kl=wt-wt&kd=-1&b=";
+    std::string kl = locale.empty() ? "wt-wt" : locale;
+    req.body = "q=" + url::encode(query) + "&kl=" + url::encode(kl) + "&kd=-1&b=";
     req.headers = {
         {"User-Agent", ua},
         {"Content-Type", "application/x-www-form-urlencoded"},
@@ -48,9 +50,10 @@ std::vector<Result> to_results(std::vector<html::Entry>&& entries) {
     return out;
 }
 
-SearchOutcome try_host(const std::string& host, const std::string& query, const std::string& ua, int max_results) {
+SearchOutcome try_host(const std::string& host, const std::string& query, const std::string& ua,
+                       int max_results, const std::string& locale) {
     SearchOutcome out;
-    auto resp = http_execute(build_post(host, query, ua));
+    auto resp = http_execute(build_post(host, query, ua, locale));
     if (!resp.has_value()) {
         out.error = {"http backend unavailable"};
         return out;
@@ -75,7 +78,8 @@ SearchOutcome try_host(const std::string& host, const std::string& query, const 
 
 }
 
-SearchOutcome search(const std::string& query, const std::string& user_agent, int max_results) {
+SearchOutcome search(const std::string& query, const std::string& user_agent,
+                     int max_results, const std::string& locale) {
     if (query.empty()) {
         SearchOutcome out;
         out.error = {"empty query"};
@@ -84,10 +88,10 @@ SearchOutcome search(const std::string& query, const std::string& user_agent, in
 
     int capped = std::clamp(max_results, 1, 30);
 
-    auto primary = try_host(kHtmlHost, query, user_agent, capped);
+    auto primary = try_host(kHtmlHost, query, user_agent, capped, locale);
     if (primary.ok) return primary;
 
-    auto fallback = try_host(kLiteHost, query, user_agent, capped);
+    auto fallback = try_host(kLiteHost, query, user_agent, capped, locale);
     if (fallback.ok) return fallback;
 
     return primary.error.message.empty() ? fallback : primary;

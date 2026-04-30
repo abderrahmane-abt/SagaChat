@@ -48,16 +48,20 @@ Java_com_dark_networking_WebNative_nativeSearch(
     jobject,
     jstring jQuery,
     jstring jUserAgent,
-    jint jMaxResults
+    jint jMaxResults,
+    jstring jLocale
 ) {
     const char* q = env->GetStringUTFChars(jQuery, nullptr);
     const char* ua = env->GetStringUTFChars(jUserAgent, nullptr);
+    const char* lc = jLocale ? env->GetStringUTFChars(jLocale, nullptr) : nullptr;
     std::string query = q ? q : "";
     std::string user_agent = ua ? ua : "";
+    std::string locale = lc ? lc : "";
     if (q) env->ReleaseStringUTFChars(jQuery, q);
     if (ua) env->ReleaseStringUTFChars(jUserAgent, ua);
+    if (lc) env->ReleaseStringUTFChars(jLocale, lc);
 
-    auto outcome = net::ddg::search(query, user_agent, jMaxResults);
+    auto outcome = net::ddg::search(query, user_agent, jMaxResults, locale);
 
     if (!outcome.ok) {
         __android_log_print(ANDROID_LOG_WARN, kTag, "search failed: %s", outcome.error.message.c_str());
@@ -191,4 +195,137 @@ Java_com_dark_networking_WebNative_nativeFetch(
     }
 
     return make_response_triple(env, status_buf, resp->body, "");
+}
+
+namespace {
+
+bool ascii_iequals(const std::string& a, const std::string& b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i) {
+        char ca = a[i]; char cb = b[i];
+        if (ca >= 'A' && ca <= 'Z') ca = (char)(ca + 32);
+        if (cb >= 'A' && cb <= 'Z') cb = (char)(cb + 32);
+        if (ca != cb) return false;
+    }
+    return true;
+}
+
+std::string find_header(const std::vector<net::Header>& headers, const std::string& name) {
+    for (const auto& h : headers) {
+        if (ascii_iequals(h.first, name)) return h.second;
+    }
+    return "";
+}
+
+}
+
+extern "C" JNIEXPORT jobjectArray JNICALL
+Java_com_dark_networking_WebNative_nativeFetchBytes(
+    JNIEnv* env,
+    jobject,
+    jstring jUrl,
+    jstring jUserAgent,
+    jint jTimeoutMs,
+    jobjectArray jHeaderKeys,
+    jobjectArray jHeaderVals
+) {
+    jclass objCls = env->FindClass("java/lang/Object");
+    if (objCls == nullptr) return nullptr;
+
+    auto build_result = [&](const std::string& status,
+                             const std::string& body_bytes,
+                             const std::string& error,
+                             const std::string& content_type) -> jobjectArray {
+        jobjectArray out = env->NewObjectArray(4, objCls, nullptr);
+        if (out == nullptr) return nullptr;
+        env->SetObjectArrayElement(out, 0, env->NewStringUTF(status.c_str()));
+        jbyteArray bodyArr = env->NewByteArray(static_cast<jsize>(body_bytes.size()));
+        if (bodyArr == nullptr) return nullptr;
+        if (!body_bytes.empty()) {
+            env->SetByteArrayRegion(
+                bodyArr, 0, static_cast<jsize>(body_bytes.size()),
+                reinterpret_cast<const jbyte*>(body_bytes.data()));
+        }
+        env->SetObjectArrayElement(out, 1, bodyArr);
+        env->SetObjectArrayElement(out, 2, env->NewStringUTF(error.c_str()));
+        env->SetObjectArrayElement(out, 3, env->NewStringUTF(content_type.c_str()));
+        return out;
+    };
+
+    const char* u = env->GetStringUTFChars(jUrl, nullptr);
+    const char* ua = env->GetStringUTFChars(jUserAgent, nullptr);
+    std::string url = u ? u : "";
+    std::string user_agent = ua ? ua : "";
+    if (u) env->ReleaseStringUTFChars(jUrl, u);
+    if (ua) env->ReleaseStringUTFChars(jUserAgent, ua);
+
+    if (url.empty()) {
+        return build_result("0", "", "empty url", "");
+    }
+
+    net::HttpRequest req;
+    req.url = url;
+    req.method = "GET";
+    req.headers = {
+        {"User-Agent", user_agent},
+        {"Accept", "*/*"},
+        {"Accept-Language", "en-US,en;q=0.9"},
+        {"Sec-Fetch-Dest", "document"},
+        {"Sec-Fetch-Mode", "navigate"},
+        {"Sec-Fetch-Site", "none"},
+        {"Sec-Fetch-User", "?1"},
+        {"Upgrade-Insecure-Requests", "1"},
+    };
+
+    if (jHeaderKeys != nullptr && jHeaderVals != nullptr) {
+        const jsize nk = env->GetArrayLength(jHeaderKeys);
+        const jsize nv = env->GetArrayLength(jHeaderVals);
+        const jsize count = (nk < nv) ? nk : nv;
+        for (jsize i = 0; i < count; ++i) {
+            jstring jk = (jstring) env->GetObjectArrayElement(jHeaderKeys, i);
+            jstring jv = (jstring) env->GetObjectArrayElement(jHeaderVals, i);
+            const char* kc = jk ? env->GetStringUTFChars(jk, nullptr) : nullptr;
+            const char* vc = jv ? env->GetStringUTFChars(jv, nullptr) : nullptr;
+            std::string ks = kc ? kc : "";
+            std::string vs = vc ? vc : "";
+            if (kc) env->ReleaseStringUTFChars(jk, kc);
+            if (vc) env->ReleaseStringUTFChars(jv, vc);
+            if (jk) env->DeleteLocalRef(jk);
+            if (jv) env->DeleteLocalRef(jv);
+            if (ks.empty()) continue;
+            bool replaced = false;
+            for (auto& h : req.headers) {
+                if (h.first == ks) { h.second = vs; replaced = true; break; }
+            }
+            if (!replaced) req.headers.emplace_back(ks, vs);
+        }
+    }
+
+    req.timeout_ms = jTimeoutMs > 0 ? jTimeoutMs : 30000;
+    req.follow_redirects = true;
+
+    auto resp = net::http_execute(req);
+    if (!resp.has_value()) {
+        __android_log_print(ANDROID_LOG_WARN, kTag, "fetchBytes transport-fail host=%s",
+                            host_of(url).c_str());
+        return build_result("0", "", "transport", "");
+    }
+
+    char status_buf[16];
+    std::snprintf(status_buf, sizeof(status_buf), "%d", resp->status);
+
+    std::string content_type = find_header(resp->headers, "Content-Type");
+
+    if (!resp->error.empty()) {
+        __android_log_print(ANDROID_LOG_WARN, kTag, "fetchBytes failed host=%s status=%d",
+                            host_of(url).c_str(), resp->status);
+        return build_result(status_buf, resp->body, resp->error, content_type);
+    }
+
+    if (resp->status < 200 || resp->status >= 400) {
+        __android_log_print(ANDROID_LOG_WARN, kTag, "fetchBytes http %d host=%s",
+                            resp->status, host_of(url).c_str());
+    }
+
+    return build_result(status_buf, resp->body, "", content_type);
 }
