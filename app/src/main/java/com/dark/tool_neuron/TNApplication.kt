@@ -35,10 +35,15 @@ class TNApplication : Application() {
         val accessibilityGuard = accessibilityGuardLazy.get()
 
         val envReasons = integrity.scanProcessEnvironment()
-        if (envReasons != BootIntegrity.FAIL_NONE) {
-            Log.w(TAG, "env reasons=$envReasons")
-            BootIntegrity.hardFail(envReasons)
+        val hardEnvReasons = envReasons and (BootIntegrity.FAIL_DEBUGGER or BootIntegrity.FAIL_FRIDA)
+        if (hardEnvReasons != BootIntegrity.FAIL_NONE) {
+            Log.w(TAG, "env reasons=$envReasons (hard=$hardEnvReasons)")
+            BootIntegrity.hardFail(hardEnvReasons)
             return
+        }
+        if (envReasons and BootIntegrity.FAIL_XPOSED != 0) {
+            Log.w(TAG, "xposed/lspd-like signal detected; deferring to user warning")
+            softEnvReasons = envReasons
         }
 
         val outcome = integrity.bootVerify()
@@ -57,10 +62,6 @@ class TNApplication : Application() {
         when (val a11y = accessibilityGuard.scan()) {
             is AccessibilityGuard.Result.SuspiciousAttached -> {
                 Log.w(TAG, "unknown a11y services attached: ${a11y.packages}")
-                if (!BuildConfig.DEBUG) {
-                    BootIntegrity.hardFail(BootIntegrity.FAIL_XPOSED)
-                    return
-                }
             }
             else -> Unit
         }
@@ -82,5 +83,9 @@ class TNApplication : Application() {
 
     companion object {
         private const val TAG = "TNApplication"
+
+        @Volatile
+        var softEnvReasons: Int = 0
+            internal set
     }
 }

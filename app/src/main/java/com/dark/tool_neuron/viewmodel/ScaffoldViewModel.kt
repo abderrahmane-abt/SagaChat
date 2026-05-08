@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.download_manager.HxdManager
 import com.dark.download_manager.HxdStatus
+import com.dark.hxs_encryptor.BootIntegrity
+import com.dark.tool_neuron.TNApplication
+import com.dark.tool_neuron.data.AccessibilityGuard
 import com.dark.tool_neuron.data.AppPreferences
 import com.dark.tool_neuron.data.RootGuard
 import com.dark.tool_neuron.data.SecurityManager
@@ -28,6 +31,7 @@ class ScaffoldViewModel @Inject constructor(
     private val prefs: AppPreferences,
     private val security: SecurityManager,
     private val rootGuard: RootGuard,
+    private val accessibilityGuard: AccessibilityGuard,
     session: SessionHolder,
     serverController: ServerController,
     installProgress: InstallProgressTracker,
@@ -75,14 +79,30 @@ class ScaffoldViewModel @Inject constructor(
     private val _rootWarning = MutableStateFlow<RootWarning?>(resolveInitialRootWarning())
     val rootWarning: StateFlow<RootWarning?> = _rootWarning.asStateFlow()
 
-    data class RootWarning(val evidence: Set<String>)
+    data class RootWarning(
+        val rootEvidence: Set<String>,
+        val tamperEvidence: Set<String>,
+        val a11yPackages: Set<String>,
+    ) {
+        val isEmpty: Boolean
+            get() = rootEvidence.isEmpty() && tamperEvidence.isEmpty() && a11yPackages.isEmpty()
+    }
 
     private fun resolveInitialRootWarning(): RootWarning? {
         if (prefs.rootWarningShown) return null
-        return when (val r = rootGuard.scan()) {
-            is RootGuard.Result.Rooted -> RootWarning(r.evidence)
-            else -> null
+        val rootEvidence = when (val r = rootGuard.scan()) {
+            is RootGuard.Result.Rooted -> r.evidence
+            else -> emptySet()
         }
+        val tamperEvidence = mutableSetOf<String>()
+        val envBits = TNApplication.softEnvReasons
+        if (envBits and BootIntegrity.FAIL_XPOSED != 0) tamperEvidence += "xposed/lspd"
+        val a11yPackages = when (val a = accessibilityGuard.scan()) {
+            is AccessibilityGuard.Result.SuspiciousAttached -> a.packages
+            else -> emptySet()
+        }
+        val warning = RootWarning(rootEvidence, tamperEvidence.toSet(), a11yPackages)
+        return if (warning.isEmpty) null else warning
     }
 
     fun acknowledgeRootWarning() {
@@ -91,9 +111,11 @@ class ScaffoldViewModel @Inject constructor(
     }
 
     fun resolveStartDestination(): String {
+        val tcAccepted = prefs.tcAccepted
         val onboarded = prefs.onboardingComplete
         val secDone = prefs.securitySetupDone
         val modelDone = prefs.modelSetupDone
+        if (!tcAccepted) return NavScreens.TermsConditions.route
         if (!onboarded) return NavScreens.DevNotes.route
         if (!secDone) return NavScreens.SetupScreen.route
         if (!modelDone) return NavScreens.ModelSetup.route
@@ -103,6 +125,10 @@ class ScaffoldViewModel @Inject constructor(
 
     fun markOnboardingComplete() {
         prefs.onboardingComplete = true
+    }
+
+    fun markTermsAccepted() {
+        if (!prefs.tcAccepted) prefs.tcAccepted = true
     }
 
     fun markModelSetupDone() {

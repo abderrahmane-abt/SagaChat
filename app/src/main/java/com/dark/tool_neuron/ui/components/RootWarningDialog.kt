@@ -13,31 +13,76 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun RootWarningDialog(
-    evidence: Set<String>,
+    rootEvidence: Set<String>,
+    tamperEvidence: Set<String>,
+    a11yPackages: Set<String>,
     onAcknowledge: () -> Unit,
 ) {
+    val title = when {
+        rootEvidence.isNotEmpty() && tamperEvidence.isNotEmpty() -> "Root and tampering signals detected"
+        tamperEvidence.isNotEmpty() -> "Tampering signals detected"
+        rootEvidence.isNotEmpty() -> "Root access detected"
+        a11yPackages.isNotEmpty() -> "Accessibility services detected"
+        else -> "Device security warning"
+    }
+
     AlertDialog(
         onDismissRequest = {},
-        title = { Text("Root access detected") },
+        title = { Text(title) },
         text = {
             Column {
                 Text(
-                    "Your device appears to be rooted. Any app with root access on this device can read ToolNeuron's encrypted files and, in principle, extract session data while the app is running.",
+                    "Your device shows signs that lower the protection floor for ToolNeuron. The app will keep running, but read this once.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    "Your PIN is still hardware-sealed by the Android Keystore — but root lowers the protection floor. Use at your own risk.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                if (evidence.isNotEmpty()) {
+
+                if (rootEvidence.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        "Evidence: ${evidence.joinToString(", ")}",
+                        "Root access: another app on this device with root can read ToolNeuron's encrypted files and, in principle, extract session data while the app is running. Your PIN is still hardware-sealed by Android Keystore.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Evidence: ${rootEvidence.joinToString(", ")}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+
+                if (tamperEvidence.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "Hooking framework detected (Xposed / LSPosed / similar). Modules can intercept method calls inside ToolNeuron and observe data in memory regardless of encryption.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Signals: ${tamperEvidence.joinToString(", ")}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                if (a11yPackages.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "Accessibility services from non-system apps are active. They can read on-screen text and observe what you type, including chat content.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Packages: ${a11yPackages.joinToString(", ")}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Use at your own risk. This warning is shown only once.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
         },
         confirmButton = {
