@@ -91,7 +91,9 @@ fun HomeScreenBottomBar(
     val contextUsage by viewModel.contextUsage.collectAsStateWithLifecycle()
 
     val canSend by remember {
-        derivedStateOf { text.isNotBlank() && isModelLoaded && !isGenerating }
+        derivedStateOf {
+            text.isNotBlank() && !isGenerating && (isModelLoaded || installedModels.isNotEmpty())
+        }
     }
 
     val isIngesting by viewModel.isIngestingDocument.collectAsStateWithLifecycle()
