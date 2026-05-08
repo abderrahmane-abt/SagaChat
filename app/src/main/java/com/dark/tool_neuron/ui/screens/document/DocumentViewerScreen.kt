@@ -42,6 +42,7 @@ import com.dark.tool_neuron.viewmodel.DocumentViewerViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.ui.platform.LocalLocale
 
 @Composable
 fun DocumentViewerScreen(
@@ -233,7 +234,7 @@ private fun IterationBlock(entry: IterationLogEntry) {
 @Composable
 private fun Footer(doc: ResearchDocument) {
     val dimens = LocalDimens.current
-    val ts = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(doc.createdAt))
+    val ts = SimpleDateFormat("yyyy-MM-dd HH:mm", LocalLocale.current.platformLocale).format(Date(doc.createdAt))
     val secs = doc.durationMs / 1000
     Surface(
         shape = LocalTnShapes.current.lg,

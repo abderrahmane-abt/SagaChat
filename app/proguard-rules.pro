@@ -31,11 +31,13 @@
 -keep class com.dark.hxs_encryptor.** { *; }
 -keep class com.dark.download_manager.** { *; }
 -keep class com.dark.native_server.** { *; }
+-keep class com.dark.networking.** { *; }
 
 -dontwarn com.dark.hxs.**
 -dontwarn com.dark.hxs_encryptor.**
 -dontwarn com.dark.download_manager.**
 -dontwarn com.dark.native_server.**
+-dontwarn com.dark.networking.**
 
 # Apache Commons Compress (used for sherpa-onnx .tar.bz2 voice archives) carries
 # soft references to optional integrations (osgi, zstd, brotli, xz) that R8 flags
