@@ -9,6 +9,8 @@ import java.io.FileInputStream
 
 object VoiceArchive {
 
+    private const val EXTRACT_BUFFER_SIZE = 256 * 1024
+
     sealed class ExtractResult {
         data class Success(val folder: File, val configJson: String) : ExtractResult()
         data class Failure(val reason: String) : ExtractResult()
@@ -29,7 +31,8 @@ object VoiceArchive {
         dest.mkdirs()
 
         try {
-            BufferedInputStream(FileInputStream(archive)).use { fileIn ->
+            val copyBuf = ByteArray(EXTRACT_BUFFER_SIZE)
+            BufferedInputStream(FileInputStream(archive), EXTRACT_BUFFER_SIZE).use { fileIn ->
                 BZip2CompressorInputStream(fileIn, true).use { bzIn ->
                     TarArchiveInputStream(bzIn).use { tarIn ->
                         while (true) {
@@ -42,7 +45,13 @@ object VoiceArchive {
                             } else {
                                 target.parentFile?.mkdirs()
                                 onEntry(target.name)
-                                target.outputStream().use { out -> tarIn.copyTo(out) }
+                                target.outputStream().buffered(EXTRACT_BUFFER_SIZE).use { out ->
+                                    while (true) {
+                                        val n = tarIn.read(copyBuf)
+                                        if (n < 0) break
+                                        out.write(copyBuf, 0, n)
+                                    }
+                                }
                             }
                         }
                     }
