@@ -21,6 +21,7 @@ import ai.onnxruntime.OnnxTensor as OrtTensor
 internal class OnnxApiImpl(
     private val ortEnv: OrtEnvironment,
     private val gate: CapabilityGate,
+    private val epProvider: () -> String = { EP_CPU },
 ) : OnnxApi {
 
     override suspend fun loadSession(
@@ -31,15 +32,19 @@ internal class OnnxApiImpl(
         val sessionOptions = OrtSession.SessionOptions().apply {
             if (options.intraOpThreads > 0) setIntraOpNumThreads(options.intraOpThreads)
             if (options.interOpThreads > 0) setInterOpNumThreads(options.interOpThreads)
-            if (options.useNnapi) {
-                runCatching { addNnapi() }
-            }
-            if (options.useXnnpack) {
-                runCatching { addXnnpack(emptyMap<String, String>()) }
+            when (epProvider()) {
+                EP_NNAPI -> runCatching { addNnapi() }
+                EP_XNNPACK -> runCatching { addXnnpack(emptyMap<String, String>()) }
             }
         }
         val session = ortEnv.createSession(modelPath, sessionOptions)
         OnnxSessionImpl(ortEnv, session, sessionOptions)
+    }
+
+    companion object {
+        const val EP_CPU = "cpu"
+        const val EP_NNAPI = "nnapi"
+        const val EP_XNNPACK = "xnnpack"
     }
 }
 

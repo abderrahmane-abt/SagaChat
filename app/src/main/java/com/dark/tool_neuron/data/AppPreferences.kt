@@ -227,6 +227,10 @@ class AppPreferences @Inject constructor(
             ?: DEFAULT_THREAD_MODE
         set(value) = putString(KEY_THREAD_MODE, value.coerceIn(0, 2).toString())
 
+    var pluginOnnxEp: String
+        get() = getString(KEY_PLUGIN_ONNX_EP, DEFAULT_PLUGIN_ONNX_EP)
+        set(value) = putString(KEY_PLUGIN_ONNX_EP, value)
+
     fun readAuthState(): AuthState {
         val sealed = getBytes(KEY_AUTH_STATE) ?: return AuthState.DEFAULT
         val plaintext = try {
@@ -311,6 +315,12 @@ class AppPreferences @Inject constructor(
         const val THREAD_MODE_POWER_SAVING = 0
         const val THREAD_MODE_BALANCED = 1
         const val THREAD_MODE_PERFORMANCE = 2
+
+        const val KEY_PLUGIN_ONNX_EP = "plugin_onnx_ep"
+        const val PLUGIN_ONNX_EP_CPU = "cpu"
+        const val PLUGIN_ONNX_EP_NNAPI = "nnapi"
+        const val PLUGIN_ONNX_EP_XNNPACK = "xnnpack"
+        const val DEFAULT_PLUGIN_ONNX_EP = PLUGIN_ONNX_EP_CPU
         const val DEFAULT_RESEARCH_MAX_ITERATIONS = 5
         const val DEFAULT_RESEARCH_MAX_QUESTIONS = 4
         const val DEFAULT_RESEARCH_RESULTS_PER_SEARCH = 5

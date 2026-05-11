@@ -52,7 +52,10 @@ object PluginHostModule {
     fun providePluginExecutor(
         @ApplicationContext context: Context,
         @PluginStorage storage: HexStorage,
-    ): PluginExecutor = PluginExecutor(context, storage)
+        prefs: com.dark.tool_neuron.data.AppPreferences,
+    ): PluginExecutor = PluginExecutor(context, storage).apply {
+        onnxExecutionProvider = prefs.pluginOnnxEp
+    }
 
     @Provides
     @Singleton

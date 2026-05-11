@@ -87,6 +87,21 @@ fun AppTopBar(
             title = "Privacy",
             subtitle = "App lock and panic PIN",
         )
+        NavScreens.SettingsVision.route -> SettingsTopBar(
+            onBack = onBack,
+            title = "Vision",
+            subtitle = "VLM image preprocessing",
+        )
+        NavScreens.SettingsPerformance.route -> SettingsTopBar(
+            onBack = onBack,
+            title = "Performance",
+            subtitle = "Thread placement and decode priority",
+        )
+        NavScreens.SettingsPlugins.route -> SettingsTopBar(
+            onBack = onBack,
+            title = "Plugins",
+            subtitle = "ONNX execution and installed plugins",
+        )
         NavScreens.SettingsAbout.route -> SettingsTopBar(
             onBack = onBack,
             title = "About",

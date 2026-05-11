@@ -133,6 +133,24 @@ private val SETTINGS_LANDING_CARDS = listOf(
         icon = TnIcons.Sparkles,
     ),
     LandingCard(
+        route = NavScreens.SettingsVision.route,
+        title = "Vision",
+        description = "Image quality for VLM (multimodal) models",
+        icon = TnIcons.Photo,
+    ),
+    LandingCard(
+        route = NavScreens.SettingsPerformance.route,
+        title = "Performance",
+        description = "Thread mode, CPU placement, decode priority",
+        icon = TnIcons.Cpu,
+    ),
+    LandingCard(
+        route = NavScreens.SettingsPlugins.route,
+        title = "Plugins",
+        description = "ONNX execution provider, installed plugins",
+        icon = TnIcons.Puzzle,
+    ),
+    LandingCard(
         route = NavScreens.SettingsPrivacy.route,
         title = "Privacy",
         description = "App lock, panic PIN, vault",

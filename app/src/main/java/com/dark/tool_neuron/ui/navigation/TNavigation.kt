@@ -297,6 +297,33 @@ fun TNavigation(
                 viewModel = viewModel,
             )
         }
+        composable(NavScreens.SettingsVision.route) {
+            val viewModel: SettingsViewModel = hiltViewModel()
+            SettingsSectionScreen(
+                innerPadding = innerPadding,
+                sectionId = SettingsViewModel.SECTION_VISION,
+                viewModel = viewModel,
+                onNavigate = { route -> navController.navigate(route) },
+            )
+        }
+        composable(NavScreens.SettingsPerformance.route) {
+            val viewModel: SettingsViewModel = hiltViewModel()
+            SettingsSectionScreen(
+                innerPadding = innerPadding,
+                sectionId = SettingsViewModel.SECTION_PERFORMANCE,
+                viewModel = viewModel,
+                onNavigate = { route -> navController.navigate(route) },
+            )
+        }
+        composable(NavScreens.SettingsPlugins.route) {
+            val viewModel: SettingsViewModel = hiltViewModel()
+            SettingsSectionScreen(
+                innerPadding = innerPadding,
+                sectionId = SettingsViewModel.SECTION_PLUGINS,
+                viewModel = viewModel,
+                onNavigate = { route -> navController.navigate(route) },
+            )
+        }
         composable(NavScreens.SettingsPrivacy.route) {
             val viewModel: SettingsViewModel = hiltViewModel()
             SettingsSectionScreen(

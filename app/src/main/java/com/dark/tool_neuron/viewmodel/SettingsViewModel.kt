@@ -44,6 +44,7 @@ class SettingsViewModel @Inject constructor(
     private val modelRepo: ModelRepository,
     private val prefs: AppPreferences,
     private val voiceManager: VoiceModelManager,
+    private val pluginExecutor: com.dark.plugin_exc.PluginExecutor,
 ) : ViewModel() {
 
     private val _navEvents = MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -65,6 +66,8 @@ class SettingsViewModel @Inject constructor(
     private val _researchActiveModel = MutableStateFlow(prefs.activeResearchModelId)
     private val _vlmImageQuality = MutableStateFlow(prefs.vlmImageQuality)
     private val _threadMode = MutableStateFlow(prefs.threadMode)
+    private val _pluginOnnxEp = MutableStateFlow(prefs.pluginOnnxEp)
+    private val _installedPluginCount = pluginExecutor.registry.installed
     private val appVersion: String = resolveVersion()
 
     val state: StateFlow<SettingsState> = combine(
@@ -86,6 +89,8 @@ class SettingsViewModel @Inject constructor(
         _researchActiveModel,
         _vlmImageQuality,
         _threadMode,
+        _pluginOnnxEp,
+        _installedPluginCount,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         val models = values[0] as List<ModelInfo>
@@ -106,6 +111,10 @@ class SettingsViewModel @Inject constructor(
         val researchActiveModel = values[15] as String
         val vlmImageQuality = values[16] as String
         val threadMode = values[17] as Int
+        val pluginOnnxEp = values[18] as String
+        @Suppress("UNCHECKED_CAST")
+        val installedPlugins = values[19] as List<com.dark.plugin_exc.InstalledPlugin>
+        val pluginCount = installedPlugins.size
 
         SettingsState(
             sections = buildSections(
@@ -125,6 +134,8 @@ class SettingsViewModel @Inject constructor(
                 researchActiveModel = researchActiveModel,
                 vlmImageQuality = vlmImageQuality,
                 threadMode = threadMode,
+                pluginOnnxEp = pluginOnnxEp,
+                pluginCount = pluginCount,
             ),
             dialog = dialog,
             snackbarMessage = snackbar,
@@ -168,14 +179,69 @@ class SettingsViewModel @Inject constructor(
         researchActiveModel: String,
         vlmImageQuality: String,
         threadMode: Int,
+        pluginOnnxEp: String,
+        pluginCount: Int,
     ): List<SettingsSection> = listOf(
         chatAndRagSection(models, defaultEmbedding, ragSmartRerank, ragMultiQuery, ragDeepResearch),
         researchSection(models, researchMaxIter, researchMaxQ, researchPerSearch, researchCancelBg, researchActiveModel),
         voiceSection(models, activeTts, activeStt),
         visionSection(vlmImageQuality),
         performanceSection(threadMode),
+        pluginsSection(pluginOnnxEp, pluginCount),
         privacySection(lockEnabled, panicPinSet),
         aboutSection(),
+    )
+
+    private fun pluginsSection(ep: String, count: Int): SettingsSection = SettingsSection(
+        id = SECTION_PLUGINS,
+        title = "Plugins",
+        description = "Runtime settings for installed plugins. Takes effect on next plugin reload.",
+        icon = TnIcons.Puzzle,
+        items = listOf(
+            SettingsItem.Info(
+                id = ID_PLUGINS_COUNT,
+                title = "Installed plugins",
+                subtitle = "Manage from the Plugins screen in the drawer.",
+                icon = TnIcons.Puzzle,
+                value = count.toString(),
+            ),
+            SettingsItem.Choice(
+                id = ID_PLUGIN_ONNX_EP,
+                title = "ONNX execution provider",
+                subtitle = "Where plugin AI models run. Restart the plugin after changing.",
+                icon = TnIcons.Cpu,
+                selectedKey = ep,
+                options = listOf(
+                    SettingsChoiceOption(
+                        AppPreferences.PLUGIN_ONNX_EP_CPU,
+                        "CPU",
+                        "Most compatible. Plain ARM CPU kernels. Default.",
+                    ),
+                    SettingsChoiceOption(
+                        AppPreferences.PLUGIN_ONNX_EP_NNAPI,
+                        "NPU / NNAPI",
+                        "Hardware acceleration via Android NNAPI. Speed varies by device; some plugins may crash.",
+                    ),
+                    SettingsChoiceOption(
+                        AppPreferences.PLUGIN_ONNX_EP_XNNPACK,
+                        "CPU (XNNPACK)",
+                        "ARM-optimized CPU kernels. Faster on FP32 models, incompatible with some INT8 quantized models.",
+                    ),
+                ),
+                onSelect = { key ->
+                    val v = when (key) {
+                        AppPreferences.PLUGIN_ONNX_EP_NNAPI,
+                        AppPreferences.PLUGIN_ONNX_EP_XNNPACK,
+                        AppPreferences.PLUGIN_ONNX_EP_CPU -> key
+                        else -> AppPreferences.DEFAULT_PLUGIN_ONNX_EP
+                    }
+                    prefs.pluginOnnxEp = v
+                    _pluginOnnxEp.value = v
+                    pluginExecutor.onnxExecutionProvider = v
+                    _dialog.value = null
+                },
+            ),
+        ),
     )
 
     private fun performanceSection(mode: Int): SettingsSection = SettingsSection(
@@ -687,6 +753,7 @@ class SettingsViewModel @Inject constructor(
         const val SECTION_VOICE = "voice"
         const val SECTION_VISION = "vision"
         const val SECTION_PERFORMANCE = "performance"
+        const val SECTION_PLUGINS = "plugins"
         const val SECTION_PRIVACY = "privacy"
         const val SECTION_ABOUT = "about"
 
@@ -704,6 +771,8 @@ class SettingsViewModel @Inject constructor(
         private const val ID_RESEARCH_ACTIVE_MODEL = "research_active_model"
         private const val ID_VLM_IMAGE_QUALITY = "vlm_image_quality"
         private const val ID_THREAD_MODE = "thread_mode"
+        private const val ID_PLUGINS_COUNT = "plugins_count"
+        private const val ID_PLUGIN_ONNX_EP = "plugin_onnx_ep"
         private val CLEARABLE_CHOICE_IDS = setOf(
             ID_DEFAULT_EMBEDDING,
             ID_DEFAULT_TTS,

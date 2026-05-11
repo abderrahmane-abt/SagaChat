@@ -30,6 +30,9 @@ class PluginExecutor(
 
     private val ortEnv: OrtEnvironment by lazy { OrtEnvironment.getEnvironment() }
 
+    @Volatile
+    var onnxExecutionProvider: String = "cpu"
+
     fun install(stream: InputStream): InstalledPlugin {
         val installed = loader.installFromStream(stream)
         registry.refresh()
@@ -56,7 +59,7 @@ class PluginExecutor(
         val pluginCtx = PluginContext(
             pluginId = installed.manifest.id,
             appContext = appContext,
-            onnx = OnnxApiImpl(ortEnv, gate),
+            onnx = OnnxApiImpl(ortEnv, gate, epProvider = { onnxExecutionProvider }),
             hxs = HxsApiImpl(hxs, installed.manifest.id, gate),
             network = NetworkApiImpl(gate),
         )
