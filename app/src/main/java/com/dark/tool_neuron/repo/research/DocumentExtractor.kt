@@ -1,6 +1,6 @@
 package com.dark.tool_neuron.repo.research
 
-import com.dark.gguf_lib.GGUFNativeLib
+import com.dark.gguf_lib.RAGEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -11,8 +11,10 @@ internal object DocumentExtractor {
         nameHint: String? = null,
     ): String? = withContext(Dispatchers.IO) {
         if (bytes.isEmpty()) return@withContext null
-        runCatching { GGUFNativeLib.nativeRagExtractText(bytes, mimeHint, nameHint) }
-            .getOrNull()
-            ?.takeIf { it.isNotBlank() }
+        try {
+            RAGEngine().extractText(bytes, mimeHint, nameHint)?.takeIf { it.isNotBlank() }
+        } catch (_: Exception) {
+            null
+        }
     }
 }
