@@ -3,6 +3,7 @@ package com.dark.tool_neuron.viewmodel.home_vm
 import android.app.Application
 import android.net.Uri
 import android.util.Log
+import com.dark.gguf_lib.ImageQuality
 import com.dark.tool_neuron.data.AppPreferences
 import com.dark.tool_neuron.model.ChatMessage
 import com.dark.tool_neuron.model.Citation
@@ -117,7 +118,9 @@ class InferenceCoordinator @Inject constructor(
 
                 val stream: Flow<InferenceEvent> = if (vlmRoute) {
                     val uris = userImages.mapNotNull { runCatching { Uri.parse(it) }.getOrNull() }
-                    InferenceClient.generateVlm(app, historyJson, uris, modelSession.maxTokens.value)
+                    val quality = runCatching { ImageQuality.valueOf(appPrefs.vlmImageQuality) }
+                        .getOrDefault(ImageQuality.MEDIUM)
+                    InferenceClient.generateVlm(app, historyJson, uris, modelSession.maxTokens.value, quality)
                 } else {
                     InferenceClient.generateMultiTurn(historyJson, modelSession.maxTokens.value)
                 }
@@ -344,10 +347,16 @@ class InferenceCoordinator @Inject constructor(
                 promptTokens = o.optInt("tokensEvaluated", 0),
                 generatedTokens = o.optInt("tokensPredicted", 0),
             )
+            // Current RSS isn't in the per-turn metrics callback (peak only).
+            // Pull it from the side channel — one AIDL call per turn end is
+            // cheap and gives the live process resident size for the action
+            // window display.
+            val currentRss = readCurrentRssMb()
             val mem = MemoryMetrics(
                 modelSizeMB = o.optDouble("modelSizeMB", 0.0),
                 contextSizeMB = o.optDouble("contextSizeMB", 0.0),
                 peakMemoryMB = o.optDouble("peakMemoryMB", 0.0),
+                currentMemoryMB = currentRss,
                 usagePercent = o.optDouble("memoryUsagePercent", 0.0),
             )
             val textValid = text.tokensPerSecond > 0.0 || text.generatedTokens > 0
@@ -356,6 +365,11 @@ class InferenceCoordinator @Inject constructor(
         } catch (_: Exception) {
             null to null
         }
+    }
+
+    private fun readCurrentRssMb(): Double {
+        val raw = InferenceClient.getMemoryStatsJson() ?: return 0.0
+        return runCatching { JSONObject(raw).optDouble("current_rss_mb", 0.0) }.getOrDefault(0.0)
     }
 
     private fun parseThinking(raw: String): Pair<String, String> {

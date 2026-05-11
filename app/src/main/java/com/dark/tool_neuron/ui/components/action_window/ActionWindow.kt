@@ -364,23 +364,26 @@ private fun StatsTab(
         }
         StatRow("Backend", if (isModelLoaded) "CPU" else "--")
 
-        SectionHeader(title = "Memory")
+        SectionHeader(title = "Memory (resident)")
         if (memoryMetrics != null) {
             if (memoryMetrics.modelSizeMB > 0) {
-                StatRow("Model size", "%.0f MB".format(memoryMetrics.modelSizeMB))
+                StatRow("Model on disk", "%.0f MB".format(memoryMetrics.modelSizeMB))
             }
             if (memoryMetrics.contextSizeMB > 0) {
-                StatRow("Context size", "%.0f MB".format(memoryMetrics.contextSizeMB))
+                StatRow("KV cache", "%.0f MB".format(memoryMetrics.contextSizeMB))
+            }
+            if (memoryMetrics.currentMemoryMB > 0) {
+                StatRow("Process now (RSS)", "%.0f MB".format(memoryMetrics.currentMemoryMB))
             }
             if (memoryMetrics.peakMemoryMB > 0) {
-                StatRow("Peak memory", "%.0f MB".format(memoryMetrics.peakMemoryMB))
+                StatRow("Process peak (HWM)", "%.0f MB".format(memoryMetrics.peakMemoryMB))
             }
             if (memoryMetrics.usagePercent > 0) {
-                StatRow("Usage", "%.1f%%".format(memoryMetrics.usagePercent))
+                StatRow("Peak vs device RAM", "%.1f%%".format(memoryMetrics.usagePercent))
             }
         } else {
-            StatRow("Model size", if (isModelLoaded) "No data yet" else "--")
-            StatRow("Context size", if (isModelLoaded) "No data yet" else "--")
+            StatRow("Model on disk", if (isModelLoaded) "No data yet" else "--")
+            StatRow("KV cache", if (isModelLoaded) "No data yet" else "--")
         }
     }
 }

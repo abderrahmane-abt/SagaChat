@@ -36,6 +36,7 @@ data class MemoryMetrics(
     val modelSizeMB: Double = 0.0,
     val contextSizeMB: Double = 0.0,
     val peakMemoryMB: Double = 0.0,
+    val currentMemoryMB: Double = 0.0,
     val usagePercent: Double = 0.0,
 ) {
     companion object
