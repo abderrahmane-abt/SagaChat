@@ -6,7 +6,7 @@ Project memory for this repo. **When you change anything that affects future wor
 
 ## Project scope
 
-Privacy-first, offline-only on-device AI assistant. No Google Play services, no network telemetry, no analytics. In-scope pillars: on-device LLM chat, RAG over user documents, vision-language models (VLM), voice (TTS+STT), Remote Server with bundled web UI, HF Explorer, **on-device image generation / img2img / inpaint / 4× upscale via the `:ai_sd` AAR (re-pivoted in 2026-05-08)**. Out of scope: tool calling, plugin hub, Termux integration. (Image generation was originally cut on 2026-04-20 and re-added on 2026-05-08 by mirroring the LocalDream NPU model catalog through the existing model store + a new Image Task screen.)
+Privacy-first, offline-only on-device AI assistant. No Google Play services, no network telemetry, no analytics. In-scope pillars: on-device LLM chat, RAG over user documents, vision-language models (VLM), voice (TTS+STT), Remote Server with bundled web UI, HF Explorer, **on-device image generation / img2img / inpaint / 4× upscale via the `:ai_sd` AAR (re-pivoted in 2026-05-08)**, **first-party plugin system with ONNX inference + capability-gated APIs (re-pivoted in 2026-05-11)**. Out of scope: tool calling, Termux integration. (Image generation was originally cut on 2026-04-20 and re-added on 2026-05-08. Plugin marketplace was also originally cut on 2026-04-20 and re-added on 2026-05-11 as a first-party plugin runtime — DexClassLoader, Plugin contract with @Composable Content(), capability-gated OnnxApi/HxsApi/NetworkApi, floating plugin dock with smooth switch transitions.)
 
 Package: `com.dark.tool_neuron` · minSdk 29 · targetSdk 36 · abiFilters `arm64-v8a`, `x86_64`.
 
@@ -15,6 +15,8 @@ Modules:
 - `:hxs` — encrypted key-value store (Kotlin wrapper + C++ core).
 - `:hxs_encryptor` — crypto + integrity primitives: Argon2id, AES-GCM/ChaCha20-Poly1305, BoringSSL, ML-KEM-768, ML-DSA-65, Ed25519, HKDF, mmap+mlock `SecureBuffer`, plus the native security policy / auth / boot-integrity stack.
 - `:native-server` — embedded OpenAI-compatible HTTP server (cpp-httplib + nlohmann/json header-only via FetchContent, no BoringSSL / OpenSSL / zlib dep). Powers Remote Server mode.
+- `:plugin-api` — pure-Kotlin contract plugin authors compile against. `Plugin` interface with lifecycle + `@Composable Content()`, `PluginContext`, `PluginCapability` enum, `PluginManifest`, `OnnxApi`, `HxsApi`, `NetworkApi`. Compose deps are `compileOnly`; host provides them at runtime via classloader-parent.
+- `:plugin-exc` — plugin host runtime. `PluginExecutor`, `PluginLoader` (DexClassLoader from `<filesDir>/plugins/<id>/classes.dex` + .so detection across SUPPORTED_ABIS), `PluginRegistry`, `PluginInstance`, `CapabilityGate` (PolicyEngine.hasSession + manifest cap check), `PluginContainerActivity` (hosts plugin's `Content()` with AnimatedContent fade+scale plugin-switch transitions), `PluginDock` (floating M3-expressive surface with circle chips per open plugin, tertiary-corner native-code badge), `OnnxApiImpl` (wraps onnxruntime-android 1.20.0, gated by AI_ONNX), `HxsApiImpl` (per-plugin collection `plugin_<id>`, indexed string keys, gated by HXS_READ/WRITE), `NetworkApiImpl` (WebNative.fetchBytes GET, gated by INTERNET).
 - `:download_manager`, `:networking` — ancillary modules.
 
 Prebuilt AARs in `libs/`:
@@ -360,7 +362,7 @@ No `modelType` field on `ModelInfo`. `ProviderType` is canonical (`GGUF` / `TTS`
 
 ## Remote Server
 
-Embedded HTTP server exposing the loaded LLM over an OpenAI-compatible API on the local network. Standalone replacement for the rejected Ktor PR. Phase 1 = LLM chat completions only; no embeddings, image gen, TLS, mDNS, tool calling.
+Embedded HTTP server exposing every installed engine over an OpenAI-compatible API on the local network. Standalone replacement for the rejected Ktor PR. As of 2026-05-11 the server is multi-engine: chat GGUF, VLM (chat + images), embeddings, TTS, STT, and image generation (txt2img / img2img / inpaint / 4x upscale). No TLS, no mDNS, no outbound calls.
 
 ### Process model
 
@@ -368,72 +370,146 @@ Three processes:
 
 - `:app` — UI, chat ViewModels, `ServerController` (AIDL client), `InferenceClient` (AIDL client of `:inference`). HXS / Keystore live here; nothing crosses out.
 - `:inference` — `InferenceService` (chat-side llama.cpp + sherpa-onnx). Untouched by the server.
-- `:server` — `RemoteServerService`, its own `GGMLEngine`, the embedded native HTTP server, the bearer token in native memory. Foreground (`dataSync`, `stopWithTask="false"`). Independent: app crash doesn't kill it, server crash doesn't kill the app.
+- `:server` — `RemoteServerService`, its own per-type engine instances (`ServerEngine` chat, `ServerVlmEngine`, `ServerEmbeddingEngine`, `ServerTtsEngine`, `ServerSttEngine`, `ServerImageEngine`), the embedded native HTTP server, the bearer token in native memory. Foreground (`dataSync`, `stopWithTask="false"`). Independent: app crash doesn't kill it, server crash doesn't kill the app.
 
-`:server` doesn't open HXS. The bearer token, model path, model config, web-UI HTML, docs HTML are all handed across via AIDL `start(configJson)`. When the user rotates the token in the UI, `:app` regenerates + persists, then pushes the new token to `:server` via `IRemoteServerService.rotateToken(newToken)`.
+`:server` doesn't open HXS. The bearer token, full engines catalog (per-model id / display name / file path / mmproj path / per-model config JSON / kind), web-UI HTML, and docs HTML are all handed across via AIDL `start(configJson)`. When the user rotates the token in the UI, `:app` regenerates + persists, then pushes the new token to `:server` via `IRemoteServerService.rotateToken(newToken)`.
 
 When the user swipes the app away, `:app` and `:inference` both die. `:server` keeps running because it's foreground **and** because `handleStart` self-calls `startService(Intent(this, RemoteServerService::class.java))` immediately before `startForeground`. That transitions it from bind-only to started lifecycle — without it, every binder client dying (which happens on swipe-to-kill) makes the service eligible for destruction even with a foreground notification. Reopening the app re-binds; `ServerController` calls `currentSnapshotJson()` and `recentRequestEventsJson(100)` to rehydrate the Server Screen with whatever's running right now.
 
 Tapping the notification body opens `MainActivity` with `EXTRA_OPEN_SERVER_SCREEN=true`, which routes straight to the Server Screen. The Stop button on the notification fires `startService(action=ACTION_STOP)` against `:server`, which tears down in-process.
 
+### Engine model — lazy per-type, primary preload
+
+`ServerEngineRegistry` (in `:server`) holds one instance per kind. Each kind is loaded lazily on first request and cached:
+
+| Kind             | Wrapper                  | Library backing                                      |
+|------------------|--------------------------|------------------------------------------------------|
+| `gguf`           | `ServerEngine`           | `com.dark.gguf_lib.GGMLEngine`                       |
+| `vlm`            | `ServerVlmEngine`        | `GGMLEngine` + mmproj projector                      |
+| `embedding`      | `ServerEmbeddingEngine`  | `com.dark.gguf_lib.EmbeddingEngine`                  |
+| `tts`            | `ServerTtsEngine`        | `com.dark.ai_sherpa.OfflineTts` (VITS)               |
+| `stt`            | `ServerSttEngine`        | `com.dark.ai_sherpa.OfflineRecognizer` (Whisper)     |
+| `image_gen`      | `ServerImageEngine`      | `com.dark.ai_sd.StableDiffusionManager` (QNN/MNN)    |
+| `image_upscaler` | `ServerImageEngine`      | same SDK, separate `loadUpscaler` path               |
+
+Why lazy-load: a 4 GB device cannot hold every engine simultaneously. On `start(configJson)` the primary chat GGUF (or first VLM if no chat) is preloaded so first /v1/chat/completions returns fast; everything else materialises on first request to that endpoint. Per-kind `Mutex`/`synchronized` lock prevents two requests racing the load. Engine instances are NOT reaped on idle in this iteration — only `shutdownAll()` on server stop. If RAM becomes a problem on smaller devices, the natural extension is a per-kind TTL cache or a `POST /v1/admin/unload?kind=image_gen` route.
+
+Cross-process gotchas:
+- `:server` loads `StableDiffusionManager.getInstance(context)` independently from `:app`. They each have their own native pipeline. The `qnnlibs.tar.xz` runtime extraction is uid-shared at `<filesDir>/ai_sd_runtime/`; whichever process extracts first wins, the other sees the existing files and skips. Image gen via the server therefore requires the user to have downloaded the SD runtime through the Image Task screen at least once.
+- `:server` does NOT open HXS to read `prefs.activeTtsModelId` / `activeSttModelId`. Voice "default" is whatever the catalog ranks first per kind — `ServerController.buildEnginesCatalog` walks the `ModelRepository` in install order, so the active voice model from `:app` doesn't influence which voice the server uses as fallback. Clients pick explicitly via the `model` field. If the request `model` is unknown, the server falls back to `first_of_kind`.
+- `:inference` (the chat-side llama.cpp service) is untouched by the server — no AIDL hops between `:server` and `:inference`. Server-side load and chat-side load are independent. This is intentional: it keeps the request path on one process and prevents the server lockdown from also blocking chat-side voice/image flows on the same engine.
+
+### Routes
+
+| Method | Path                          | Auth | Stream | Purpose                                                 |
+|--------|-------------------------------|------|--------|---------------------------------------------------------|
+| GET    | `/`, `/index.html`, `/webui`  | public | -    | Bundled Material-3 web UI                                |
+| GET    | `/docs`, `/docs/`             | public | -    | API documentation                                        |
+| GET    | `/health`                      | public | -    | Liveness ping `{status:ok}`                              |
+| GET    | `/v1/models`                   | auth | -      | Full enabled-engine catalog (id, type, owned_by)         |
+| POST   | `/v1/chat/completions`         | auth | yes    | Chat GGUF; auto-routes to VLM when message contains `image_url` parts |
+| POST   | `/v1/embeddings`               | auth | -      | Dense embeddings — `{input: string \| string[]}`         |
+| POST   | `/v1/audio/speech`             | auth | -      | TTS — body `{model, input, voice, speed}`, returns `audio/wav` |
+| POST   | `/v1/audio/transcriptions`     | auth | -      | STT — multipart `file=<wav>` + `model=<id>`              |
+| POST   | `/v1/images/generations`       | auth | -      | txt2img — body `{model, prompt, negative_prompt?, steps?, cfg?, width?, height?, seed?}`, returns `{data:[{b64_json}]}` |
+| POST   | `/v1/images/edits`             | auth | -      | img2img / inpaint — multipart `image`, optional `mask`, `model`, `prompt`, sampling params |
+| POST   | `/v1/images/upscale`           | auth | -      | 4x upscale — multipart `image` + `model`                  |
+
+Every non-public route is gated by the same `pre_routing_handler`: rate-limit token bucket → ban list → bearer auth (constant-time compare, 20 consecutive fails → 1 h ban). The same `post_routing_handler` records every request into the 128-entry audit ring buffer + pushes it across to `:app` via `InferenceBridge.onRequestEvent`. No exceptions, no per-route auth bypass.
+
 ### Native (`:native-server`)
 
 ```
 native-server/src/main/cpp/
-  server_core.{h,cpp}        — httplib::Server lifecycle, pre/post-routing, route registry
+  server_core.{h,cpp}        — httplib::Server lifecycle, pre/post-routing, every route registration
   server_auth.{h,cpp}        — bearer token store + constant-time compare + 401/403
-  server_crypto.{h,cpp}      — getrandom(2) RNG, const_time_eq, base64url, secure_zero (no BoringSSL)
-  server_models.{h,cpp}      — catalog JSON cache + /v1/models envelope
+  server_crypto.{h,cpp}      — getrandom(2) RNG, const_time_eq, base64url, base64 std, base64 decoder, secure_zero
+  server_models.{h,cpp}      — typed catalog: id + display_name + path + mmproj_path + config_json + Kind + created
+                                + has_id_of_kind / first_of_kind / has_any_of_kind / build_list_response
   server_audit.{h,cpp}       — 128-entry ring buffer of request events
   server_rate_limit.{h,cpp}  — per-client token bucket (cap=30, refill=1/s) + auth-fail ban (20 fails → 1 h)
   server_webui.{h,cpp}       — set/clear/get/has HTML (mutex-protected std::string)
-  gen_session.{h,cpp}        — gen-id Registry + per-session token queue (push_token / push_done / push_error / cancel) + blocking take(timeout)
-  openai_schema.{h,cpp}      — ChatRequest parser, non-stream + SSE chunk responses, error envelope
-  jvm_bridge.{h,cpp}         — JavaVM pin, JNI upcalls (startGeneration / cancelGeneration / onRequestEvent) via global jobject ref
-  native_server.cpp          — JNI entry points + JNI_OnLoad
+  server_docs.{h,cpp}        — same for /docs
+  server_staging.{h,cpp}     — tmpfile dir for large binary payloads; staged paths handed across JNI (no byte[] copies)
+  wav_codec.{h,cpp}          — minimal RIFF/PCM16 + IEEE-float decode (STT input); encode is on the Kotlin side
+  gen_session.{h,cpp}        — chat / VLM streaming session: token queue + cancellation
+  reply_session.{h,cpp}      — single-shot reply session for embeddings / TTS / STT / image; carries text or staged binary path
+  openai_schema.{h,cpp}      — ChatRequest parser (detects has_images), VLM image part extractor (base64 data URLs ONLY),
+                                error envelope, embedding response, transcription response, image response builders
+  jvm_bridge.{h,cpp}         — JavaVM pin, JNI upcalls (startGeneration + startEmbedding + startTts + startStt
+                                + startImageGen + startImageUpscale + cancelGeneration + onRequestEvent)
+  native_server.cpp          — JNI entry points (start/stop/token/catalog/bridge/feeders/staging/audit/rl/webui/docs) + JNI_OnLoad
 ```
 
-CMake fetches `cpp-httplib v0.18.5` and `nlohmann/json v3.11.3`, both header-only (`HTTPLIB_COMPILE=OFF`, `HTTPLIB_REQUIRE_OPENSSL=OFF`, `HTTPLIB_REQUIRE_ZLIB=OFF`, `JSON_BuildTests=OFF`). Same flags as `:hxs_encryptor`: c++17, `-fvisibility=hidden`, `-fstack-protector-strong`, LTO/gc-sections/icf release, `-march=armv8-a+crypto+sha2` on arm64, `-Wl,-z,max-page-size=16384`.
+CMake fetches `cpp-httplib v0.18.5` and `nlohmann/json v3.11.3`, both header-only (`HTTPLIB_COMPILE=OFF`, `HTTPLIB_REQUIRE_OPENSSL=OFF`, `HTTPLIB_REQUIRE_ZLIB=OFF`, `JSON_BuildTests=OFF`). Same flags as `:hxs_encryptor`: c++17, `-fvisibility=hidden`, `-fstack-protector-strong`, LTO/gc-sections/icf release, `-march=armv8-a+crypto+sha2` on arm64, `-Wl,-z,max-page-size=16384`. Read timeout was lifted from 15s → 60s and payload max from 1 MB → 64 MB to accommodate base64-encoded VLM images and multipart audio/image uploads.
 
-`POST /v1/chat/completions` flow:
-1. pre_routing: rate-limit → 429; ban list → 403; bearer auth on every path except public allowlist → 401 with `note_auth_fail` (triggers ban after 20).
-2. `openai_schema` parses body → validates `model` ∈ catalog → creates GenSession.
-3. `jvm_bridge` upcalls `InferenceBridge.startGeneration(genId, messagesJson, paramsJson)`.
-4. Java side runs `InferenceClient.generateMultiTurn(...)`; pushes each token via `nativeFeedToken(genId, tok)`; ends `nativeFeedDone(genId, "stop")`.
-5. `stream=true` → httplib `set_chunked_content_provider` spools OpenAI SSE (`data: {…}\n\n`, terminator `data: [DONE]\n\n`). `stream=false` → single `chat.completion`.
-6. post_routing: `audit::record` + `jvm::emit_request_event` → Kotlin `ServerInferenceBridge.onRequestEvent` → `ServerController.appendRequestEvent`.
+Payload mechanics:
+- **Streaming** (chat / VLM): `gen_session` queue with `nativeFeedToken / nativeFeedDone / nativeFeedError`; the httplib chunked content provider drains it onto an SSE stream.
+- **Single-response** (embeddings / TTS / STT / image): `reply_session` — bridge calls `nativeFeedReplyText(replyId, body, mime)` for JSON/text or `nativeFeedReplyBinary(replyId, path, mime)` for staged binary; the route handler blocks on `session->wait(timeout)`.
+- **Big binary upload** (multipart image, mask, wav): cpp-httplib decodes multipart natively; the route writes each part to `<cacheDir>/server-staging/tn_<rand>_<name>` via `server_staging::write_bytes`, hands the path to Java via JNI string (avoids byte[] JNI copies), and unlinks on response.
+- **Big binary download** (TTS wav, generated PNG): Kotlin writes the bytes to the staged path, hands the path back via `nativeFeedReplyBinary(path, mime)`, the C++ side reads + sends + unlinks. PNG responses are base64-encoded into JSON `b64_json` per OpenAI; WAV is sent as raw `audio/wav`.
+- **VLM image_url parts**: only `data:image/...;base64,...` URLs are accepted. Network URLs return 400 (offline-only scope). Decoded bytes are staged to tmpfiles and the paths passed to `InferenceBridge.startGeneration(..., imagePaths=[...])`. Sanitised messages (image parts collapsed into text-only `content`) are forwarded to the engine alongside the path list — the Kotlin bridge reads each tmpfile and feeds the bytes to `GGMLEngine.generateVlmFlow(imageData = [...])`.
 
 ### Web UI
 
-Bundled at `app/src/main/assets/server_webui.html`. Loaded by `RemoteServerService.loadWebUiHtml()` on start; if asset read fails, `FALLBACK_WEBUI_HTML` (inline minimal HTML) is used. JNI: `nativeSetWebUiHtml(html)` pushes; `nativeClearWebUi()` clears on stop. Routes `/`, `/index.html`, `/webui` serve `webui::get_html()` and are added to the `auth::is_public_path` allowlist. The bundled UI is a single-file Material-3 chat client: sidebar history (`localStorage` key `tn.chats.v2`), markdown rendering with code-copy + math + tables, streaming with blinking cursor, settings dialog (bearer token, host, model display, "Clear all chats"), connection indicator polling `/health` every 30 s, auto dark/light via `prefers-color-scheme`.
+Bundled at `app/src/main/assets/server_webui.html`. Single Material-3 SPA with a sidebar tab strip that swaps the main panel between four workspaces:
 
-### AIDL (`app/src/main/aidl/com/dark/tool_neuron/service/server/`)
+- **Chat** — preserved from the prior build: localStorage history, markdown rendering, streaming with blinking cursor, settings dialog, connection indicator. Adds an attach-image button (📎) that converts the uploaded image to a `data:image/...;base64,...` URL and appends it as an OpenAI multi-part `image_url` content entry on the next send. Server auto-detects and routes to the VLM engine.
+- **Embeddings** — model select, multi-line input (one row per line), runs `/v1/embeddings`, shows vector count + first 8 dims of each row.
+- **Voice** — two cards. TTS: model + text + voice id + speed, plays the returned WAV inline. STT: model + WAV upload, shows transcribed text.
+- **Image** — segmented switch (Generate / Edit / Inpaint / Upscale). Prompt + negative + steps/CFG/width/height for diffusion modes. Input image file for Edit/Inpaint/Upscale. Mask file for Inpaint. Result is rendered inline from `b64_json`.
 
-- `IRemoteServerService.aidl` — start / stop / isRunning / currentSnapshotJson / rotateToken / recentRequestEventsJson / clearAuditLog / register-callback / unregister-callback. Everything passes as JSON strings; no parcelable plugin needed.
-- `IRemoteServerCallback.aidl` — `onStateChanged(snapshotJson)` and `onRequestEvent(eventJson)`. Wire pushes from `:server` to `:app`.
+`refreshModelCache()` hits `/v1/models` once per tab activation and filters per-kind for the model dropdowns. JNI: `nativeSetWebUiHtml(html)` pushes the bundled file at server start; `nativeClearWebUi()` clears on stop. Same applies to `/docs` via `nativeSetDocsHtml` + `app/src/main/assets/server_docs.html`. The docs file documents every endpoint with copy-pasteable curl examples.
+
+### Start config (`configJson`) schema
+
+JSON object passed to `IRemoteServerService.start(configJson)`. Built by `ServerController.start()` from `:app`:
+
+```json
+{
+  "token":     "tn_sk_<base64url>",
+  "port":      11434,
+  "bindMode":  "ALL_INTERFACES | LOOPBACK_ONLY | WIFI_ONLY",
+  "webUiHtml": "<bundled assets/server_webui.html>",
+  "docsHtml":  "<bundled assets/server_docs.html>",
+  "engines":   [
+    { "id":"...", "name":"...", "path":"<abs file path>", "type":"gguf|vlm|embedding|tts|stt|image_gen|image_upscaler",
+      "mmproj_path":"<vlm only, optional>", "config_json":"{...}", "created":1715000000, "primary":true|false }
+  ]
+}
+```
+
+`engines` is built by walking the entire installed `ModelRepository` and mapping `ProviderType` → engine kind. GGUF chat models living under `<modelsDir>/vlm/` with a colocated `*mmproj*.gguf` are auto-classified as `vlm`. `config_json` merges the per-model `loadingParamsJson` + `inferenceParamsJson` from `ModelConfig`. URI-pathType models are skipped — the server only supports `FILE` paths because there's no clean way to trampoline content URIs across the `:server` process boundary.
 
 ### `:server`-side Kotlin (in `app/src/main/java/com/dark/tool_neuron/service/server/`, runs in `:server` process)
 
-- `RemoteServerService.kt` — plain `Service`, NOT `@AndroidEntryPoint`. Holds its own `ServerEngine`, `ServerInferenceBridge`, and a `RemoteCallbackList<IRemoteServerCallback>`. Implements `IRemoteServerService.Stub` inline. Foreground promotion happens *inside* the AIDL `start(configJson)` call — pulls model id / name / path / config / token / port / bind mode / web-UI HTML / docs HTML from the JSON, calls `engine.load`, configures + starts the native HTTP server, publishes a `ServerSnapshot` to all callbacks. `onStartCommand` only handles `ACTION_STOP` (the notification's Stop button).
-- `ServerEngine.kt` — wraps `com.dark.gguf_lib.GGMLEngine`. `load(path, configJson)`, `unload()`, `generateMultiTurnFlow(...)`, `setSampling`, `setSystemPrompt`, `stopGeneration`. Same JSON shape `InferenceService` parses for chat (contextSize, threadMode, flashAttn, cacheTypeK/V, sampling, kvSink/Window/Evict).
-- `ServerInferenceBridge.kt` — extends `com.dark.native_server.InferenceBridge`. Constructed with a `ServerEngine` reference and an `onRequestEvent` callback. No `@Singleton`, no Hilt. Calls `engine.generateMultiTurnFlow` directly — never crosses AIDL.
-- `ServerSnapshot` (in `RemoteServerService.kt`, internal) — phase / modelId / modelName / host / displayHost / lanHost / port / bindModeName / wifiActive / reason. Serialised to JSON for cross-process shipping.
-- `BindResolver.kt`, `ServerTypes.kt` — same as before. `ServerInfo` and `ServerState` continue to model UI-side state in `:app`.
+- `RemoteServerService.kt` — plain `Service`, NOT `@AndroidEntryPoint`. Holds the `ServerEngineRegistry`, the `ServerInferenceBridge`, and a `RemoteCallbackList<IRemoteServerCallback>`. Implements `IRemoteServerService.Stub` inline. Foreground promotion happens *inside* the AIDL `start(configJson)` call — parses the catalog, sets the staging dir, calls `registry.setCatalog`, preloads the primary chat (or first VLM if no chat), configures + starts the native HTTP server, publishes a `ServerSnapshot` to all callbacks. `onStartCommand` only handles `ACTION_STOP` (the notification's Stop button). `onCreate` calls `nativeSetStagingDir(<cacheDir>/server-staging/)` so the cleanup path is wired even before a `start`.
+- `ServerEngine.kt` — wraps `GGMLEngine` for chat GGUF. `load(modelId, path, configJson)` (carries the id so the registry can decide reload vs. reuse), `unload()`, `generateMultiTurnFlow(...)`, `setSampling`, `setSystemPrompt`, `stopGeneration`. Same JSON shape `InferenceService` parses for chat (contextSize, threadMode, flashAttn, cacheTypeK/V, sampling, kvSink/Window/Evict).
+- `ServerVlmEngine.kt` — separate `GGMLEngine` instance. `ensureLoaded(modelId, basePath, mmprojPath, configJson)` releases any prior projector, loads the base GGUF, then auto-loads the mmproj (preferring the explicit path; falling back to colocated `*mmproj*.gguf`). `generateFlow(messagesJson, imageBytes, maxTokens)` dispatches to `GGMLEngine.generateVlmFlow(imageData=..., imageQuality=HIGH)`.
+- `ServerEmbeddingEngine.kt` — wraps `EmbeddingEngine`. `ensureLoaded(modelId, path, configJson)` calls `engine.load(path, threads, contextSize)`. Exposes `embedBatch(texts, normalize=true)` — the bridge JSON-encodes the result for `nativeFeedReplyText`.
+- `ServerTtsEngine.kt` — wraps sherpa-onnx `OfflineTts` (VITS only). `ensureLoaded` builds `OfflineTtsConfig` from the model config JSON; `synthesize(text, speakerId, speed)` returns mono float samples; `sampleRate()` exposes the codec rate so the WAV encoder writes the right header.
+- `ServerSttEngine.kt` — wraps sherpa-onnx `OfflineRecognizer` (Whisper only). `recognize(samples, sampleRate)` returns the transcribed text or null on failure.
+- `ServerImageEngine.kt` — wraps `StableDiffusionManager`. `ensureRuntime()` is gated on `<filesDir>/ai_sd_runtime/qnnlibs.tar.xz` existing (downloaded by `:app`-side `ImageGenManager`). `loadDiffusion(id, name, path, width, height)` walks the model dir, builds `DiffusionModelConfig`, and calls `sdk.loadModel`. `loadUpscaler(id, path)` toggles MNN vs. OpenCL based on filename. `generate(params)` is `sdk.generateImageSync(...)` (blocks until result). `upscale(bitmap)` posts the bitmap and `.first {}`s on `upscaleState` for Complete/Error. PNG encoding/decoding lives here too.
+- `ServerEngineRegistry.kt` — single source of truth for catalog + lazy loading. `chatFor`, `vlmFor`, `embedFor`, `ttsFor`, `sttFor`, `imageGenFor(width, height)`, `upscalerFor`. Each method picks the entry by id or falls back to `firstOf(kind)`. Per-kind locks (`Mutex` for suspend, plain `Object` for sherpa's synchronous load) serialise concurrent loads.
+- `ServerInferenceBridge.kt` — extends `InferenceBridge`. Each upcall (`startGeneration` / `startEmbedding` / `startTts` / `startStt` / `startImageGen` / `startImageUpscale`) launches a coroutine on a `SupervisorJob` IO scope, calls the right registry method, dispatches to the engine, and feeds the result back via `NativeServer.nativeFeed*`. Chat + VLM streaming uses the existing `nativeFeedToken / nativeFeedDone / nativeFeedError` triplet; everything else uses the single-shot `nativeFeedReplyText / nativeFeedReplyBinary / nativeFeedReplyError`. VLM marker is prefixed onto the last user message via `engine.defaultMarker()` (= `engine.getVlmDefaultMarker()` in the Kotlin call site).
+- `ServerCatalog.kt` — typed catalog model + `ServerEngineKind` enum + JSON serializer matching the C++ `set_catalog_json` parser.
+- `ServerWavCodec.kt` — Kotlin-side RIFF reader/writer used by TTS (encode floats → wav) and STT (decode wav → floats). Mirrors the native helper.
+- `ServerSnapshot` (in `RemoteServerService.kt`, internal) — phase / modelId / modelName / host / displayHost / lanHost / port / bindModeName / wifiActive / reason. Serialised to JSON for cross-process shipping. `modelId / modelName` reflect the **primary** engine (chat GGUF or first VLM) — the snapshot doesn't enumerate every loaded engine.
+- `BindResolver.kt`, `ServerTypes.kt` — unchanged.
 
 ### `:app`-side Kotlin
 
-- `ServerController.kt` — `@Singleton`, AIDL client. Binds to `:server` on first construction (Hilt eager-ish). Mirrors `IRemoteServerCallback.onStateChanged` into `state: StateFlow<ServerState>` and `onRequestEvent` into `requestEvents`. `start()` reads selected model + config + token + port + bind mode + asset HTML, packages as a JSON `ServerStartConfig`, calls `IRemoteServerService.start(configJson)`. `stop()` and `rotateToken()` forward via AIDL. Token generation is pure Kotlin (`SecureRandom` + base64url, no JNI in `:app`).
-- `viewmodel/ServerViewModel.kt`, `ui/screens/server/ServerScreen.kt`, `ServerTopBar.kt` — unchanged. Their `ServerController` API surface matches what existed before.
+- `ServerController.kt` — `@Singleton`, AIDL client. `start()` walks `ModelRepository.models.value`, builds the full multi-engine catalog (one JSON entry per installed model), packages with token / port / bind mode / web-UI HTML / docs HTML, calls `IRemoteServerService.start(configJson)`. URI-pathType models are silently skipped. The "selected chat model" pref still exists but is now only used to mark a `"primary": true` flag inside the engines array — if it's unset or invalid the first installed chat GGUF wins. Start enables as long as **any** engine is installed (was: required a chat model). `stop()` and `rotateToken()` forward via AIDL.
+- `viewmodel/ServerViewModel.kt` — adds `anyEngineInstalled: StateFlow<Boolean>`. Chat-model selector card stays; selecting only seeds the `primary` flag.
+- `ui/screens/server/ServerScreen.kt` — Start button enabled if any engine is installed OR a chat is selected.
 
 ### State sync / process-survival semantics
 
-- `:app` calls `bindService(intent, conn, BIND_AUTO_CREATE)`. Android starts `:server`. AIDL stub returned. App registers callback, reads `currentSnapshotJson()` to rehydrate.
-- App-killed-but-server-running case: re-launching the app re-binds; `currentSnapshotJson()` returns `phase=running` with all live fields, plus `recentRequestEventsJson(100)` for the log card.
-- Server foregrounds *only* during AIDL `start`, not on `bindService` alone — so a brief "exists, idle, no notification" state is impossible (we never enter it).
+Unchanged from the single-engine build. `:app` calls `bindService(intent, conn, BIND_AUTO_CREATE)`. Android starts `:server`. AIDL stub returned. App registers callback, reads `currentSnapshotJson()` to rehydrate. App-killed-but-server-running: re-launching the app re-binds; `currentSnapshotJson()` returns `phase=running` with all live fields, plus `recentRequestEventsJson(100)` for the log card. Server foregrounds *only* during AIDL `start`, not on `bindService` alone — so a brief "exists, idle, no notification" state is impossible (we never enter it).
 
 ### Lockdown
 
-`ScaffoldViewModel.serverRunning: StateFlow<Boolean>` derived from `ServerController.state`. `AppScaffold` `LaunchedEffect(serverRunning, currentRoute)` re-routes to `ServerScreen` with `popUpTo(0) { inclusive = true }` when running and not already there. `BackHandler(running) {}` inside ServerScreen absorbs back. Drawer gesture hidden via `showDrawer = currentRoute == HomeScreen.route && !serverRunning`. Chat-side load/unload + sendMessage are gated on `!serverController.isBusy` so server-owned model state isn't perturbed.
+`ScaffoldViewModel.serverRunning: StateFlow<Boolean>` derived from `ServerController.state`. `AppScaffold` `LaunchedEffect(serverRunning, currentRoute)` re-routes to `ServerScreen` with `popUpTo(0) { inclusive = true }` when running and not already there. `BackHandler(running) {}` inside ServerScreen absorbs back. Drawer gesture hidden via `showDrawer = currentRoute == HomeScreen.route && !serverRunning`. Chat-side load/unload + sendMessage in `HomeViewModel` are gated on `!serverController.isBusy`; same for `ModelStoreViewModel.downloadPack / downloadModel / setActive`. Because the lockdown is UI-routing rather than per-VM gating, the Image Task / Voice screens are inherently unreachable while server is running — no per-VM gate needed there. The server owns whatever model state it has loaded for its current request; chat-side reload would have nothing to clobber anyway because they're separate engine instances in separate processes.
 
 ### Auth + token lifecycle
 
@@ -445,11 +521,11 @@ Bundled at `app/src/main/assets/server_webui.html`. Loaded by `RemoteServerServi
 
 ### HXS server keys
 
-`server_token` (String), `server_port` (String, validated [1024..65535], default `11434`), `server_bind_mode` (String, default `ALL_INTERFACES`), `server_auto_start` (Boolean, reserved), `server_configured` (Boolean), `server_selected_model` (String). All ride the same encrypted `app_prefs` vault.
+`server_token` (String), `server_port` (String, validated [1024..65535], default `11434`), `server_bind_mode` (String, default `ALL_INTERFACES`), `server_auto_start` (Boolean, reserved), `server_configured` (Boolean), `server_selected_model` (String — primary chat hint only as of multi-engine). All ride the same encrypted `app_prefs` vault.
 
-### Phase-1 deliberate omissions
+### Deliberate omissions
 
-HTTPS / TLS, mDNS / Bonjour, QR-pairing, dynamic-model-load over the wire, streaming usage metrics, embeddings / image-gen / audio endpoints, request-log persistence to HXS.
+HTTPS / TLS, mDNS / Bonjour, QR-pairing, dynamic-model-load over the wire, streaming usage metrics, request-log persistence to HXS, network-URL image fetching (offline-only). Audio transcoding — `/v1/audio/transcriptions` accepts WAV PCM (16-bit or 32-bit float) only; MP3/AAC etc. return a generic decode failure. Per-engine RAM accounting — engines stay loaded until server stop; no idle TTL. Image-gen progress streaming — `/v1/images/generations` is single-response (uses `generateImageSync`); the live diffusion intermediate previews available in the in-app Image Task screen are not exposed.
 
 ---
 
@@ -872,7 +948,19 @@ Hub + 7 detail screens, all **single-Scaffold** (accept `innerPadding: PaddingVa
 - Don't remove the `startService(Intent(this, RemoteServerService::class.java))` call inside `handleStart` (just before `startForeground`). The service is otherwise bind-only and gets destroyed when `:app` dies / swipes from recents. The self-start transitions it to the "started" lifecycle so a foreground notification + `stopWithTask="false"` keeps it alive across client death.
 - Don't let any UI escape the server lockdown. `LaunchedEffect(serverRunning, currentRoute)` with `popUpTo(0) { inclusive = true }`; `BackHandler(enabled = running) {}` in ServerScreen; drawer gated by `showDrawer = currentRoute == HomeScreen.route && !serverRunning`.
 - Don't persist the server token outside the encrypted HXS `app_prefs` vault.
-- Don't make `/v1/models` return the full installed catalog. Phase 1 exposes only the currently-loaded model. Dynamic load over the wire requires explicit opt-in.
+- `/v1/models` returns the full enabled-engine catalog (every installed model across `gguf` / `vlm` / `embedding` / `tts` / `stt` / `image_gen` / `image_upscaler`) with per-entry `type` + `owned_by`. Each model's JSON entry must carry `id`, `path`, `type`, `config_json`; for `vlm` rows also `mmproj_path`. Don't shrink this back to "currently loaded only" — clients pick the model per request via the OpenAI `model` field, and the registry lazy-loads on first use. Don't silently expose models with `pathType == CONTENT_URI`; they're filtered in `ServerController.buildEnginesCatalog` because the server has no SAF trampoline.
+- Don't bypass `ServerEngineRegistry` from any new route. Per-kind locks (`Mutex` for the suspend-based loaders, plain `synchronized` for the sherpa-onnx ones) serialise concurrent loads — a second request for the same engine waits for the first load to complete instead of racing it. New endpoints add a new typed `Kind` to `server_models::Kind`, a new wrapper class, a new registry method, a new `InferenceBridge.start<X>` upcall, and a new `nativeFeedReply*` consumption path. Don't shortcut by reaching into `GGMLEngine` / `StableDiffusionManager` directly from the route handler — every engine touch must go through the registry so loading discipline is preserved.
+- Don't route `/v1/chat/completions` to the VLM engine unless the request has at least one `image_url` content part. `oai::extract_images_from_messages` is the single decision point — it sets `request.has_images = true` only when a part of type `image_url` is detected in any message. Don't move that detection upstream into the rate-limit / auth layer; pre-routing must stay pure.
+- Don't accept network URLs in `image_url` parts on the server. Privacy / offline-only scope: only `data:image/...;base64,...` is parsed; `http(s)://...` returns 400 `invalid_image`. Adding outbound fetch from `:server` would mean adding curl-impersonate to the native server, which doubles its native deps and breaks the "no BoringSSL/OpenSSL/zlib in `:native-server`" rule.
+- Don't pass big binary payloads (TTS audio, generated images, multipart image/mask inputs, multipart WAV) as `byte[]` over JNI. The contract is: write the bytes to `<cacheDir>/server-staging/tn_<rand>_<name>` via `server_staging`, hand the **path** across JNI as a Java string. The C++ route reads/writes the file directly. Cleanup happens after the response is sent (`staging::unlink_safe`) and at every server stop (`staging::purge_all`). JNI byte[] copies for 4 MB images are measurable overhead and have caused OOMs in adjacent products.
+- Don't change `reply_session.wait(timeout_ms)` to take 0 or -1 unconditionally. The defaults exist for a reason: embeddings 120s, TTS 180s, STT 180s, image gen 600s, image upscale 300s. On a Snapdragon 8 Gen 1 a 20-step SDXL run can flirt with 5 min; the 600s ceiling is the cliff before we say "something's wedged".
+- Don't drop the in-process `ServerImageEngine.ensureRuntime()` check that gates on `<filesDir>/ai_sd_runtime/qnnlibs.tar.xz` existing. The user must have triggered the SD runtime download via the in-app Image Task screen at least once before the server's image endpoints work. Image gen routes return a clean 500 with "image engine unavailable or runtime not installed" if not.
+- Don't share `StableDiffusionManager` state between `:app` and `:server`. Each process has its own `getInstance(context)` (class loaders are per-process). They cooperate only via the shared on-disk `<filesDir>/ai_sd_runtime/` directory; whichever process initialises first extracts qnnlibs, the other sees the existing files and skips re-extraction. Don't add IPC between the two image stacks.
+- Don't fold the `:server`-side `ServerTtsEngine` / `ServerSttEngine` back into using `InferenceClient` AIDL. `:server` MUST own its sherpa-onnx instances directly — the AIDL hop would mean (a) crossing into `:inference` which has its own active TTS/STT for in-app voice, (b) yanking that state under the user's feet when the chat-side mic is in flight. The two stacks are intentionally independent.
+- Don't read voice / embedding "active" preferences from inside `:server`. The server doesn't open HXS. `ServerTtsEngine.ttsFor(modelId)` falls back to `catalog.firstOf(TTS)` when the requested id isn't found — which is "whatever's listed first in `ModelRepository.models`" (install order). If the request omits `model`, the server picks the first installed engine of that kind. Clients that want a specific voice MUST send `model` explicitly.
+- Don't broaden the OpenAI streaming contract to non-chat routes. Embeddings, TTS, STT, image gen are all single-response. Adding `stream:true` support to them would require either a new SSE schema (no OpenAI precedent for images), or partial-bytes-over-chunked-transfer (sherpa-onnx and SD AAR are batch-only; no per-step callback exposes individual samples). Stay aligned with OpenAI's published shapes.
+- Don't trip the `server_->set_payload_max_length` setting back to 1 MB. The 64 MB cap is sized to fit base64-encoded VLM image_urls (4 MB raw ≈ 5.4 MB b64) plus multipart audio uploads (whisper-friendly 30s WAV at 16kHz 16-bit ≈ 960 KB) plus 4× upscale inputs. Same applies to the read/write timeouts (60s / 120s) — TTS synthesis of a single sentence on a Tensor G3 takes ~3s, but a 200-character paragraph runs longer.
+- Don't add audio transcoding to `/v1/audio/transcriptions`. WAV-only is the documented contract. Bringing in ffmpeg or symphonia would balloon the native footprint. If clients want MP3/AAC support, they decode client-side before upload (the bundled web UI's STT panel already only accepts `.wav`).
 - Don't bind the server only to the Wi-Fi IP by default. `ALL_INTERFACES` (0.0.0.0) is the default so the loopback URL is reachable from the device's own browser regardless of Wi-Fi state. Display two URLs: loopback (always works) + LAN (when Wi-Fi is up).
 - Don't display `serverPort` from raw HXS without validation. Getter validates [1024..65535]; setter clamps. Effective port (post-bind) is written back from `nativeBoundPort()`.
 - Don't drop the `serverController.isBusy` gating on chat-side load/unload/send. The server owns the loaded model; uncontrolled chat-side reload would yank state mid-request.

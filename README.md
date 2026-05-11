@@ -28,10 +28,13 @@ Active development. 3.0. Built from Android Studio; signed releases require keys
 Removed at the 2026-04-20 scope pivot and not coming back:
 
 - Tool calling / agent platform
-- Image generation
-- Plugin marketplace
 - Termux integration
 - Cloud features of any kind
+
+Re-added after 2026-04-20:
+
+- **Image generation** — 2026-05-08, via the `:ai_sd` AAR (QNN + MNN backends).
+- **Plugin marketplace** — 2026-05-11, as a first-party plugin runtime (`:plugin-api` + `:plugin-exc`) with DexClassLoader, capability-gated APIs (ONNX / HXS / network), and a floating plugin dock for switching between live plugins. Currently first-party plugins only; .so support behind a "contains native code" badge.
 
 ---
 
