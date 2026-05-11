@@ -3,6 +3,7 @@ package com.dark.tool_neuron.viewmodel.home_vm
 import android.content.Context
 import android.util.Log
 import androidx.core.net.toUri
+import com.dark.tool_neuron.data.AppPreferences
 import com.dark.tool_neuron.model.ModelConfig
 import com.dark.tool_neuron.model.ModelInfo
 import com.dark.tool_neuron.model.enums.PathType
@@ -26,12 +27,24 @@ import javax.inject.Singleton
 private const val DEFAULT_MAX_TOKENS = 2048
 private const val DEFAULT_CONTEXT_SIZE = 4096
 private const val TAG = "ModelSessionManager"
-private const val VLM_PROJECTOR_THREADS = 2
+
+// ViT projector is compute-bound (no memory-bandwidth ceiling like decode) —
+// scales linearly up to perf-core count. Was hardcoded at 2 which left half
+// the perf cores idle on modern 4-perf-core SoCs (e.g. Snapdragon 7s Gen 3),
+// roughly doubling encode time. Map from the user's thread-mode pref:
+//   POWER_SAVING → 2  (cool)
+//   BALANCED     → 4  (default — saturates the perf cluster)
+//   PERFORMANCE  → 4  (no benefit beyond perf cluster — eff cores hurt)
+private fun vlmProjectorThreadsFor(threadMode: Int): Int = when (threadMode) {
+    0 -> 2
+    else -> 4
+}
 
 @Singleton
 class ModelSessionManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val modelRepo: ModelRepository,
+    private val appPrefs: AppPreferences,
 ) {
     private val _loadState = MutableStateFlow<ModelLoadState>(ModelLoadState.Idle)
     val loadState: StateFlow<ModelLoadState> = _loadState.asStateFlow()
@@ -106,7 +119,12 @@ class ModelSessionManager @Inject constructor(
         }
         val ok = withContext(Dispatchers.IO) {
             try {
-                InferenceClient.loadVlmProjector(mmproj.absolutePath, VLM_PROJECTOR_THREADS, imageMinTokens = -1, imageMaxTokens = -1)
+                InferenceClient.loadVlmProjector(
+                    mmproj.absolutePath,
+                    vlmProjectorThreadsFor(appPrefs.threadMode),
+                    imageMinTokens = -1,
+                    imageMaxTokens = -1,
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "VLM projector auto-load failed", e)
                 _vlmAutoLoadError.value = e.message ?: "Projector load failed"
@@ -164,20 +182,27 @@ class ModelSessionManager @Inject constructor(
     }
 
     private fun buildConfigJson(config: ModelConfig?): String {
-        if (config == null) return "{}"
-        val sb = StringBuilder(256).append('{')
-        val loading = config.loadingParamsJson
-        val inference = config.inferenceParamsJson
-        if (loading != "{}" && loading.isNotBlank()) {
-            val inner = loading.trim().removePrefix("{").removeSuffix("}")
-            if (inner.isNotBlank()) sb.append(inner).append(',')
+        // Start from per-model JSON (if any), then layer in global defaults
+        // for keys the user hasn't overridden per-model. Today the only
+        // global-default key is threadMode (Settings → Performance).
+        val merged = JSONObject()
+        config?.loadingParamsJson?.takeIf { it.isNotBlank() && it != "{}" }
+            ?.let { runCatching { JSONObject(it) }.getOrNull() }
+            ?.let { mergeInto(merged, it) }
+        config?.inferenceParamsJson?.takeIf { it.isNotBlank() && it != "{}" }
+            ?.let { runCatching { JSONObject(it) }.getOrNull() }
+            ?.let { mergeInto(merged, it) }
+        if (!merged.has("threadMode")) {
+            merged.put("threadMode", appPrefs.threadMode)
         }
-        if (inference != "{}" && inference.isNotBlank()) {
-            val inner = inference.trim().removePrefix("{").removeSuffix("}")
-            if (inner.isNotBlank()) sb.append(inner)
+        return merged.toString()
+    }
+
+    private fun mergeInto(dst: JSONObject, src: JSONObject) {
+        val it = src.keys()
+        while (it.hasNext()) {
+            val key = it.next()
+            dst.put(key, src.get(key))
         }
-        if (sb.last() == ',') sb.deleteCharAt(sb.length - 1)
-        sb.append('}')
-        return sb.toString()
     }
 }
