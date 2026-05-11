@@ -14,11 +14,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -58,6 +60,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.dark.tool_neuron.model.ChatDocument
 import com.dark.tool_neuron.model.NavScreens
+import com.dark.tool_neuron.ui.components.ContextStatsDialog
+import com.dark.tool_neuron.viewmodel.ImageEncodeStatus
 import com.dark.tool_neuron.service.inference.InferenceClient
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionProgressButton
@@ -90,19 +94,29 @@ fun HomeScreenBottomBar(
     val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
     val contextUsage by viewModel.contextUsage.collectAsStateWithLifecycle()
 
-    val canSend by remember {
-        derivedStateOf {
-            text.isNotBlank() && !isGenerating && (isModelLoaded || installedModels.isNotEmpty())
-        }
-    }
-
     val isIngesting by viewModel.isIngestingDocument.collectAsStateWithLifecycle()
     val documentError by viewModel.documentError.collectAsStateWithLifecycle()
     val ragReady by viewModel.ragReady.collectAsStateWithLifecycle()
     val activeEmbeddingName by viewModel.activeEmbeddingName.collectAsStateWithLifecycle()
 
     val pendingImages by viewModel.pendingImages.collectAsStateWithLifecycle()
+    val imageEncodeStatus by viewModel.imageEncodeStatus.collectAsStateWithLifecycle()
     val isVlmLoaded by viewModel.isVlmLoaded.collectAsStateWithLifecycle()
+
+    val imagesEncoding by remember {
+        derivedStateOf {
+            pendingImages.any { uri ->
+                val s = imageEncodeStatus[uri] ?: ImageEncodeStatus.Pending
+                s == ImageEncodeStatus.Pending || s == ImageEncodeStatus.Encoding
+            }
+        }
+    }
+
+    val canSend by remember {
+        derivedStateOf {
+            text.isNotBlank() && !isGenerating && !imagesEncoding && (isModelLoaded || installedModels.isNotEmpty())
+        }
+    }
     val vlmError by viewModel.vlmError.collectAsStateWithLifecycle()
 
     val isRecording by viewModel.isRecording.collectAsStateWithLifecycle()
@@ -135,8 +149,8 @@ fun HomeScreenBottomBar(
     }
 
     val imagePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia(),
-    ) { uri -> uri?.let(viewModel::addImage) }
+        ActivityResultContracts.PickMultipleVisualMedia(),
+    ) { uris -> uris.forEach(viewModel::addImage) }
 
     Column(
         modifier = Modifier
@@ -158,6 +172,7 @@ fun HomeScreenBottomBar(
 
         PendingImageRow(
             images = pendingImages,
+            statusMap = imageEncodeStatus,
             onRemove = viewModel::removeImage,
         )
 
@@ -242,9 +257,15 @@ fun HomeScreenBottomBar(
                         }
                     },
                     onStop = viewModel::stopGeneration,
+                    onContextClick = viewModel::openContextStats,
                 )
             }
         }
+    }
+
+    val contextStatsReport by viewModel.contextStatsReport.collectAsStateWithLifecycle()
+    contextStatsReport?.let { report ->
+        ContextStatsDialog(report = report, onDismiss = viewModel::dismissContextStats)
     }
 }
 
@@ -267,6 +288,7 @@ private fun InputBar(
     onLoadModelClick: () -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
+    onContextClick: () -> Unit,
 ) {
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
@@ -324,6 +346,7 @@ private fun InputBar(
                     text = contextText,
                     progress = contextProgress,
                     isActive = isModelLoaded,
+                    onClick = { if (isModelLoaded) onContextClick() },
                 )
                 Spacer(Modifier.width(dimens.spacingXs))
                 ActionButton(
@@ -346,6 +369,7 @@ private fun InputBar(
 @Composable
 private fun PendingImageRow(
     images: List<Uri>,
+    statusMap: Map<Uri, ImageEncodeStatus>,
     onRemove: (Uri) -> Unit,
 ) {
     val dimens = LocalDimens.current
@@ -371,9 +395,9 @@ private fun PendingImageRow(
                         }
                     }.getOrNull()
                 }
+                val status = statusMap[uri] ?: ImageEncodeStatus.Pending
                 Box(
-                    modifier = Modifier
-                        .size(56.dp),
+                    modifier = Modifier.size(56.dp),
                 ) {
                     Surface(
                         shape = tnShapes.md,
@@ -396,6 +420,7 @@ private fun PendingImageRow(
                             )
                         }
                     }
+                    EncodeStatusOverlay(status = status)
                     Surface(
                         shape = tnShapes.full,
                         color = MaterialTheme.colorScheme.surface,
@@ -420,6 +445,66 @@ private fun PendingImageRow(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun BoxScope.EncodeStatusOverlay(status: ImageEncodeStatus) {
+    when (status) {
+        ImageEncodeStatus.Encoding -> {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        MaterialTheme.colorScheme.scrim.copy(alpha = 0.35f),
+                        LocalTnShapes.current.md,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
+            }
+        }
+        ImageEncodeStatus.Cached -> {
+            Surface(
+                shape = LocalTnShapes.current.full,
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .size(16.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = TnIcons.Check,
+                        contentDescription = "Vision tokens cached",
+                        modifier = Modifier.size(11.dp),
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                }
+            }
+        }
+        ImageEncodeStatus.Error -> {
+            Surface(
+                shape = LocalTnShapes.current.full,
+                color = MaterialTheme.colorScheme.errorContainer,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .size(16.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = TnIcons.AlertTriangle,
+                        contentDescription = "Vision encode failed",
+                        modifier = Modifier.size(11.dp),
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                }
+            }
+        }
+        ImageEncodeStatus.Pending -> Unit
     }
 }
 
@@ -574,6 +659,7 @@ private fun SendOrStopButton(
             onClickListener = onSend,
             icon = TnIcons.Send,
             contentDescription = "Send",
+            enabled = canSend,
             shape = tnShapes.full,
             colors = IconButtonDefaults.filledIconButtonColors(
                 containerColor = if (canSend)
@@ -721,6 +807,7 @@ private fun ContextIndicator(
     text: String,
     progress: Float,
     isActive: Boolean,
+    onClick: () -> Unit,
 ) {
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
@@ -733,6 +820,7 @@ private fun ContextIndicator(
     Surface(
         shape = tnShapes.full,
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+        modifier = Modifier.clickable(enabled = isActive, onClick = onClick),
     ) {
         Row(
             modifier = Modifier.padding(

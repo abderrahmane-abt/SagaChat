@@ -16,9 +16,16 @@ import com.dark.tool_neuron.model.TextMetrics
 import com.dark.tool_neuron.model.enums.ProviderType
 import com.dark.tool_neuron.model.ResearchEvent
 import com.dark.tool_neuron.model.ResearchUiState
+import com.dark.gguf_lib.ImageQuality
+import com.dark.tool_neuron.data.AppPreferences
 import com.dark.tool_neuron.repo.ChatRepository
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.repo.RagManager
+import com.dark.tool_neuron.repo.VlmVisionCacheRepository
+import com.dark.tool_neuron.ui.components.ContextStatsReport
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import com.dark.tool_neuron.service.server.ServerController
 import com.dark.tool_neuron.service.inference.InferenceClient
 import com.dark.tool_neuron.viewmodel.home_vm.GenerationOutcome
@@ -46,7 +53,10 @@ import javax.inject.Inject
 
 private const val ROLE_USER = "user"
 private const val ROLE_ASSISTANT = "assistant"
+private const val TAG_PRECOMPUTE = "VlmPrecompute"
 private val WHITESPACE = "\\s+".toRegex()
+
+enum class ImageEncodeStatus { Pending, Encoding, Cached, Error }
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -60,6 +70,8 @@ class HomeViewModel @Inject constructor(
     private val voiceManager: VoiceModelManager,
     private val serverController: ServerController,
     private val researchCoordinator: ResearchCoordinator,
+    private val appPrefs: AppPreferences,
+    private val vlmCache: VlmVisionCacheRepository,
 ) : ViewModel() {
 
     val speakingMessageId: StateFlow<String?> = voiceManager.speakingId
@@ -177,6 +189,57 @@ class HomeViewModel @Inject constructor(
 
     private val _pendingImages = MutableStateFlow<List<Uri>>(emptyList())
     val pendingImages: StateFlow<List<Uri>> = _pendingImages.asStateFlow()
+
+    private val _imageEncodeStatus = MutableStateFlow<Map<Uri, ImageEncodeStatus>>(emptyMap())
+    val imageEncodeStatus: StateFlow<Map<Uri, ImageEncodeStatus>> = _imageEncodeStatus.asStateFlow()
+    private val precomputeJobs = mutableMapOf<Uri, Job>()
+
+    private val _contextStatsReport = MutableStateFlow<ContextStatsReport?>(null)
+    val contextStatsReport: StateFlow<ContextStatsReport?> = _contextStatsReport.asStateFlow()
+
+    fun openContextStats() {
+        viewModelScope.launch {
+            _contextStatsReport.value = withContext(Dispatchers.IO) { buildContextStatsReport() }
+        }
+    }
+
+    fun dismissContextStats() { _contextStatsReport.value = null }
+
+    private fun buildContextStatsReport(): ContextStatsReport {
+        val mem = parseJsonOrNull(InferenceClient.getMemoryStatsJson())
+        val vt  = parseJsonOrNull(InferenceClient.getVtCacheStatsJson())
+        val vkv = parseJsonOrNull(InferenceClient.getVlmKvCacheStatsJson())
+        val visionStats = vlmCache.stats()
+        return ContextStatsReport(
+            nCtx              = mem?.optInt("n_ctx", 0) ?: 0,
+            nUsed             = mem?.optInt("n_used", 0) ?: 0,
+            contextUsagePct   = mem?.optDouble("context_usage_pct", 0.0) ?: 0.0,
+            modelMb           = mem?.optDouble("model_mb", 0.0) ?: 0.0,
+            kvCacheMb         = mem?.optDouble("kv_cache_mb", 0.0) ?: 0.0,
+            currentRssMb      = mem?.optDouble("current_rss_mb", 0.0) ?: 0.0,
+            peakRssMb         = mem?.optDouble("peak_rss_mb", 0.0) ?: 0.0,
+            memAvailableMb    = mem?.optDouble("mem_available_mb", 0.0) ?: 0.0,
+            memTotalMb        = mem?.optDouble("mem_total_mb", 0.0) ?: 0.0,
+            threadMode        = mem?.optInt("thread_mode", 0) ?: 0,
+            modelLoaded       = mem?.optBoolean("model_loaded", false) ?: false,
+            vlmLoaded         = mem?.optBoolean("vlm_loaded", false) ?: false,
+            vtCacheInit       = mem?.optBoolean("vt_cache_init", false) ?: false,
+            vtCacheEntries    = vt?.optInt("entry_count", 0) ?: 0,
+            vtCacheBytes      = vt?.optLong("total_bytes", 0L) ?: 0L,
+            vtCacheHits       = vt?.optLong("hits", 0L) ?: 0L,
+            vtCacheMisses     = vt?.optLong("misses", 0L) ?: 0L,
+            vlmKvCacheInit    = mem?.optBoolean("vlm_kv_cache_init", false) ?: false,
+            vlmKvCacheEntries = vkv?.optInt("entry_count", 0) ?: 0,
+            vlmKvCacheBytes   = vkv?.optLong("total_bytes", 0L) ?: 0L,
+            vlmKvCacheHits    = vkv?.optLong("hits", 0L) ?: 0L,
+            vlmKvCacheMisses  = vkv?.optLong("misses", 0L) ?: 0L,
+            visionIndexEntries = visionStats.entryCount,
+            visionIndexBytes   = visionStats.totalBytes,
+        )
+    }
+
+    private fun parseJsonOrNull(json: String?): JSONObject? =
+        json?.takeIf { it.isNotBlank() }?.let { runCatching { JSONObject(it) }.getOrNull() }
 
     val vlmError: StateFlow<String?> = modelSession.vlmAutoLoadError
 
@@ -337,14 +400,73 @@ class HomeViewModel @Inject constructor(
                 android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
             )
         }
+        if (_pendingImages.value.contains(uri)) return
         _pendingImages.value = _pendingImages.value + uri
+        startPrecomputeFor(uri)
     }
 
     fun removeImage(uri: Uri) {
         _pendingImages.value = _pendingImages.value.filterNot { it == uri }
+        precomputeJobs.remove(uri)?.cancel()
+        _imageEncodeStatus.value = _imageEncodeStatus.value - uri
     }
 
-    fun clearPendingImages() { _pendingImages.value = emptyList() }
+    fun clearPendingImages() {
+        _pendingImages.value = emptyList()
+        precomputeJobs.values.forEach { it.cancel() }
+        precomputeJobs.clear()
+        _imageEncodeStatus.value = emptyMap()
+    }
+
+    private fun startPrecomputeFor(uri: Uri) {
+        val activeId = activeModel.value?.id ?: run {
+            updateStatus(uri, ImageEncodeStatus.Pending)
+            return
+        }
+        precomputeJobs[uri]?.cancel()
+        updateStatus(uri, ImageEncodeStatus.Pending)
+        precomputeJobs[uri] = viewModelScope.launch {
+            try {
+                val bytes = withContext(Dispatchers.IO) {
+                    app.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                } ?: run {
+                    updateStatus(uri, ImageEncodeStatus.Error)
+                    return@launch
+                }
+                val sha = withContext(Dispatchers.IO) { VlmVisionCacheRepository.sha256(bytes) }
+                if (vlmCache.isCached(activeId, sha)) {
+                    vlmCache.touch(activeId, sha)
+                    updateStatus(uri, ImageEncodeStatus.Cached)
+                    return@launch
+                }
+                if (!isVlmLoaded.value) {
+                    updateStatus(uri, ImageEncodeStatus.Pending)
+                    return@launch
+                }
+                updateStatus(uri, ImageEncodeStatus.Encoding)
+                val quality = runCatching { ImageQuality.valueOf(appPrefs.vlmImageQuality) }
+                    .getOrDefault(ImageQuality.MEDIUM)
+                val ok = InferenceClient.precomputeVision(app, uri, quality)
+                if (ok) {
+                    vlmCache.markCached(activeId, sha, bytes.size.toLong(), imageMaxTokens = -1)
+                    updateStatus(uri, ImageEncodeStatus.Cached)
+                } else {
+                    updateStatus(uri, ImageEncodeStatus.Error)
+                }
+            } catch (_: CancellationException) {
+                throw kotlin.coroutines.cancellation.CancellationException()
+            } catch (e: Exception) {
+                Log.e(TAG_PRECOMPUTE, "precompute uri=$uri failed", e)
+                updateStatus(uri, ImageEncodeStatus.Error)
+            } finally {
+                precomputeJobs.remove(uri)
+            }
+        }
+    }
+
+    private fun updateStatus(uri: Uri, status: ImageEncodeStatus) {
+        _imageEncodeStatus.value = _imageEncodeStatus.value + (uri to status)
+    }
 
     fun clearVlmError() { modelSession.clearVlmAutoLoadError() }
 
@@ -499,6 +621,16 @@ class HomeViewModel @Inject constructor(
         val images = _pendingImages.value
         if (_isGenerating.value) return
         if (trimmed.isEmpty() && images.isEmpty()) return
+        // Defense-in-depth: refuse send while any attached image is still
+        // pre-warming. Firing generation while ViT is encoding pegs the
+        // CPU on two threads at 96-100% each, starves the UI thread, and
+        // ANRs after ~5 s. The Compose canSend gate should prevent this
+        // too — this is the backstop in case a recomposition lags.
+        val statusMap = _imageEncodeStatus.value
+        if (images.any { uri ->
+                val s = statusMap[uri] ?: ImageEncodeStatus.Pending
+                s == ImageEncodeStatus.Pending || s == ImageEncodeStatus.Encoding
+            }) return
         val active = activeModel.value
             ?: chatModels.value.firstOrNull()?.also { modelRepo.setActive(it.id) }
             ?: run {
