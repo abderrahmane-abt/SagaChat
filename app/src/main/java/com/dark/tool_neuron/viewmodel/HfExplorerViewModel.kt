@@ -29,7 +29,8 @@ import org.json.JSONArray
 import javax.inject.Inject
 
 private const val MAX_HISTORY = 20
-private const val DEFAULT_LIMIT = 30
+private const val DEFAULT_LIMIT = 10
+private const val TRENDING_LIMIT = 8
 
 enum class HfFileFilter { ALL, GGUF, MMPROJ }
 enum class HfFileSizeBucket(val label: String, val maxBytes: Long) {
@@ -261,7 +262,7 @@ class HfExplorerViewModel @Inject constructor(
     private fun loadTrending() {
         viewModelScope.launch {
             _trendingLoading.value = true
-            client.trending(12).onSuccess { _trending.value = it }
+            client.trending(TRENDING_LIMIT).onSuccess { _trending.value = it }
             _trendingLoading.value = false
         }
     }
