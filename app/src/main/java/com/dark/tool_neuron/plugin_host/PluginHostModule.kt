@@ -4,6 +4,7 @@ import android.content.Context
 import com.dark.hxs.HexStorage
 import com.dark.hxs_encryptor.HxsEncryptor
 import com.dark.plugin_exc.PluginExecutor
+import com.dark.plugin_exc.catalog.PluginCatalogClient
 import com.dark.plugin_exc.ui.PluginContainerActivity
 import com.dark.tool_neuron.data.AppKeyStore
 import dagger.Module
@@ -64,6 +65,10 @@ object PluginHostModule {
     ): PluginContainerHost = PluginContainerHost(executor).also {
         PluginContainerActivity.bind(it)
     }
+
+    @Provides
+    @Singleton
+    fun providePluginCatalogClient(): PluginCatalogClient = PluginCatalogClient()
 
     private fun openOrRebuild(
         storage: HexStorage,

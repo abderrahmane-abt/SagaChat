@@ -1,7 +1,5 @@
 package com.dark.tool_neuron.ui.screens.plugin_install
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -26,16 +24,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -48,6 +45,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.plugin_api.PluginCapability
 import com.dark.plugin_exc.InstalledPlugin
+import com.dark.plugin_exc.catalog.CatalogEntry
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.components.BodyLabel
@@ -67,13 +65,15 @@ fun PluginInstallScreen(
     vm: PluginInstallViewModel = hiltViewModel(),
 ) {
     val installed by vm.installed.collectAsStateWithLifecycle()
-    val installState by vm.installState.collectAsStateWithLifecycle()
+    val catalog by vm.catalog.collectAsStateWithLifecycle()
+    val storeRows by vm.storeRows.collectAsStateWithLifecycle()
     val activePlugin by vm.activePlugin.collectAsStateWithLifecycle()
     val openPlugins by vm.openPlugins.collectAsStateWithLifecycle()
 
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { 2 })
     val scope = rememberCoroutineScope()
-    val dimens = LocalDimens.current
+
+    LaunchedEffect(Unit) { vm.refreshCatalog() }
 
     Column(
         modifier = Modifier
@@ -90,7 +90,7 @@ fun PluginInstallScreen(
                 onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
                 text = {
                     Text(
-                        text = "Installed (${installed.size})",
+                        text = "Store",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -101,7 +101,7 @@ fun PluginInstallScreen(
                 onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
                 text = {
                     Text(
-                        text = "Install",
+                        text = "Installed (${installed.size})",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -115,7 +115,16 @@ fun PluginInstallScreen(
             verticalAlignment = Alignment.Top,
         ) { page ->
             when (page) {
-                0 -> InstalledTab(
+                0 -> StoreTab(
+                    catalog = catalog,
+                    rows = storeRows,
+                    onInstall = vm::installFromCatalog,
+                    onUpdate = vm::installFromCatalog,
+                    onOpen = vm::openPlugin,
+                    onRetry = vm::refreshCatalog,
+                    onDismissError = vm::dismissError,
+                )
+                1 -> InstalledTab(
                     installed = installed,
                     activeId = activePlugin,
                     runningIds = openPlugins.toSet(),
@@ -123,13 +132,298 @@ fun PluginInstallScreen(
                     onStop = vm::stopPlugin,
                     onUninstall = vm::uninstall,
                 )
-                1 -> InstallTab(
-                    state = installState,
-                    onPickFile = vm::installFromUri,
-                    onOpen = vm::openPlugin,
-                    onDismiss = vm::dismissInstallState,
+            }
+        }
+    }
+}
+
+@Composable
+private fun StoreTab(
+    catalog: PluginInstallViewModel.CatalogState,
+    rows: List<PluginInstallViewModel.StoreRow>,
+    onInstall: (CatalogEntry) -> Unit,
+    onUpdate: (CatalogEntry) -> Unit,
+    onOpen: (String) -> Unit,
+    onRetry: () -> Unit,
+    onDismissError: (String) -> Unit,
+) {
+    val dimens = LocalDimens.current
+    when (val c = catalog) {
+        is PluginInstallViewModel.CatalogState.Loading -> CatalogLoadingState()
+        is PluginInstallViewModel.CatalogState.Failed -> CatalogErrorState(c.reason, onRetry)
+        is PluginInstallViewModel.CatalogState.Ready -> {
+            if (rows.isEmpty()) {
+                EmptyState(
+                    icon = TnIcons.Puzzle,
+                    title = "No plugins yet",
+                    body = "The catalog returned no entries.",
+                )
+                return
+            }
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    horizontal = dimens.screenPadding,
+                    vertical = dimens.spacingMd,
+                ),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+            ) {
+                items(rows, key = { it.entry.id }) { row ->
+                    StoreCard(
+                        row = row,
+                        onInstall = { onInstall(row.entry) },
+                        onUpdate = { onUpdate(row.entry) },
+                        onOpen = { onOpen(row.entry.id) },
+                        onDismissError = { onDismissError(row.entry.id) },
+                    )
+                }
+                item {
+                    StoreFootnote(updatedAt = c.catalog.updatedAt, count = c.catalog.plugins.size)
+                }
+                item { Spacer(Modifier.height(dimens.spacingXxl)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StoreCard(
+    row: PluginInstallViewModel.StoreRow,
+    onInstall: () -> Unit,
+    onUpdate: () -> Unit,
+    onOpen: () -> Unit,
+    onDismissError: () -> Unit,
+) {
+    val dimens = LocalDimens.current
+    val e = row.entry
+    StandardCard(
+        containerColor = when (row.phase) {
+            is PluginInstallViewModel.Phase.Installed ->
+                MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.18f)
+            is PluginInstallViewModel.Phase.UpdateAvailable ->
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+            is PluginInstallViewModel.Phase.Failed ->
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+            else ->
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        },
+        content = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+            ) {
+                PluginInitialAvatar(initial = e.initial, active = false)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = e.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    CaptionText(text = "v${e.version} · ${e.author} · ${humanSize(e.size)}")
+                }
+                PhaseBadge(row.phase)
+            }
+
+            if (e.description.isNotBlank()) {
+                BodyLabel(
+                    text = e.description,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                    maxLines = 3,
                 )
             }
+
+            CapabilityChips(capabilities = e.capabilities, hasNative = e.hasNativeCode)
+
+            PhaseActionRow(
+                phase = row.phase,
+                onInstall = onInstall,
+                onUpdate = onUpdate,
+                onOpen = onOpen,
+                onDismissError = onDismissError,
+            )
+        },
+    )
+}
+
+@Composable
+private fun PhaseBadge(phase: PluginInstallViewModel.Phase) {
+    when (phase) {
+        is PluginInstallViewModel.Phase.Installed -> StatusBadge(text = "Installed", isActive = true)
+        is PluginInstallViewModel.Phase.UpdateAvailable -> InfoBadge(
+            text = "Update",
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+        )
+        else -> Unit
+    }
+}
+
+@Composable
+private fun PhaseActionRow(
+    phase: PluginInstallViewModel.Phase,
+    onInstall: () -> Unit,
+    onUpdate: () -> Unit,
+    onOpen: () -> Unit,
+    onDismissError: () -> Unit,
+) {
+    val dimens = LocalDimens.current
+    AnimatedContent(
+        targetState = phase,
+        transitionSpec = {
+            (fadeIn(tween(180)) + scaleIn(tween(180), initialScale = 0.97f))
+                .togetherWith(fadeOut(tween(140)))
+        },
+        label = "phase-action",
+    ) { current ->
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            when (current) {
+                is PluginInstallViewModel.Phase.NotInstalled -> {
+                    ActionTextButton(
+                        onClickListener = onInstall,
+                        icon = TnIcons.Download,
+                        text = "Install",
+                    )
+                }
+                is PluginInstallViewModel.Phase.Installed -> {
+                    ActionTextButton(
+                        onClickListener = onOpen,
+                        icon = TnIcons.Rocket,
+                        text = "Open",
+                    )
+                }
+                is PluginInstallViewModel.Phase.UpdateAvailable -> {
+                    ActionTextButton(
+                        onClickListener = onUpdate,
+                        icon = TnIcons.Download,
+                        text = "Update from v${current.fromVersion}",
+                    )
+                    Spacer(Modifier.weight(1f))
+                    ActionTextButton(
+                        onClickListener = onOpen,
+                        icon = TnIcons.Rocket,
+                        text = "Open",
+                    )
+                }
+                is PluginInstallViewModel.Phase.Downloading -> {
+                    val frac = if (current.total > 0)
+                        (current.bytes.toFloat() / current.total.toFloat()).coerceIn(0f, 1f)
+                    else 0f
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(dimens.spacingXxs),
+                    ) {
+                        LinearProgressIndicator(
+                            progress = { frac },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        CaptionText(
+                            text = "Downloading · ${humanSize(current.bytes)} / ${humanSize(current.total)}",
+                        )
+                    }
+                }
+                is PluginInstallViewModel.Phase.Installing -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(dimens.iconSm),
+                        strokeWidth = 2.dp,
+                    )
+                    CaptionText(text = "Verifying and extracting bundle")
+                }
+                is PluginInstallViewModel.Phase.Failed -> {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Install failed",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        CaptionText(text = current.reason)
+                    }
+                    ActionTextButton(
+                        onClickListener = onInstall,
+                        icon = TnIcons.Download,
+                        text = "Retry",
+                    )
+                    ActionTextButton(
+                        onClickListener = onDismissError,
+                        icon = TnIcons.Check,
+                        text = "Dismiss",
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StoreFootnote(updatedAt: String, count: Int) {
+    val dimens = LocalDimens.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = dimens.spacingSm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+    ) {
+        Icon(
+            imageVector = TnIcons.Info,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            modifier = Modifier.size(dimens.iconSm),
+        )
+        CaptionText(text = "$count plugin(s) in catalog · catalog updated $updatedAt")
+    }
+}
+
+@Composable
+private fun CatalogLoadingState() {
+    val dimens = LocalDimens.current
+    Box(
+        modifier = Modifier.fillMaxSize().padding(dimens.spacingXxl),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+        ) {
+            CircularProgressIndicator()
+            CaptionText(text = "Fetching plugin catalog…")
+        }
+    }
+}
+
+@Composable
+private fun CatalogErrorState(reason: String, onRetry: () -> Unit) {
+    val dimens = LocalDimens.current
+    Box(
+        modifier = Modifier.fillMaxSize().padding(dimens.spacingXxl),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+        ) {
+            Icon(
+                imageVector = TnIcons.AlertTriangle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(dimens.iconLg),
+            )
+            Text(
+                text = "Could not load catalog",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            BodyLabel(text = reason, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            ActionTextButton(
+                onClickListener = onRetry,
+                icon = TnIcons.Rocket,
+                text = "Retry",
+            )
         }
     }
 }
@@ -147,8 +441,8 @@ private fun InstalledTab(
     if (installed.isEmpty()) {
         EmptyState(
             icon = TnIcons.Puzzle,
-            title = "No plugins yet",
-            body = "Install a plugin from a .zip bundle to get started.",
+            title = "No plugins installed",
+            body = "Browse the Store tab to add a plugin.",
         )
         return
     }
@@ -323,232 +617,6 @@ private fun capabilityLabel(cap: PluginCapability): String = when (cap) {
 }
 
 @Composable
-private fun InstallTab(
-    state: PluginInstallViewModel.InstallState,
-    onPickFile: (android.net.Uri) -> Unit,
-    onOpen: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val dimens = LocalDimens.current
-    val picker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-    ) { uri -> if (uri != null) onPickFile(uri) }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = dimens.screenPadding, vertical = dimens.spacingMd),
-        verticalArrangement = Arrangement.spacedBy(dimens.spacingMd),
-    ) {
-        DropZoneCard(
-            onPick = {
-                picker.launch(
-                    arrayOf("application/zip", "application/octet-stream", "*/*")
-                )
-            },
-            enabled = state !is PluginInstallViewModel.InstallState.Working,
-        )
-
-        AnimatedContent(
-            targetState = state,
-            transitionSpec = {
-                (fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.95f))
-                    .togetherWith(fadeOut(tween(140)) + scaleOut(tween(140), targetScale = 1.02f))
-            },
-            label = "install-state",
-        ) { current ->
-            when (current) {
-                is PluginInstallViewModel.InstallState.Idle -> Spacer(Modifier.height(0.dp))
-                is PluginInstallViewModel.InstallState.Working -> WorkingCard()
-                is PluginInstallViewModel.InstallState.Success -> SuccessCard(
-                    name = current.name,
-                    onOpen = { onOpen(current.pluginId); onDismiss() },
-                    onDismiss = onDismiss,
-                )
-                is PluginInstallViewModel.InstallState.Failed -> FailedCard(
-                    reason = current.reason,
-                    onDismiss = onDismiss,
-                )
-            }
-        }
-
-        Spacer(Modifier.weight(1f))
-        InfoFootnote()
-    }
-}
-
-@Composable
-private fun DropZoneCard(onPick: () -> Unit, enabled: Boolean) {
-    val dimens = LocalDimens.current
-    StandardCard(
-        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-        onClick = if (enabled) onPick else null,
-        content = {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(vertical = dimens.spacingMd),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(dimens.iconLg + 24.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary, CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = TnIcons.Package,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(dimens.iconMd + 4.dp),
-                    )
-                }
-                Text(
-                    text = "Install from local storage",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                CaptionText(text = "Tap to pick a plugin bundle (.zip).")
-                Spacer(Modifier.height(dimens.spacingXs))
-                ActionButton(
-                    onClickListener = onPick,
-                    icon = TnIcons.HardDrive,
-                    contentDescription = "Choose file",
-                    enabled = enabled,
-                )
-            }
-        },
-    )
-}
-
-@Composable
-private fun WorkingCard() {
-    val dimens = LocalDimens.current
-    StandardCard(
-        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        content = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(dimens.iconMd),
-                    strokeWidth = 2.5.dp,
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Installing plugin…",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    CaptionText(text = "Extracting bundle and verifying manifest")
-                }
-            }
-        },
-    )
-}
-
-@Composable
-private fun SuccessCard(name: String, onOpen: () -> Unit, onDismiss: () -> Unit) {
-    val dimens = LocalDimens.current
-    StandardCard(
-        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-        content = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
-            ) {
-                Icon(
-                    imageVector = TnIcons.Check,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Installed",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    )
-                    BodyLabel(
-                        text = name,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    )
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)) {
-                ActionTextButton(
-                    onClickListener = onOpen,
-                    icon = TnIcons.Rocket,
-                    text = "Open plugin",
-                )
-                ActionTextButton(
-                    onClickListener = onDismiss,
-                    icon = TnIcons.Check,
-                    text = "Dismiss",
-                )
-            }
-        },
-    )
-}
-
-@Composable
-private fun FailedCard(reason: String, onDismiss: () -> Unit) {
-    val dimens = LocalDimens.current
-    StandardCard(
-        containerColor = MaterialTheme.colorScheme.errorContainer,
-        content = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
-            ) {
-                Icon(
-                    imageVector = TnIcons.AlertTriangle,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                )
-                Text(
-                    text = "Install failed",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                )
-            }
-            BodyLabel(
-                text = reason,
-                color = MaterialTheme.colorScheme.onErrorContainer,
-            )
-            ActionTextButton(
-                onClickListener = onDismiss,
-                icon = TnIcons.Check,
-                text = "Dismiss",
-            )
-        },
-    )
-}
-
-@Composable
-private fun InfoFootnote() {
-    val dimens = LocalDimens.current
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
-    ) {
-        Icon(
-            imageVector = TnIcons.Info,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            modifier = Modifier.size(dimens.iconSm),
-        )
-        CaptionText(
-            text = "Plugins run inside this app. Permissions you grant are limited by what each plugin declares.",
-        )
-    }
-}
-
-@Composable
 private fun EmptyState(icon: ImageVector, title: String, body: String) {
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
@@ -591,4 +659,13 @@ private fun EmptyState(icon: ImageVector, title: String, body: String) {
             )
         }
     }
+}
+
+private fun humanSize(bytes: Long): String {
+    if (bytes < 1024) return "$bytes B"
+    val kb = bytes / 1024.0
+    if (kb < 1024) return "%.1f kB".format(kb)
+    val mb = kb / 1024.0
+    if (mb < 1024) return "%.1f MB".format(mb)
+    return "%.2f GB".format(mb / 1024.0)
 }
