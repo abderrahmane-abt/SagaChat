@@ -17,12 +17,14 @@ class ServerEngine {
         val ok = engine.load(
             path = path,
             contextSize = cfg.optInt("contextSize", 4096),
-            threadMode = cfg.optInt("threadMode", 1),
             flashAttn = cfg.optBoolean("flashAttn", true),
             cacheTypeK = cfg.optString("cacheTypeK", "q8_0"),
             cacheTypeV = cfg.optString("cacheTypeV", "q8_0"),
         )
-        if (ok) applySamplingFromConfig(cfg)
+        if (ok) {
+            engine.setThreadMode(cfg.optInt("threadMode", 1))
+            applySamplingFromConfig(cfg)
+        }
         return ok
     }
 
