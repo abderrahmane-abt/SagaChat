@@ -10,6 +10,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.util.Log
+import com.dark.gguf_lib.ImageQuality
 import com.dark.tool_neuron.service.IGenerationCallback
 import com.dark.tool_neuron.service.IInferenceService
 import com.dark.tool_neuron.service.IModelLoadCallback
@@ -345,6 +346,7 @@ object InferenceClient {
         messagesJson: String,
         imageUris: List<Uri>,
         maxTokens: Int,
+        imageQuality: ImageQuality = ImageQuality.MEDIUM,
     ): Flow<InferenceEvent> = callbackFlow {
         val svc = withTimeoutOrNull(BIND_TIMEOUT_MS) { _service.first { it != null } }
         if (svc == null) {
@@ -364,7 +366,7 @@ object InferenceClient {
         }
         val cb = generationCallback { event -> trySend(event) }
         try {
-            svc.generateVlm(messagesJson, pfds, maxTokens, cb)
+            svc.generateVlm(messagesJson, pfds, maxTokens, imageQuality.nativeValue, cb)
         } catch (e: Exception) {
             trySend(InferenceEvent.Error(e.message ?: "Service error"))
             close()
@@ -373,6 +375,28 @@ object InferenceClient {
         }
         awaitClose {}
     }.buffer(Channel.UNLIMITED).flowOn(Dispatchers.IO)
+
+    suspend fun precomputeVision(
+        context: Context,
+        imageUri: Uri,
+        imageQuality: ImageQuality,
+    ): Boolean = withContext(Dispatchers.IO) {
+        val svc = withTimeoutOrNull(BIND_TIMEOUT_MS) { _service.first { it != null } } ?: return@withContext false
+        val pfd = try {
+            context.contentResolver.openFileDescriptor(imageUri, "r")
+        } catch (e: Exception) {
+            Log.e(TAG, "precomputeVision: open uri failed", e)
+            null
+        } ?: return@withContext false
+        try {
+            svc.precomputeVlmVision(pfd, imageQuality.nativeValue)
+        } catch (e: Exception) {
+            Log.e(TAG, "precomputeVision failed", e)
+            false
+        } finally {
+            try { pfd.close() } catch (_: Exception) {}
+        }
+    }
 
     fun setSampling(samplingJson: String) {
         try { _service.value?.setSampling(samplingJson) } catch (_: Exception) {}
@@ -403,6 +427,19 @@ object InferenceClient {
 
     fun getContextUsage(): Float =
         try { _service.value?.contextUsage ?: 0f } catch (_: Exception) { 0f }
+
+    fun setThreadMode(mode: Int) {
+        try { _service.value?.setThreadMode(mode) } catch (_: Exception) {}
+    }
+
+    fun getMemoryStatsJson(): String? =
+        try { _service.value?.memoryStatsJson } catch (_: Exception) { null }
+
+    fun getVtCacheStatsJson(): String? =
+        try { _service.value?.vtCacheStatsJson } catch (_: Exception) { null }
+
+    fun getVlmKvCacheStatsJson(): String? =
+        try { _service.value?.vlmKvCacheStatsJson } catch (_: Exception) { null }
 
     fun supportsThinking(): Boolean =
         try { _service.value?.supportsThinking() ?: false } catch (_: Exception) { false }
