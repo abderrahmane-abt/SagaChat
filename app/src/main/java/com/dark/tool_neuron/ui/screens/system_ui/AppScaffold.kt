@@ -1,11 +1,17 @@
 package com.dark.tool_neuron.ui.screens.system_ui
 
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.PermanentDrawerSheet
+import androidx.compose.material3.PermanentNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.ui.unit.dp
+import com.dark.tool_neuron.ui.util.LocalIsExpandedLayout
+import com.dark.tool_neuron.ui.util.ProvideWindowMetrics
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -26,6 +32,13 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun AppScaffold() {
+    ProvideWindowMetrics {
+        AppScaffoldInner()
+    }
+}
+
+@Composable
+private fun AppScaffoldInner() {
     val navController = rememberNavController()
     val currentEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentEntry?.destination?.route
@@ -79,13 +92,10 @@ fun AppScaffold() {
     val showDrawer = currentRoute == NavScreens.HomeScreen.route && !serverRunning
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val isExpanded = LocalIsExpandedLayout.current
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        gesturesEnabled = showDrawer,
-        drawerContent = {
-            ModalDrawerSheet {
-                ChatDrawerContent(
+    val drawerBody: @Composable () -> Unit = {
+        ChatDrawerContent(
                     chats = chats,
                     currentChatId = currentChatId,
                     onChatSelected = { id ->
@@ -98,6 +108,7 @@ fun AppScaffold() {
                     },
                     onDeleteChat = homeViewModel::deleteChat,
                     onPinChat = homeViewModel::pinChat,
+                    onExportChat = homeViewModel::exportChat,
                     onNavigateToStore = {
                         scope.launch { drawerState.close() }
                         navController.navigate(NavScreens.ModelStore.route)
@@ -130,14 +141,14 @@ fun AppScaffold() {
                         scope.launch { drawerState.close() }
                         navController.navigate(NavScreens.ImageTask.route)
                     },
-                    onNavigateToPlugins = {
-                        scope.launch { drawerState.close() }
-                        navController.navigate(NavScreens.PluginInstall.route)
-                    },
-                )
-            }
-        }
-    ) {
+            onNavigateToPlugins = {
+                scope.launch { drawerState.close() }
+                navController.navigate(NavScreens.PluginInstall.route)
+            },
+        )
+    }
+
+    val mainScaffold: @Composable () -> Unit = {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             topBar = {
@@ -147,7 +158,9 @@ fun AppScaffold() {
                     actionWindowExpanded = actionWindowExpanded,
                     downloadProgress = downloadProgress,
                     onActionWindowToggle = homeViewModel::toggleActionWindow,
-                    onMenuClick = { scope.launch { drawerState.open() } },
+                    onMenuClick = {
+                        if (!isExpanded) scope.launch { drawerState.open() }
+                    },
                     onBack = { navController.popBackStack() },
                     onNavigateToStore = { navController.navigate(NavScreens.ModelStore.route) },
                     onNavigateToGuide = { navController.navigate(NavScreens.AppGuide.route) },
@@ -214,5 +227,20 @@ fun AppScaffold() {
                 }
             )
         }
+    }
+
+    if (isExpanded && showDrawer && !isFullscreen) {
+        PermanentNavigationDrawer(
+            drawerContent = {
+                PermanentDrawerSheet(modifier = Modifier.width(320.dp)) { drawerBody() }
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) { mainScaffold() }
+    } else {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            gesturesEnabled = showDrawer,
+            drawerContent = { ModalDrawerSheet { drawerBody() } },
+        ) { mainScaffold() }
     }
 }

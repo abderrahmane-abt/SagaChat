@@ -28,6 +28,7 @@ import com.dark.tool_neuron.ui.components.action_window.ActionWindowPill
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
+import com.dark.tool_neuron.ui.util.LocalIsExpandedLayout
 import com.dark.tool_neuron.viewmodel.home_vm.PillState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,12 +54,14 @@ fun HomeScreenTopbar(
             )
         },
         navigationIcon = {
-            ActionButton(
-                onClickListener = onMenuClick,
-                icon = TnIcons.Menu,
-                contentDescription = "Menu",
-                modifier = Modifier.padding(start = dimens.screenPadding)
-            )
+            if (!LocalIsExpandedLayout.current) {
+                ActionButton(
+                    onClickListener = onMenuClick,
+                    icon = TnIcons.Menu,
+                    contentDescription = "Menu",
+                    modifier = Modifier.padding(start = dimens.screenPadding)
+                )
+            }
         },
         actions = {
             ActionButton(
