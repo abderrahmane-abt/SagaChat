@@ -1,8 +1,10 @@
 package com.dark.tool_neuron.ui.screens.home_screen
 
 import android.Manifest
+import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,7 +35,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButtonColors
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -60,6 +61,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.dark.tool_neuron.model.ChatDocument
 import com.dark.tool_neuron.model.NavScreens
+import com.dark.tool_neuron.ui.components.CompactProgressBar
 import com.dark.tool_neuron.ui.components.ContextStatsDialog
 import com.dark.tool_neuron.viewmodel.ImageEncodeStatus
 import com.dark.tool_neuron.service.inference.InferenceClient
@@ -71,7 +73,6 @@ import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.ui.theme.Motion
 import com.dark.tool_neuron.viewmodel.HomeViewModel
-import java.util.UUID
 
 @Composable
 fun HomeScreenBottomBar(
@@ -80,19 +81,21 @@ fun HomeScreenBottomBar(
 ) {
     val dimens = LocalDimens.current
     val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
     var text by remember { mutableStateOf("") }
+    var toolsWindowOpen by remember { mutableStateOf(false) }
 
     val thinkingEnabled by viewModel.thinkingEnabled.collectAsStateWithLifecycle()
-    val researchEnabled by viewModel.researchEnabled.collectAsStateWithLifecycle()
+    val webSearchEnabled by viewModel.webSearchEnabled.collectAsStateWithLifecycle()
     val supportsThinking by viewModel.supportsThinking.collectAsStateWithLifecycle()
     val isModelLoaded by InferenceClient.isModelLoaded.collectAsStateWithLifecycle()
     val isGenerating by viewModel.isGenerating.collectAsStateWithLifecycle()
     val chatDocuments by viewModel.chatDocuments.collectAsStateWithLifecycle()
-    val currentChatId by viewModel.currentChatId.collectAsStateWithLifecycle()
-    val loadModelWindow by viewModel.loadModelWindows.collectAsStateWithLifecycle()
     val installedModels by viewModel.chatModels.collectAsStateWithLifecycle()
-    val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
     val contextUsage by viewModel.contextUsage.collectAsStateWithLifecycle()
+
+    val compactionState by viewModel.compactionState.collectAsStateWithLifecycle()
+    val messages by viewModel.messages.collectAsStateWithLifecycle()
 
     val isIngesting by viewModel.isIngestingDocument.collectAsStateWithLifecycle()
     val documentError by viewModel.documentError.collectAsStateWithLifecycle()
@@ -102,6 +105,7 @@ fun HomeScreenBottomBar(
     val pendingImages by viewModel.pendingImages.collectAsStateWithLifecycle()
     val imageEncodeStatus by viewModel.imageEncodeStatus.collectAsStateWithLifecycle()
     val isVlmLoaded by viewModel.isVlmLoaded.collectAsStateWithLifecycle()
+    val embeddingModelInstalled by viewModel.embeddingModelInstalled.collectAsStateWithLifecycle()
 
     val imagesEncoding by remember {
         derivedStateOf {
@@ -152,6 +156,31 @@ fun HomeScreenBottomBar(
         ActivityResultContracts.PickMultipleVisualMedia(),
     ) { uris -> uris.forEach(viewModel::addImage) }
 
+    val filePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+            val cursor = context.contentResolver.query(uri, null, null, null, null)
+            var fileName = "Document"
+            var fileSize = 0L
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val nameIdx = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    val sizeIdx = it.getColumnIndex(OpenableColumns.SIZE)
+                    if (nameIdx >= 0) fileName = it.getString(nameIdx) ?: "Document"
+                    if (sizeIdx >= 0) fileSize = it.getLong(sizeIdx)
+                }
+            }
+            val mimeType = context.contentResolver.getType(uri)
+            viewModel.addDocument(uri, fileName, fileSize, mimeType)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -190,19 +219,51 @@ fun HomeScreenBottomBar(
             onDismissError = viewModel::clearDocumentError,
         )
 
+        CompactProgressBar(
+            visible = compactionState.active,
+            elapsedMs = compactionState.elapsedMs,
+            tokensIn = compactionState.tokensIn,
+            fraction = compactionState.fraction,
+        )
+
         AnimatedVisibility(
-            visible = loadModelWindow,
+            visible = toolsWindowOpen,
             enter = fadeIn(Motion.state()) + expandVertically(Motion.content()),
             exit = fadeOut(Motion.state()) + shrinkVertically(Motion.content()),
         ) {
-            LoadModelWindow(
-                models = installedModels,
-                loadState = modelLoadState,
-                onLoad = viewModel::loadModel,
-                onUnload = { viewModel.unloadModel() },
-                onBrowseStore = {
-                    viewModel.toggleLoadModelWindow()
-                    navController.navigate(NavScreens.ModelStore.route)
+            ToolsPickerWindow(
+                thinkingEnabled = thinkingEnabled,
+                thinkingSupported = supportsThinking,
+                webSearchEnabled = webSearchEnabled,
+                canAttachImage = isVlmLoaded,
+                canAttachFiles = embeddingModelInstalled,
+                canCompact = isModelLoaded
+                    && !isGenerating
+                    && !compactionState.active
+                    && messages.any { it.archivedByCompactId == null }
+                    && messages.lastOrNull { it.archivedByCompactId == null }
+                        ?.kind != com.dark.tool_neuron.model.MessageKind.CompactSummary,
+                onToggleThinking = viewModel::toggleThinking,
+                onToggleWebSearch = viewModel::toggleWebSearch,
+                onAttachImage = {
+                    if (isVlmLoaded) {
+                        toolsWindowOpen = false
+                        imagePicker.launch(
+                            PickVisualMediaRequest(
+                                ActivityResultContracts.PickVisualMedia.ImageOnly,
+                            ),
+                        )
+                    }
+                },
+                onAttachFiles = {
+                    if (embeddingModelInstalled) {
+                        toolsWindowOpen = false
+                        filePicker.launch(STORAGE_MIME_FILTER)
+                    }
+                },
+                onCompactChat = {
+                    toolsWindowOpen = false
+                    viewModel.compactConversation()
                 },
             )
         }
@@ -229,31 +290,15 @@ fun HomeScreenBottomBar(
                     isGenerating = isGenerating,
                     isModelLoaded = isModelLoaded,
                     contextUsage = contextUsage,
-                    supportsThinking = supportsThinking,
-                    thinkingEnabled = thinkingEnabled,
-                    researchEnabled = researchEnabled,
-                    onResearchToggle = viewModel::toggleResearch,
-                    onAttachImage = {
-                        if (isVlmLoaded) {
-                            imagePicker.launch(
-                                PickVisualMediaRequest(
-                                    ActivityResultContracts.PickVisualMedia.ImageOnly,
-                                ),
-                            )
-                        }
-                    },
-                    canAttachImage = isVlmLoaded,
+                    toolsOpen = toolsWindowOpen,
+                    onToggleTools = { toolsWindowOpen = !toolsWindowOpen },
                     onMicClick = onMicClick,
-                    onThinkingToggle = viewModel::toggleThinking,
-                    onLoadModelClick = viewModel::toggleLoadModelWindow,
                     onSend = {
                         if (canSend) {
                             focusManager.clearFocus()
                             val toSend = text
                             text = ""
                             viewModel.sendMessage(toSend)
-                        } else if (!isGenerating && !isModelLoaded && text.isNotBlank() && !loadModelWindow) {
-                            viewModel.toggleLoadModelWindow()
                         }
                     },
                     onStop = viewModel::stopGeneration,
@@ -277,22 +322,16 @@ private fun InputBar(
     isGenerating: Boolean,
     isModelLoaded: Boolean,
     contextUsage: Float,
-    supportsThinking: Boolean,
-    thinkingEnabled: Boolean,
-    researchEnabled: Boolean,
-    onResearchToggle: () -> Unit,
-    onAttachImage: () -> Unit,
-    canAttachImage: Boolean,
+    toolsOpen: Boolean,
+    onToggleTools: () -> Unit,
     onMicClick: () -> Unit,
-    onThinkingToggle: () -> Unit,
-    onLoadModelClick: () -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
     onContextClick: () -> Unit,
 ) {
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
-    val contextText = if (isModelLoaded) "${(contextUsage * 100).toInt()}%" else "--"
+    val contextText = if (isModelLoaded) "Context ${(contextUsage * 100).toInt()}%" else "Context --"
     val contextProgress = if (isModelLoaded) contextUsage else 0f
 
     Surface(
@@ -320,26 +359,9 @@ private fun InputBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
             ) {
-                ActionButton(
-                    onClickListener = onAttachImage,
-                    icon = TnIcons.Photo,
-                    contentDescription = if (canAttachImage) "Attach image" else "Attach image (load a VLM model first)",
-                    enabled = canAttachImage,
-                )
-                ActionButton(
-                    onClickListener = onLoadModelClick,
-                    icon = TnIcons.Leaf,
-                    contentDescription = "Load Model",
-                    enabled = !isGenerating,
-                )
-                ThinkingToggleButton(
-                    supported = supportsThinking,
-                    enabled = thinkingEnabled,
-                    onClick = onThinkingToggle,
-                )
-                ResearchToggleButton(
-                    enabled = researchEnabled,
-                    onClick = onResearchToggle,
+                ToolsToggleButton(
+                    open = toolsOpen,
+                    onClick = onToggleTools,
                 )
                 Spacer(Modifier.weight(1f))
                 ContextIndicator(
@@ -364,6 +386,26 @@ private fun InputBar(
             }
         }
     }
+}
+
+@Composable
+private fun ToolsToggleButton(
+    open: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = if (open) IconButtonDefaults.filledIconButtonColors(
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+    ) else IconButtonDefaults.filledIconButtonColors(
+        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+        contentColor = MaterialTheme.colorScheme.primary,
+    )
+    ActionButton(
+        onClickListener = onClick,
+        icon = TnIcons.Plus,
+        contentDescription = if (open) "Close tools" else "Open tools",
+        colors = colors,
+    )
 }
 
 @Composable
@@ -589,54 +631,6 @@ private fun DocumentChipsRow(
 }
 
 @Composable
-private fun ResearchToggleButton(
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    val colors = if (enabled) IconButtonDefaults.filledIconButtonColors(
-        containerColor = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary,
-    ) else IconButtonDefaults.filledIconButtonColors(
-        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-        contentColor = MaterialTheme.colorScheme.primary,
-    )
-    ActionButton(
-        onClickListener = onClick,
-        icon = TnIcons.Compass,
-        contentDescription = if (enabled) "Research mode on" else "Research mode off",
-        colors = colors,
-    )
-}
-
-@Composable
-private fun ThinkingToggleButton(
-    supported: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    val colors = when {
-        !supported -> IconButtonDefaults.filledIconButtonColors(
-            containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-            contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
-        )
-        enabled -> IconButtonDefaults.filledIconButtonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-        )
-        else -> IconButtonDefaults.filledIconButtonColors(
-            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-            contentColor = MaterialTheme.colorScheme.primary,
-        )
-    }
-    ActionButton(
-        onClickListener = { if (supported) onClick() },
-        icon = TnIcons.Sparkles,
-        contentDescription = if (supported) "Toggle thinking" else "Thinking not supported by this model",
-        colors = colors,
-    )
-}
-
-@Composable
 private fun SendOrStopButton(
     canSend: Boolean,
     isGenerating: Boolean,
@@ -849,3 +843,15 @@ private fun ContextIndicator(
     }
 }
 
+private val STORAGE_MIME_FILTER = arrayOf(
+    "text/*",
+    "application/pdf",
+    "application/json",
+    "application/xml",
+    "application/rtf",
+    "application/epub+zip",
+    "application/vnd.oasis.opendocument.text",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+)
