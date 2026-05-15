@@ -95,6 +95,9 @@ android {
                 "lib/arm64-v8a/libonnxruntime4j_jni.so",
                 "lib/x86_64/libonnxruntime4j_jni.so",
                 "lib/armeabi-v7a/libonnxruntime4j_jni.so",
+                "lib/arm64-v8a/libtn_security.so",
+                "lib/x86_64/libtn_security.so",
+                "lib/armeabi-v7a/libtn_security.so",
             )
         }
     }
@@ -117,6 +120,7 @@ dependencies {
     implementation(project(":plugin-exc"))
 
     // AI inference AARs
+    implementation(files("../libs/tn_security-release.aar"))
     implementation(files("../libs/gguf_lib-release.aar"))
     implementation(files("../libs/ai_sherpa-release.aar"))
     implementation(files("../libs/ai_sd-release.aar"))
