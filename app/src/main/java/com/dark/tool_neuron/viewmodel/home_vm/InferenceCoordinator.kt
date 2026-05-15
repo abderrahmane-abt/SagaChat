@@ -7,6 +7,7 @@ import com.dark.gguf_lib.ImageQuality
 import com.dark.tool_neuron.data.AppPreferences
 import com.dark.tool_neuron.model.ChatMessage
 import com.dark.tool_neuron.model.Citation
+import com.dark.tool_neuron.model.MessageKind
 import com.dark.tool_neuron.model.MemoryMetrics
 import com.dark.tool_neuron.model.TextMetrics
 import com.dark.tool_neuron.repo.ChatRepository
@@ -316,6 +317,17 @@ class InferenceCoordinator @Inject constructor(
         val marker = if (vlmLastUserId != null) InferenceClient.getVlmDefaultMarker() else ""
         val arr = JSONArray()
         messages.forEach { msg ->
+            // Pre-compaction messages stay in the UI but never re-enter the
+            // model context. The CompactSummary card that replaced them is
+            // the only anchor the model sees for that chunk of history.
+            if (msg.archivedByCompactId != null) return@forEach
+            if (msg.kind == MessageKind.CompactSummary) {
+                arr.put(JSONObject().apply {
+                    put("role", ROLE_ASSISTANT)
+                    put("content", msg.content)
+                })
+                return@forEach
+            }
             when (msg.role) {
                 ROLE_USER, ROLE_ASSISTANT, ROLE_TOOL -> {
                     val content = if (msg.id == vlmLastUserId && marker.isNotEmpty()) {
