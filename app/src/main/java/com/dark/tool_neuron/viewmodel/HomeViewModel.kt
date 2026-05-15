@@ -14,8 +14,8 @@ import com.dark.tool_neuron.model.MessageKind
 import com.dark.tool_neuron.model.ModelInfo
 import com.dark.tool_neuron.model.TextMetrics
 import com.dark.tool_neuron.model.enums.ProviderType
-import com.dark.tool_neuron.model.ResearchEvent
-import com.dark.tool_neuron.model.ResearchUiState
+import com.dark.tool_neuron.model.WebSearchEvent
+import com.dark.tool_neuron.model.WebSearchUiState
 import com.dark.gguf_lib.ImageQuality
 import com.dark.tool_neuron.data.AppPreferences
 import com.dark.tool_neuron.repo.ChatRepository
@@ -25,9 +25,11 @@ import com.dark.tool_neuron.repo.VlmVisionCacheRepository
 import com.dark.tool_neuron.ui.components.ContextStatsReport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import com.dark.tool_neuron.service.server.ServerController
 import com.dark.tool_neuron.service.inference.InferenceClient
+import com.dark.tool_neuron.service.inference.InferenceEvent
 import com.dark.tool_neuron.viewmodel.home_vm.GenerationOutcome
 import com.dark.tool_neuron.viewmodel.home_vm.GenerationStatus
 import com.dark.tool_neuron.viewmodel.home_vm.InferenceCoordinator
@@ -40,6 +42,7 @@ import com.dark.tool_neuron.voice.VoiceModelManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -47,6 +50,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.launch
 import com.dark.tool_neuron.util.ChatExporter
 import com.dark.tool_neuron.util.ChatShareHelper
@@ -72,7 +76,7 @@ class HomeViewModel @Inject constructor(
     private val ragManager: RagManager,
     private val voiceManager: VoiceModelManager,
     private val serverController: ServerController,
-    private val researchCoordinator: ResearchCoordinator,
+    private val webSearchCoordinator: WebSearchCoordinator,
     private val appPrefs: AppPreferences,
     private val vlmCache: VlmVisionCacheRepository,
 ) : ViewModel() {
@@ -152,6 +156,10 @@ class HomeViewModel @Inject constructor(
     val chatModels: StateFlow<List<ModelInfo>> = modelRepo.models
         .map { list -> list.filter { it.providerType == ProviderType.GGUF } }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val embeddingModelInstalled: StateFlow<Boolean> = modelRepo.models
+        .map { list -> list.any { it.providerType == ProviderType.EMBEDDING } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val chats: StateFlow<List<Chat>> = chatRepo.chats
     val modelLoadState: StateFlow<ModelLoadState> = modelSession.loadState
     val supportsThinking: StateFlow<Boolean> = modelSession.supportsThinking
@@ -175,14 +183,11 @@ class HomeViewModel @Inject constructor(
     private val _webSearchEnabled = MutableStateFlow(false)
     val webSearchEnabled = _webSearchEnabled.asStateFlow()
 
-    private val _researchEnabled = MutableStateFlow(false)
-    val researchEnabled: StateFlow<Boolean> = _researchEnabled.asStateFlow()
-
-    val researchActive: StateFlow<Boolean> = researchCoordinator.activeRuns
+    val webSearchActive: StateFlow<Boolean> = webSearchCoordinator.activeRuns
         .map { it.isNotEmpty() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    private val researchMessages = mutableMapOf<String, Pair<String, String>>()
+    private val webSearchMessages = mutableMapOf<String, Pair<String, String>>()
 
     private val _thinkingEnabled = MutableStateFlow(false)
     val thinkingEnabled = _thinkingEnabled.asStateFlow()
@@ -333,6 +338,10 @@ class HomeViewModel @Inject constructor(
 
     private var generationJob: Job? = null
 
+    private val _compactionState = MutableStateFlow(CompactionState())
+    val compactionState: StateFlow<CompactionState> = _compactionState.asStateFlow()
+    private var compactionJob: Job? = null
+
     init {
         viewModelScope.launch {
             combine(InferenceClient.isModelLoaded, InferenceClient.contextUsage) { loaded, usage ->
@@ -341,52 +350,60 @@ class HomeViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            researchCoordinator.events.collect { event -> handleResearchEvent(event) }
+            webSearchCoordinator.events.collect { event -> handleWebSearchEvent(event) }
         }
     }
 
-    private fun handleResearchEvent(event: ResearchEvent) {
-        val (chatId, messageId) = researchMessages[event.runId] ?: return
+    private fun handleWebSearchEvent(event: WebSearchEvent) {
+        val (chatId, messageId) = webSearchMessages[event.runId] ?: return
         val msg = chatRepo.getMessageById(messageId) ?: return
-        val current = ResearchUiState.fromJson(msg.researchState)
+        val current = WebSearchUiState.fromJson(msg.webSearchState)
         val next = current.applyEvent(event)
-        chatRepo.updateMessage(msg.copy(researchState = next.toJson()))
+        chatRepo.updateMessage(msg.copy(webSearchState = next.toJson()))
         if (chatId == _currentChatId.value) {
             _messages.value = chatRepo.getMessages(chatId)
         }
-        if (event is ResearchEvent.Done || event is ResearchEvent.Cancelled || event is ResearchEvent.Failed) {
-            researchMessages.remove(event.runId)
+        if (event is WebSearchEvent.Done || event is WebSearchEvent.Cancelled || event is WebSearchEvent.Failed) {
+            webSearchMessages.remove(event.runId)
         }
     }
 
     fun toggleActionWindow() { _actionWindowExpanded.value = !_actionWindowExpanded.value }
     fun collapseActionWindow() { _actionWindowExpanded.value = false }
-    fun toggleWebSearch() { _webSearchEnabled.value = !_webSearchEnabled.value }
-    fun toggleResearch() { _researchEnabled.value = !_researchEnabled.value }
-    fun toggleThinking() { _thinkingEnabled.value = !_thinkingEnabled.value }
+    fun toggleWebSearch() {
+        val next = !_webSearchEnabled.value
+        _webSearchEnabled.value = next
+        if (next) _thinkingEnabled.value = false
+    }
 
-    fun cancelResearch(runId: String) {
-        val ref = researchMessages[runId]
+    fun toggleThinking() {
+        val next = !_thinkingEnabled.value
+        _thinkingEnabled.value = next
+        if (next) _webSearchEnabled.value = false
+    }
+
+    fun cancelWebSearch(runId: String) {
+        val ref = webSearchMessages[runId]
         if (ref != null) {
             val (chatId, msgId) = ref
             val msg = chatRepo.getMessageById(msgId)
             if (msg != null) {
-                val current = ResearchUiState.fromJson(msg.researchState)
+                val current = WebSearchUiState.fromJson(msg.webSearchState)
                 if (!current.isStopping() && current.phase !in setOf(
-                        ResearchUiState.PHASE_DONE,
-                        ResearchUiState.PHASE_CANCELLED,
-                        ResearchUiState.PHASE_FAILED,
+                        WebSearchUiState.PHASE_DONE,
+                        WebSearchUiState.PHASE_CANCELLED,
+                        WebSearchUiState.PHASE_FAILED,
                     )
                 ) {
-                    val stopping = current.copy(phase = ResearchUiState.PHASE_STOPPING)
-                    chatRepo.updateMessage(msg.copy(researchState = stopping.toJson()))
+                    val stopping = current.copy(phase = WebSearchUiState.PHASE_STOPPING)
+                    chatRepo.updateMessage(msg.copy(webSearchState = stopping.toJson()))
                     if (chatId == _currentChatId.value) {
                         _messages.value = chatRepo.getMessages(chatId)
                     }
                 }
             }
         }
-        researchCoordinator.cancel(runId)
+        webSearchCoordinator.cancel(runId)
     }
     fun toggleLoadModelWindow() {
         if (_isGenerating.value) {
@@ -623,20 +640,20 @@ class HomeViewModel @Inject constructor(
     fun loadModel(model: ModelInfo) {
         if (serverController.isBusy) return
         if (_isGenerating.value) return
-        if (researchActive.value) return
+        if (webSearchActive.value) return
         viewModelScope.launch { modelSession.load(model) }
     }
 
     fun unloadModel() {
         if (serverController.isBusy) return
         if (_isGenerating.value) return
-        if (researchActive.value) return
+        if (webSearchActive.value) return
         viewModelScope.launch { modelSession.unload() }
     }
 
     fun sendMessage(text: String) {
         if (serverController.isBusy) return
-        if (researchActive.value) return
+        if (webSearchActive.value) return
         val trimmed = text.trim()
         val images = _pendingImages.value
         if (_isGenerating.value) return
@@ -658,9 +675,9 @@ class HomeViewModel @Inject constructor(
                 return
             }
 
-        val researchQuestion = parseResearchInput(trimmed)
-        if (researchQuestion != null) {
-            startResearch(active, researchQuestion)
+        val webSearchQuery = parseWebSearchInput(trimmed)
+        if (webSearchQuery != null) {
+            startWebSearch(active, webSearchQuery)
             return
         }
 
@@ -696,24 +713,24 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private fun parseResearchInput(text: String): String? {
-        if (text.startsWith("/research", ignoreCase = true)) {
-            val q = text.removePrefix("/research").removePrefix("/RESEARCH").trim()
+    private fun parseWebSearchInput(text: String): String? {
+        if (text.startsWith("/search", ignoreCase = true)) {
+            val q = text.removePrefix("/search").removePrefix("/SEARCH").trim()
             return q.ifBlank { null }
         }
-        if (_researchEnabled.value) return text
+        if (_webSearchEnabled.value) return text
         return null
     }
 
-    private fun startResearch(active: ModelInfo, question: String) {
-        if (researchActive.value) return
+    private fun startWebSearch(active: ModelInfo, userQuery: String) {
+        if (webSearchActive.value) return
         val chatId = ensureChat(active)
         val isFirstTurn = chatRepo.getMessages(chatId).count { it.role == ROLE_USER } == 1
         val userMessage = ChatMessage(
             id = UUID.randomUUID().toString(),
             chatId = chatId,
             role = ROLE_USER,
-            content = question,
+            content = userQuery,
             timestamp = System.currentTimeMillis(),
             kind = MessageKind.Text,
         )
@@ -726,39 +743,50 @@ class HomeViewModel @Inject constructor(
             id = cardMessageId,
             chatId = chatId,
             role = ROLE_ASSISTANT,
-            content = question,
+            content = userQuery,
             timestamp = System.currentTimeMillis() + 1,
             kind = MessageKind.Text,
             modelName = active.name,
-            researchRunId = placeholderRunId,
-            researchState = ResearchUiState().toJson(),
+            webSearchRunId = placeholderRunId,
+            webSearchState = WebSearchUiState(userQuery = userQuery).toJson(),
         )
         chatRepo.addMessage(cardMessage)
 
-        val runId = researchCoordinator.start(
+        val runId = webSearchCoordinator.start(
             scope = viewModelScope,
-            chatId = chatId,
-            messageId = cardMessageId,
-            question = question,
-            modelId = active.id,
-            modelName = active.name,
+            userQuery = userQuery,
         )
-        researchMessages[runId] = chatId to cardMessageId
+        webSearchMessages[runId] = chatId to cardMessageId
 
-        chatRepo.updateMessage(cardMessage.copy(researchRunId = runId))
+        chatRepo.updateMessage(cardMessage.copy(webSearchRunId = runId))
         _messages.value = chatRepo.getMessages(chatId)
-        if (isFirstTurn) chatRepo.autoTitle(chatId, question)
+        if (isFirstTurn) chatRepo.autoTitle(chatId, userQuery)
     }
 
     fun regenerateLast() {
         if (_isGenerating.value) return
         val chatId = _currentChatId.value ?: return
-        if (activeModel.value == null) {
+        val active = activeModel.value
+        if (active == null) {
             _loadModelWindow.value = true
             return
         }
         val lastAssistant = chatRepo.getMessages(chatId).lastOrNull { it.role == ROLE_ASSISTANT }
             ?: return
+        // Web-search cards are assistant messages too; if regenerate is hit
+        // on one, re-run the search instead of falling into the chat path
+        // (which would delete the card and treat the original user message
+        // as a plain chat send).
+        if (lastAssistant.webSearchRunId != null) {
+            val query = lastAssistant.content
+            chatRepo.deleteMessage(lastAssistant.id)
+            val msgs = chatRepo.getMessages(chatId)
+            val lastUser = msgs.lastOrNull { it.role == ROLE_USER }
+            if (lastUser != null) chatRepo.deleteMessage(lastUser.id)
+            _messages.value = chatRepo.getMessages(chatId)
+            startWebSearch(active, query)
+            return
+        }
         chatRepo.deleteMessage(lastAssistant.id)
         runGeneration(chatId, isFirstTurn = false, userText = "")
     }
@@ -805,6 +833,160 @@ class HomeViewModel @Inject constructor(
         if (!_isGenerating.value) return
         modelSession.stopGeneration()
         generationJob?.cancel()
+    }
+
+    /**
+     * Summarize the active chat via the inference service, then replace the
+     * persisted chat history with a single assistant message containing the
+     * summary. The KV cache is wiped by the service so the next user turn
+     * prefills against the fresh summary-only prefix.
+     */
+    fun compactConversation() {
+        if (serverController.isBusy) return
+        if (_isGenerating.value) return
+        if (_compactionState.value.active) return
+        val chatId = _currentChatId.value ?: return
+        val activeModelName = activeModel.value?.name ?: ""
+        val existing = chatRepo.getMessages(chatId)
+        if (existing.isEmpty()) return
+
+        val arr = JSONArray()
+        existing.forEach { msg ->
+            if (msg.role != ROLE_USER && msg.role != ROLE_ASSISTANT) return@forEach
+            arr.put(JSONObject().apply {
+                put("role", msg.role)
+                put("content", msg.content)
+            })
+        }
+        if (arr.length() == 0) return
+        val messagesJson = arr.toString()
+
+        // Budget: assume model context is at least 2k; aim for a summary that
+        // leaves room for at least one full turn after the swap.
+        val maxSummaryTokens = 768
+
+        val start = System.currentTimeMillis()
+        val summary = StringBuilder()
+        var tokensIn = 0
+        var tokensOut = 0
+        var promptProgress = 0f
+
+        _compactionState.value = CompactionState(
+            active = true,
+            elapsedMs = 0,
+            tokensIn = 0,
+            fraction = 0f,
+        )
+
+        compactionJob = viewModelScope.launch {
+            try {
+                // transformWhile is what lets the flow terminate when the
+                // service signals Done/Error. callbackFlow never closes
+                // itself, so a plain collect would hang here and we'd
+                // never archive + insert the summary card downstream.
+                InferenceClient.compactConversation(messagesJson, maxSummaryTokens)
+                    .transformWhile { event ->
+                        emit(event)
+                        event !is InferenceEvent.Done && event !is InferenceEvent.Error
+                    }
+                    .collect { event ->
+                        when (event) {
+                            is InferenceEvent.Token -> {
+                                summary.append(event.text)
+                                tokensOut += 1
+                                // The generation phase advances the bar by
+                                // elapsed time rather than token budget,
+                                // since maxSummaryTokens (768) is usually
+                                // a wild over-estimate of what the model
+                                // emits (~60–150 tokens) and the
+                                // budget-based scheme stalled near 52%.
+                                val genElapsed = System.currentTimeMillis() - start
+                                val genFrac = ((genElapsed - 1500).coerceAtLeast(0)
+                                    .toFloat() / GEN_PHASE_TARGET_MS)
+                                    .coerceIn(0f, 0.95f)
+                                _compactionState.value = _compactionState.value.copy(
+                                    elapsedMs = genElapsed,
+                                    fraction = (0.5f + genFrac * 0.5f).coerceIn(0f, 0.97f),
+                                )
+                            }
+                            is InferenceEvent.Progress -> {
+                                promptProgress = event.progress.coerceIn(0f, 1f)
+                                _compactionState.value = _compactionState.value.copy(
+                                    elapsedMs = System.currentTimeMillis() - start,
+                                    fraction = (promptProgress * 0.5f).coerceIn(0f, 0.5f),
+                                )
+                            }
+                            is InferenceEvent.Metrics -> {
+                                val j = runCatching { JSONObject(event.metricsJson) }.getOrNull()
+                                if (j != null) {
+                                    tokensIn = j.optInt("tokensEvaluated", tokensIn)
+                                    tokensOut = j.optInt("tokensPredicted", tokensOut)
+                                    _compactionState.value = _compactionState.value.copy(
+                                        elapsedMs = System.currentTimeMillis() - start,
+                                        tokensIn = tokensIn,
+                                    )
+                                }
+                            }
+                            is InferenceEvent.Done -> {
+                                _compactionState.value = _compactionState.value.copy(
+                                    elapsedMs = System.currentTimeMillis() - start,
+                                    fraction = 1f,
+                                )
+                            }
+                            is InferenceEvent.Error -> {
+                                Log.w("HomeViewModel", "compact failed: ${event.message}")
+                            }
+                            else -> Unit
+                        }
+                    }
+
+                val summaryText = summary.toString().trim()
+                if (summaryText.isNotEmpty()) {
+                    val compactId = UUID.randomUUID().toString()
+                    // Mark every currently-active message as folded into
+                    // this compact. They stay on disk + in the UI list, but
+                    // InferenceCoordinator will skip them from now on.
+                    chatRepo.getMessages(chatId)
+                        .filter { it.archivedByCompactId == null }
+                        .forEach { msg ->
+                            chatRepo.updateMessage(msg.copy(archivedByCompactId = compactId))
+                        }
+                    // The summary card itself is the new in-context anchor.
+                    chatRepo.addMessage(
+                        ChatMessage(
+                            id = compactId,
+                            chatId = chatId,
+                            role = ROLE_ASSISTANT,
+                            content = summaryText,
+                            timestamp = System.currentTimeMillis(),
+                            kind = MessageKind.CompactSummary,
+                            modelName = activeModelName,
+                        )
+                    )
+                    _messages.value = chatRepo.getMessages(chatId)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("HomeViewModel", "compact threw: ${e.message}")
+            } finally {
+                // Let the user see 100% before the banner collapses.
+                if (_compactionState.value.fraction >= 0.97f) {
+                    _compactionState.value = _compactionState.value.copy(fraction = 1f)
+                    try { delay(450) } catch (_: CancellationException) {}
+                }
+                _compactionState.value = CompactionState(active = false)
+                compactionJob = null
+            }
+        }
+    }
+
+    companion object {
+        // Rough wall-clock target the gen-phase progress bar animates over.
+        // Hit at the high end on ~120 summary tokens at ~12 tok/s on a
+        // mid-range device. We never let the bar exceed 97% before Done so
+        // a fast summary doesn't visibly "finish then re-snap" at completion.
+        private const val GEN_PHASE_TARGET_MS = 12_000L
     }
 
     private fun runGeneration(chatId: String, isFirstTurn: Boolean, userText: String) {
@@ -915,3 +1097,14 @@ class HomeViewModel @Inject constructor(
         return trim().split(WHITESPACE).count { it.isNotEmpty() }
     }
 }
+
+/**
+ * Snapshot of an in-flight conversation compaction. The UI binds to this and
+ * renders a progress banner while [active] is true.
+ */
+data class CompactionState(
+    val active: Boolean = false,
+    val elapsedMs: Long = 0L,
+    val tokensIn: Int = 0,
+    val fraction: Float = 0f,
+)

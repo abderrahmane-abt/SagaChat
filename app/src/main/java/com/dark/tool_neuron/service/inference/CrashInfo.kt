@@ -1,5 +1,6 @@
 package com.dark.tool_neuron.service.inference
 
+import com.dark.tn_security.TnEvent
 import org.json.JSONObject
 
 data class CrashInfo(
@@ -19,6 +20,56 @@ data class CrashInfo(
     val suggestion: String? = derivedSuggestion(signalName, category, message, operation)
 
     companion object {
+        /**
+         * Adapt a TnEvent.Error coming over the AIDL stream into the
+         * existing CrashInfo data class so the legacy dialog keeps working
+         * until Phase 6 replaces it with the CrashReportActivity. Module
+         * attribution is taken from the event — no string-literal fallback.
+         */
+        fun fromTnEvent(ev: TnEvent.Error): CrashInfo {
+            return CrashInfo(
+                lib             = ev.module.slug,
+                signal          = null,
+                signalName      = null,
+                operation       = ev.opId,
+                operationDetail = ev.file?.let { f -> "$f:${ev.line} ${ev.func.orEmpty()}".trim() },
+                errorCode       = ev.code.value,
+                category        = ev.code.name,
+                message         = ev.message,
+                timestamp       = ev.timestampMs,
+                source          = Source.LIVE_ERROR,
+            )
+        }
+
+        /**
+         * Adapt an AIDL onCrashReplay payload (crash JSON written by the
+         * tn_security signal handler in a previous process lifetime) into
+         * CrashInfo. The library/module attribution is read FROM the JSON,
+         * not hardcoded — fixes the sherpa-onnx misattribution bug.
+         */
+        fun fromCrashReplay(crashJson: String, crashFilePath: String): CrashInfo? {
+            if (crashJson.isBlank()) return null
+            return try {
+                val root = JSONObject(crashJson)
+                val signalName = root.optString("signal_name").takeIf { it.isNotBlank() }
+                val moduleSlug = root.optString("module_slug").takeIf { it.isNotBlank() }
+                    ?: "unknown"
+                CrashInfo(
+                    lib             = moduleSlug,
+                    signal          = root.optInt("signal", -1).takeIf { it > 0 },
+                    signalName      = signalName,
+                    operation       = null,
+                    operationDetail = crashFilePath.takeIf { it.isNotBlank() },
+                    errorCode       = null,
+                    category        = "NativeCrash",
+                    message         = signalName?.let { "Native crash ($it)" } ?: "Native crash",
+                    timestamp       = root.optLong("timestamp_ms", System.currentTimeMillis()),
+                    source          = Source.NATIVE_CRASH,
+                )
+            } catch (_: Exception) { null }
+        }
+
+        @Deprecated("Use fromTnEvent / fromCrashReplay. Retained briefly for Phase 4→6 transition.")
         fun fromJson(lib: String, raw: String, source: Source): CrashInfo? {
             if (raw.isBlank() || raw == "{}") return null
             return try {

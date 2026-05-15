@@ -15,7 +15,13 @@ data class Chat(
 enum class MessageKind {
     Text,
     Image,
-    ToolResult;
+    ToolResult,
+    // Wide chat-summary card emitted by GGMLEngine.compact. Acts as the
+    // single in-context anchor for everything before it; pre-summary
+    // messages get [ChatMessage.archivedByCompactId] set to this card's id
+    // and are hidden from the model on subsequent generates while still
+    // visible (muted) in the UI.
+    CompactSummary;
 
     companion object {
         fun from(id: Int): MessageKind = entries.getOrNull(id) ?: Text
@@ -56,6 +62,10 @@ data class ChatMessage(
     val textMetrics: TextMetrics? = null,
     val memoryMetrics: MemoryMetrics? = null,
     val citations: List<Citation> = emptyList(),
-    val researchRunId: String? = null,
-    val researchState: String = "",
+    val webSearchRunId: String? = null,
+    val webSearchState: String = "",
+    // Non-null = this message has been folded into a CompactSummary card
+    // and must NOT be included in the model's context window. Kept in
+    // storage + visible (muted) in the UI as conversation history.
+    val archivedByCompactId: String? = null,
 )

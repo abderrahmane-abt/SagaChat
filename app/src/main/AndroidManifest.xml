@@ -44,6 +44,13 @@
             android:theme="@style/Theme.ToolNeuron">
         </activity>
 
+        <activity
+            android:name=".ui.screens.crash_report.CrashReportActivity"
+            android:exported="false"
+            android:label="Crash report"
+            android:theme="@style/Theme.ToolNeuron">
+        </activity>
+
         <service
             android:name="com.dark.download_manager.HxdService"
             android:exported="false"

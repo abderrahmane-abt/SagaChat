@@ -33,7 +33,6 @@ fun HomeScreen(
     actionWindowExpanded: Boolean,
     onActionWindowDismiss: () -> Unit,
     onOpenModelManager: () -> Unit = {},
-    onOpenResearchDocument: (String) -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val lastCrash by InferenceClient.lastCrashInfo.collectAsStateWithLifecycle()
@@ -106,8 +105,7 @@ fun HomeScreen(
             onDelete = viewModel::deleteMessage,
             onEditUserMessage = viewModel::editUserMessage,
             onForkFromMessage = viewModel::forkFromMessage,
-            onOpenResearchDocument = onOpenResearchDocument,
-            onCancelResearch = viewModel::cancelResearch,
+            onCancelWebSearch = viewModel::cancelWebSearch,
             retrievalLabel = retrievalLabel,
             contentPadding = PaddingValues(
                 horizontal = dimens.spacingLg,

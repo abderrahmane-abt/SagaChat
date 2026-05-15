@@ -1,9 +1,11 @@
 package com.dark.tool_neuron.ui.screens.home_screen
 
+import android.content.Intent
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -15,19 +17,27 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.service.inference.CrashInfo
 import com.dark.tool_neuron.ui.icons.TnIcons
+import com.dark.tool_neuron.ui.screens.crash_report.CrashReportActivity
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
-import com.dark.tool_neuron.ui.theme.maple
 
+/**
+ * Minimal failure surface — module slug + one-line message + two actions:
+ * "Details" launches the full [CrashReportActivity] with tabbed history +
+ * export. "Dismiss" closes the dialog. The dialog never shows file paths,
+ * stack traces, op-ids, or signals — those belong in the Activity.
+ */
 @Composable
 fun InferenceCrashDialog(
     crash: CrashInfo,
     onDismiss: () -> Unit,
     onOpenModelManager: () -> Unit,
 ) {
+    val context = LocalContext.current
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = {
@@ -40,8 +50,8 @@ fun InferenceCrashDialog(
         title = {
             Text(
                 text = if (crash.source == CrashInfo.Source.NATIVE_CRASH)
-                    "Inference engine crashed"
-                else "Model error",
+                    "${crash.lib} crashed"
+                else "${crash.lib} reported an error",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -50,14 +60,10 @@ fun InferenceCrashDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(max = 360.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                CrashFieldRow("Library", crash.lib)
-                crash.signalName?.let { CrashFieldRow("Signal", "$it (${crash.signal ?: "?"})") }
-                crash.category?.let { CrashFieldRow("Category", it) }
-                crash.operation?.let { CrashFieldRow("During", it) }
-
                 Surface(
                     color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
                     shape = LocalTnShapes.current.md,
@@ -69,72 +75,27 @@ fun InferenceCrashDialog(
                         modifier = Modifier.padding(12.dp),
                     )
                 }
-
-                crash.suggestion?.let { suggestion ->
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            text = "Suggested fix",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Text(
-                            text = suggestion,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
-
-                crash.operationDetail?.let { detail ->
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            text = "Details",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Surface(
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                            shape = LocalTnShapes.current.sm,
-                        ) {
-                            Text(
-                                text = detail,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontFamily = maple,
-                                modifier = Modifier.padding(8.dp),
-                            )
-                        }
-                    }
+                crash.suggestion?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
                 }
             }
         },
         confirmButton = {
             TextButton(onClick = {
+                Log.i("InferenceCrashDialog", "Show details tapped")
+                val intent = Intent(context, CrashReportActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                runCatching { context.startActivity(intent) }
+                    .onFailure { Log.e("InferenceCrashDialog", "startActivity failed", it) }
                 onDismiss()
-                onOpenModelManager()
-            }) { Text("Open Model Settings") }
+            }) { Text("Show details") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Dismiss") }
         },
     )
-}
-
-@Composable
-private fun CrashFieldRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-        )
-    }
 }
