@@ -223,8 +223,9 @@ class ChatRepository @Inject constructor(
         private const val TAG_MSG_TEXT_METRICS = 11
         private const val TAG_MSG_MEMORY_METRICS = 12
         private const val TAG_MSG_CITATIONS = 13
-        private const val TAG_MSG_RESEARCH_RUN = 14
-        private const val TAG_MSG_RESEARCH_STATE = 15
+        private const val TAG_MSG_WEBSEARCH_RUN = 14
+        private const val TAG_MSG_WEBSEARCH_STATE = 15
+        private const val TAG_MSG_ARCHIVED_BY = 16
     }
 
     private fun Chat.toRecord(): HxsRecord {
@@ -270,8 +271,9 @@ class ChatRepository @Inject constructor(
             m.textMetrics?.let { putString(TAG_MSG_TEXT_METRICS, it.toJson()) }
             m.memoryMetrics?.let { putString(TAG_MSG_MEMORY_METRICS, it.toJson()) }
             if (m.citations.isNotEmpty()) putString(TAG_MSG_CITATIONS, m.citations.toJson())
-            m.researchRunId?.takeIf { it.isNotBlank() }?.let { putString(TAG_MSG_RESEARCH_RUN, it) }
-            if (m.researchState.isNotBlank()) putString(TAG_MSG_RESEARCH_STATE, m.researchState)
+            m.webSearchRunId?.takeIf { it.isNotBlank() }?.let { putString(TAG_MSG_WEBSEARCH_RUN, it) }
+            if (m.webSearchState.isNotBlank()) putString(TAG_MSG_WEBSEARCH_STATE, m.webSearchState)
+            m.archivedByCompactId?.takeIf { it.isNotBlank() }?.let { putString(TAG_MSG_ARCHIVED_BY, it) }
         }
     }
 
@@ -300,8 +302,9 @@ class ChatRepository @Inject constructor(
             textMetrics = textJson.takeIf { it.isNotEmpty() }?.let { TextMetrics.fromJson(it) },
             memoryMetrics = memoryJson.takeIf { it.isNotEmpty() }?.let { MemoryMetrics.fromJson(it) },
             citations = citationsJson.takeIf { it.isNotEmpty() }?.let { citationsFromJson(it) }.orEmpty(),
-            researchRunId = getString(TAG_MSG_RESEARCH_RUN).takeIf { it.isNotEmpty() },
-            researchState = getString(TAG_MSG_RESEARCH_STATE),
+            webSearchRunId = getString(TAG_MSG_WEBSEARCH_RUN).takeIf { it.isNotEmpty() },
+            webSearchState = getString(TAG_MSG_WEBSEARCH_STATE),
+            archivedByCompactId = getString(TAG_MSG_ARCHIVED_BY).takeIf { it.isNotEmpty() },
         )
     }
 
