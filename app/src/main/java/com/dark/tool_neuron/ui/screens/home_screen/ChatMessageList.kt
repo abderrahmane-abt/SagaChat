@@ -28,10 +28,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.model.ChatMessage
-import com.dark.tool_neuron.model.ResearchUiState
+import com.dark.tool_neuron.model.WebSearchUiState
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.icons.TnIcons
-import com.dark.tool_neuron.ui.screens.research.ResearchCard
+import com.dark.tool_neuron.ui.screens.web_search.WebSearchCard
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.ui.theme.Motion
@@ -58,8 +58,7 @@ fun ChatMessageList(
     onDelete: (String) -> Unit,
     onEditUserMessage: (messageId: String, newContent: String) -> Unit,
     onForkFromMessage: (String) -> Unit,
-    onOpenResearchDocument: (String) -> Unit = {},
-    onCancelResearch: (String) -> Unit = {},
+    onCancelWebSearch: (String) -> Unit = {},
     retrievalLabel: String? = null,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
@@ -114,13 +113,25 @@ fun ChatMessageList(
             verticalArrangement = Arrangement.spacedBy(dimens.spacingMd),
         ) {
             items(items = messages, key = { it.id }) { message ->
-                val runId = message.researchRunId
+                val runId = message.webSearchRunId
                 if (runId != null) {
-                    ResearchCard(
-                        question = message.content,
-                        state = ResearchUiState.fromJson(message.researchState),
-                        onOpenDocument = onOpenResearchDocument,
-                        onCancel = { onCancelResearch(runId) },
+                    WebSearchCard(
+                        message = message,
+                        state = WebSearchUiState.fromJson(message.webSearchState),
+                        onCancel = { onCancelWebSearch(runId) },
+                        canRegenerate = !isGenerating && message.id == lastAssistantId,
+                        canDelete = !isGenerating,
+                        canFork = !isGenerating,
+                        onRegenerate = onRegenerate,
+                        onDelete = onDelete,
+                        onFork = onForkFromMessage,
+                        isSpeaking = speakingMessageId == message.id,
+                        isSpeakLoading = loadingSpeakId == message.id && speakingMessageId != message.id,
+                        canSpeak = canSpeak,
+                        onSpeakToggle = {
+                            val state = WebSearchUiState.fromJson(message.webSearchState)
+                            onSpeakToggle(message.id, state.answer)
+                        },
                     )
                 } else {
                     MessageBubble(
