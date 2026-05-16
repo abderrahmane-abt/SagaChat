@@ -23,10 +23,12 @@ class AccessibilityGuard @Inject constructor(
 
         if (raw.isBlank()) return Result.Clean
 
+        val ownPkg = context.packageName
         val services = raw.split(":").filter { it.isNotBlank() }
         val unknown = services.mapNotNull { entry ->
             val pkg = entry.substringBefore('/').trim()
             if (pkg.isBlank()) null
+            else if (pkg == ownPkg) null
             else if (pkg in ALLOWLIST) null
             else pkg
         }
