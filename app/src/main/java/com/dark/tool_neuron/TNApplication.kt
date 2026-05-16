@@ -70,6 +70,14 @@ class TNApplication : Application() {
         // Bind to :inference here (not MainActivity) so RAG / SD / STT calls
         // initiated by background work or by ViewModels constructed before the
         // first Activity don't time out on the 15 s ensureBound wait.
+        // startForegroundService promotes the service to "started" state so
+        // android:stopWithTask="true" in the manifest actually triggers
+        // onTaskRemoved when the user swipes the app from recents — bind-only
+        // services don't get that callback even with stopWithTask set.
+        try {
+            val svc = android.content.Intent(this, com.dark.tool_neuron.service.inference.InferenceService::class.java)
+            androidx.core.content.ContextCompat.startForegroundService(this, svc)
+        } catch (t: Throwable) { Log.e(TAG, "startForegroundService(:inference) failed", t) }
         try { InferenceClient.bind(this) }
         catch (t: Throwable) { Log.e(TAG, "InferenceClient.bind failed", t) }
 
