@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.security.MessageDigest
 import javax.inject.Inject
@@ -486,7 +487,7 @@ class ModelStoreViewModel @Inject constructor(
                 val kind = if (model.modelType == "tts") VoiceKind.TTS else VoiceKind.STT
                 val parent = modelRepo.voiceDir(if (kind == VoiceKind.TTS) "tts" else "stt")
                 val result = VoiceArchive.extractAndBuildConfig(archive, parent, kind) { entryName ->
-                    _extractingFile.value = _extractingFile.value + (model.id to entryName)
+                    _extractingFile.update { it + (model.id to entryName) }
                 }
                 when (result) {
                     is VoiceArchive.ExtractResult.Success -> {
@@ -544,7 +545,7 @@ class ModelStoreViewModel @Inject constructor(
                 val targetDir = modelRepo.imageModelDir(model.id)
                 targetDir.listFiles()?.forEach { it.deleteRecursively() }
                 val ok = unzipInto(archive, targetDir) { entryName ->
-                    _extractingFile.value = _extractingFile.value + (model.id to entryName)
+                    _extractingFile.update { it + (model.id to entryName) }
                 }
                 if (!ok) {
                     _error.value = "Extraction failed for ${model.name}"
@@ -625,29 +626,55 @@ class ModelStoreViewModel @Inject constructor(
         onEntry: (String) -> Unit,
     ): Boolean {
         val targetCanonical = target.canonicalPath + java.io.File.separator
-        java.util.zip.ZipFile(archive).use { zip ->
-            val entries = zip.entries()
-            while (entries.hasMoreElements()) {
-                val e = entries.nextElement()
+        val workers = minOf(4, Runtime.getRuntime().availableProcessors().coerceAtLeast(1))
+        val bufSize = 256 * 1024
+
+        return java.util.zip.ZipFile(archive).use { zip ->
+            val fileEntries = ArrayList<java.util.zip.ZipEntry>()
+            val it = zip.entries()
+            while (it.hasMoreElements()) {
+                val e = it.nextElement()
                 val raw = e.name
                 if (raw.contains("..")) continue
                 val outFile = java.io.File(target, raw)
                 val canonical = outFile.canonicalPath
                 if (!canonical.startsWith(targetCanonical) && canonical != target.canonicalPath) {
-                    return false
+                    return@use false
                 }
                 if (e.isDirectory) {
                     outFile.mkdirs()
-                    continue
-                }
-                outFile.parentFile?.mkdirs()
-                onEntry(raw.substringAfterLast('/'))
-                zip.getInputStream(e).use { input ->
-                    outFile.outputStream().use { out -> input.copyTo(out) }
+                } else {
+                    outFile.parentFile?.mkdirs()
+                    fileEntries.add(e)
                 }
             }
+
+            val executor = java.util.concurrent.Executors.newFixedThreadPool(workers)
+            try {
+                val futures = fileEntries.map { entry ->
+                    executor.submit {
+                        val outFile = java.io.File(target, entry.name)
+                        onEntry(entry.name.substringAfterLast('/'))
+                        zip.getInputStream(entry).use { input ->
+                            java.io.BufferedOutputStream(
+                                java.io.FileOutputStream(outFile),
+                                bufSize,
+                            ).use { out -> input.copyTo(out, bufSize) }
+                        }
+                    }
+                }
+                for (f in futures) {
+                    try {
+                        f.get()
+                    } catch (ee: java.util.concurrent.ExecutionException) {
+                        throw ee.cause ?: ee
+                    }
+                }
+            } finally {
+                executor.shutdown()
+            }
+            true
         }
-        return true
     }
 
     private fun finalizeNonVlmDownload(model: HuggingFaceModel, destFile: java.io.File) {

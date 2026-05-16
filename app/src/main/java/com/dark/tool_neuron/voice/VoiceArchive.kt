@@ -1,19 +1,31 @@
 package com.dark.tool_neuron.voice
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import org.json.JSONObject
 import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream
 
 object VoiceArchive {
 
-    private const val EXTRACT_BUFFER_SIZE = 256 * 1024
+    private const val READ_BUFFER_SIZE = 256 * 1024
+    private const val PIPELINE_CAPACITY = 16
 
     sealed class ExtractResult {
         data class Success(val folder: File, val configJson: String) : ExtractResult()
         data class Failure(val reason: String) : ExtractResult()
+    }
+
+    private sealed class WriteOp {
+        data class OpenFile(val target: File) : WriteOp()
+        data class Chunk(val bytes: ByteArray, val length: Int) : WriteOp()
     }
 
     fun extractAndBuildConfig(
@@ -31,31 +43,65 @@ object VoiceArchive {
         dest.mkdirs()
 
         try {
-            val copyBuf = ByteArray(EXTRACT_BUFFER_SIZE)
-            BufferedInputStream(FileInputStream(archive), EXTRACT_BUFFER_SIZE).use { fileIn ->
-                BZip2CompressorInputStream(fileIn, true).use { bzIn ->
-                    TarArchiveInputStream(bzIn).use { tarIn ->
-                        while (true) {
-                            val entry = tarIn.nextEntry ?: break
-                            if (!tarIn.canReadEntryData(entry)) continue
-                            val relative = entry.name.trimStart('/')
-                            val target = safeResolve(dest, relative) ?: continue
-                            if (entry.isDirectory) {
-                                target.mkdirs()
-                            } else {
-                                target.parentFile?.mkdirs()
-                                onEntry(target.name)
-                                target.outputStream().buffered(EXTRACT_BUFFER_SIZE).use { out ->
+            runBlocking {
+                val channel = Channel<WriteOp>(PIPELINE_CAPACITY)
+
+                val writer = launch(Dispatchers.IO) {
+                    var stream: BufferedOutputStream? = null
+                    try {
+                        for (op in channel) {
+                            when (op) {
+                                is WriteOp.OpenFile -> {
+                                    stream?.close()
+                                    stream = BufferedOutputStream(
+                                        FileOutputStream(op.target),
+                                        READ_BUFFER_SIZE,
+                                    )
+                                }
+                                is WriteOp.Chunk -> {
+                                    stream?.write(op.bytes, 0, op.length)
+                                }
+                            }
+                        }
+                    } finally {
+                        stream?.close()
+                    }
+                }
+
+                val producer = launch(Dispatchers.Default) {
+                    try {
+                        BufferedInputStream(FileInputStream(archive), READ_BUFFER_SIZE).use { fileIn ->
+                            BZip2CompressorInputStream(fileIn, true).use { bzIn ->
+                                TarArchiveInputStream(bzIn).use { tarIn ->
                                     while (true) {
-                                        val n = tarIn.read(copyBuf)
-                                        if (n < 0) break
-                                        out.write(copyBuf, 0, n)
+                                        val entry = tarIn.nextEntry ?: break
+                                        if (!tarIn.canReadEntryData(entry)) continue
+                                        val relative = entry.name.trimStart('/')
+                                        val target = safeResolve(dest, relative) ?: continue
+                                        if (entry.isDirectory) {
+                                            target.mkdirs()
+                                        } else {
+                                            target.parentFile?.mkdirs()
+                                            onEntry(target.name)
+                                            channel.send(WriteOp.OpenFile(target))
+                                            while (true) {
+                                                val buf = ByteArray(READ_BUFFER_SIZE)
+                                                val n = tarIn.read(buf)
+                                                if (n < 0) break
+                                                channel.send(WriteOp.Chunk(buf, n))
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
+                    } finally {
+                        channel.close()
                     }
                 }
+
+                producer.join()
+                writer.join()
             }
         } catch (t: Throwable) {
             dest.deleteRecursively()
@@ -86,11 +132,6 @@ object VoiceArchive {
         val files = entries.filter { it.isFile }
         return if (files.isEmpty() && dirs.size == 1) dirs[0] else dest
     }
-
-    private data class Tree(
-        val files: Map<String, File>,
-        val subdirs: Map<String, File>,
-    )
 
     private fun collectTree(root: File): Pair<Map<String, File>, Map<String, File>> {
         val files = HashMap<String, File>()
