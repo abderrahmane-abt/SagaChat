@@ -97,6 +97,11 @@ fun AppTopBar(
             title = "Plugins",
             subtitle = "ONNX execution and installed plugins",
         )
+        NavScreens.SettingsDiagnostics.route -> SettingsTopBar(
+            onBack = onBack,
+            title = "Diagnostics",
+            subtitle = "Errors, crashes, and exportable bundles",
+        )
         NavScreens.SettingsAbout.route -> SettingsTopBar(
             onBack = onBack,
             title = "About",

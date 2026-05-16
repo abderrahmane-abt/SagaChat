@@ -313,6 +313,15 @@ fun TNavigation(
                 onNavigate = { route -> navController.navigate(route) },
             )
         }
+        composable(NavScreens.SettingsDiagnostics.route) {
+            val viewModel: SettingsViewModel = hiltViewModel()
+            SettingsSectionScreen(
+                innerPadding = innerPadding,
+                sectionId = SettingsViewModel.SECTION_DIAGNOSTICS,
+                viewModel = viewModel,
+                onNavigate = { route -> navController.navigate(route) },
+            )
+        }
         composable(NavScreens.SettingsAbout.route) {
             val viewModel: SettingsViewModel = hiltViewModel()
             SettingsSectionScreen(

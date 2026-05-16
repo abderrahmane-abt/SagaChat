@@ -33,6 +33,7 @@ sealed class NavScreens(val route: String) {
     object SettingsVoice : NavScreens("settings_voice")
     object SettingsTheming : NavScreens("settings_theming")
     object SettingsPrivacy : NavScreens("settings_privacy")
+    object SettingsDiagnostics : NavScreens("settings_diagnostics")
     object SettingsAbout : NavScreens("settings_about")
     object SettingsPerformance : NavScreens("settings_performance")
     object SettingsModel : NavScreens("settings_model")
