@@ -6,7 +6,9 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,11 +39,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.hxs.HexStorage
 import com.dark.hxs.HxsRecord
+import com.dark.tool_neuron.data.ThemeController
 import com.dark.tool_neuron.service.inference.HxsTnSink
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.ToolNeuronTheme
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.OutputStreamWriter
@@ -55,12 +61,24 @@ import java.util.Locale
  * errors and crashes, and renders each as a tab. Export writes a JSON
  * bundle to a SAF-picked location for bug reports.
  */
+@AndroidEntryPoint
 class CrashReportActivity : ComponentActivity() {
+
+    @Inject lateinit var themeController: ThemeController
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         setContent {
-            ToolNeuronTheme {
+            val mode by themeController.mode.collectAsStateWithLifecycle()
+            val palette by themeController.palette.collectAsStateWithLifecycle()
+            val systemDark = isSystemInDarkTheme()
+            val darkTheme = when (mode) {
+                ThemeController.Mode.SYSTEM -> systemDark
+                ThemeController.Mode.LIGHT -> false
+                ThemeController.Mode.DARK -> true
+            }
+            ToolNeuronTheme(darkTheme = darkTheme, palette = palette) {
                 CrashReportScreen(onClose = { finish() })
             }
         }

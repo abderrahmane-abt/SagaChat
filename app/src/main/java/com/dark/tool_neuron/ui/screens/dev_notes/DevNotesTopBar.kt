@@ -11,11 +11,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.ui.Modifier
+import com.dark.tool_neuron.BuildConfig
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
-
-internal const val APP_VERSION = "1.0.0"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,7 +40,7 @@ fun DevNotesTopBar() {
                 modifier = Modifier.padding(end = dimens.screenPadding)
             ) {
                 Text(
-                    text = "v$APP_VERSION",
+                    text = "v${BuildConfig.VERSION_NAME}",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.primary,
