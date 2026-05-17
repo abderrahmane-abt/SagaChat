@@ -4,9 +4,11 @@ On-device AI for Android. No Google Play services, no telemetry, no cloud. Model
 
 The point isn't to clone ChatGPT into your pocket. It's to give you a chat surface, a RAG pipeline, a voice loop, and a plugin runtime that all run with the radio off if you want them to.
 
+[Repo](https://github.com/Siddhesh2377/ToolNeuron) · [Releases](https://github.com/Siddhesh2377/ToolNeuron/releases) · [Issues](https://github.com/Siddhesh2377/ToolNeuron/issues) · [Discord](https://discord.gg/mVPwHDhrAP)
+
 ## What it does
 
-- **Chat** against any compatible GGUF model. Streaming output, multi-turn, optional thinking mode, per-turn tok/s + TTFT + peak-memory metrics.
+- **Chat** against any compatible [GGUF](https://huggingface.co/models?other=gguf) model. Streaming output, multi-turn, optional thinking mode, per-turn tok/s + TTFT + peak-memory metrics.
 - **Vision** via colocated `mmproj` projector files. Image bytes cross AIDL as PFDs, never `byte[]`.
 - **RAG** over PDF, DOCX, XLSX, PPTX, ODT, EPUB, RTF, MD, HTML, JSON, XML, CSV, TXT. Source bytes are content-addressed; re-attach a doc to any chat from the picker.
 - **Voice** through sherpa-onnx. Streaming TTS that chunks by sentence, tap-to-toggle STT. VITS / Piper / Whisper all work.
@@ -55,6 +57,8 @@ Trust decisions live in C++ so an obfuscation bypass at the Kotlin layer doesn't
 - `FLAG_SECURE` is on for PIN entry only. Chats stay screenshottable.
 
 `CLAUDE.md` is authoritative for the rest, including the planned pro-license hook (`PolicyEngine.is_pro_feature(fid >= 1000)`).
+
+Found a vulnerability? Email <siddheshsonar2377@gmail.com> instead of opening a public issue.
 
 ## Plugins
 
@@ -107,12 +111,16 @@ Missing keys fall back to an unsigned release so the dev flow stays open. `compi
 
 ## License
 
-MIT.
+[MIT](LICENSE).
 
 ## Credits
 
-- llama.cpp / GGUF (Liquid AI fork) via prebuilt AAR
-- sherpa-onnx via prebuilt AAR
-- BoringSSL, liboqs, cpp-httplib, nlohmann/json — fetched at build time
-- Apache Commons Compress for `.tar.bz2` voice archives
-- Tabler-derived icon set
+- [llama.cpp](https://github.com/ggerganov/llama.cpp) / GGUF (Liquid AI fork) via prebuilt AAR
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) via prebuilt AAR
+- [BoringSSL](https://boringssl.googlesource.com/boringssl/), [liboqs](https://github.com/open-quantum-safe/liboqs), [cpp-httplib](https://github.com/yhirose/cpp-httplib), [nlohmann/json](https://github.com/nlohmann/json) — fetched at build time
+- [Apache Commons Compress](https://commons.apache.org/proper/commons-compress/) for `.tar.bz2` voice archives
+- [Tabler](https://tabler.io/icons)-derived icon set
+
+---
+
+Built by [Siddhesh Sonar](https://github.com/Siddhesh2377).
