@@ -3,26 +3,30 @@ package com.dark.tool_neuron.ui.screens.model_store
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -31,44 +35,81 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.model.ModelCategory
 import com.dark.tool_neuron.model.SizeCategory
 import com.dark.tool_neuron.ui.components.ActionSwitch
+import com.dark.tool_neuron.ui.components.ActionToggleGroup
 import com.dark.tool_neuron.ui.components.ExpandCollapseIcon
+import com.dark.tool_neuron.ui.components.TnTextField
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.Motion
 import com.dark.tool_neuron.viewmodel.ModelStoreViewModel
 import com.dark.tool_neuron.viewmodel.SortOption
 
+private data class FilterOption<T>(val label: String, val value: T)
+
+private val MODEL_TYPE_OPTIONS: List<FilterOption<String?>> = listOf(
+    FilterOption("All", null),
+    FilterOption("Text", "gguf"),
+    FilterOption("Image", "image_gen"),
+    FilterOption("Upscale", "image_upscaler"),
+    FilterOption("TTS", "tts"),
+    FilterOption("STT", "stt"),
+)
+
+private val EXECUTION_OPTIONS: List<FilterOption<String?>> = listOf(
+    FilterOption("All", null),
+    FilterOption("CPU", "CPU"),
+    FilterOption("NPU", "NPU"),
+)
+
+private val SIZE_OPTIONS = listOf<FilterOption<SizeCategory?>>(
+    FilterOption("All", null),
+    FilterOption("Small", SizeCategory.SMALL),
+    FilterOption("Medium", SizeCategory.MEDIUM),
+    FilterOption("Large", SizeCategory.LARGE),
+)
+
+private val SORT_OPTIONS = listOf(
+    FilterOption("Name", SortOption.NAME),
+    FilterOption("Size", SortOption.SIZE),
+    FilterOption("Recent", SortOption.RECENTLY_ADDED),
+)
+
+private val PARAMETER_BUCKETS = listOf("0.5B", "1B", "3B", "6.7B", "8B", "32B", "70B")
+private val QUANT_BUCKETS = listOf("Q4_0", "Q5_0", "Q8_0", "Q4_K_M", "Q5_K_M", "Q6_K")
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchAppBar(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
-    onCloseSearch: () -> Unit
+    onCloseSearch: () -> Unit,
 ) {
     TopAppBar(
         title = {
-            TextField(
+            TnTextField(
                 value = searchQuery,
                 onValueChange = onSearchQueryChange,
-                placeholder = { Text("Search models...") },
+                placeholder = "Search models...",
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
         },
         navigationIcon = {
             IconButton(onClick = onCloseSearch) {
                 Icon(TnIcons.ArrowLeft, "Close search")
             }
-        }
+        },
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
     val dimens = LocalDimens.current
@@ -92,202 +133,161 @@ fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
         selectedSizeCategory != null,
         selectedTags.isNotEmpty(),
         !showNsfw,
-        executionTarget != null
+        executionTarget != null,
+        sortBy != SortOption.NAME,
     ).count { it }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(max = 360.dp)
+            .heightIn(max = 480.dp)
             .verticalScroll(rememberScrollState())
-            .padding(vertical = dimens.spacingSm)
+            .padding(vertical = dimens.spacingSm),
+        verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
     ) {
-        // Model type chips
+        // Model type — horizontal scroll keeps the row compact at the top
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = dimens.spacingLg),
-            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
         ) {
-            FilterChip(
-                selected = selectedModelType == null,
-                onClick = { viewModel.filterByModelType(null) },
-                label = { Text("All") }
-            )
-            listOf(
-                "Text (GGUF)" to "gguf",
-                "Image" to "image_gen",
-                "Upscaler" to "image_upscaler",
-                "TTS" to "tts",
-                "STT" to "stt",
-            ).forEach { (label, type) ->
+            MODEL_TYPE_OPTIONS.forEach { opt ->
                 FilterChip(
-                    selected = selectedModelType == type,
-                    onClick = { viewModel.filterByModelType(if (selectedModelType == type) null else type) },
-                    label = { Text(label) }
+                    selected = selectedModelType == opt.value,
+                    onClick = { viewModel.filterByModelType(opt.value) },
+                    label = { Text(opt.label) },
                 )
             }
         }
 
-        Spacer(Modifier.height(6.dp))
-
-        Text(
-            "Category",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = dimens.spacingLg)
-        )
-        Spacer(Modifier.height(dimens.spacingXs))
-
-        // Category chips
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = dimens.spacingLg),
-            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
-        ) {
-            FilterChip(
-                selected = selectedCategory == null,
-                onClick = { viewModel.filterByCategory(null) },
-                label = { Text("All") }
-            )
-            ModelCategory.entries.forEach { category ->
+        FilterSection(label = "Category") {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 FilterChip(
-                    selected = selectedCategory == category,
-                    onClick = { viewModel.filterByCategory(category) },
-                    label = { Text(category.displayName) }
+                    selected = selectedCategory == null,
+                    onClick = { viewModel.filterByCategory(null) },
+                    label = { Text("All") },
                 )
+                ModelCategory.entries.forEach { category ->
+                    FilterChip(
+                        selected = selectedCategory == category,
+                        onClick = {
+                            viewModel.filterByCategory(if (selectedCategory == category) null else category)
+                        },
+                        label = { Text(category.displayName) },
+                    )
+                }
             }
         }
 
-        Spacer(Modifier.height(6.dp))
-
-        // Advanced filters toggle
+        // Advanced toggle
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = dimens.spacingLg),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(onClick = { showAdvancedFilters = !showAdvancedFilters }) {
                 ExpandCollapseIcon(isExpanded = showAdvancedFilters, size = 20.dp)
                 Spacer(Modifier.width(dimens.spacingXs))
-                Text("Advanced Filters")
+                Text("Advanced filters")
                 if (activeFilterCount > 0) {
-                    Spacer(Modifier.width(dimens.spacingXs))
-                    AssistChip(onClick = {}, label = { Text(activeFilterCount.toString()) }, modifier = Modifier.height(24.dp))
+                    Spacer(Modifier.width(dimens.spacingSm))
+                    CountBadge(activeFilterCount)
                 }
             }
             if (activeFilterCount > 0) {
-                TextButton(onClick = { viewModel.clearAllFilters() }) { Text("Clear All") }
+                TextButton(onClick = { viewModel.clearAllFilters() }) { Text("Clear all") }
             }
         }
 
         AnimatedVisibility(
             visible = showAdvancedFilters,
             enter = Motion.Enter,
-            exit = Motion.Exit
+            exit = Motion.Exit,
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = dimens.spacingLg, vertical = dimens.spacingSm),
-                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)
+                    .padding(horizontal = dimens.spacingLg),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd),
             ) {
-                // NSFW toggle
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Show NSFW Content", style = MaterialTheme.typography.bodyMedium)
+                    Text("Show NSFW content", style = MaterialTheme.typography.bodyMedium)
                     ActionSwitch(checked = showNsfw, onCheckedChange = { viewModel.setShowNsfw(it) })
                 }
 
-                // Execution target
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Execution", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)) {
-                        FilterChip(selected = executionTarget == null, onClick = { viewModel.setExecutionTarget(null) }, label = { Text("All") })
-                        FilterChip(selected = executionTarget == "CPU", onClick = { viewModel.setExecutionTarget(if (executionTarget == "CPU") null else "CPU") }, label = { Text("CPU") })
-                        FilterChip(selected = executionTarget == "NPU", onClick = { viewModel.setExecutionTarget(if (executionTarget == "NPU") null else "NPU") }, label = { Text("NPU") })
-                    }
+                FilterSection(label = "Execution") {
+                    SegmentedFilter(
+                        options = EXECUTION_OPTIONS,
+                        selectedValue = executionTarget,
+                        onSelect = { viewModel.setExecutionTarget(it) },
+                    )
                 }
 
-                // Parameters
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Parameters", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(
-                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
-                    ) {
-                        listOf("0.5B", "1B", "3B", "6.7B", "8B", "32B", "70B").forEach { param ->
-                            FilterChip(selected = param in selectedParameters, onClick = { viewModel.toggleParameterFilter(param) }, label = { Text(param) })
-                        }
-                    }
+                FilterSection(label = "Size") {
+                    SegmentedFilter<SizeCategory?>(
+                        options = SIZE_OPTIONS,
+                        selectedValue = selectedSizeCategory,
+                        onSelect = { viewModel.filterBySizeCategory(it) },
+                    )
                 }
 
-                // Quantization
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Quantization", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(
-                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
-                    ) {
-                        listOf("Q4_0", "Q5_0", "Q8_0", "Q4_K_M", "Q5_K_M", "Q6_K").forEach { quant ->
-                            FilterChip(selected = quant in selectedQuantizations, onClick = { viewModel.toggleQuantizationFilter(quant) }, label = { Text(quant) })
-                        }
-                    }
+                FilterSection(label = "Sort by") {
+                    SegmentedFilter(
+                        options = SORT_OPTIONS,
+                        selectedValue = sortBy,
+                        onSelect = { viewModel.setSortOption(it) },
+                    )
                 }
 
-                // Size
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Size", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(
-                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
-                    ) {
-                        SizeCategory.entries.forEach { size ->
+                FilterSection(label = "Parameters") {
+                    ChipFlowRow {
+                        PARAMETER_BUCKETS.forEach { param ->
                             FilterChip(
-                                selected = selectedSizeCategory == size,
-                                onClick = { viewModel.filterBySizeCategory(if (selectedSizeCategory == size) null else size) },
-                                label = { Text(size.displayName) }
+                                selected = param in selectedParameters,
+                                onClick = { viewModel.toggleParameterFilter(param) },
+                                label = { Text(param) },
                             )
                         }
                     }
                 }
 
-                // Tags
-                val models by viewModel.models.collectAsStateWithLifecycle()
-                val availableTags = remember(models) { viewModel.getAvailableTags() }
-                if (availableTags.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Tags", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Row(
-                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
-                        ) {
-                            availableTags.forEach { tag ->
-                                FilterChip(
-                                    selected = tag in selectedTags,
-                                    onClick = { viewModel.toggleTagFilter(tag) },
-                                    label = { Text(tag) }
-                                )
-                            }
+                FilterSection(label = "Quantization") {
+                    ChipFlowRow {
+                        QUANT_BUCKETS.forEach { quant ->
+                            FilterChip(
+                                selected = quant in selectedQuantizations,
+                                onClick = { viewModel.toggleQuantizationFilter(quant) },
+                                label = { Text(quant) },
+                            )
                         }
                     }
                 }
 
-                // Sort
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Sort By", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)) {
-                        FilterChip(selected = sortBy == SortOption.NAME, onClick = { viewModel.setSortOption(SortOption.NAME) }, label = { Text("Name") })
-                        FilterChip(selected = sortBy == SortOption.SIZE, onClick = { viewModel.setSortOption(SortOption.SIZE) }, label = { Text("Size") })
-                        FilterChip(selected = sortBy == SortOption.RECENTLY_ADDED, onClick = { viewModel.setSortOption(SortOption.RECENTLY_ADDED) }, label = { Text("Recently Added") })
+                val models by viewModel.models.collectAsStateWithLifecycle()
+                val availableTags = remember(models) { viewModel.getAvailableTags() }
+                if (availableTags.isNotEmpty()) {
+                    FilterSection(label = "Tags") {
+                        ChipFlowRow {
+                            availableTags.forEach { tag ->
+                                FilterChip(
+                                    selected = tag in selectedTags,
+                                    onClick = { viewModel.toggleTagFilter(tag) },
+                                    label = { Text(tag) },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -295,7 +295,73 @@ fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
 
         HorizontalDivider(
             modifier = Modifier.padding(top = dimens.spacingSm),
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
         )
+    }
+}
+
+@Composable
+private fun FilterSection(
+    label: String,
+    content: @Composable () -> Unit,
+) {
+    val dimens = LocalDimens.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = dimens.spacingLg),
+        verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        content()
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ChipFlowRow(content: @Composable () -> Unit) {
+    val dimens = LocalDimens.current
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+        verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+        modifier = Modifier.fillMaxWidth(),
+    ) { content() }
+}
+
+@Composable
+private fun <T> SegmentedFilter(
+    options: List<FilterOption<T>>,
+    selectedValue: T,
+    onSelect: (T) -> Unit,
+) {
+    val selected = options.firstOrNull { it.value == selectedValue } ?: options.first()
+    ActionToggleGroup(
+        items = options,
+        selectedItem = selected,
+        onItemSelected = { onSelect(it.value) },
+        itemLabel = { it.label },
+    )
+}
+
+@Composable
+private fun CountBadge(count: Int) {
+    Surface(
+        modifier = Modifier
+            .size(20.dp)
+            .clip(CircleShape),
+        color = MaterialTheme.colorScheme.primary,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                count.toString(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onPrimary,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
     }
 }

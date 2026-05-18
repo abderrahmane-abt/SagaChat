@@ -1207,8 +1207,6 @@ class InferenceService : Service() {
 
         val system = config.optString("systemPrompt", "")
         if (system.isNotEmpty()) engine.setSystemPrompt(system)
-        val template = config.optString("chatTemplate", "")
-        if (template.isNotEmpty()) engine.setChatTemplate(template)
     }
 
     private inline fun <T> safeCallback(target: T, block: (T) -> Unit) {

@@ -63,6 +63,12 @@ class ModelSessionManager @Inject constructor(
 
     fun clearVlmAutoLoadError() { _vlmAutoLoadError.value = null }
 
+    // User's configured system prompt for the active model. ToolCallCoordinator
+    // reads this on every send so it can re-apply it after tool-guidance swaps,
+    // instead of clobbering it with an empty string.
+    private val _userSystemPrompt = MutableStateFlow("")
+    val userSystemPrompt: StateFlow<String> = _userSystemPrompt.asStateFlow()
+
     private val watchdogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     init {
@@ -87,6 +93,7 @@ class ModelSessionManager @Inject constructor(
         val config = modelRepo.getConfig(model.id)
         _maxTokens.value = readMaxTokens(config)
         _contextSize.value = readContextSize(config)
+        _userSystemPrompt.value = readSystemPrompt(config)
         val configJson = buildConfigJson(config)
         val result = when (model.pathType) {
             PathType.FILE -> InferenceClient.loadModel(model.path, configJson)
@@ -142,6 +149,7 @@ class ModelSessionManager @Inject constructor(
         }
         InferenceClient.unloadModel()
         _supportsThinking.value = false
+        _userSystemPrompt.value = ""
         _loadState.value = ModelLoadState.Idle
     }
 
@@ -168,6 +176,16 @@ class ModelSessionManager @Inject constructor(
             inf.optInt("maxTokens", DEFAULT_MAX_TOKENS).coerceIn(64, 32768)
         } catch (_: Exception) {
             DEFAULT_MAX_TOKENS
+        }
+    }
+
+    private fun readSystemPrompt(config: ModelConfig?): String {
+        if (config == null) return ""
+        return try {
+            JSONObject(config.inferenceParamsJson.ifBlank { "{}" })
+                .optString("systemPrompt", "")
+        } catch (_: Exception) {
+            ""
         }
     }
 

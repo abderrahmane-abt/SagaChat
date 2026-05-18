@@ -86,8 +86,6 @@ class ServerEngine {
 
         val system = cfg.optString("systemPrompt", "")
         if (system.isNotEmpty()) engine.setSystemPrompt(system)
-        val template = cfg.optString("chatTemplate", "")
-        if (template.isNotEmpty()) engine.setChatTemplate(template)
     }
 
     companion object {

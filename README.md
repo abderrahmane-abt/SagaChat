@@ -6,6 +6,8 @@ The point isn't to clone ChatGPT into your pocket. It's to give you a chat surfa
 
 [Play Store](https://play.google.com/store/apps/details?id=com.dark.tool_neuron) · [Repo](https://github.com/Siddhesh2377/ToolNeuron) · [Releases](https://github.com/Siddhesh2377/ToolNeuron/releases) · [Issues](https://github.com/Siddhesh2377/ToolNeuron/issues) · [Discord](https://discord.gg/mVPwHDhrAP)
 
+<iframe src="https://discord.com/widget?id=1405784888577228800&theme=dark" width="350" height="500" allowtransparency="true" frameborder="0" sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"></iframe>
+
 ## What it does
 
 - **Chat** against any compatible [GGUF](https://huggingface.co/models?other=gguf) model. Streaming output, multi-turn, optional thinking mode, per-turn tok/s + TTFT + peak-memory metrics.

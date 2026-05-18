@@ -1,16 +1,27 @@
 package com.dark.tool_neuron.ui.screens.model_store
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SecondaryTabRow
@@ -22,7 +33,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -39,10 +52,12 @@ fun ModelStoreScreen(
     viewModel: ModelStoreViewModel,
     onNavigateBack: () -> Unit = {},
     onNavigateToHfExplorer: () -> Unit = {},
+    onNavigateToDownloads: () -> Unit = {},
 ) {
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val filteredModels by viewModel.filteredModels.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val downloadStates by viewModel.downloadStates.collectAsStateWithLifecycle()
     val extractingIds by viewModel.extractingIds.collectAsStateWithLifecycle()
@@ -51,12 +66,22 @@ fun ModelStoreScreen(
     val installedMmprojIds by viewModel.installedMmprojIds.collectAsStateWithLifecycle()
     val deviceInfo by viewModel.deviceInfo.collectAsStateWithLifecycle()
     val deleteInProgress by viewModel.deleteInProgress.collectAsStateWithLifecycle()
+    val activeDownloadCount by viewModel.activeDownloadCount.collectAsStateWithLifecycle()
 
     var searchQuery by remember { mutableStateOf("") }
     var showSearch by remember { mutableStateOf(false) }
 
+    val blurAmount by animateDpAsState(
+        targetValue = if (isRefreshing) 20.dp else 0.dp,
+        animationSpec = Motion.state(),
+        label = "refreshBlur",
+    )
+
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
-        modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
+        modifier = Modifier
+            .padding(bottom = innerPadding.calculateBottomPadding())
+            .blur(blurAmount),
         topBar = {
             if (showSearch) {
                 SearchAppBar(
@@ -94,7 +119,27 @@ fun ModelStoreScreen(
                                 icon = TnIcons.Search,
                                 contentDescription = "Search"
                             )
+                            Spacer(Modifier.width(4.dp))
                         }
+                        Box(contentAlignment = Alignment.TopEnd) {
+                            ActionButton(
+                                onClickListener = onNavigateToDownloads,
+                                icon = TnIcons.Download,
+                                contentDescription = "Downloads",
+                            )
+                            if (activeDownloadCount > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .offset(x = (-4).dp, y = 4.dp)
+                                        .size(8.dp)
+                                        .background(
+                                            MaterialTheme.colorScheme.primary,
+                                            CircleShape,
+                                        ),
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(4.dp))
                     }
                 )
             }
@@ -176,6 +221,33 @@ fun ModelStoreScreen(
                     )
                 }
             }
+        }
+    }
+
+        RefreshOverlay(visible = isRefreshing)
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun RefreshOverlay(visible: Boolean) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(Motion.state()),
+        exit = fadeOut(Motion.state()),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {},
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            ContainedLoadingIndicator()
         }
     }
 }

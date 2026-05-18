@@ -13,6 +13,7 @@ sealed class NavScreens(val route: String) {
     object SetupTheme : NavScreens("setup_theme")
     object SetupRag : NavScreens("setup_rag")
     object ModelStore : NavScreens("model_store")
+    object Downloads : NavScreens("downloads")
     object ModelSetup : NavScreens("model_setup")
     object AppGuide : NavScreens("app_guide")
     object GuideChat : NavScreens("guide_chat")

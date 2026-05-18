@@ -999,7 +999,10 @@ class HomeViewModel @Inject constructor(
 
         val thinkingOn = _thinkingEnabled.value && modelSession.supportsThinking.value
         modelSession.setThinkingEnabled(thinkingOn)
-        toolCallCoordinator.configureInference(_webSearchEnabled.value)
+        toolCallCoordinator.configureInference(
+            webOn = _webSearchEnabled.value,
+            userSystemPrompt = modelSession.userSystemPrompt.value,
+        )
 
         generationJob = viewModelScope.launch {
             var outcome: GenerationOutcome? = null

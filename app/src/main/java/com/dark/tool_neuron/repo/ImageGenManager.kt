@@ -27,6 +27,7 @@ import javax.inject.Singleton
 @Singleton
 class ImageGenManager @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val downloadCoordinator: DownloadCoordinator,
 ) {
     private val initLock = Mutex()
     @Volatile private var initialized = false
@@ -52,6 +53,7 @@ class ImageGenManager @Inject constructor(
         val dest = runtimeArchiveFile()
         if (dest.exists()) dest.delete()
         val id = HxdManager.enqueue(context, RUNTIME_ARCHIVE_URL, dest.absolutePath)
+        downloadCoordinator.registerLabel(id, "AI Image Runtime", "runtime")
         _runtimeDownload.value = HxdState(
             id = id, url = RUNTIME_ARCHIVE_URL, destPath = dest.absolutePath,
             downloadedBytes = 0L, totalBytes = -1L, speedBps = 0L, status = HxdStatus.QUEUED,

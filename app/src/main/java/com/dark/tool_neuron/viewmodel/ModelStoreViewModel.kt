@@ -16,6 +16,7 @@ import com.dark.tool_neuron.model.ModelInfo
 import com.dark.tool_neuron.model.SizeCategory
 import com.dark.tool_neuron.model.enums.PathType
 import com.dark.tool_neuron.model.enums.ProviderType
+import com.dark.tool_neuron.repo.DownloadCoordinator
 import com.dark.tool_neuron.repo.ExplorerRepo
 import com.dark.tool_neuron.repo.HuggingFaceExplorer
 import com.dark.tool_neuron.repo.InstallProgressTracker
@@ -71,9 +72,11 @@ class ModelStoreViewModel @Inject constructor(
     private val serverController: ServerController,
     private val installProgress: InstallProgressTracker,
     private val modelSession: ModelSessionManager,
+    private val downloadCoordinator: DownloadCoordinator,
 ) : ViewModel() {
 
     val installedModels: StateFlow<List<ModelInfo>> = modelRepo.models
+    val activeDownloadCount: StateFlow<Int> = downloadCoordinator.activeCount
     val repositories: StateFlow<List<HFRepository>> = repoDataStore.repositories
     val defaultEmbeddingModelId: StateFlow<String?> = ragManager.defaultEmbeddingModelId
 
@@ -92,6 +95,9 @@ class ModelStoreViewModel @Inject constructor(
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
@@ -196,7 +202,7 @@ class ModelStoreViewModel @Inject constructor(
 
     fun refreshModels() {
         viewModelScope.launch(Dispatchers.IO) {
-            _isLoading.value = true
+            _isRefreshing.value = true
             _error.value = null
             try {
                 catalog.clearCache()
@@ -206,7 +212,7 @@ class ModelStoreViewModel @Inject constructor(
             } catch (e: Exception) {
                 _error.value = e.message ?: "Failed to refresh"
             }
-            _isLoading.value = false
+            _isRefreshing.value = false
         }
     }
 
@@ -420,6 +426,7 @@ class ModelStoreViewModel @Inject constructor(
         destFile.parentFile?.mkdirs()
 
         val hxdId = HxdManager.enqueue(context, model.fileUri, destFile.absolutePath)
+        downloadCoordinator.registerLabel(hxdId, model.name, downloadTypeOf(model))
         _downloadIds.value = _downloadIds.value + (model.id to hxdId)
         _downloadStates.value = _downloadStates.value + (model.id to
             HxdState(hxdId, model.fileUri, destFile.absolutePath, 0L, -1L, 0L, HxdStatus.QUEUED))
@@ -712,6 +719,13 @@ class ModelStoreViewModel @Inject constructor(
         ))
         _downloadIds.value = _downloadIds.value - model.id
         _downloadStates.value = _downloadStates.value - model.id
+    }
+
+    private fun downloadTypeOf(model: HuggingFaceModel): String = when {
+        model.isMmproj -> "mmproj"
+        model.isVlm -> "vlm"
+        model.modelType.isNotBlank() -> model.modelType
+        else -> "gguf"
     }
 
     fun cancelDownload(modelId: String) {

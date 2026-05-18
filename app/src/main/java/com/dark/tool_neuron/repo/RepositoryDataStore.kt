@@ -100,8 +100,17 @@ class RepositoryDataStore @Inject constructor(
             HFRepository("smollm3-3b", "SmolLM3 3B", "HuggingFaceTB/SmolLM3-3B-GGUF"),
             // General-purpose pick
             HFRepository("phi35-mini", "Phi 3.5 Mini Instruct", "unsloth/Phi-3.5-mini-instruct-GGUF"),
+            // Uncensored / roleplay (Llama 3.2 1B class — ~700 MB–1.3 GB)
+            // mradermacher/* repos pulled — their GGUF-embedded chat templates crash gguf_lib's minja eval (SIGBUS)
+            HFRepository("novaciano-sorete-1b", "Sorete 1B", "Novaciano/Sorete-1B-GGUF", category = ModelCategory.UNCENSORED),
+            HFRepository("novaciano-chronos-1b", "Chronos 1B (iMatrix)", "Novaciano/Chronos-1B-iMatrix-GGUF", category = ModelCategory.UNCENSORED),
+            HFRepository("novaciano-toxic-npc-1b", "Toxic NPC 1B", "Novaciano/Toxic.NPC-1B-GGUF", category = ModelCategory.UNCENSORED),
+            HFRepository("novaciano-doctor-horror-1b", "Doctor Horror 1B", "Novaciano/Doctor_Horror-3.2-1B-GGUF", category = ModelCategory.UNCENSORED),
         )
 
-        private val REMOVED_IDS = setOf("sd-qnn", "sd-mnn", "sd-cyberrealistic-qnn")
+        private val REMOVED_IDS = setOf(
+            "sd-qnn", "sd-mnn", "sd-cyberrealistic-qnn",
+            "mrad-emo-sex-v2-1b", "mrad-sex-fusion-1b",
+        )
     }
 }

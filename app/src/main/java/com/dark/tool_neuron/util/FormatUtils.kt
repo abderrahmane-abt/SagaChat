@@ -6,15 +6,14 @@ fun extractParameterCount(name: String): String? {
 }
 
 fun extractQuantization(name: String): String? {
+    val base = name.substringAfterLast('/').removeSuffix(".gguf")
     val patterns = listOf(
-        Regex("""[_-](Q\d[\w_]*)""", RegexOption.IGNORE_CASE),
-        Regex("""[_-](IQ\d[\w_]*)""", RegexOption.IGNORE_CASE),
-        Regex("""[_-]([Bb][Ff]16)"""),
-        Regex("""[_-]([Ff]16|[Ff]32)"""),
+        Regex("""(?:^|[._-])(I?Q\d[A-Z\d_]*?)(?=\.|$)""", RegexOption.IGNORE_CASE),
+        Regex("""(?:^|[._-])(BF16|F16|F32)(?=[._-]|$)""", RegexOption.IGNORE_CASE),
     )
     for (p in patterns) {
-        val match = p.find(name)
-        if (match != null) return match.groupValues[1]
+        val match = p.find(base)
+        if (match != null) return match.groupValues[1].uppercase()
     }
     return null
 }

@@ -22,6 +22,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.ui.screens.credits.CreditsScreen
 import com.dark.tool_neuron.ui.screens.dev_notes.DevNotesScreen
+import com.dark.tool_neuron.ui.screens.downloads.DownloadsScreen
 import com.dark.tool_neuron.ui.screens.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.screens.image_task.ImageTaskScreen
 import com.dark.tool_neuron.ui.screens.intro_screen.IntroScreen
@@ -181,7 +182,11 @@ fun TNavigation(
                 viewModel = viewModel,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToHfExplorer = { navController.navigate(NavScreens.HfExplorer.route) },
+                onNavigateToDownloads = { navController.navigate(NavScreens.Downloads.route) },
             )
+        }
+        composable(NavScreens.Downloads.route) {
+            DownloadsScreen(innerPadding = innerPadding)
         }
         composable(NavScreens.ModelSetup.route) {
             val activity = LocalContext.current as ComponentActivity

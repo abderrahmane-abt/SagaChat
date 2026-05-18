@@ -88,6 +88,7 @@ If `getPackageInfo(... GET_SIGNING_CERTIFICATES)` returns null/empty (some weird
 | `chat_documents_meta_v1/` | `tn.chat_documents.user_key.v2` | RAG document metadata (id, name, mime, chunk count, sourceId). Dir name is historical — the user-key is v2. |
 | `chat_documents/sources_v2/` | per-file AEAD via `SourceFileVault` | Each `<sourceId>.bin` is `[iv(12)][ct][tag(16)]` AEAD blob. Per-file key is `HKDF(DEK, salt=signerHash, info="tn.chat_doc_source.user_key.v2@<sourceId>")`. AAD = sourceId UTF-8 bytes (rename → decrypt fails). Replaces the legacy plaintext `chat_documents/sources/` (deleted on first v2 boot). |
 | `rag_keyword_v1/` | `tn.rag_keyword.user_key.v2` | BM25 inverted-index records. |
+| `download_history_v1/` | `tn.download_history.user_key.v2` | Download history (id, displayName, type, status, totalBytes, completedAt, error). Capped at 50 newest; oldest pruned on insert. Fresh-created on first launch of the Downloads-screen build; no migration. |
 
 **v1 → v2 migration is destructive.** Each repo's `openOrRebuild` tries `openEncrypted` with the v2 key. If that fails (existing v1 data sealed under the old non-signer-bound key), it wipes the vault dir and re-creates fresh. On first launch with a v2 build, an existing user loses their PIN, chat history, and RAG attachments — one time. The Keystore alias is preserved (so the DEK is still the same), only the per-vault user-keys change.
 
@@ -754,6 +755,64 @@ To add SDXL on devices that aren't in `isSdxlCapable` — pipeline-level, not ga
 
 ---
 
+## Downloads screen
+
+Dedicated screen aggregating every queued / downloading download plus a persistent history of completed / failed / cancelled ones. Reachable from a Download icon in the Model Store top bar (badge dot when active count > 0). Route: `NavScreens.Downloads("downloads")`.
+
+### Architecture
+
+Two singletons sit between `HxdManager` and the UI:
+
+- **`DownloadCoordinator`** (`@Singleton`, in `repo/`) — subscribes to `HxdManager.tasks` once at first construction. Holds an in-memory `ConcurrentHashMap<Int, DownloadLabel>` (hxdId → displayName + type). On every emission, recomputes `activeCount: StateFlow<Int>` (count of QUEUED/CONNECTING/DOWNLOADING/PAUSED tasks) and detects per-task terminal transitions (COMPLETED/FAILED/CANCELLED). On a first-time terminal transition it removes the label, then writes a `DownloadHistoryEntry` via the repo. `recordedTerminals: Set<Int>` dedupes so a task that bounces between flow emissions only gets one history row. `DownloadLabel.fromUrl(url)` provides a fallback when the label was never registered (e.g. a download that survived process restart).
+- **`DownloadHistoryRepository`** (`@Singleton`, in `repo/`) — HXS-backed at `<filesDir>/download_history_v1/`. Sealed under `HKDF(DEK, salt=signerHash, info="tn.download_history.user_key.v2")` — same v2-signer-bound pattern as every other vault. Collection name `download_history`. TAG layout `1=id (UUID), 2=displayName, 3=type, 4=status (ord), 5=totalBytes, 6=completedAt, 7=error`. `insert()` writes + caps to MAX_ENTRIES=50 newest + flushes + refreshes the StateFlow. `clearAll()` deletes every record. Capping happens inside `insert()` so the vault can't grow unbounded.
+
+Every enqueue site MUST call `coordinator.registerLabel(hxdId, displayName, type)` immediately after `HxdManager.enqueue(...)`. Current sites:
+- `ModelStoreViewModel.downloadModel(model)` — label = `model.name`, type from `downloadTypeOf(model)` mapping (`mmproj` / `vlm` / `gguf` / per-model-type strings).
+- `ImageGenManager.downloadRuntime()` — label = `"AI Image Runtime"`, type = `"runtime"`.
+
+Any new download path that calls `HxdManager.enqueue` MUST register a label too, otherwise the row falls back to `url.substringAfterLast('/')` and the history entry shows the raw filename instead of a human-readable name.
+
+### Process isolation
+
+`DownloadCoordinator` + `DownloadHistoryRepository` are `:app`-process-only by construction. Verified at build time: neither `:server` (`service/server/`) nor `:inference` (`service/inference/`) imports them. The coordinator is reached only via `ModelStoreViewModel` and `ImageGenManager`, both of which are constructed only in `:app`. If a future service-process class needs to know about downloads (e.g. a notification surfacing history in `:server`), it MUST go through AIDL — never inject the coordinator directly, because that would attempt HXS unwrap from a non-main process and crash.
+
+### ViewModel + screen
+
+- **`DownloadsViewModel`** (`@HiltViewModel`) — exposes `activeDownloads: StateFlow<List<ActiveDownloadItem>>` (joined HxdManager.tasks + coordinator labels, filtered to non-terminal, sorted by hxdId) and `history: StateFlow<List<DownloadHistoryEntry>>` (passthrough from repo). Methods: `cancel(hxdId)`, `clearHistory()`. `ActiveDownloadItem(hxdId, displayName, type, state)`.
+- **`DownloadsScreen`** at `ui/screens/downloads/DownloadsScreen.kt` — single `LazyColumn` with section headers (`Active · N` then `History · N` with trash icon to clear). Uses `LocalDimens` / `LocalTnShapes` / `TnIcons` throughout; no inline `dp` constants for theme tokens. Empty state when both are empty (Download icon + "No downloads yet").
+- **`DownloadsTopBar`** — minimal GuideTopBar-style top bar; dispatched from `AppTopBar.kt`'s `when` block on `NavScreens.Downloads.route`.
+
+### Active row
+
+For each `ActiveDownloadItem`:
+- Header row: type-icon badge (mapped from `type` string) + display name + cancel icon (X).
+- Body switches on `HxdStatus`:
+  - QUEUED → "Queued" text
+  - CONNECTING → `TnIndeterminateProgressBar` + "Connecting…"
+  - PAUSED → `TnProgressBar` (if totalBytes > 0) + "Paused"
+  - DOWNLOADING → `TnProgressBar` (or indeterminate if totalBytes ≤ 0) + `"<pct>%  ·  <downloaded> / <total>"` left, `state.speedFormatted` right.
+
+### History row
+
+For each `DownloadHistoryEntry`:
+- Status icon (CircleCheck primary / AlertTriangle error / X muted) + display name.
+- Subtitle: `"<status>  ·  <relative time>  ·  <size>"` (size omitted if ≤ 0). Failed/cancelled rows append the first 48 chars of the error string when present.
+- Relative time via `android.text.format.DateUtils.getRelativeTimeSpanString(..., MINUTE_IN_MILLIS, FORMAT_ABBREV_RELATIVE)`.
+
+### Top-bar badge
+
+`ModelStoreScreen` adds a Download `ActionButton` in the `TopAppBar.actions` slot, always visible (not gated on tab). When `viewModel.activeDownloadCount > 0`, a small `MaterialTheme.colorScheme.primary` circle (8.dp) is drawn at top-end via `Box(contentAlignment = TopEnd)` + `Modifier.offset(x=-4.dp, y=4.dp)`. Count comes from `ModelStoreViewModel.activeDownloadCount` which is a direct passthrough of `DownloadCoordinator.activeCount`.
+
+### What's deliberately NOT in v1
+
+- No retry button on failed history rows. To retry, the user re-initiates from the Store.
+- No per-row delete in history. The "Clear all" trash icon in the section header is the only deletion path.
+- No pause/resume controls (HxdManager exposes them, but the existing Store UI doesn't surface them either — keeping parity).
+- No filtering or search in history (50-entry cap keeps the list short enough).
+- No grouping by type. Single chronological list ordered newest-first.
+
+---
+
 ## Dynamic Island overlay
 
 Floating black pill that morphs into a card, drawn over every app via `TYPE_APPLICATION_OVERLAY`. Lives in `app/src/main/java/com/dark/tool_neuron/service/island/`. Foreground service (`IslandOverlayService`, `foregroundServiceType="dataSync"`, `stopWithTask="false"`) keeps the overlay alive across recents-swipe. Window params are `WRAP_CONTENT + FLAG_NOT_FOCUSABLE + FLAG_LAYOUT_NO_LIMITS + gravity TOP|CENTER_HORIZONTAL + x=0`; the pill is **always horizontally centered** at the top of the screen. WRAP_CONTENT means the window resizes in lockstep with the morph animation (pill grows into card symmetrically both sides) so unrelated taps miss the window entirely in pill mode. The user calibrates only Y (`offsetYDp`) via the prototype screen slider — there is no X calibration because the pill is always centered.
@@ -1026,6 +1085,10 @@ Hub + 7 detail screens, all **single-Scaffold** (accept `innerPadding: PaddingVa
 - Don't reuse the chat model picker for image-gen models. They're separate `ProviderType` rows (`IMAGE_GEN`, `IMAGE_UPSCALER`) on `ModelInfo` and live in `<filesDir>/sd_models/` / `<filesDir>/sd_upscalers/`, never in the GGUF chat model dir. The store routes them through `finalizeImageGenDownload` / `finalizeImageUpscalerDownload` and they should not appear in `chatModels` filters anywhere.
 - Don't drop the `context.packageName` self-exclusion in `AccessibilityGuard.scan`. Our own `IslandAccessibilityService` registers under our own package; without the self-skip every user who enables the smart-dodge accessibility service would trip our own one-time `RootWarningDialog` ("Suspicious accessibility services attached: com.dark.tool_neuron"). The exclusion is targeted — only OUR pkg is allowed; every other non-allowlisted service still surfaces in the dialog.
 - Don't duplicate the island pill / dodge geometry constants between `IslandOverlayRoot.kt` and `IslandAccessibilityService.kt`. Both read from `IslandGeometry` (PILL_W_DP, PILL_H_DP, OUTER_PADDING_DP, DODGE_MARGIN_DP, MAX_DODGE_DP). If the pill grows or shrinks, the service's pillRect computation diverges from where the overlay actually draws → dodge will compute against the wrong rect and either over-dodge (visible jitter) or under-dodge (pill stays on top of buttons).
+- Don't call `HxdManager.enqueue(...)` from any new code path without immediately following it with `downloadCoordinator.registerLabel(hxdId, displayName, type)`. The Downloads screen's history is built from those labels — skipping the call means the history row falls back to `url.substringAfterLast('/')`, which is unreadable for the user (full hex repo IDs, etc.). The two enforced sites today are `ModelStoreViewModel.downloadModel` and `ImageGenManager.downloadRuntime`; new sites must follow the same pattern.
+- Don't inject `DownloadCoordinator` or `DownloadHistoryRepository` from any class that runs in `:server` or `:inference`. Both are `:app`-process-only by construction (HXS access lives in main process; cross-process injection would attempt to unwrap the DEK from a process that doesn't have the Keystore alias scoped to it and crash). If a service-process feature needs download state, route through AIDL.
+- Don't bump `DownloadHistoryRepository.MAX_ENTRIES` past 50 without a UI plan for the list growing. 50 entries × ~256 bytes is ~13 KB at rest — trivial — but the screen's LazyColumn isn't paginated and the section header has no count limit. Larger caps need at least a "show more" affordance or per-day grouping.
+- Don't write into the `tn.download_history.*` info-string namespace from anywhere other than `DownloadHistoryRepository`. The v2 suffix is also load-bearing — bumping to v3 invalidates every existing user's history vault (the open-or-rebuild helper will wipe it). If the schema needs a breaking change, write a migration that reads via the v2 key and re-inserts under v3, then bump.
 - Don't compute the AccessibilityService's pill rect against the current `nudge` value. Use the calibrated `IslandPositionStore.position.value` only. Dodge math must answer "where should the pill move to be clear", not "where would the pill stay if it's already nudged" — feeding nudge back into the calc creates an oscillation loop (the pill dodges off the button → button no longer overlaps → nudge resets to 0 → button overlaps again → dodge → …).
 - Don't clear the `IslandPositionStore.nudge` on `TYPE_WINDOW_CONTENT_CHANGED`. Only `TYPE_WINDOW_STATE_CHANGED` (app/activity switch) resets the nudge before re-scanning. Content changes (RecyclerView scrolls, dialog toggles, text edits) fire dozens per second; clearing on every one would make the pill flash back to its calibrated home position constantly. The scan that follows each content event publishes a fresh nudge if needed; idempotent if the new nudge equals the old one.
 - Don't lift the 150 ms coalesce on the accessibility-event handler. `TYPE_WINDOW_CONTENT_CHANGED` can fire many times per second in any UI with animations or live updates (chat message streaming, video player UI, progress bars). Walking the entire node tree per event will pin a CPU core; debouncing to one scan per 150 ms keeps the smart dodge under ~1 % CPU on a mid-tier device.

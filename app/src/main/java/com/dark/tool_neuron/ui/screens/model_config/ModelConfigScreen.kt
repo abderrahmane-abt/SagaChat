@@ -85,7 +85,6 @@ fun ModelConfigScreen(
 
     // Prompt
     var systemPrompt by remember { mutableStateOf(inferenceJson.optString("systemPrompt", "")) }
-    var chatTemplate by remember { mutableStateOf(inferenceJson.optString("chatTemplate", "")) }
 
     // Sampling — advanced
     var mirostat by remember { mutableIntStateOf(inferenceJson.optInt("mirostat", 0)) }
@@ -129,7 +128,7 @@ fun ModelConfigScreen(
         cacheTypeK = "q8_0"; cacheTypeV = "q8_0"
         temperature = 0.7f; topK = 40; topP = 0.9f; minP = 0.05f
         repeatPenalty = 1.1f; maxTokens = 2048; seed = "-1"
-        systemPrompt = ""; chatTemplate = ""
+        systemPrompt = ""
         mirostat = 0; mirostatTau = 5f; mirostatEta = 0.1f
         frequencyPenalty = 0f; presencePenalty = 0f; penaltyLastN = 64
         dryMultiplier = 0f; dryBase = 1.75f; dryAllowedLength = 2
@@ -159,7 +158,6 @@ fun ModelConfigScreen(
                 inference.put("maxTokens", maxTokens)
                 inference.put("seed", seed.toIntOrNull() ?: -1)
                 if (systemPrompt.isNotBlank()) inference.put("systemPrompt", systemPrompt)
-                if (chatTemplate.isNotBlank()) inference.put("chatTemplate", chatTemplate)
 
                 if (mirostat != 0) {
                     inference.put("mirostat", mirostat)
@@ -397,18 +395,6 @@ fun ModelConfigScreen(
                                     explanation = "The model's hidden instructions. Sets its job and personality. " +
                                         "Example: \"You are a friendly tutor who explains things simply.\" " +
                                         "If left blank, the model has no anchor and tends to make stuff up.",
-                                )
-                                ConfigTextField(
-                                    label = "Chat Template",
-                                    value = chatTemplate,
-                                    onValueChange = { chatTemplate = it },
-                                    placeholder = "(use model default)",
-                                    singleLine = false,
-                                    minLines = 2,
-                                    maxLines = 6,
-                                    explanation = "How your messages are formatted before being sent to the model. " +
-                                        "Example: each model expects a specific format. Leave blank — the model already knows its own. " +
-                                        "Only fill this in if replies are gibberish.",
                                 )
                             }
                         }

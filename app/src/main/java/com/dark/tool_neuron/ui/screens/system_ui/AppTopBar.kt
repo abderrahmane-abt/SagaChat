@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import com.dark.tool_neuron.model.DownloadProgress
 import com.dark.tool_neuron.model.NavScreens
 import com.dark.tool_neuron.ui.screens.dev_notes.DevNotesTopBar
+import com.dark.tool_neuron.ui.screens.downloads.DownloadsTopBar
 import com.dark.tool_neuron.ui.screens.guide.GuideTopBar
 import com.dark.tool_neuron.ui.screens.home_screen.HomeScreenTopbar
 import com.dark.tool_neuron.ui.screens.image_task.ImageTaskTopBar
@@ -42,6 +43,7 @@ fun AppTopBar(
         NavScreens.SetupScreen.route -> SetupScreenTopBar()
         NavScreens.ModelSetup.route -> SetupScreenTopBar()
         NavScreens.ModelStore.route -> Unit
+        NavScreens.Downloads.route -> DownloadsTopBar(onBack = onBack)
         NavScreens.AppGuide.route -> GuideTopBar(title = "App Guide", onBack = onBack)
         NavScreens.GuideChat.route -> GuideTopBar(title = "Chat", onBack = onBack)
         NavScreens.GuideModels.route -> GuideTopBar(title = "Models", onBack = onBack)

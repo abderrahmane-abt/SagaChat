@@ -30,16 +30,21 @@ class ToolCallCoordinator @Inject constructor(
     fun enabledTools(): List<ToolDef> =
         pluginRegistry.enabledToolDefs(pluginPrefs.enabledIds())
 
-    fun configureInference(webOn: Boolean): List<ToolDef> {
+    fun configureInference(webOn: Boolean, userSystemPrompt: String): List<ToolDef> {
         val tools = if (webOn) enabledTools() else emptyList()
         Log.i(TAG, "configureInference: webOn=$webOn tools=${tools.map { it.name }}")
         if (tools.isEmpty()) {
             InferenceClient.clearTools()
-            InferenceClient.setSystemPrompt("")
+            InferenceClient.setSystemPrompt(userSystemPrompt)
             return tools
         }
         val toolsJson = Json.encodeToString(JsonArray.serializer(), toOpenAiFormat(tools))
-        InferenceClient.setSystemPrompt(TOOL_USE_GUIDANCE)
+        val combined = if (userSystemPrompt.isBlank()) {
+            TOOL_USE_GUIDANCE
+        } else {
+            "$userSystemPrompt\n\n$TOOL_USE_GUIDANCE"
+        }
+        InferenceClient.setSystemPrompt(combined)
         InferenceClient.enableToolCalling(toolsJson)
         return tools
     }
