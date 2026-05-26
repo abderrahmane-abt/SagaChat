@@ -201,7 +201,6 @@ fun ModelStoreScreen(
                         extractingIds = extractingIds,
                         extractingFile = extractingFile,
                         installedModelIds = installedModels.map { it.id }.toSet(),
-                        viewModel = viewModel,
                         onDownload = { viewModel.downloadModel(it) },
                         onCancelDownload = { viewModel.cancelDownload(it) },
                         onRetry = { viewModel.loadModels() }

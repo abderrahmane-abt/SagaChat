@@ -10,7 +10,6 @@ import com.moorixlabs.download_manager.HxdState
 import com.moorixlabs.download_manager.HxdStatus
 import com.moorixlabs.sagachat.model.HFRepository
 import com.moorixlabs.sagachat.model.HuggingFaceModel
-import com.moorixlabs.sagachat.model.ModelCategory
 import com.moorixlabs.sagachat.model.ModelConfig
 import com.moorixlabs.sagachat.model.ModelInfo
 import com.moorixlabs.sagachat.model.SizeCategory
@@ -28,8 +27,6 @@ import com.moorixlabs.sagachat.repo.RepositoryValidator
 import com.moorixlabs.sagachat.repo.ValidationResult
 import com.moorixlabs.sagachat.data.AppPreferences
 import com.moorixlabs.sagachat.service.inference.InferenceClient
-import com.moorixlabs.sagachat.util.extractParameterCount
-import com.moorixlabs.sagachat.util.extractQuantization
 
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -47,14 +44,6 @@ import java.security.MessageDigest
 import javax.inject.Inject
 
 enum class StoreTab { MODELS, INSTALLED, SETTINGS }
-
-enum class SortOption { NAME, SIZE, RECENTLY_ADDED }
-
-data class RepoGroupInfo(
-    val displayName: String,
-    val author: String,
-    val modelCount: Int,
-)
 
 @HiltViewModel
 class ModelStoreViewModel @Inject constructor(
@@ -112,38 +101,7 @@ class ModelStoreViewModel @Inject constructor(
     val isModelLoaded = InferenceClient.isModelLoaded
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    // Filter states
-    private val _selectedModelType = MutableStateFlow<String?>(null)
-    val selectedModelType: StateFlow<String?> = _selectedModelType.asStateFlow()
-
-    private val _selectedCategory = MutableStateFlow<ModelCategory?>(null)
-    val selectedCategory: StateFlow<ModelCategory?> = _selectedCategory.asStateFlow()
-
-    private val _selectedParameters = MutableStateFlow<Set<String>>(emptySet())
-    val selectedParameters: StateFlow<Set<String>> = _selectedParameters.asStateFlow()
-
-    private val _selectedQuantizations = MutableStateFlow<Set<String>>(emptySet())
-    val selectedQuantizations: StateFlow<Set<String>> = _selectedQuantizations.asStateFlow()
-
-    private val _selectedSizeCategory = MutableStateFlow<SizeCategory?>(null)
-    val selectedSizeCategory: StateFlow<SizeCategory?> = _selectedSizeCategory.asStateFlow()
-
-    private val _selectedTags = MutableStateFlow<Set<String>>(emptySet())
-    val selectedTags: StateFlow<Set<String>> = _selectedTags.asStateFlow()
-
-    private val _showNsfw = MutableStateFlow(true)
-    val showNsfw: StateFlow<Boolean> = _showNsfw.asStateFlow()
-
-    private val _executionTarget = MutableStateFlow<String?>(null)
-    val executionTarget: StateFlow<String?> = _executionTarget.asStateFlow()
-
-    private val _sortBy = MutableStateFlow(SortOption.NAME)
-    val sortBy: StateFlow<SortOption> = _sortBy.asStateFlow()
-
     private val _searchQuery = MutableStateFlow("")
-
-    private val _selectedRepository = MutableStateFlow<String?>(null)
-    val selectedRepository: StateFlow<String?> = _selectedRepository.asStateFlow()
 
     // Validation
     private val _validationResults = MutableStateFlow<Map<String, ValidationResult>>(emptyMap())
@@ -170,8 +128,6 @@ class ModelStoreViewModel @Inject constructor(
     }
 
     fun selectTab(tab: StoreTab) { _selectedTab.value = tab }
-
-    fun selectRepository(repoKey: String?) { _selectedRepository.value = repoKey }
 
     fun loadModels() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -218,48 +174,6 @@ class ModelStoreViewModel @Inject constructor(
     private fun applyAllFilters() {
         var filtered = _models.value
 
-        _selectedCategory.value?.let { cat ->
-            val repos = repoDataStore.repositories.value
-            val matching = repos.filter { it.category == cat && it.isEnabled }.map { it.id }.toSet()
-            filtered = filtered.filter { model -> matching.any { model.id.startsWith(it) } }
-        }
-
-        if (_selectedParameters.value.isNotEmpty()) {
-            filtered = filtered.filter { model ->
-                val params = extractParameterCount(model.name)
-                params != null && params in _selectedParameters.value
-            }
-        }
-
-        if (_selectedQuantizations.value.isNotEmpty()) {
-            filtered = filtered.filter { model ->
-                val quant = extractQuantization(model.name)
-                quant != null && quant in _selectedQuantizations.value
-            }
-        }
-
-        _selectedSizeCategory.value?.let { size ->
-            filtered = filtered.filter { SizeCategory.fromSize(it.approximateSize) == size }
-        }
-
-        if (_selectedTags.value.isNotEmpty()) {
-            filtered = filtered.filter { model ->
-                _selectedTags.value.all { tag -> tag in model.tags }
-            }
-        }
-
-        if (!_showNsfw.value) {
-            filtered = filtered.filter { "NSFW" !in it.tags }
-        }
-
-        _selectedModelType.value?.let { type ->
-            filtered = filtered.filter { it.modelType == type }
-        }
-
-        _executionTarget.value?.let { target ->
-            filtered = filtered.filter { target in it.tags }
-        }
-
         if (_searchQuery.value.isNotBlank()) {
             val q = _searchQuery.value
             filtered = filtered.filter {
@@ -268,65 +182,12 @@ class ModelStoreViewModel @Inject constructor(
             }
         }
 
-        filtered = when (_sortBy.value) {
-            SortOption.NAME -> filtered.sortedBy { it.name.lowercase() }
-            SortOption.SIZE -> filtered.sortedBy { SizeCategory.parseSizeToBytes(it.approximateSize) }
-            SortOption.RECENTLY_ADDED -> filtered.reversed()
-        }
+        filtered = filtered.sortedBy { it.name.lowercase() }
 
         _filteredModels.value = filtered
     }
 
     fun filterModels(query: String) { _searchQuery.value = query; applyAllFilters() }
-    fun filterByModelType(type: String?) { _selectedModelType.value = type; applyAllFilters() }
-    fun filterByCategory(cat: ModelCategory?) { _selectedCategory.value = cat; applyAllFilters() }
-    fun toggleParameterFilter(p: String) {
-        _selectedParameters.value = if (p in _selectedParameters.value) _selectedParameters.value - p else _selectedParameters.value + p
-        applyAllFilters()
-    }
-    fun toggleQuantizationFilter(q: String) {
-        _selectedQuantizations.value = if (q in _selectedQuantizations.value) _selectedQuantizations.value - q else _selectedQuantizations.value + q
-        applyAllFilters()
-    }
-    fun filterBySizeCategory(s: SizeCategory?) { _selectedSizeCategory.value = s; applyAllFilters() }
-    fun setSortOption(o: SortOption) { _sortBy.value = o; applyAllFilters() }
-    fun toggleTagFilter(tag: String) {
-        _selectedTags.value = if (tag in _selectedTags.value) _selectedTags.value - tag else _selectedTags.value + tag
-        applyAllFilters()
-    }
-    fun setShowNsfw(show: Boolean) { _showNsfw.value = show; applyAllFilters() }
-    fun setExecutionTarget(t: String?) { _executionTarget.value = t; applyAllFilters() }
-    fun clearAllFilters() {
-        _selectedModelType.value = null; _selectedCategory.value = null
-        _selectedParameters.value = emptySet(); _selectedQuantizations.value = emptySet()
-        _selectedSizeCategory.value = null; _selectedTags.value = emptySet()
-        _showNsfw.value = true; _executionTarget.value = null
-        _sortBy.value = SortOption.NAME; _searchQuery.value = ""
-        applyAllFilters()
-    }
-
-    fun getAvailableTags(): List<String> =
-        _models.value.flatMap { it.tags }.distinct()
-            .filter { it !in listOf("GGUF") && !it.matches(Regex("Q\\d.*")) }
-            .sorted()
-
-    fun getGroupedRepos(): Map<String, RepoGroupInfo> {
-        val repos = repoDataStore.repositories.value
-        val repoNameLookup = repos.associate { it.repoPath to it.name }
-        val grouped = mutableMapOf<String, RepoGroupInfo>()
-
-        _filteredModels.value.groupBy { it.repoId }.forEach { (repoId, models) ->
-            val repoPath = repos.find { it.id == repoId }?.repoPath ?: repoId
-            val displayName = repoNameLookup[repoPath] ?: repoId.substringAfterLast("/")
-            val author = if (repoPath.contains("/")) repoPath.substringBefore("/") else ""
-            grouped[repoId] = RepoGroupInfo(displayName, author, models.size)
-        }
-        return grouped
-    }
-
-    fun getModelsForRepo(repoKey: String): List<HuggingFaceModel> =
-        _filteredModels.value.filter { it.repoId == repoKey }
-
 
     fun downloadByQuickStartId(modelId: String) {
         viewModelScope.launch {
