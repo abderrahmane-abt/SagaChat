@@ -21,3 +21,9 @@ local.properties
 /.claude/
 /feats/
 /logs/
+
+# Project Memory and Phases
+PHASE_*.md
+memory.md
+MyChatWithClaude.md
+CharacterCreationPrototype.md
