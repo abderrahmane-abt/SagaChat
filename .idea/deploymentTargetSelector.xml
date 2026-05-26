@@ -2,7 +2,7 @@
 <project version="4">
   <component name="deploymentTargetSelector">
     <selectionStates>
-      <SelectionState runConfigName="app">
+      <SelectionState runConfigName="plugins.expense">
         <option name="selectionMode" value="DROPDOWN" />
         <DropdownSelection timestamp="2026-05-08T16:44:48.722028401Z">
           <Target type="DEFAULT_BOOT">
@@ -35,7 +35,7 @@
         </DropdownSelection>
         <DialogSelection />
       </SelectionState>
-      <SelectionState runConfigName="plugins.expense">
+      <SelectionState runConfigName="app">
         <option name="selectionMode" value="DROPDOWN" />
         <DropdownSelection timestamp="2026-05-08T16:44:48.722028401Z">
           <Target type="DEFAULT_BOOT">

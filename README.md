@@ -1,10 +1,10 @@
-# ToolNeuron
+# SagaChat
 
 On-device AI for Android. No Google Play services, no telemetry, no cloud. Models, chats, RAG documents, and key material stay on the phone.
 
 The point isn't to clone ChatGPT into your pocket. It's to give you a chat surface, a RAG pipeline, a voice loop, and a plugin runtime that all run with the radio off if you want them to.
 
-[Play Store](https://play.google.com/store/apps/details?id=com.dark.tool_neuron) · [Repo](https://github.com/Siddhesh2377/ToolNeuron) · [Releases](https://github.com/Siddhesh2377/ToolNeuron/releases) · [Issues](https://github.com/Siddhesh2377/ToolNeuron/issues) · [Discord](https://discord.gg/mVPwHDhrAP)
+[Play Store](https://play.google.com/store/apps/details?id=com.moorixlabs.sagachat) · [Repo](https://github.com/Siddhesh2377/SagaChat) · [Releases](https://github.com/Siddhesh2377/SagaChat/releases) · [Issues](https://github.com/Siddhesh2377/SagaChat/issues) · [Discord](https://discord.gg/mVPwHDhrAP)
 
 
 ## What it does

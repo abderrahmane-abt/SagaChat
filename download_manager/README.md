@@ -1,6 +1,6 @@
 # HXD — Hex Downloader
 
-A private, self-contained download engine for ToolNeuron. Designed for downloading large files (AI models, datasets) with full background survival, automatic resume, and zero leakage to the Android system.
+A private, self-contained download engine for SagaChat. Designed for downloading large files (AI models, datasets) with full background survival, automatic resume, and zero leakage to the Android system.
 
 ---
 

@@ -104,7 +104,7 @@ jobjectArray make_response_triple(JNIEnv* env, const std::string& status,
 }
 
 extern "C" JNIEXPORT jobjectArray JNICALL
-Java_com_dark_networking_WebNative_nativeSearch(
+Java_com_moorixlabs_networking_WebNative_nativeSearch(
     JNIEnv* env,
     jobject,
     jstring jQuery,
@@ -147,17 +147,17 @@ Java_com_dark_networking_WebNative_nativeSearch(
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_dark_networking_WebNative_nativeHasBackend(JNIEnv*, jobject) {
+Java_com_moorixlabs_networking_WebNative_nativeHasBackend(JNIEnv*, jobject) {
     return net::http_available() ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_dark_networking_WebNative_nativeBackendName(JNIEnv* env, jobject) {
+Java_com_moorixlabs_networking_WebNative_nativeBackendName(JNIEnv* env, jobject) {
     return env->NewStringUTF(net::http_backend_name());
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_dark_networking_WebNative_nativeSetCaBundle(JNIEnv* env, jobject, jstring jPath) {
+Java_com_moorixlabs_networking_WebNative_nativeSetCaBundle(JNIEnv* env, jobject, jstring jPath) {
     const char* p = env->GetStringUTFChars(jPath, nullptr);
     std::string path = p ? p : "";
     if (p) env->ReleaseStringUTFChars(jPath, p);
@@ -165,7 +165,7 @@ Java_com_dark_networking_WebNative_nativeSetCaBundle(JNIEnv* env, jobject, jstri
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_dark_networking_WebNative_nativeSetProfile(JNIEnv* env, jobject, jstring jProfile) {
+Java_com_moorixlabs_networking_WebNative_nativeSetProfile(JNIEnv* env, jobject, jstring jProfile) {
     const char* p = env->GetStringUTFChars(jProfile, nullptr);
     std::string prof = p ? p : "";
     if (p) env->ReleaseStringUTFChars(jProfile, p);
@@ -173,7 +173,7 @@ Java_com_dark_networking_WebNative_nativeSetProfile(JNIEnv* env, jobject, jstrin
 }
 
 extern "C" JNIEXPORT jobjectArray JNICALL
-Java_com_dark_networking_WebNative_nativeFetch(
+Java_com_moorixlabs_networking_WebNative_nativeFetch(
     JNIEnv* env,
     jobject,
     jstring jUrl,
@@ -281,7 +281,7 @@ std::string find_header(const std::vector<net::Header>& headers, const std::stri
 }
 
 extern "C" JNIEXPORT jobjectArray JNICALL
-Java_com_dark_networking_WebNative_nativeFetchBytes(
+Java_com_moorixlabs_networking_WebNative_nativeFetchBytes(
     JNIEnv* env,
     jobject,
     jstring jUrl,

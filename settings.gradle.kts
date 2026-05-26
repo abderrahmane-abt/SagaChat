@@ -22,15 +22,10 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Tool-Neuron"
+rootProject.name = "SagaChat"
 include(":app")
 include(":hxs")
 include(":hxs_encryptor")
 include(":download_manager")
 include(":networking")
-include(":native-server")
-include(":plugin-exc")
-include(":plugin-api")
-include(":plugins:notes")
-include(":plugins:counter")
-include(":plugins:expense")
+

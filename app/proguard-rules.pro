@@ -1,7 +1,7 @@
 # NavScreens — sealed class routes must survive shrinking so Navigation
 # can resolve destinations by route string at runtime.
--keep class com.dark.tool_neuron.model.NavScreens { *; }
--keep class com.dark.tool_neuron.model.NavScreens$* { *; }
+-keep class com.moorixlabs.sagachat.model.NavScreens { *; }
+-keep class com.moorixlabs.sagachat.model.NavScreens$* { *; }
 
 # Kotlin serialization — keeps @Serializable class structure intact.
 -keepattributes *Annotation*, InnerClasses, Signature, EnclosingMethod
@@ -21,25 +21,25 @@
 # Prebuilt AARs in libs/ — already minified, expose JNI entry points via specific
 # class+method names. R8 must not rename or strip these or the dlsym/JNI lookups
 # inside libgguf_lib.so / libai_sherpa.so fail at runtime.
--keep class com.dark.gguf_lib.** { *; }
--keep class com.dark.ai_sherpa.** { *; }
--keep class com.dark.ai_sd.** { *; }
--dontwarn com.dark.gguf_lib.**
--dontwarn com.dark.ai_sherpa.**
--dontwarn com.dark.ai_sd.**
+-keep class com.moorixlabs.gguf_lib.** { *; }
+-keep class com.moorixlabs.ai_sherpa.** { *; }
+-keep class com.moorixlabs.ai_sd.** { *; }
+-dontwarn com.moorixlabs.gguf_lib.**
+-dontwarn com.moorixlabs.ai_sherpa.**
+-dontwarn com.moorixlabs.ai_sd.**
 
 # Local native modules — explicit keeps to satisfy R8 whole-program analysis
--keep class com.dark.hxs.** { *; }
--keep class com.dark.hxs_encryptor.** { *; }
--keep class com.dark.download_manager.** { *; }
--keep class com.dark.native_server.** { *; }
--keep class com.dark.networking.** { *; }
+-keep class com.moorixlabs.hxs.** { *; }
+-keep class com.moorixlabs.hxs_encryptor.** { *; }
+-keep class com.moorixlabs.download_manager.** { *; }
+-keep class com.moorixlabs.native_server.** { *; }
+-keep class com.moorixlabs.networking.** { *; }
 
--dontwarn com.dark.hxs.**
--dontwarn com.dark.hxs_encryptor.**
--dontwarn com.dark.download_manager.**
--dontwarn com.dark.native_server.**
--dontwarn com.dark.networking.**
+-dontwarn com.moorixlabs.hxs.**
+-dontwarn com.moorixlabs.hxs_encryptor.**
+-dontwarn com.moorixlabs.download_manager.**
+-dontwarn com.moorixlabs.native_server.**
+-dontwarn com.moorixlabs.networking.**
 
 # ============================================================================
 # Plugin host runtime contract
@@ -55,8 +55,8 @@
 # ============================================================================
 
 # Plugin SPI — already in plugin-api consumer-rules but kept here for clarity.
--keep class com.dark.plugin_api.** { *; }
--keep interface com.dark.plugin_api.** { *; }
+-keep class com.moorixlabs.plugin_api.** { *; }
+-keep interface com.moorixlabs.plugin_api.** { *; }
 
 # Kotlin stdlib — Metadata, intrinsics, top-level Kt files (LazyKt, TuplesKt,
 # CollectionsKt, StringsKt, ...), coroutine continuations, math, random, reflect.

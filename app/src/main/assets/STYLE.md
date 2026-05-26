@@ -1,6 +1,6 @@
 # Asset HTML style guide
 
-These two files (`server_webui.html`, `server_docs.html`) are the bundled UI for the embedded HTTP server. The `:server` process serves them as static strings at `/`, `/webui`, and `/docs`. **They run in third-party browsers on the LAN — they must be self-contained, fast, and indistinguishable in feel from the rest of ToolNeuron.**
+These two files (`server_webui.html`, `server_docs.html`) are the bundled UI for the embedded HTTP server. The `:server` process serves them as static strings at `/`, `/webui`, and `/docs`. **They run in third-party browsers on the LAN — they must be self-contained, fast, and indistinguishable in feel from the rest of SagaChat.**
 
 ## Constraints (non-negotiable)
 
@@ -31,7 +31,7 @@ Both files share the same token set. **Don't drift.** If you want to add a token
 --code-bg:#F4F4F6;
 ```
 
-Both palettes are aligned with the marketing site (`/home/home/WebstormProjects/ToolNeuron-Web`). If you change the website palette, update these too — the user notices.
+Both palettes are aligned with the marketing site (`/home/home/WebstormProjects/SagaChat-Web`). If you change the website palette, update these too — the user notices.
 
 ### Radii
 
@@ -244,4 +244,4 @@ assets/
 - No service-side analytics — see "no telemetry."
 - No tooltips on buttons — `aria-label` + `title` is enough.
 
-If you find yourself adding any of these, stop and ask whether the asset is the right place. The chat UI inside the app (`com.dark.tool_neuron.ui.screens.home_screen`) is the rich surface. These two files are the polite, lean, embeddable face of the same model.
+If you find yourself adding any of these, stop and ask whether the asset is the right place. The chat UI inside the app (`com.moorixlabs.sagachat.ui.screens.home_screen`) is the rich surface. These two files are the polite, lean, embeddable face of the same model.

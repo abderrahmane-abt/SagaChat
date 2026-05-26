@@ -174,7 +174,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void*) {
 // ── Vault lifecycle ──
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_hxs_HexStorage_nativeCreatePlaintext(
+Java_com_moorixlabs_hxs_HexStorage_nativeCreatePlaintext(
     JNIEnv* env, jobject, jstring basePath
 ) {
     std::lock_guard lock(g_mtx);
@@ -189,7 +189,7 @@ Java_com_dark_hxs_HexStorage_nativeCreatePlaintext(
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_hxs_HexStorage_nativeOpenPlaintext(
+Java_com_moorixlabs_hxs_HexStorage_nativeOpenPlaintext(
     JNIEnv* env, jobject, jstring basePath
 ) {
     std::lock_guard lock(g_mtx);
@@ -211,7 +211,7 @@ Java_com_dark_hxs_HexStorage_nativeOpenPlaintext(
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_hxs_HexStorage_nativeCreateEncrypted(
+Java_com_moorixlabs_hxs_HexStorage_nativeCreateEncrypted(
     JNIEnv* env, jobject, jstring basePath,
     jbyteArray appKey, jbyteArray userKey, jobject encryptor
 ) {
@@ -246,7 +246,7 @@ Java_com_dark_hxs_HexStorage_nativeCreateEncrypted(
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_hxs_HexStorage_nativeOpenEncrypted(
+Java_com_moorixlabs_hxs_HexStorage_nativeOpenEncrypted(
     JNIEnv* env, jobject, jstring basePath,
     jbyteArray appKey, jbyteArray userKey, jobject encryptor
 ) {
@@ -286,7 +286,7 @@ Java_com_dark_hxs_HexStorage_nativeOpenEncrypted(
 }
 
 JNIEXPORT void JNICALL
-Java_com_dark_hxs_HexStorage_nativeClose(JNIEnv* env, jobject) {
+Java_com_moorixlabs_hxs_HexStorage_nativeClose(JNIEnv* env, jobject) {
     std::lock_guard lock(g_mtx);
     if (!g_open) return;
 
@@ -310,7 +310,7 @@ Java_com_dark_hxs_HexStorage_nativeClose(JNIEnv* env, jobject) {
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_hxs_HexStorage_nativeExists(JNIEnv* env, jobject, jstring basePath) {
+Java_com_moorixlabs_hxs_HexStorage_nativeExists(JNIEnv* env, jobject, jstring basePath) {
     std::string path = jstring_to_string(env, basePath) + "/manifest.hxs";
     return (access(path.c_str(), F_OK) == 0) ? JNI_TRUE : JNI_FALSE;
 }
@@ -318,14 +318,14 @@ Java_com_dark_hxs_HexStorage_nativeExists(JNIEnv* env, jobject, jstring basePath
 // ── Collection management ──
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_hxs_HexStorage_nativeEnsureCollection(JNIEnv* env, jobject, jstring name) {
+Java_com_moorixlabs_hxs_HexStorage_nativeEnsureCollection(JNIEnv* env, jobject, jstring name) {
     std::lock_guard lock(g_mtx);
     if (!g_open) return JNI_FALSE;
     return ensure_collection(jstring_to_string(env, name)) ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT void JNICALL
-Java_com_dark_hxs_HexStorage_nativeDropCollection(JNIEnv* env, jobject, jstring name) {
+Java_com_moorixlabs_hxs_HexStorage_nativeDropCollection(JNIEnv* env, jobject, jstring name) {
     std::lock_guard lock(g_mtx);
     if (!g_open) return;
     std::string n = jstring_to_string(env, name);
@@ -339,7 +339,7 @@ Java_com_dark_hxs_HexStorage_nativeDropCollection(JNIEnv* env, jobject, jstring 
 }
 
 JNIEXPORT jobjectArray JNICALL
-Java_com_dark_hxs_HexStorage_nativeListCollections(JNIEnv* env, jobject) {
+Java_com_moorixlabs_hxs_HexStorage_nativeListCollections(JNIEnv* env, jobject) {
     std::lock_guard lock(g_mtx);
     if (!g_open) return nullptr;
 
@@ -356,7 +356,7 @@ Java_com_dark_hxs_HexStorage_nativeListCollections(JNIEnv* env, jobject) {
 // ── CRUD ──
 
 JNIEXPORT jint JNICALL
-Java_com_dark_hxs_HexStorage_nativePut(
+Java_com_moorixlabs_hxs_HexStorage_nativePut(
     JNIEnv* env, jobject, jstring collection, jbyteArray recordData
 ) {
     std::lock_guard lock(g_mtx);
@@ -371,7 +371,7 @@ Java_com_dark_hxs_HexStorage_nativePut(
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_hxs_HexStorage_nativeUpdate(
+Java_com_moorixlabs_hxs_HexStorage_nativeUpdate(
     JNIEnv* env, jobject, jstring collection, jbyteArray recordData
 ) {
     std::lock_guard lock(g_mtx);
@@ -386,7 +386,7 @@ Java_com_dark_hxs_HexStorage_nativeUpdate(
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_dark_hxs_HexStorage_nativeGet(
+Java_com_moorixlabs_hxs_HexStorage_nativeGet(
     JNIEnv* env, jobject, jstring collection, jint recordId
 ) {
     std::lock_guard lock(g_mtx);
@@ -403,7 +403,7 @@ Java_com_dark_hxs_HexStorage_nativeGet(
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_hxs_HexStorage_nativeDelete(
+Java_com_moorixlabs_hxs_HexStorage_nativeDelete(
     JNIEnv* env, jobject, jstring collection, jint recordId
 ) {
     std::lock_guard lock(g_mtx);
@@ -416,7 +416,7 @@ Java_com_dark_hxs_HexStorage_nativeDelete(
 }
 
 JNIEXPORT jint JNICALL
-Java_com_dark_hxs_HexStorage_nativeCount(
+Java_com_moorixlabs_hxs_HexStorage_nativeCount(
     JNIEnv* env, jobject, jstring collection
 ) {
     std::lock_guard lock(g_mtx);
@@ -427,7 +427,7 @@ Java_com_dark_hxs_HexStorage_nativeCount(
 }
 
 JNIEXPORT jobjectArray JNICALL
-Java_com_dark_hxs_HexStorage_nativeGetAll(
+Java_com_moorixlabs_hxs_HexStorage_nativeGetAll(
     JNIEnv* env, jobject, jstring collection
 ) {
     std::lock_guard lock(g_mtx);
@@ -452,7 +452,7 @@ Java_com_dark_hxs_HexStorage_nativeGetAll(
 // ── Indexing ──
 
 JNIEXPORT void JNICALL
-Java_com_dark_hxs_HexStorage_nativeAddIndex(
+Java_com_moorixlabs_hxs_HexStorage_nativeAddIndex(
     JNIEnv* env, jobject, jstring collection, jint tag, jint wireType
 ) {
     std::lock_guard lock(g_mtx);
@@ -463,7 +463,7 @@ Java_com_dark_hxs_HexStorage_nativeAddIndex(
 }
 
 JNIEXPORT void JNICALL
-Java_com_dark_hxs_HexStorage_nativeRemoveIndex(
+Java_com_moorixlabs_hxs_HexStorage_nativeRemoveIndex(
     JNIEnv* env, jobject, jstring collection, jint tag
 ) {
     std::lock_guard lock(g_mtx);
@@ -475,7 +475,7 @@ Java_com_dark_hxs_HexStorage_nativeRemoveIndex(
 // ── Queries ──
 
 JNIEXPORT jobjectArray JNICALL
-Java_com_dark_hxs_HexStorage_nativeQueryString(
+Java_com_moorixlabs_hxs_HexStorage_nativeQueryString(
     JNIEnv* env, jobject, jstring collection, jint tag, jstring value
 ) {
     std::lock_guard lock(g_mtx);
@@ -499,7 +499,7 @@ Java_com_dark_hxs_HexStorage_nativeQueryString(
 }
 
 JNIEXPORT jobjectArray JNICALL
-Java_com_dark_hxs_HexStorage_nativeQueryInt(
+Java_com_moorixlabs_hxs_HexStorage_nativeQueryInt(
     JNIEnv* env, jobject, jstring collection, jint tag, jlong value
 ) {
     std::lock_guard lock(g_mtx);
@@ -523,7 +523,7 @@ Java_com_dark_hxs_HexStorage_nativeQueryInt(
 }
 
 JNIEXPORT jobjectArray JNICALL
-Java_com_dark_hxs_HexStorage_nativeQueryRange(
+Java_com_moorixlabs_hxs_HexStorage_nativeQueryRange(
     JNIEnv* env, jobject, jstring collection, jint tag, jlong minVal, jlong maxVal
 ) {
     std::lock_guard lock(g_mtx);
@@ -550,7 +550,7 @@ Java_com_dark_hxs_HexStorage_nativeQueryRange(
 // ── Flush ──
 
 JNIEXPORT void JNICALL
-Java_com_dark_hxs_HexStorage_nativeFlush(JNIEnv* env, jobject, jstring collection) {
+Java_com_moorixlabs_hxs_HexStorage_nativeFlush(JNIEnv* env, jobject, jstring collection) {
     std::lock_guard lock(g_mtx);
     if (!g_open) return;
     std::string name = jstring_to_string(env, collection);
@@ -559,7 +559,7 @@ Java_com_dark_hxs_HexStorage_nativeFlush(JNIEnv* env, jobject, jstring collectio
 }
 
 JNIEXPORT void JNICALL
-Java_com_dark_hxs_HexStorage_nativeFlushAll(JNIEnv*, jobject) {
+Java_com_moorixlabs_hxs_HexStorage_nativeFlushAll(JNIEnv*, jobject) {
     std::lock_guard lock(g_mtx);
     if (!g_open) return;
     for (auto& [_, coll] : g_collections) coll->flush();
@@ -569,7 +569,7 @@ Java_com_dark_hxs_HexStorage_nativeFlushAll(JNIEnv*, jobject) {
 // ── Schema version ──
 
 JNIEXPORT jint JNICALL
-Java_com_dark_hxs_HexStorage_nativeGetSchemaVersion(
+Java_com_moorixlabs_hxs_HexStorage_nativeGetSchemaVersion(
     JNIEnv* env, jobject, jstring collection
 ) {
     std::lock_guard lock(g_mtx);
@@ -579,7 +579,7 @@ Java_com_dark_hxs_HexStorage_nativeGetSchemaVersion(
 }
 
 JNIEXPORT void JNICALL
-Java_com_dark_hxs_HexStorage_nativeSetSchemaVersion(
+Java_com_moorixlabs_hxs_HexStorage_nativeSetSchemaVersion(
     JNIEnv* env, jobject, jstring collection, jint version
 ) {
     std::lock_guard lock(g_mtx);
@@ -591,7 +591,7 @@ Java_com_dark_hxs_HexStorage_nativeSetSchemaVersion(
 // ── RAG keyword index (BM25) ──
 
 JNIEXPORT jint JNICALL
-Java_com_dark_hxs_HexStorage_nativeRagIngest(
+Java_com_moorixlabs_hxs_HexStorage_nativeRagIngest(
     JNIEnv* env, jobject, jstring collection,
     jstring docId, jstring chatId, jstring sourceId,
     jint chunkIndex, jstring text
@@ -610,7 +610,7 @@ Java_com_dark_hxs_HexStorage_nativeRagIngest(
 }
 
 JNIEXPORT jint JNICALL
-Java_com_dark_hxs_HexStorage_nativeRagRemoveDocument(
+Java_com_moorixlabs_hxs_HexStorage_nativeRagRemoveDocument(
     JNIEnv* env, jobject, jstring collection, jstring docId
 ) {
     std::lock_guard lock(g_mtx);
@@ -621,7 +621,7 @@ Java_com_dark_hxs_HexStorage_nativeRagRemoveDocument(
 }
 
 JNIEXPORT void JNICALL
-Java_com_dark_hxs_HexStorage_nativeRagClear(
+Java_com_moorixlabs_hxs_HexStorage_nativeRagClear(
     JNIEnv* env, jobject, jstring collection
 ) {
     std::lock_guard lock(g_mtx);
@@ -631,7 +631,7 @@ Java_com_dark_hxs_HexStorage_nativeRagClear(
 }
 
 JNIEXPORT jint JNICALL
-Java_com_dark_hxs_HexStorage_nativeRagDocCount(
+Java_com_moorixlabs_hxs_HexStorage_nativeRagDocCount(
     JNIEnv* env, jobject, jstring collection, jstring docId
 ) {
     std::lock_guard lock(g_mtx);
@@ -642,7 +642,7 @@ Java_com_dark_hxs_HexStorage_nativeRagDocCount(
 }
 
 JNIEXPORT jobjectArray JNICALL
-Java_com_dark_hxs_HexStorage_nativeRagQuery(
+Java_com_moorixlabs_hxs_HexStorage_nativeRagQuery(
     JNIEnv* env, jobject, jstring collection,
     jstring queryText, jstring chatId, jint topK
 ) {

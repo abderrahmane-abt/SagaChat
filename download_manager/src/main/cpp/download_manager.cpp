@@ -16,7 +16,7 @@ extern "C" {
 // ── File I/O engine ───────────────────────────────────────────────────────────
 
 JNIEXPORT jlong JNICALL
-Java_com_dark_download_1manager_HxdNative_nativePrepare(
+Java_com_moorixlabs_download_1manager_HxdNative_nativePrepare(
         JNIEnv* env, jobject, jint id, jstring dest_j) {
     const char* dest = env->GetStringUTFChars(dest_j, nullptr);
     int64_t offset = DownloadEngine::instance().prepare((int)id, dest);
@@ -27,13 +27,13 @@ Java_com_dark_download_1manager_HxdNative_nativePrepare(
 }
 
 JNIEXPORT void JNICALL
-Java_com_dark_download_1manager_HxdNative_nativeSetTotal(
+Java_com_moorixlabs_download_1manager_HxdNative_nativeSetTotal(
         JNIEnv*, jobject, jint id, jlong total) {
     DownloadEngine::instance().set_total((int)id, (int64_t)total);
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_download_1manager_HxdNative_nativeWriteChunk(
+Java_com_moorixlabs_download_1manager_HxdNative_nativeWriteChunk(
         JNIEnv* env, jobject, jint id, jbyteArray data, jint offset, jint len) {
     jbyte* buf = env->GetByteArrayElements(data, nullptr);
     bool ok = DownloadEngine::instance().write_chunk(
@@ -43,7 +43,7 @@ Java_com_dark_download_1manager_HxdNative_nativeWriteChunk(
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_download_1manager_HxdNative_nativeComplete(
+Java_com_moorixlabs_download_1manager_HxdNative_nativeComplete(
         JNIEnv*, jobject, jint id) {
     bool ok = DownloadEngine::instance().complete((int)id);
     LOGD("complete id=%d success=%d", (int)id, ok);
@@ -51,26 +51,26 @@ Java_com_dark_download_1manager_HxdNative_nativeComplete(
 }
 
 JNIEXPORT void JNICALL
-Java_com_dark_download_1manager_HxdNative_nativeFail(
+Java_com_moorixlabs_download_1manager_HxdNative_nativeFail(
         JNIEnv*, jobject, jint id) {
     DownloadEngine::instance().fail((int)id);
 }
 
 JNIEXPORT void JNICALL
-Java_com_dark_download_1manager_HxdNative_nativeCancel(
+Java_com_moorixlabs_download_1manager_HxdNative_nativeCancel(
         JNIEnv*, jobject, jint id) {
     DownloadEngine::instance().cancel((int)id);
 }
 
 JNIEXPORT void JNICALL
-Java_com_dark_download_1manager_HxdNative_nativePause(
+Java_com_moorixlabs_download_1manager_HxdNative_nativePause(
         JNIEnv*, jobject, jint id) {
     DownloadEngine::instance().pause((int)id);
 }
 
 // Returns [downloaded_bytes, total_bytes, speed_bps, state_ordinal]
 JNIEXPORT jlongArray JNICALL
-Java_com_dark_download_1manager_HxdNative_nativeGetProgress(
+Java_com_moorixlabs_download_1manager_HxdNative_nativeGetProgress(
         JNIEnv* env, jobject, jint id) {
     ProgressInfo p = DownloadEngine::instance().get_progress((int)id);
     jlongArray arr = env->NewLongArray(4);
@@ -80,7 +80,7 @@ Java_com_dark_download_1manager_HxdNative_nativeGetProgress(
 }
 
 JNIEXPORT void JNICALL
-Java_com_dark_download_1manager_HxdNative_nativeCleanup(
+Java_com_moorixlabs_download_1manager_HxdNative_nativeCleanup(
         JNIEnv*, jobject, jint id) {
     DownloadEngine::instance().cleanup((int)id);
 }
@@ -89,7 +89,7 @@ Java_com_dark_download_1manager_HxdNative_nativeCleanup(
 
 // Each task is represented as 6 parallel arrays for efficient JNI transfer.
 JNIEXPORT jboolean JNICALL
-Java_com_dark_download_1manager_HxdNative_nativeSaveQueue(
+Java_com_moorixlabs_download_1manager_HxdNative_nativeSaveQueue(
         JNIEnv* env, jobject,
         jstring   path_j,
         jintArray ids_j,
@@ -141,7 +141,7 @@ Java_com_dark_download_1manager_HxdNative_nativeSaveQueue(
 
 // Returns Array<Array<String>> — each inner array: [id, state, downloaded, total, url, destPath]
 JNIEXPORT jobjectArray JNICALL
-Java_com_dark_download_1manager_HxdNative_nativeLoadQueue(
+Java_com_moorixlabs_download_1manager_HxdNative_nativeLoadQueue(
         JNIEnv* env, jobject, jstring path_j) {
     const char* path = env->GetStringUTFChars(path_j, nullptr);
     std::vector<PersistedTask> tasks = load_queue(path);

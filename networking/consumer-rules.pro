@@ -1,7 +1,7 @@
--keep class com.dark.networking.WebNative {
+-keep class com.moorixlabs.networking.WebNative {
     native <methods>;
     public <methods>;
 }
--keep class com.dark.networking.WebResponse { *; }
--keep class com.dark.networking.WebBytesResponse { *; }
--keep class com.dark.networking.WebSearchResult { *; }
+-keep class com.moorixlabs.networking.WebResponse { *; }
+-keep class com.moorixlabs.networking.WebBytesResponse { *; }
+-keep class com.moorixlabs.networking.WebSearchResult { *; }

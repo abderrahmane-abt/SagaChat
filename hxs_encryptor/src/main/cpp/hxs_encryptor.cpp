@@ -53,7 +53,7 @@ extern "C" {
 // ── Encrypt (auto cipher selection) ──
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeEncrypt(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativeEncrypt(
     JNIEnv* env, jobject, jbyteArray plaintext, jbyteArray key, jbyteArray aad
 ) {
     JniBytes pt(env, plaintext);
@@ -72,7 +72,7 @@ Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeEncrypt(
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeDecrypt(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativeDecrypt(
     JNIEnv* env, jobject, jbyteArray sealed_data, jbyteArray key, jbyteArray aad
 ) {
     JniBytes sd(env, sealed_data);
@@ -93,7 +93,7 @@ Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeDecrypt(
 // ── HKDF-SHA256 ──
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeDeriveKey(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativeDeriveKey(
     JNIEnv* env, jobject, jbyteArray ikm, jbyteArray salt, jstring info
 ) {
     JniBytes i(env, ikm);
@@ -122,7 +122,7 @@ Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeDeriveKey(
 // ── Argon2id ──
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeArgon2id(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativeArgon2id(
     JNIEnv* env, jobject,
     jbyteArray password, jbyteArray salt_arr,
     jint t_cost, jint m_cost, jint parallelism, jint hash_len
@@ -153,7 +153,7 @@ Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeArgon2id(
 // ── PBKDF2-SHA256 (fallback) ──
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativePbkdf2(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativePbkdf2(
     JNIEnv* env, jobject,
     jbyteArray password, jbyteArray salt_arr, jint iterations, jint keyLength
 ) {
@@ -176,7 +176,7 @@ Java_com_dark_hxs_1encryptor_HxsEncryptor_nativePbkdf2(
 // ── Random bytes ──
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeRandomBytes(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativeRandomBytes(
     JNIEnv* env, jobject, jint size
 ) {
     if (size <= 0) return nullptr;
@@ -194,7 +194,7 @@ Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeRandomBytes(
 // ── SHA-256 ──
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeSha256(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativeSha256(
     JNIEnv* env, jobject, jbyteArray data
 ) {
     JniBytes d(env, data);
@@ -208,7 +208,7 @@ Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeSha256(
 // ── Secure wipe ──
 
 JNIEXPORT void JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeSecureWipe(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativeSecureWipe(
     JNIEnv* env, jobject, jbyteArray data
 ) {
     if (!data) return;
@@ -223,7 +223,7 @@ Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeSecureWipe(
 // ── Cipher detection ──
 
 JNIEXPORT jint JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeDetectCipher(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativeDetectCipher(
     JNIEnv*, jobject
 ) {
     return static_cast<jint>(g_engine.detect_optimal_cipher());
@@ -232,35 +232,35 @@ Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeDetectCipher(
 // ── Integrity checks ──
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeIsDebuggerAttached(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativeIsDebuggerAttached(
     JNIEnv*, jobject
 ) {
     return static_cast<jboolean>(hxs::IntegrityGuard::is_debugger_attached());
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeBlockDebugger(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativeBlockDebugger(
     JNIEnv*, jobject
 ) {
     return static_cast<jboolean>(hxs::IntegrityGuard::block_debugger());
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeIsFridaPresent(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativeIsFridaPresent(
     JNIEnv*, jobject
 ) {
     return static_cast<jboolean>(hxs::IntegrityGuard::is_frida_present());
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeIsXposedPresent(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativeIsXposedPresent(
     JNIEnv*, jobject
 ) {
     return static_cast<jboolean>(hxs::IntegrityGuard::is_xposed_present());
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeVerifyApkSignature(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativeVerifyApkSignature(
     JNIEnv* env, jobject, jbyteArray expected, jbyteArray actual
 ) {
     JniBytes e(env, expected);
@@ -272,7 +272,7 @@ Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeVerifyApkSignature(
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeHashFile(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativeHashFile(
     JNIEnv* env, jobject, jstring path
 ) {
     if (!path) return nullptr;
@@ -289,7 +289,7 @@ Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeHashFile(
 // ── Hybrid KEM (X25519 + ML-KEM-768) ──
 
 JNIEXPORT jobjectArray JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeHybridKemKeygen(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativeHybridKemKeygen(
     JNIEnv* env, jobject
 ) {
     auto kp = hxs::HybridKem::keygen();
@@ -308,7 +308,7 @@ Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeHybridKemKeygen(
 }
 
 JNIEXPORT jobjectArray JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeHybridKemEncaps(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativeHybridKemEncaps(
     JNIEnv* env, jobject, jbyteArray public_key
 ) {
     JniBytes pk(env, public_key);
@@ -328,7 +328,7 @@ Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeHybridKemEncaps(
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeHybridKemDecaps(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativeHybridKemDecaps(
     JNIEnv* env, jobject, jbyteArray ciphertext, jbyteArray secret_key
 ) {
     JniBytes ct(env, ciphertext);
@@ -344,7 +344,7 @@ Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeHybridKemDecaps(
 // ── Hybrid Signatures (Ed25519 + ML-DSA-65) ──
 
 JNIEXPORT jobjectArray JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeHybridSignKeygen(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativeHybridSignKeygen(
     JNIEnv* env, jobject
 ) {
     auto kp = hxs::HybridSign::keygen();
@@ -361,7 +361,7 @@ Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeHybridSignKeygen(
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeHybridSign(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativeHybridSign(
     JNIEnv* env, jobject, jbyteArray message, jbyteArray secret_key
 ) {
     JniBytes msg(env, message);
@@ -375,7 +375,7 @@ Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeHybridSign(
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeHybridVerify(
+Java_com_moorixlabs_hxs_1encryptor_HxsEncryptor_nativeHybridVerify(
     JNIEnv* env, jobject, jbyteArray message, jbyteArray signature, jbyteArray public_key
 ) {
     JniBytes msg(env, message);
@@ -389,7 +389,7 @@ Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeHybridVerify(
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_hxs_1encryptor_PolicyEngine_nativeIsAllowed(
+Java_com_moorixlabs_hxs_1encryptor_PolicyEngine_nativeIsAllowed(
     JNIEnv* env, jclass, jint feature_id, jbyteArray token
 ) {
     JniBytes t(env, token);
@@ -403,49 +403,49 @@ Java_com_dark_hxs_1encryptor_PolicyEngine_nativeIsAllowed(
 }
 
 JNIEXPORT void JNICALL
-Java_com_dark_hxs_1encryptor_PolicyEngine_nativeSetPassthrough(
+Java_com_moorixlabs_hxs_1encryptor_PolicyEngine_nativeSetPassthrough(
     JNIEnv*, jclass, jboolean passthrough
 ) {
     hxs::policy::set_passthrough(static_cast<bool>(passthrough));
 }
 
 JNIEXPORT void JNICALL
-Java_com_dark_hxs_1encryptor_PolicyEngine_nativeMarkTampered(
+Java_com_moorixlabs_hxs_1encryptor_PolicyEngine_nativeMarkTampered(
     JNIEnv*, jclass
 ) {
     hxs::policy::mark_tampered();
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_hxs_1encryptor_PolicyEngine_nativeIsTampered(
+Java_com_moorixlabs_hxs_1encryptor_PolicyEngine_nativeIsTampered(
     JNIEnv*, jclass
 ) {
     return static_cast<jboolean>(hxs::policy::is_tampered());
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_hxs_1encryptor_PolicyEngine_nativeHasSession(
+Java_com_moorixlabs_hxs_1encryptor_PolicyEngine_nativeHasSession(
     JNIEnv*, jclass
 ) {
     return static_cast<jboolean>(hxs::policy::has_session());
 }
 
 JNIEXPORT void JNICALL
-Java_com_dark_hxs_1encryptor_PolicyEngine_nativeInvalidateSession(
+Java_com_moorixlabs_hxs_1encryptor_PolicyEngine_nativeInvalidateSession(
     JNIEnv*, jclass
 ) {
     hxs::policy::invalidate_session();
 }
 
 JNIEXPORT void JNICALL
-Java_com_dark_hxs_1encryptor_PolicyEngine_nativeResetForTesting(
+Java_com_moorixlabs_hxs_1encryptor_PolicyEngine_nativeResetForTesting(
     JNIEnv*, jclass
 ) {
     hxs::policy::reset_for_testing();
 }
 
 JNIEXPORT jint JNICALL
-Java_com_dark_hxs_1encryptor_BootIntegrity_nativeBootVerify(
+Java_com_moorixlabs_hxs_1encryptor_BootIntegrity_nativeBootVerify(
     JNIEnv* env, jclass, jobjectArray lib_paths, jobjectArray lib_hashes
 ) {
     if (lib_paths == nullptr || lib_hashes == nullptr) {
@@ -492,14 +492,14 @@ Java_com_dark_hxs_1encryptor_BootIntegrity_nativeBootVerify(
 }
 
 JNIEXPORT void JNICALL
-Java_com_dark_hxs_1encryptor_BootIntegrity_nativeHardFail(
+Java_com_moorixlabs_hxs_1encryptor_BootIntegrity_nativeHardFail(
     JNIEnv*, jclass, jint reason
 ) {
     hxs::boot::hard_fail(static_cast<uint32_t>(reason));
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_hxs_1encryptor_BootIntegrity_nativeSetRelaxedForTesting(
+Java_com_moorixlabs_hxs_1encryptor_BootIntegrity_nativeSetRelaxedForTesting(
     JNIEnv*, jclass, jboolean relaxed
 ) {
     return static_cast<jboolean>(
@@ -508,21 +508,21 @@ Java_com_dark_hxs_1encryptor_BootIntegrity_nativeSetRelaxedForTesting(
 }
 
 JNIEXPORT void JNICALL
-Java_com_dark_hxs_1encryptor_BootIntegrity_nativeInstallPtrace(
+Java_com_moorixlabs_hxs_1encryptor_BootIntegrity_nativeInstallPtrace(
     JNIEnv*, jclass
 ) {
     hxs::boot::install_ptrace_self_trace();
 }
 
 JNIEXPORT jint JNICALL
-Java_com_dark_hxs_1encryptor_BootIntegrity_nativeScanEnvironment(
+Java_com_moorixlabs_hxs_1encryptor_BootIntegrity_nativeScanEnvironment(
     JNIEnv*, jclass
 ) {
     return static_cast<jint>(hxs::boot::scan_process_environment());
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_dark_hxs_1encryptor_BootIntegrity_nativeHashFile(
+Java_com_moorixlabs_hxs_1encryptor_BootIntegrity_nativeHashFile(
     JNIEnv* env, jclass, jstring path
 ) {
     if (!path) return nullptr;
@@ -535,7 +535,7 @@ Java_com_dark_hxs_1encryptor_BootIntegrity_nativeHashFile(
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_dark_hxs_1encryptor_BootIntegrity_nativeVerifyHookBaselines(
+Java_com_moorixlabs_hxs_1encryptor_BootIntegrity_nativeVerifyHookBaselines(
     JNIEnv*, jclass
 ) {
     return static_cast<jboolean>(hxs::boot::verify_hook_baselines());
@@ -548,7 +548,7 @@ jint JNI_OnLoad(JavaVM*, void*) {
 }
 
 JNIEXPORT jobjectArray JNICALL
-Java_com_dark_hxs_1encryptor_AuthNative_nativeSetup(
+Java_com_moorixlabs_hxs_1encryptor_AuthNative_nativeSetup(
     JNIEnv* env, jclass, jbyteArray pin
 ) {
     JniBytes p(env, pin);
@@ -568,7 +568,7 @@ Java_com_dark_hxs_1encryptor_AuthNative_nativeSetup(
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_dark_hxs_1encryptor_AuthNative_nativeVerify(
+Java_com_moorixlabs_hxs_1encryptor_AuthNative_nativeVerify(
     JNIEnv* env, jclass, jbyteArray pin, jbyteArray salt, jbyteArray stored_hash
 ) {
     JniBytes p(env, pin);
@@ -589,7 +589,7 @@ Java_com_dark_hxs_1encryptor_AuthNative_nativeVerify(
 }
 
 JNIEXPORT void JNICALL
-Java_com_dark_hxs_1encryptor_AuthNative_nativeInvalidate(
+Java_com_moorixlabs_hxs_1encryptor_AuthNative_nativeInvalidate(
     JNIEnv*, jclass
 ) {
     hxs::auth::invalidate();

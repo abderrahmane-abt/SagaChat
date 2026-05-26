@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace  = "com.dark.download_manager"
+    namespace  = "com.moorixlabs.download_manager"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -34,7 +34,7 @@ android {
     externalNativeBuild {
         cmake {
             path    = file("src/main/cpp/CMakeLists.txt")
-            version = "3.31.4"
+            version = "3.22.1"
         }
     }
 

@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "com.dark.hxs"
+    namespace = "com.moorixlabs.hxs"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -37,7 +37,7 @@ android {
     externalNativeBuild {
         cmake {
             path("src/main/cpp/CMakeLists.txt")
-            version = "3.31.4"
+            version = "3.22.1"
         }
     }
 

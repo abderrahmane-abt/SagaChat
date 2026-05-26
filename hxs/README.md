@@ -286,7 +286,7 @@ HXS is schema-free at the storage level — any record can have any fields. But 
 ### Structure
 
 ```
-app/src/main/java/com/dark/tool_neuron/data/schema/
+app/src/main/java/com/moorixlabs/sagachat/data/schema/
 ├── ChatSchema.kt
 ├── MessageSchema.kt
 ├── PersonaSchema.kt
@@ -490,7 +490,7 @@ hxs/
 │   │   ├── collection.h/cpp     # Collection engine (mmap, RWLock, LZ4, crypto)
 │   │   ├── manifest.h/cpp       # Vault metadata, collection registry, DEK
 │   │   └── hxs.cpp              # JNI bridge
-│   └── java/com/dark/hxs/
+│   └── java/com/moorixlabs/hxs/
 │       └── HexStorage.kt        # Kotlin API + HxsRecord builder
 ```
 

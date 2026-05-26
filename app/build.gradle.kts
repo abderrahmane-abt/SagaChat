@@ -22,13 +22,13 @@ val hasReleaseSigning = tnKeystorePath != null &&
     tnKeyPassword != null
 
 android {
-    namespace = "com.dark.tool_neuron"
+    namespace = "com.moorixlabs.sagachat"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.dark.tool_neuron"
+        applicationId = "com.moorixlabs.sagachat"
         minSdk = 31
         targetSdk = 37
         versionCode = (rootProject.findProperty("tn.versionCode") as String).toInt()
@@ -115,15 +115,12 @@ dependencies {
     implementation(project(":hxs"))
     implementation(project(":download_manager"))
     implementation(project(":networking"))
-    implementation(project(":native-server"))
-    implementation(project(":plugin-api"))
-    implementation(project(":plugin-exc"))
+
 
     // AI inference AARs
     implementation(files("../libs/tn_security-release.aar"))
     implementation(files("../libs/gguf_lib-release.aar"))
-    implementation(files("../libs/ai_sherpa-release.aar"))
-    implementation(files("../libs/ai_sd-release.aar"))
+
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
 

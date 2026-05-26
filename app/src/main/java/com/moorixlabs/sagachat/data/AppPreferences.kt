@@ -1,0 +1,241 @@
+package com.moorixlabs.sagachat.data
+
+import android.content.Context
+import com.moorixlabs.hxs.HexStorage
+import com.moorixlabs.hxs.HxsRecord
+import com.moorixlabs.hxs_encryptor.HxsEncryptor
+import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.File
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class AppPreferences @Inject constructor(
+    @param:ApplicationContext private val context: Context,
+    private val keyStore: AppKeyStore,
+    private val encryptor: HxsEncryptor,
+) {
+
+    private val storage = HexStorage()
+    private val basePath: String
+
+    init {
+        val dir = context.filesDir.resolve("app_prefs")
+        dir.mkdirs()
+        basePath = dir.absolutePath
+
+        val dek = keyStore.unwrapOrCreateDek()
+        val signerHash = keyStore.installSignerHash()
+        val userKey = encryptor.deriveKey(ikm = dek, salt = signerHash, info = USER_KEY_INFO)
+
+        val opened = openOrRebuild(dek, userKey)
+        if (!opened) throw SecurityException("Failed to open encrypted app_prefs vault")
+
+        // userKey is NOT wiped: hxs.cpp holds a GlobalRef to this ByteArray for every encrypt/decrypt callback. Zeroing it would make every AEAD op use a zero key.
+
+        storage.ensureCollection(COLLECTION)
+        storage.addIndex(COLLECTION, TAG_KEY, HexStorage.WIRE_BYTES)
+    }
+
+    fun getBoolean(key: String, default: Boolean = false): Boolean =
+        findRecord(key)?.getBool(TAG_VALUE_BOOL, default) ?: default
+
+    fun putBoolean(key: String, value: Boolean) {
+        val existing = findRecord(key)
+        if (existing != null) {
+            existing.putBool(TAG_VALUE_BOOL, value)
+            storage.update(COLLECTION, existing)
+        } else {
+            val record = HxsRecord.build {
+                putString(TAG_KEY, key)
+                putBool(TAG_VALUE_BOOL, value)
+            }
+            storage.put(COLLECTION, record)
+        }
+        storage.flushAll()
+    }
+
+    fun getString(key: String, default: String = ""): String =
+        findRecord(key)?.getString(TAG_VALUE_STRING, default) ?: default
+
+    fun putString(key: String, value: String) {
+        val existing = findRecord(key)
+        if (existing != null) {
+            existing.putString(TAG_VALUE_STRING, value)
+            storage.update(COLLECTION, existing)
+        } else {
+            val record = HxsRecord.build {
+                putString(TAG_KEY, key)
+                putString(TAG_VALUE_STRING, value)
+            }
+            storage.put(COLLECTION, record)
+        }
+        storage.flushAll()
+    }
+
+    fun getBytes(key: String): ByteArray? =
+        findRecord(key)?.getBytes(TAG_VALUE_BYTES)
+
+    fun putBytes(key: String, value: ByteArray) {
+        val existing = findRecord(key)
+        if (existing != null) {
+            existing.putBytes(TAG_VALUE_BYTES, value)
+            storage.update(COLLECTION, existing)
+        } else {
+            val record = HxsRecord.build {
+                putString(TAG_KEY, key)
+                putBytes(TAG_VALUE_BYTES, value)
+            }
+            storage.put(COLLECTION, record)
+        }
+        storage.flushAll()
+    }
+
+    fun deleteKey(key: String) {
+        val existing = findRecord(key) ?: return
+        storage.delete(COLLECTION, existing.id)
+        storage.flushAll()
+    }
+
+    private fun findRecord(key: String): HxsRecord? =
+        storage.queryString(COLLECTION, TAG_KEY, key).firstOrNull()
+
+    var onboardingComplete: Boolean
+        get() = getBoolean(KEY_ONBOARDING_COMPLETE)
+        set(value) = putBoolean(KEY_ONBOARDING_COMPLETE, value)
+
+    var tcAccepted: Boolean
+        get() = getBoolean(KEY_TC_ACCEPTED)
+        set(value) = putBoolean(KEY_TC_ACCEPTED, value)
+
+    var setupDone: Boolean
+        get() = getBoolean(KEY_SETUP_DONE)
+        set(value) = putBoolean(KEY_SETUP_DONE, value)
+
+    var securitySetupDone: Boolean
+        get() = getBoolean(KEY_SECURITY_SETUP_DONE)
+        set(value) = putBoolean(KEY_SECURITY_SETUP_DONE, value)
+
+    var modelSetupDone: Boolean
+        get() = getBoolean(KEY_MODEL_SETUP_DONE)
+        set(value) = putBoolean(KEY_MODEL_SETUP_DONE, value)
+
+    var guideShown: Boolean
+        get() = getBoolean(KEY_GUIDE_SHOWN)
+        set(value) = putBoolean(KEY_GUIDE_SHOWN, value)
+
+    var rootWarningShown: Boolean
+        get() = getBoolean(KEY_ROOT_WARNING_SHOWN)
+        set(value) = putBoolean(KEY_ROOT_WARNING_SHOWN, value)
+
+    var hfSearchHistory: String
+        get() = getString(KEY_HF_SEARCH_HISTORY)
+        set(value) = putString(KEY_HF_SEARCH_HISTORY, value)
+
+    var hfTagsCatalogJson: String
+        get() = getString(KEY_HF_TAGS_CATALOG)
+        set(value) = putString(KEY_HF_TAGS_CATALOG, value)
+
+    var hfTagsCatalogSavedAt: Long
+        get() = getString(KEY_HF_TAGS_CATALOG_AT).toLongOrNull() ?: 0L
+        set(value) = putString(KEY_HF_TAGS_CATALOG_AT, value.toString())
+
+    var threadMode: Int
+        get() = getString(KEY_THREAD_MODE, DEFAULT_THREAD_MODE.toString()).toIntOrNull()?.coerceIn(0, 2)
+            ?: DEFAULT_THREAD_MODE
+        set(value) = putString(KEY_THREAD_MODE, value.coerceIn(0, 2).toString())
+
+    // ── Roleplay preferences ─────────────────────────────────────────────
+    var userDisplayName: String
+        get() = getString(KEY_USER_DISPLAY_NAME, "You")
+        set(v) = putString(KEY_USER_DISPLAY_NAME, v)
+
+    var responseLengthStyle: String
+        get() = getString(KEY_RESPONSE_LENGTH_STYLE, "medium")
+        set(v) = putString(KEY_RESPONSE_LENGTH_STYLE, v)
+
+    var memoryEnabled: Boolean
+        get() = getBoolean(KEY_MEMORY_ENABLED, true)
+        set(v) = putBoolean(KEY_MEMORY_ENABLED, v)
+
+    fun readAuthState(): AuthState {
+        val sealed = getBytes(KEY_AUTH_STATE) ?: return AuthState.DEFAULT
+        val plaintext = try {
+            encryptor.decrypt(sealed, deriveAuthKey(), AUTH_AAD)
+        } catch (_: SecurityException) {
+            return AuthState.DEFAULT
+        }
+        try {
+            return AuthState.decode(plaintext)
+        } finally {
+            encryptor.secureWipe(plaintext)
+        }
+    }
+
+    fun writeAuthState(state: AuthState) {
+        val plaintext = state.encode()
+        val sealed = try {
+            encryptor.encrypt(plaintext, deriveAuthKey(), AUTH_AAD)
+        } finally {
+            encryptor.secureWipe(plaintext)
+        }
+        putBytes(KEY_AUTH_STATE, sealed)
+    }
+
+    fun clearAuthState() {
+        deleteKey(KEY_AUTH_STATE)
+    }
+
+    private fun deriveAuthKey(): ByteArray {
+        val dek = keyStore.unwrapOrCreateDek()
+        val signerHash = keyStore.installSignerHash()
+        return encryptor.deriveKey(ikm = dek, salt = signerHash, info = AUTH_KEY_INFO)
+    }
+
+    private fun openOrRebuild(dek: ByteArray, userKey: ByteArray): Boolean {
+        if (storage.exists(basePath)) {
+            if (storage.openEncrypted(basePath, dek, userKey, encryptor)) return true
+            File(basePath).deleteRecursively()
+            File(basePath).mkdirs()
+        }
+        return storage.createEncrypted(basePath, dek, userKey, encryptor)
+    }
+
+    companion object {
+        private const val COLLECTION = "app_prefs"
+        private const val TAG_KEY = 1
+        private const val TAG_VALUE_BOOL = 2
+        private const val TAG_VALUE_STRING = 3
+        private const val TAG_VALUE_BYTES = 4
+
+        const val KEY_ONBOARDING_COMPLETE = "onboarding_complete"
+        const val KEY_TC_ACCEPTED = "tc_accepted"
+        const val KEY_SETUP_DONE = "setup_done"
+        const val KEY_SECURITY_SETUP_DONE = "security_setup_done"
+        const val KEY_MODEL_SETUP_DONE = "model_setup_done"
+        const val KEY_GUIDE_SHOWN = "guide_shown"
+        const val KEY_ROOT_WARNING_SHOWN = "root_warning_shown"
+        const val KEY_HF_SEARCH_HISTORY = "hf_search_history"
+        const val KEY_HF_TAGS_CATALOG = "hf_tags_catalog_v1"
+        const val KEY_HF_TAGS_CATALOG_AT = "hf_tags_catalog_v1_at"
+        const val KEY_THREAD_MODE = "thread_mode"
+        const val DEFAULT_THREAD_MODE = 1
+        const val THREAD_MODE_POWER_SAVING = 0
+        const val THREAD_MODE_BALANCED = 1
+        const val THREAD_MODE_PERFORMANCE = 2
+
+        // Roleplay keys
+        const val KEY_USER_DISPLAY_NAME = "user_display_name"
+        const val KEY_RESPONSE_LENGTH_STYLE = "rp_response_length"
+        const val KEY_MEMORY_ENABLED = "memory_enabled"
+
+        private const val KEY_AUTH_STATE = "auth_state_v1"
+
+        const val SECURITY_NONE = "none"
+        const val SECURITY_APP_PASSWORD = "app_password"
+
+        private const val USER_KEY_INFO = "tn.app_prefs.user_key.v2"
+        private const val AUTH_KEY_INFO = "tn.app_prefs.auth_key.v2"
+        private val AUTH_AAD = "tn.auth_state.v1".toByteArray(Charsets.UTF_8)
+    }
+}

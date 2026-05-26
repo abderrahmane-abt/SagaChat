@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="dark light" />
 <meta name="theme-color" content="#0A0A0A" media="(prefers-color-scheme: dark)" />
 <meta name="theme-color" content="#FAFAF9" media="(prefers-color-scheme: light)" />
-<title>ToolNeuron</title>
+<title>SagaChat</title>
 <style>
 :root {
   color-scheme: dark light;
@@ -464,7 +464,7 @@ kbd {
     <div class="brand">
       <div class="brand-row">
         <span class="brand-dot" aria-hidden="true"></span>
-        <span>ToolNeuron</span>
+        <span>SagaChat</span>
       </div>
       <div class="brand-meta" id="modelSub">Loading…</div>
     </div>
@@ -555,7 +555,7 @@ kbd {
           <label for="ttsModel">Model</label>
           <select id="ttsModel"></select>
           <label for="ttsInput">Text</label>
-          <textarea id="ttsInput" rows="5" placeholder="Hello from ToolNeuron."></textarea>
+          <textarea id="ttsInput" rows="5" placeholder="Hello from SagaChat."></textarea>
           <div class="studio-row">
             <div class="studio-field">
               <label for="ttsSpeaker">Voice</label>
@@ -640,7 +640,7 @@ kbd {
     <div class="modal-body">
       <label for="tokenInput">Bearer token</label>
       <input id="tokenInput" type="password" placeholder="tn_sk_..." autocomplete="off" spellcheck="false" />
-      <div class="info">From the Server screen in the ToolNeuron app — tap the eye icon to reveal it.</div>
+      <div class="info">From the Server screen in the SagaChat app — tap the eye icon to reveal it.</div>
       <label for="hostInfo">Server</label>
       <input id="hostInfo" type="text" readonly tabindex="-1" />
       <label for="modelInfo">Model</label>
@@ -896,7 +896,7 @@ kbd {
     renderMessages();
     var c = activeChat();
     els.topbarTitle.textContent = c ? c.title : 'Chat';
-    document.title = (c && c.title && c.title !== 'New chat') ? c.title + ' · ToolNeuron' : 'ToolNeuron';
+    document.title = (c && c.title && c.title !== 'New chat') ? c.title + ' · SagaChat' : 'SagaChat';
   }
 
   var scrollAnchored = true;

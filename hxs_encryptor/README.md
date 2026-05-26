@@ -169,7 +169,7 @@ The signing certificate's SHA-256 hash is baked into the key derivation chain. A
 AppMasterKey = HKDF-SHA256(
     ikm  = keystore_secret,
     salt = SHA256(apk_signing_certificate),
-    info = "com.dark.tool_neuron.hxs"
+    info = "com.moorixlabs.sagachat.hxs"
 )
 ```
 
@@ -295,7 +295,7 @@ hxs_encryptor/
 │   │   ├── pq_kem.h/cpp            # Hybrid KEM: X25519 + ML-KEM-768
 │   │   ├── pq_sign.h/cpp           # Hybrid signatures: Ed25519 + ML-DSA-65
 │   │   └── hxs_encryptor.cpp       # JNI bridge
-│   └── java/com/dark/hxs_encryptor/
+│   └── java/com/moorixlabs/hxs_encryptor/
 │       └── HxsEncryptor.kt         # Kotlin API
 ```
 

@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "com.dark.networking"
+    namespace = "com.moorixlabs.networking"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -40,7 +40,7 @@ android {
     externalNativeBuild {
         cmake {
             path("src/main/cpp/CMakeLists.txt")
-            version = "3.31.4"
+            version = "3.22.1"
         }
     }
     compileOptions {
