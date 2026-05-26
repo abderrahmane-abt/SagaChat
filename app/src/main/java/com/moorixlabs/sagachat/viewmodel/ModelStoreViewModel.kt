@@ -172,7 +172,7 @@ class ModelStoreViewModel @Inject constructor(
 
 
     private fun applyAllFilters() {
-        var filtered = _models.value
+        var filtered = _models.value.filter { it.modelType == "gguf" }
 
         if (_searchQuery.value.isNotBlank()) {
             val q = _searchQuery.value
