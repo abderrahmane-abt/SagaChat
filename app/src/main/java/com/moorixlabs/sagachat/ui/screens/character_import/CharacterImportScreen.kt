@@ -17,10 +17,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.ClipboardManager
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import android.widget.Toast
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -42,8 +48,14 @@ fun CharacterImportScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("Paste JSON", "From File")
 
+    var showHelpDialog by remember { mutableStateOf(false) }
+
     // Clears result when leaving the screen
     DisposableEffect(Unit) { onDispose { viewModel.clearImportResult() } }
+
+    if (showHelpDialog) {
+        ImportHelpDialog(onDismiss = { showHelpDialog = false })
+    }
 
     Scaffold(
         topBar = {
@@ -56,6 +68,11 @@ fun CharacterImportScreen(
                         Icon(TnIcons.ArrowLeft, contentDescription = "Back")
                     }
                 },
+                actions = {
+                    IconButton(onClick = { showHelpDialog = true }) {
+                        Icon(TnIcons.InfoCircle, contentDescription = "Help")
+                    }
+                }
             )
         },
         contentWindowInsets = WindowInsets(0),
@@ -458,4 +475,75 @@ private fun FieldRow(label: String, present: Boolean) {
                 MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
         )
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Help Dialog
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun ImportHelpDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val clipboardManager: ClipboardManager = LocalClipboardManager.current
+    val helpJson = """
+{
+  "name": "Character Name",
+  "chat_name": "Display Name",
+  "bio": "Background & History",
+  "personality": "Core traits",
+  "scenario": "Setting the scene",
+  "first_mes": "Initial message",
+  "mes_example": "Example dialogs",
+  "tags": ["tag1", "tag2"]
+}
+    """.trimIndent()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("Supported JSON Format")
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "You can paste standard TavernAI V1, SillyTavern V2, or SagaChat JSON files. The core fields supported are:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        text = helpJson,
+                        style = TextStyle(
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    clipboardManager.setText(AnnotatedString(helpJson))
+                    Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                }
+            ) {
+                Icon(TnIcons.Copy, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Copy JSON")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
 }
