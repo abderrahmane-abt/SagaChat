@@ -23,6 +23,7 @@ import com.moorixlabs.sagachat.repo.ModelCatalog
 import com.moorixlabs.sagachat.repo.ModelRepository
 import com.moorixlabs.sagachat.repo.RepositoryDataStore
 import com.moorixlabs.sagachat.viewmodel.home_vm.ModelSessionManager
+import com.moorixlabs.sagachat.viewmodel.home_vm.ModelLoadState
 import com.moorixlabs.sagachat.repo.RepositoryValidator
 import com.moorixlabs.sagachat.repo.ValidationResult
 import com.moorixlabs.sagachat.data.AppPreferences
@@ -485,6 +486,15 @@ class ModelStoreViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             _deleteInProgress.value = model.id
             try {
+                // Unload from RAM first if this model is currently active
+                val isLoaded = modelSession.loadState.value
+                if (isLoaded is ModelLoadState.Active && isLoaded.modelId == model.id) {
+                    modelSession.unload()
+                }
+                // Clear default model pref if it pointed to this model
+                if (prefs.defaultModelId == model.id) {
+                    prefs.defaultModelId = ""
+                }
                 if (model.pathType == PathType.FILE) java.io.File(model.path).delete()
                 modelRepo.delete(model.id)
             } finally {
@@ -506,7 +516,7 @@ class ModelStoreViewModel @Inject constructor(
     }
 
     fun unloadModel() {
-        viewModelScope.launch { InferenceClient.unloadModel() }
+        viewModelScope.launch { modelSession.unload() }
     }
 
     fun importLocalModel(

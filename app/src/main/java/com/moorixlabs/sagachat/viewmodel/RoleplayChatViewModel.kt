@@ -7,6 +7,7 @@ import com.moorixlabs.sagachat.model.Character
 import com.moorixlabs.sagachat.model.ChatMessage
 import com.moorixlabs.sagachat.model.MemoryState
 import com.moorixlabs.sagachat.model.MessageKind
+import com.moorixlabs.sagachat.model.enums.ProviderType
 import com.moorixlabs.sagachat.repo.CharacterRepository
 import com.moorixlabs.sagachat.repo.ChatRepository
 import com.moorixlabs.sagachat.repo.MemoryManager
@@ -22,6 +23,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
+
+sealed class RpSessionState {
+    data object Loading : RpSessionState()
+    data object Ready : RpSessionState()
+    data object NoModelInstalled : RpSessionState()
+    data class Error(val message: String) : RpSessionState()
+}
 
 @HiltViewModel
 class RoleplayChatViewModel @Inject constructor(
@@ -42,18 +50,26 @@ class RoleplayChatViewModel @Inject constructor(
     private val _showMemoryPanel = MutableStateFlow(false)
     val showMemoryPanel: StateFlow<Boolean> = _showMemoryPanel.asStateFlow()
 
-    private val _initError = MutableStateFlow<String?>(null)
-    val initError: StateFlow<String?> = _initError.asStateFlow()
+    private val _sessionState = MutableStateFlow<RpSessionState>(RpSessionState.Loading)
+    val sessionState: StateFlow<RpSessionState> = _sessionState.asStateFlow()
 
     fun init(characterId: String) {
+        // Gate: check for installed GGUF models before anything else
+        val hasModel = modelRepo.models.value.any { it.providerType == ProviderType.GGUF }
+        if (!hasModel) {
+            _sessionState.value = RpSessionState.NoModelInstalled
+            return
+        }
+
         val c = characterRepo.getById(characterId)
         if (c == null) {
-            _initError.value = "Character not found."
+            _sessionState.value = RpSessionState.Error("Character not found.")
             return
         }
         _character.value = c
         _memoryState.value = memoryManager.get(characterId)
         applyCharacterSystemPrompt(c)
+        _sessionState.value = RpSessionState.Ready
     }
 
     fun toggleMemoryPanel() {
@@ -121,9 +137,9 @@ class RoleplayChatViewModel @Inject constructor(
             val existing = chatRepo.getChatById(c.linkedChatId)
             if (existing != null) return existing.id
         }
-        val activeModel = modelRepo.models.value.firstOrNull { it.isActive }
-            ?: modelRepo.models.value.firstOrNull()
-            ?: error("No model installed")
+        val activeModel = modelRepo.models.value.firstOrNull { it.isActive && it.providerType == ProviderType.GGUF }
+            ?: modelRepo.models.value.firstOrNull { it.providerType == ProviderType.GGUF }
+            ?: error("No GGUF model installed")
         val chat = chatRepo.createChat(activeModel.id, activeModel.name)
         characterRepo.linkChat(c.id, chat.id)
         _character.value = c.copy(linkedChatId = chat.id)

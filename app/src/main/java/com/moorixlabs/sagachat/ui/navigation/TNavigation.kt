@@ -418,6 +418,8 @@ fun TNavigation(
                 characterId = characterId,
                 innerPadding = innerPadding,
                 onBack = { navController.popBackStack() },
+                onBrowseModels = { navController.navigate(NavScreens.ModelStore.route) },
+                onImportModel = { navController.navigate(NavScreens.ModelSetup.route) },
             )
         }
     }

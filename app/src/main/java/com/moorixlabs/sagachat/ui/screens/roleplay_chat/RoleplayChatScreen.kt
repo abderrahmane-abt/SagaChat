@@ -37,6 +37,7 @@ import com.moorixlabs.sagachat.ui.theme.LocalDimens
 import com.moorixlabs.sagachat.ui.theme.LocalTnShapes
 import com.moorixlabs.sagachat.viewmodel.HomeViewModel
 import com.moorixlabs.sagachat.viewmodel.RoleplayChatViewModel
+import com.moorixlabs.sagachat.viewmodel.RpSessionState
 import com.moorixlabs.sagachat.util.shareJsonFile
 import kotlinx.coroutines.launch
 
@@ -46,13 +47,15 @@ fun RoleplayChatScreen(
     characterId: String,
     innerPadding: PaddingValues,
     onBack: () -> Unit,
+    onBrowseModels: () -> Unit = {},
+    onImportModel: () -> Unit = {},
     homeViewModel: HomeViewModel = hiltViewModel(),
     rpViewModel: RoleplayChatViewModel = hiltViewModel(),
 ) {
     val character by rpViewModel.character.collectAsStateWithLifecycle()
     val memoryState by rpViewModel.memoryState.collectAsStateWithLifecycle()
     val showMemoryPanel by rpViewModel.showMemoryPanel.collectAsStateWithLifecycle()
-    val initError by rpViewModel.initError.collectAsStateWithLifecycle()
+    val sessionState by rpViewModel.sessionState.collectAsStateWithLifecycle()
 
     val messages by homeViewModel.messages.collectAsStateWithLifecycle()
     val streamingFragment by homeViewModel.streamingFragment.collectAsStateWithLifecycle()
@@ -83,8 +86,41 @@ fun RoleplayChatScreen(
         }
     }
 
-    LaunchedEffect(initError) {
-        if (initError != null) onBack()
+    // ── Session State Gates ────────────────────────────────────
+    when (sessionState) {
+        is RpSessionState.NoModelInstalled -> {
+            NoModelInstalledSheet(
+                onBrowseModels = onBrowseModels,
+                onImportModel = onImportModel,
+                onBack = onBack,
+            )
+            return
+        }
+        is RpSessionState.Error -> {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text((sessionState as RpSessionState.Error).message)
+                    Spacer(Modifier.height(16.dp))
+                    Button(onClick = onBack) {
+                        Text("Go Back")
+                    }
+                }
+            }
+            return
+        }
+        is RpSessionState.Loading -> {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+            return
+        }
+        is RpSessionState.Ready -> { /* fall through to normal chat UI */ }
     }
 
     // ── Layout ────────────────────────────────────────────────

@@ -158,6 +158,10 @@ class AppPreferences @Inject constructor(
         get() = getBoolean(KEY_MEMORY_ENABLED, true)
         set(v) = putBoolean(KEY_MEMORY_ENABLED, v)
 
+    var defaultModelId: String
+        get() = getString(KEY_DEFAULT_MODEL_ID)
+        set(value) = putString(KEY_DEFAULT_MODEL_ID, value)
+
     fun readAuthState(): AuthState {
         val sealed = getBytes(KEY_AUTH_STATE) ?: return AuthState.DEFAULT
         val plaintext = try {
@@ -228,6 +232,7 @@ class AppPreferences @Inject constructor(
         const val KEY_USER_DISPLAY_NAME = "user_display_name"
         const val KEY_RESPONSE_LENGTH_STYLE = "rp_response_length"
         const val KEY_MEMORY_ENABLED = "memory_enabled"
+        const val KEY_DEFAULT_MODEL_ID = "default_model_id"
 
         private const val KEY_AUTH_STATE = "auth_state_v1"
 
