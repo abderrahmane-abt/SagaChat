@@ -202,11 +202,14 @@ class InferenceService : Service() {
                     // would tear it down and rebuild — wasting ~50 ms per load.
                     engine.setThreadMode(config.optInt("threadMode", 1))
                     val success = engine.load(
-                        path = modelPath,
+                        path        = modelPath,
                         contextSize = config.optInt("contextSize", 4096),
-                        flashAttn = config.optBoolean("flashAttn", true),
-                        cacheTypeK = config.optString("cacheTypeK", "q8_0"),
-                        cacheTypeV = config.optString("cacheTypeV", "q8_0"),
+                        batchSize   = config.optInt("batchSize", 512),
+                        flashAttn   = config.optBoolean("flashAttn", true),
+                        useMmap     = config.optBoolean("useMmap", true),
+                        useMlock    = config.optBoolean("useMlock", false),
+                        cacheTypeK  = config.optString("cacheTypeK", "q8_0"),
+                        cacheTypeV  = config.optString("cacheTypeV", "q8_0"),
                     )
                     if (success) {
                         applySamplingFromConfig(config)
@@ -239,11 +242,14 @@ class InferenceService : Service() {
                     // post-load threadpool rebuild.
                     engine.setThreadMode(config.optInt("threadMode", 1))
                     val success = engine.loadFromFd(
-                        fd = fd,
+                        fd          = fd,
                         contextSize = config.optInt("contextSize", 4096),
-                        flashAttn = config.optBoolean("flashAttn", true),
-                        cacheTypeK = config.optString("cacheTypeK", "q8_0"),
-                        cacheTypeV = config.optString("cacheTypeV", "q8_0"),
+                        batchSize   = config.optInt("batchSize", 512),
+                        flashAttn   = config.optBoolean("flashAttn", true),
+                        useMmap     = config.optBoolean("useMmap", true),
+                        useMlock    = config.optBoolean("useMlock", false),
+                        cacheTypeK  = config.optString("cacheTypeK", "q8_0"),
+                        cacheTypeV  = config.optString("cacheTypeV", "q8_0"),
                     )
                     if (success) {
                         applySamplingFromConfig(config)

@@ -70,8 +70,11 @@ fun ModelConfigScreen(
 
     // Loading
     var contextSize by remember { mutableIntStateOf(loadingJson.optInt("contextSize", 4096)) }
+    var batchSize by remember { mutableIntStateOf(loadingJson.optInt("batchSize", 512)) }
     var threadMode by remember { mutableIntStateOf(loadingJson.optInt("threadMode", 0)) }
     var flashAttn by remember { mutableStateOf(loadingJson.optBoolean("flashAttn", false)) }
+    var useMmap by remember { mutableStateOf(loadingJson.optBoolean("useMmap", true)) }
+    var useMlock by remember { mutableStateOf(loadingJson.optBoolean("useMlock", false)) }
     var cacheTypeK by remember { mutableStateOf(loadingJson.optString("cacheTypeK", "q8_0")) }
     var cacheTypeV by remember { mutableStateOf(loadingJson.optString("cacheTypeV", "q8_0")) }
 
@@ -119,7 +122,8 @@ fun ModelConfigScreen(
     var showMemory by remember { mutableStateOf(false) }
 
     fun resetToDefaults() {
-        contextSize = 4096; threadMode = 0; flashAttn = false
+        contextSize = 4096; batchSize = 512; threadMode = 0; flashAttn = false
+        useMmap = true; useMlock = false
         cacheTypeK = "q8_0"; cacheTypeV = "q8_0"
         temperature = 0.7f; topK = 40; topP = 0.9f; minP = 0.05f
         repeatPenalty = 1.1f; maxTokens = 2048; seed = "-1"
@@ -137,8 +141,11 @@ fun ModelConfigScreen(
         when (modelInfo.providerType) {
             ProviderType.GGUF -> {
                 loading.put("contextSize", contextSize)
+                loading.put("batchSize", batchSize)
                 loading.put("threadMode", threadMode)
                 loading.put("flashAttn", flashAttn)
+                loading.put("useMmap", useMmap)
+                loading.put("useMlock", useMlock)
                 loading.put("cacheTypeK", cacheTypeK)
                 loading.put("cacheTypeV", cacheTypeV)
 
@@ -292,12 +299,45 @@ fun ModelConfigScreen(
                                     explanation = "How hard your CPU works. " +
                                         "Example: Power saver = quiet + slow. Performance = fast + hot battery.",
                                 )
+                                ConfigSlider(
+                                    label = "Batch Size",
+                                    value = batchSize.toFloat(),
+                                    onValueChange = { batchSize = it.roundToInt() },
+                                    valueRange = 128f..2048f,
+                                    steps = ((2048 - 128) / 128) - 1,
+                                    valueDisplay = batchSize.toString(),
+                                    explanation = "Number of tokens to evaluate in parallel. " +
+                                        "Higher = faster prompt processing (prefill) but uses more RAM. " +
+                                        "Example: 512 is standard. 1024 or 2048 processed quicker on high-end devices.",
+                                )
                                 ConfigSwitch(
                                     label = "Flash Attention",
                                     checked = flashAttn,
                                     onCheckedChange = { flashAttn = it },
                                     explanation = "A faster way to do the model's attention math. " +
                                         "Example: Same output, just quicker. Most modern models support it. Try turning it on.",
+                                )
+                                ConfigSwitch(
+                                    label = "Memory-mapped loading (mmap)",
+                                    checked = useMmap,
+                                    onCheckedChange = { useMmap = it },
+                                    explanation = "ON (default): model pages load lazily from storage and the OS " +
+                                        "can evict them under memory pressure — generation may stutter after " +
+                                        "the phone has been idle with other apps running. " +
+                                        "OFF: entire model is read into RAM at load time, load takes longer but " +
+                                        "weight pages never get evicted mid-conversation. " +
+                                        "Turn off if you notice slowdowns after switching away from the app.",
+                                )
+                                ConfigSwitch(
+                                    label = "Lock pages in RAM (mlock)",
+                                    checked = useMlock,
+                                    onCheckedChange = { useMlock = it },
+                                    explanation = "Asks the OS to pin model memory pages so they can never be " +
+                                        "swapped to storage. Stronger guarantee than disabling mmap, but " +
+                                        "requires elevated permissions — on standard (non-rooted) Android this " +
+                                        "will likely be silently ignored by the kernel. " +
+                                        "Safe to enable: if the device refuses it, the AAR falls back gracefully. " +
+                                        "Only meaningful if mmap is also OFF.",
                                 )
                                 ConfigToggleGroup(
                                     label = "KV Cache — Keys",
