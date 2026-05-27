@@ -33,11 +33,6 @@ val rpBottomTabs = listOf(
         icon = TnIcons.Cpu,
     ),
     BottomTab(
-        route = NavScreens.Storage.route,
-        label = "Storage",
-        icon = TnIcons.HardDrive,
-    ),
-    BottomTab(
         route = NavScreens.Settings.route,
         label = "Settings",
         icon = TnIcons.Settings,
@@ -129,7 +124,7 @@ private fun getActiveTab(currentRoute: String?): String? {
         currentRoute.startsWith("model_config") ||
         currentRoute.startsWith("hf_explorer") ||
         currentRoute.startsWith("hf_repo") -> NavScreens.ModelStore.route
-        currentRoute.startsWith("storage") -> NavScreens.Storage.route
+        currentRoute.startsWith("storage") ||
         currentRoute.startsWith("settings") -> NavScreens.Settings.route
         else -> null
     }
