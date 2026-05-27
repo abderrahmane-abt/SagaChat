@@ -73,8 +73,8 @@ fun RoleplayChatScreen(
     LaunchedEffect(character?.id) {
         val c = character ?: return@LaunchedEffect
         val chatId = rpViewModel.resolveOrCreateChatId()
+        rpViewModel.ensureInitialMessage(chatId)
         homeViewModel.selectChat(chatId)
-        rpViewModel.ensureInitialMessage(chatId, messages)
     }
 
     LaunchedEffect(isGenerating) {

@@ -93,13 +93,11 @@ class RoleplayChatViewModel @Inject constructor(
      * Ensures the character's initial greeting is present as the first
      * assistant message in the chat. Called once when the chat session opens.
      */
-    fun ensureInitialMessage(
-        chatId: String,
-        messages: List<ChatMessage>,
-    ) {
+    fun ensureInitialMessage(chatId: String) {
         val c = _character.value ?: return
         if (c.initialMessage.isBlank()) return
-        if (messages.any { it.role == "assistant" }) return
+        val existing = chatRepo.getMessages(chatId)
+        if (existing.any { it.role == "assistant" }) return
 
         val greeting = ChatMessage(
             id        = UUID.randomUUID().toString(),
