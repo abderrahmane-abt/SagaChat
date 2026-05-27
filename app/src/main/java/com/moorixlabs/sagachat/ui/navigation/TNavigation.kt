@@ -63,6 +63,7 @@ fun TNavigation(
     onUnlocked: () -> Unit = {},
     onSetupComplete: () -> Unit = {},
     onModelSetupComplete: () -> Unit = {},
+    onMenuClick: () -> Unit = {},
 ) {
     val transitions = rememberNavTransitions()
 
@@ -150,6 +151,8 @@ fun TNavigation(
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToHfExplorer = { navController.navigate(NavScreens.HfExplorer.route) },
                 onNavigateToDownloads = { navController.navigate(NavScreens.Downloads.route) },
+                isMenu = true,
+                onMenuClick = onMenuClick,
             )
         }
 

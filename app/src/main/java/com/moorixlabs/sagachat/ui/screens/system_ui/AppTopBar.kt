@@ -32,7 +32,11 @@ fun AppTopBar(
         NavScreens.Downloads.route -> DownloadsTopBar(onBack = onBack)
         NavScreens.SetupTheme.route -> SetupScreenTopBar()
         NavScreens.ModelManager.route -> Unit
-        NavScreens.Settings.route -> SettingsTopBar(onBack = onBack)
+        NavScreens.Settings.route -> SettingsTopBar(
+            onBack = onBack,
+            isMenu = true,
+            onMenuClick = onMenuClick,
+        )
         NavScreens.SettingsChatRp.route -> SettingsTopBar(
             onBack = onBack,
             title = "Chat & Roleplay",

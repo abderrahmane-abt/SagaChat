@@ -53,6 +53,8 @@ fun ModelStoreScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToHfExplorer: () -> Unit = {},
     onNavigateToDownloads: () -> Unit = {},
+    isMenu: Boolean = false,
+    onMenuClick: () -> Unit = {},
 ) {
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val filteredModels by viewModel.filteredModels.collectAsStateWithLifecycle()
@@ -100,11 +102,19 @@ fun ModelStoreScreen(
                 TopAppBar(
                     title = { Text("Model Store") },
                     navigationIcon = {
-                        ActionButton(
-                            onClickListener = onNavigateBack,
-                            icon = TnIcons.ArrowLeft,
-                            contentDescription = "Back"
-                        )
+                        if (isMenu) {
+                            ActionButton(
+                                onClickListener = onMenuClick,
+                                icon = TnIcons.Menu,
+                                contentDescription = "Menu"
+                            )
+                        } else {
+                            ActionButton(
+                                onClickListener = onNavigateBack,
+                                icon = TnIcons.ArrowLeft,
+                                contentDescription = "Back"
+                            )
+                        }
                     },
                     actions = {
                         if (selectedTab == StoreTab.MODELS) {

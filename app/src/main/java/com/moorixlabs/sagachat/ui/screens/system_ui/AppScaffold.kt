@@ -1,9 +1,12 @@
 package com.moorixlabs.sagachat.ui.screens.system_ui
 
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.PermanentDrawerSheet
@@ -80,118 +83,130 @@ private fun AppScaffoldInner() {
             || currentRoute == NavScreens.PasswordScreen.route
             || currentRoute == NavScreens.Credits.route
 
-    val showDrawer = currentRoute == NavScreens.CharacterList.route
+    val activeTab = getActiveTab(currentRoute)
+    val showDrawer = activeTab != null && !isFullscreen
+    val isCharacterList = activeTab == NavScreens.CharacterList.route
+    val drawerWidth = if (isCharacterList) 360.dp else 80.dp
+
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val isExpanded = LocalIsExpandedLayout.current
 
     val drawerBody: @Composable () -> Unit = {
-        ChatDrawerContent(
-            chats = chats,
-            currentChatId = currentChatId,
-            onChatSelected = { id ->
-                homeViewModel.selectChat(id)
-                scope.launch { drawerState.close() }
-            },
-            onNewChat = {
-                homeViewModel.createNewChat()
-                scope.launch { drawerState.close() }
-            },
-            onDeleteChat = homeViewModel::deleteChat,
-            onPinChat = homeViewModel::pinChat,
-            onExportChat = homeViewModel::exportChat,
-            onNavigateToStore = {
-                scope.launch { drawerState.close() }
-                navController.navigate(NavScreens.ModelStore.route)
-            },
-            onNavigateToSettings = {
-                scope.launch { drawerState.close() }
-                navController.navigate(NavScreens.Settings.route)
-            },
-            onNavigateToCredits = {
-                scope.launch { drawerState.close() }
-                navController.navigate(NavScreens.Credits.route)
-            },
-        )
+        Row(modifier = Modifier.fillMaxHeight()) {
+            AppSideMenu(
+                currentRoute = currentRoute,
+                navController = navController,
+            )
+            if (isCharacterList) {
+                androidx.compose.material3.VerticalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+                Box(modifier = Modifier.width(280.dp)) {
+                    ChatDrawerContent(
+                        chats = chats,
+                        currentChatId = currentChatId,
+                        onChatSelected = { id ->
+                            homeViewModel.selectChat(id)
+                            scope.launch { drawerState.close() }
+                        },
+                        onNewChat = {
+                            homeViewModel.createNewChat()
+                            scope.launch { drawerState.close() }
+                        },
+                        onDeleteChat = homeViewModel::deleteChat,
+                        onPinChat = homeViewModel::pinChat,
+                        onExportChat = { id, format -> homeViewModel.exportChat(id, format) },
+                        onNavigateToStore = {
+                            scope.launch { drawerState.close() }
+                            navController.navigate(NavScreens.ModelStore.route)
+                        },
+                        onNavigateToSettings = {
+                            scope.launch { drawerState.close() }
+                            navController.navigate(NavScreens.Settings.route)
+                        },
+                        onNavigateToCredits = {
+                            scope.launch { drawerState.close() }
+                            navController.navigate(NavScreens.Credits.route)
+                        },
+                    )
+                }
+            }
+        }
     }
 
     val mainScaffold: @Composable () -> Unit = {
-        Row(modifier = Modifier.fillMaxSize()) {
-            if (!isFullscreen) {
-                AppSideMenu(
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            topBar = {
+                if (!isFullscreen) AppTopBar(
+                    currentRoute = currentRoute,
+                    pillState = pillState,
+                    actionWindowExpanded = false,
+                    downloadProgress = downloadProgress,
+                    onActionWindowToggle = {},
+                    onMenuClick = {
+                        if (!isExpanded) scope.launch { drawerState.open() }
+                    },
+                    onBack = { navController.popBackStack() },
+                    onNavigateToStore = { navController.navigate(NavScreens.ModelStore.route) },
+                )
+            },
+            bottomBar = {
+                if (!isFullscreen) AppBottomBar(
                     currentRoute = currentRoute,
                     navController = navController,
-                )
-            }
-            Scaffold(
-                modifier = Modifier.weight(1f),
-                topBar = {
-                    if (!isFullscreen) AppTopBar(
-                        currentRoute = currentRoute,
-                        pillState = pillState,
-                        actionWindowExpanded = false,
-                        downloadProgress = downloadProgress,
-                        onActionWindowToggle = {},
-                        onMenuClick = {
-                            if (!isExpanded) scope.launch { drawerState.open() }
-                        },
-                        onBack = { navController.popBackStack() },
-                        onNavigateToStore = { navController.navigate(NavScreens.ModelStore.route) },
-                    )
-                },
-                bottomBar = {
-                    if (!isFullscreen) AppBottomBar(
-                        currentRoute = currentRoute,
-                        navController = navController,
-                        onThemeSetupComplete = {
-                            navController.navigate(NavScreens.ModelSetup.route) {
-                                popUpTo(NavScreens.SetupTheme.route) { inclusive = true }
-                            }
-                        },
-                        onTermsAccepted = {
-                            val cameFromOnboarding = navController.previousBackStackEntry == null
-                            scaffoldViewModel.markTermsAccepted()
-                            if (cameFromOnboarding) {
-                                navController.navigate(NavScreens.SetupScreen.route) {
-                                    popUpTo(NavScreens.TermsConditions.route) { inclusive = true }
-                                }
-                            } else {
-                                navController.popBackStack()
-                            }
-                        },
-                    )
-                },
-            ) { innerPadding ->
-                TNavigation(
-                    navController = navController,
-                    innerPadding = innerPadding,
-                    startDestination = NavScreens.IntroScreen.route,
-                    nextDestination = nextDestination,
-                    onUnlocked = {
-                        navController.navigate(NavScreens.CharacterList.route) {
-                            popUpTo(NavScreens.PasswordScreen.route) { inclusive = true }
+                    onThemeSetupComplete = {
+                        navController.navigate(NavScreens.ModelSetup.route) {
+                            popUpTo(NavScreens.SetupTheme.route) { inclusive = true }
                         }
                     },
-                    onSetupComplete = {
-                        navController.navigate(NavScreens.SetupTheme.route) {
-                            popUpTo(NavScreens.SetupScreen.route) { inclusive = true }
-                        }
-                    },
-                    onModelSetupComplete = {
-                        scaffoldViewModel.markModelSetupDone()
-                        navController.navigate(NavScreens.CharacterList.route) {
-                            popUpTo(NavScreens.ModelSetup.route) { inclusive = true }
+                    onTermsAccepted = {
+                        val cameFromOnboarding = navController.previousBackStackEntry == null
+                        scaffoldViewModel.markTermsAccepted()
+                        if (cameFromOnboarding) {
+                            navController.navigate(NavScreens.SetupScreen.route) {
+                                popUpTo(NavScreens.TermsConditions.route) { inclusive = true }
+                            }
+                        } else {
+                            navController.popBackStack()
                         }
                     },
                 )
-            }
+            },
+        ) { innerPadding ->
+            TNavigation(
+                navController = navController,
+                innerPadding = innerPadding,
+                startDestination = NavScreens.IntroScreen.route,
+                nextDestination = nextDestination,
+                onUnlocked = {
+                    navController.navigate(NavScreens.CharacterList.route) {
+                        popUpTo(NavScreens.PasswordScreen.route) { inclusive = true }
+                    }
+                },
+                onSetupComplete = {
+                    navController.navigate(NavScreens.SetupTheme.route) {
+                        popUpTo(NavScreens.SetupScreen.route) { inclusive = true }
+                    }
+                },
+                onModelSetupComplete = {
+                    scaffoldViewModel.markModelSetupDone()
+                    navController.navigate(NavScreens.CharacterList.route) {
+                        popUpTo(NavScreens.ModelSetup.route) { inclusive = true }
+                    }
+                },
+                onMenuClick = {
+                    if (!isExpanded) scope.launch { drawerState.open() }
+                },
+            )
         }
     }
 
     if (isExpanded && showDrawer && !isFullscreen) {
         PermanentNavigationDrawer(
             drawerContent = {
-                PermanentDrawerSheet(modifier = Modifier.width(320.dp)) { drawerBody() }
+                PermanentDrawerSheet(modifier = Modifier.width(drawerWidth)) { drawerBody() }
             },
             modifier = Modifier.fillMaxSize(),
         ) { mainScaffold() }
@@ -199,7 +214,23 @@ private fun AppScaffoldInner() {
         ModalNavigationDrawer(
             drawerState = drawerState,
             gesturesEnabled = showDrawer,
-            drawerContent = { ModalDrawerSheet { drawerBody() } },
+            drawerContent = { ModalDrawerSheet(modifier = Modifier.width(drawerWidth)) { drawerBody() } },
         ) { mainScaffold() }
+    }
+}
+
+private fun getActiveTab(currentRoute: String?): String? {
+    if (currentRoute == null) return null
+    return when {
+        currentRoute.startsWith("character_list") -> NavScreens.CharacterList.route
+        currentRoute.startsWith("model_store") ||
+        currentRoute.startsWith("downloads") ||
+        currentRoute.startsWith("model_manager") ||
+        currentRoute.startsWith("model_config") ||
+        currentRoute.startsWith("hf_explorer") ||
+        currentRoute.startsWith("hf_repo") -> NavScreens.ModelStore.route
+        currentRoute.startsWith("storage") ||
+        currentRoute.startsWith("settings") -> NavScreens.Settings.route
+        else -> null
     }
 }

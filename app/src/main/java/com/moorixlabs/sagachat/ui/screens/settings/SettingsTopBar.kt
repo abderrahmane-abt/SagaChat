@@ -23,6 +23,8 @@ fun SettingsTopBar(
     onBack: () -> Unit,
     title: String = "Settings",
     subtitle: String? = "App preferences, privacy, and storage",
+    isMenu: Boolean = false,
+    onMenuClick: () -> Unit = {},
 ) {
     val dimens = LocalDimens.current
     CenterAlignedTopAppBar(
@@ -49,12 +51,21 @@ fun SettingsTopBar(
             }
         },
         navigationIcon = {
-            ActionButton(
-                onClickListener = onBack,
-                icon = TnIcons.ArrowLeft,
-                contentDescription = "Back",
-                modifier = Modifier.padding(start = dimens.screenPadding),
-            )
+            if (isMenu) {
+                ActionButton(
+                    onClickListener = onMenuClick,
+                    icon = TnIcons.Menu,
+                    contentDescription = "Menu",
+                    modifier = Modifier.padding(start = dimens.screenPadding),
+                )
+            } else {
+                ActionButton(
+                    onClickListener = onBack,
+                    icon = TnIcons.ArrowLeft,
+                    contentDescription = "Back",
+                    modifier = Modifier.padding(start = dimens.screenPadding),
+                )
+            }
         },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
