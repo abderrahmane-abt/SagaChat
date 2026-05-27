@@ -3,6 +3,7 @@ package com.moorixlabs.sagachat.viewmodel
 import androidx.lifecycle.ViewModel
 import com.moorixlabs.sagachat.model.Character
 import com.moorixlabs.sagachat.repo.CharacterRepository
+import com.moorixlabs.sagachat.repo.ChatRepository
 import com.moorixlabs.sagachat.repo.MemoryManager
 import com.moorixlabs.sagachat.util.CharacterExporter
 import com.moorixlabs.sagachat.util.CharacterImporter
@@ -16,6 +17,7 @@ import javax.inject.Inject
 class CharacterViewModel @Inject constructor(
     private val characterRepo: CharacterRepository,
     private val memoryManager: MemoryManager,
+    private val chatRepo: ChatRepository,
 ) : ViewModel() {
 
     val characters: StateFlow<List<Character>> = characterRepo.characters
@@ -62,7 +64,20 @@ class CharacterViewModel @Inject constructor(
     }
 
     fun deleteCharacter(characterId: String) {
+        val c = characterRepo.getById(characterId)
+        if (c?.linkedChatId?.isNotBlank() == true) {
+            chatRepo.deleteChat(c.linkedChatId)
+        }
         characterRepo.delete(characterId)
+        memoryManager.resetMemory(characterId)
+    }
+
+    fun startNewChat(characterId: String) {
+        val c = characterRepo.getById(characterId) ?: return
+        if (c.linkedChatId.isNotBlank()) {
+            chatRepo.deleteChat(c.linkedChatId)
+            characterRepo.linkChat(characterId, "")
+        }
         memoryManager.resetMemory(characterId)
     }
 

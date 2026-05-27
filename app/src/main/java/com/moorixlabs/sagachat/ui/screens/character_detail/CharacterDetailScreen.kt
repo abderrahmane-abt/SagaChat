@@ -35,6 +35,7 @@ fun CharacterDetailScreen(
     }
 
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showWipeDialog by remember { mutableStateOf(false) }
 
     if (showDeleteDialog) {
         AlertDialog(
@@ -58,6 +59,29 @@ fun CharacterDetailScreen(
         )
     }
 
+    if (showWipeDialog) {
+        AlertDialog(
+            onDismissRequest = { showWipeDialog = false },
+            title = { Text("Start New Chat?") },
+            text = { Text("This will permanently delete the current conversation and all associated memories with ${character.chatName}. Are you sure?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.startNewChat(characterId)
+                        showWipeDialog = false
+                        onStartChat(characterId)
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) { Text("Start Fresh") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showWipeDialog = false }) { Text("Cancel") }
+            },
+        )
+    }
+
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         bottomBar = {
@@ -66,23 +90,36 @@ fun CharacterDetailScreen(
                     .fillMaxWidth()
                     .navigationBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 OutlinedButton(
                     onClick = { onEdit(characterId) },
                     modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    Icon(TnIcons.Edit, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
+                    Icon(TnIcons.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
                     Text("Edit")
+                }
+                if (character.linkedChatId.isNotBlank()) {
+                    OutlinedButton(
+                        onClick = { showWipeDialog = true },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Icon(TnIcons.Trash, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Wipe")
+                    }
                 }
                 Button(
                     onClick = { onStartChat(characterId) },
-                    modifier = Modifier.weight(2f),
+                    modifier = Modifier.weight(if (character.linkedChatId.isNotBlank()) 1.2f else 2f),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    Icon(TnIcons.MessageCircle, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Start Chat")
+                    Icon(TnIcons.MessageCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (character.linkedChatId.isNotBlank()) "Resume" else "Start Chat")
                 }
             }
         },
