@@ -8,7 +8,27 @@ object CharacterExporter {
 
     // Returns a pretty-printed SagaChat V1 JSON string for the given character.
     fun toJson(character: Character): String {
-        val obj = JSONObject().apply {
+        return buildCharacterJson(character).toString(2)
+    }
+
+    // Returns a pretty-printed SagaChat V1 JSON string including chat history.
+    fun exportSession(character: Character, messages: List<com.moorixlabs.sagachat.model.ChatMessage>): String {
+        val obj = buildCharacterJson(character)
+        val messagesArray = JSONArray()
+        messages.forEach { msg ->
+            val msgObj = JSONObject().apply {
+                put("role", msg.role)
+                put("content", msg.content)
+                put("timestamp", msg.timestamp)
+            }
+            messagesArray.put(msgObj)
+        }
+        obj.put("messages", messagesArray)
+        return obj.toString(2)
+    }
+
+    private fun buildCharacterJson(character: Character): JSONObject {
+        return JSONObject().apply {
             put("sagachat_version", 1)
             put("name", character.name)
             put("chat_name", character.chatName)
@@ -19,8 +39,6 @@ object CharacterExporter {
             put("mes_example", character.exampleDialogs)
             put("tags", JSONArray(character.tags))
         }
-        // Pretty-print with 2-space indent
-        return obj.toString(2)
     }
 
     // Sanitizes the character name into a safe filename.

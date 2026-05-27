@@ -19,8 +19,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.platform.ClipboardManager
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import android.widget.Toast
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -32,6 +37,7 @@ import com.moorixlabs.sagachat.ui.theme.LocalDimens
 import com.moorixlabs.sagachat.ui.theme.LocalTnShapes
 import com.moorixlabs.sagachat.viewmodel.HomeViewModel
 import com.moorixlabs.sagachat.viewmodel.RoleplayChatViewModel
+import com.moorixlabs.sagachat.util.shareJsonFile
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,6 +59,9 @@ fun RoleplayChatScreen(
     val isGenerating by homeViewModel.isGenerating.collectAsStateWithLifecycle()
     val isModelLoaded by InferenceClient.isModelLoaded.collectAsStateWithLifecycle()
     val installedModels by homeViewModel.chatModels.collectAsStateWithLifecycle()
+
+    val context = LocalContext.current
+    val clipboardManager: ClipboardManager = LocalClipboardManager.current
 
     val charName = character?.chatName ?: "…"
 
@@ -90,6 +99,20 @@ fun RoleplayChatScreen(
                 hasMemory = memoryState.summary.isNotBlank(),
                 onBack = onBack,
                 onMemory = rpViewModel::toggleMemoryPanel,
+                onCopyJson = {
+                    val json = rpViewModel.exportSessionJson(messages)
+                    if (json != null) {
+                        clipboardManager.setText(AnnotatedString(json))
+                        Toast.makeText(context, "Chat JSON copied", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onExportFile = {
+                    val json = rpViewModel.exportSessionJson(messages)
+                    val fileName = rpViewModel.exportSessionFileName()
+                    if (json != null) {
+                        shareJsonFile(context, json, fileName)
+                    }
+                }
             )
 
             // ── Message list ──────────────────────────────────
@@ -142,7 +165,11 @@ private fun RpTopBar(
     hasMemory: Boolean,
     onBack: () -> Unit,
     onMemory: () -> Unit,
+    onCopyJson: () -> Unit,
+    onExportFile: () -> Unit,
 ) {
+    var expanded by remember { mutableStateOf(false) }
+
     TopAppBar(
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
@@ -200,6 +227,32 @@ private fun RpTopBar(
                     else
                         MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+            Box {
+                IconButton(onClick = { expanded = true }) {
+                    Icon(TnIcons.More, contentDescription = "More")
+                }
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Copy JSON") },
+                        onClick = {
+                            expanded = false
+                            onCopyJson()
+                        },
+                        leadingIcon = { Icon(TnIcons.Copy, contentDescription = null, modifier = Modifier.size(20.dp)) }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Export File") },
+                        onClick = {
+                            expanded = false
+                            onExportFile()
+                        },
+                        leadingIcon = { Icon(TnIcons.Share, contentDescription = null, modifier = Modifier.size(20.dp)) }
+                    )
+                }
             }
         },
     )

@@ -11,6 +11,7 @@ import com.moorixlabs.sagachat.repo.CharacterRepository
 import com.moorixlabs.sagachat.repo.ChatRepository
 import com.moorixlabs.sagachat.repo.MemoryManager
 import com.moorixlabs.sagachat.repo.ModelRepository
+import com.moorixlabs.sagachat.util.CharacterExporter
 import com.moorixlabs.sagachat.util.SystemPromptBuilder
 import com.moorixlabs.sagachat.viewmodel.home_vm.ModelSessionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -129,6 +130,16 @@ class RoleplayChatViewModel @Inject constructor(
         characterRepo.linkChat(c.id, chat.id)
         _character.value = c.copy(linkedChatId = chat.id)
         return chat.id
+    }
+
+    fun exportSessionJson(messages: List<ChatMessage>): String? {
+        val c = _character.value ?: return null
+        return CharacterExporter.exportSession(c, messages)
+    }
+
+    fun exportSessionFileName(): String {
+        val c = _character.value ?: return "chat_session.json"
+        return CharacterExporter.fileName(c).replace(".json", "_chat.json")
     }
 
     private fun applyCharacterSystemPrompt(
