@@ -289,6 +289,7 @@ class HomeViewModel @Inject constructor(
             kind = MessageKind.Text,
         )
         chatRepo.addMessage(userMessage)
+        _messages.value = chatRepo.getMessages(chatId) // Update UI immediately
 
         val isFirstTurn = chatRepo.getMessages(chatId).count { it.role == ROLE_USER } == 1
 
