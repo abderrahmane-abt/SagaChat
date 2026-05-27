@@ -10,10 +10,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.moorixlabs.sagachat.ui.icons.TnIcons
+import com.moorixlabs.sagachat.util.shareJsonFile
 import com.moorixlabs.sagachat.viewmodel.CharacterViewModel
 
 @Composable
@@ -25,6 +27,7 @@ fun CharacterDetailScreen(
     viewModel: CharacterViewModel = hiltViewModel(),
 ) {
     val character = remember(characterId) { viewModel.getCharacter(characterId) }
+    val context = LocalContext.current
 
     if (character == null) {
         LaunchedEffect(Unit) { onBack() }
@@ -121,17 +124,37 @@ fun CharacterDetailScreen(
                     ) {
                         Icon(TnIcons.ArrowLeft, contentDescription = "Back")
                     }
-                    IconButton(
-                        onClick = { showDeleteDialog = true },
-                        colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                        ),
-                    ) {
-                        Icon(
-                            TnIcons.Trash,
-                            contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.error,
-                        )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        IconButton(
+                            onClick = {
+                                val exportJson = viewModel.exportJson(characterId)
+                                val exportFileName = viewModel.exportFileName(characterId)
+                                if (exportJson != null) {
+                                    shareJsonFile(context, exportJson, exportFileName)
+                                }
+                            },
+                            colors = IconButtonDefaults.iconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                            ),
+                        ) {
+                            Icon(
+                                TnIcons.Share,
+                                contentDescription = "Export",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                        IconButton(
+                            onClick = { showDeleteDialog = true },
+                            colors = IconButtonDefaults.iconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                            ),
+                        ) {
+                            Icon(
+                                TnIcons.Trash,
+                                contentDescription = "Delete",
+                                tint = MaterialTheme.colorScheme.error,
+                            )
+                        }
                     }
                 }
                 // Name overlay

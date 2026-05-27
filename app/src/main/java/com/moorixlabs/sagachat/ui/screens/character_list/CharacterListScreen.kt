@@ -27,11 +27,26 @@ fun CharacterListScreen(
     innerPadding: PaddingValues,
     onOpenCharacter: (characterId: String) -> Unit,
     onCreateCharacter: () -> Unit,
+    onImportCharacter: () -> Unit,
     viewModel: CharacterViewModel = hiltViewModel(),
 ) {
     val characters by viewModel.characters.collectAsStateWithLifecycle()
 
     Scaffold(
+        topBar = {
+            @OptIn(ExperimentalMaterial3Api::class)
+            TopAppBar(
+                title = { Text("Characters", fontWeight = FontWeight.SemiBold) },
+                actions = {
+                    IconButton(onClick = onImportCharacter) {
+                        Icon(TnIcons.FileImport, contentDescription = "Import character")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                ),
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onCreateCharacter,

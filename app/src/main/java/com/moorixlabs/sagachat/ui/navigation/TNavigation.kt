@@ -49,7 +49,9 @@ import com.moorixlabs.sagachat.viewmodel.StorageViewModel
 import com.moorixlabs.sagachat.ui.screens.character_list.CharacterListScreen
 import com.moorixlabs.sagachat.ui.screens.character_detail.CharacterDetailScreen
 import com.moorixlabs.sagachat.ui.screens.character_create.CharacterCreateScreen
+import com.moorixlabs.sagachat.ui.screens.character_import.CharacterImportScreen
 import com.moorixlabs.sagachat.ui.screens.roleplay_chat.RoleplayChatScreen
+import com.moorixlabs.sagachat.viewmodel.CharacterViewModel
 import java.net.URLDecoder
 
 @Composable
@@ -342,6 +344,7 @@ fun TNavigation(
                 innerPadding = innerPadding,
                 onOpenCharacter = { id -> navController.navigate(NavScreens.CharacterDetail.routeFor(id)) },
                 onCreateCharacter = { navController.navigate(NavScreens.CharacterCreate.route) },
+                onImportCharacter = { navController.navigate(NavScreens.CharacterImport.route) },
             )
         }
 
@@ -372,6 +375,20 @@ fun TNavigation(
                         popUpTo(NavScreens.CharacterEdit.route) { inclusive = true }
                     }
                 },
+            )
+        }
+
+        composable(NavScreens.CharacterImport.route) {
+            val activity = LocalContext.current as ComponentActivity
+            val vm: CharacterViewModel = hiltViewModel(activity)
+            CharacterImportScreen(
+                viewModel = vm,
+                onImported = { characterId ->
+                    navController.navigate(NavScreens.CharacterDetail.routeFor(characterId)) {
+                        popUpTo(NavScreens.CharacterImport.route) { inclusive = true }
+                    }
+                },
+                onBack = { navController.popBackStack() },
             )
         }
 

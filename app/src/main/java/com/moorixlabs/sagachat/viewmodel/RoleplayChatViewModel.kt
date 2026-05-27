@@ -13,7 +13,6 @@ import com.moorixlabs.sagachat.repo.MemoryManager
 import com.moorixlabs.sagachat.repo.ModelRepository
 import com.moorixlabs.sagachat.util.SystemPromptBuilder
 import com.moorixlabs.sagachat.viewmodel.home_vm.ModelSessionManager
-import com.moorixlabs.sagachat.viewmodel.home_vm.ToolCallCoordinator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,7 +29,6 @@ class RoleplayChatViewModel @Inject constructor(
     private val modelRepo: ModelRepository,
     private val memoryManager: MemoryManager,
     private val modelSession: ModelSessionManager,
-    private val toolCallCoordinator: ToolCallCoordinator,
     private val appPrefs: AppPreferences,
 ) : ViewModel() {
 
@@ -142,10 +140,8 @@ class RoleplayChatViewModel @Inject constructor(
             memory    = memory,
             userName  = appPrefs.userDisplayName,
         )
-        // Inject character system prompt; disable web search in RP mode.
-        toolCallCoordinator.configureInference(
-            webOn            = false,
-            userSystemPrompt = prompt,
-        )
+        // Write to ModelSessionManager so HomeViewModel.runGeneration()
+        // reads the character prompt instead of the empty ModelConfig value.
+        modelSession.setUserSystemPrompt(prompt)
     }
 }

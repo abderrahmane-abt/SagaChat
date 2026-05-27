@@ -10,6 +10,7 @@ sealed class NavScreens(val route: String) {
     object ModelSetup      : NavScreens("model_setup")
     object CharacterList   : NavScreens("character_list")
     object CharacterCreate : NavScreens("character_create")
+    object CharacterImport : NavScreens("character_import")
     object ModelStore      : NavScreens("model_store")
     object Downloads       : NavScreens("downloads")
     object ModelManager    : NavScreens("model_manager")

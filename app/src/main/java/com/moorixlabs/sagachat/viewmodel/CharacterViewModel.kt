@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import com.moorixlabs.sagachat.model.Character
 import com.moorixlabs.sagachat.repo.CharacterRepository
 import com.moorixlabs.sagachat.repo.MemoryManager
+import com.moorixlabs.sagachat.util.CharacterExporter
+import com.moorixlabs.sagachat.util.CharacterImporter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -66,6 +68,45 @@ class CharacterViewModel @Inject constructor(
 
     fun getCharacter(characterId: String): Character? =
         characterRepo.getById(characterId)
+
+    // ── Import / Export ───────────────────────────────────────────────────────
+
+    private val _importResult = MutableStateFlow<CharacterImporter.ImportResult?>(null)
+    val importResult: StateFlow<CharacterImporter.ImportResult?> = _importResult.asStateFlow()
+
+    fun parseImportJson(json: String) {
+        _importResult.value = if (json.isBlank()) null else CharacterImporter.parse(json)
+    }
+
+    fun confirmImport(onDone: (characterId: String) -> Unit) {
+        val result = _importResult.value as? CharacterImporter.ImportResult.Success ?: return
+        saveCharacterDirect(result.character, onDone)
+    }
+
+    fun clearImportResult() {
+        _importResult.value = null
+    }
+
+    fun exportJson(characterId: String): String? {
+        val c = characterRepo.getById(characterId) ?: return null
+        return CharacterExporter.toJson(c)
+    }
+
+    fun exportFileName(characterId: String): String {
+        val c = characterRepo.getById(characterId) ?: return "character.json"
+        return CharacterExporter.fileName(c)
+    }
+
+    private fun saveCharacterDirect(
+        character: Character,
+        onDone: (characterId: String) -> Unit,
+    ) {
+        if (_isSaving.value) return
+        _isSaving.value = true
+        val saved = characterRepo.create(character)
+        _isSaving.value = false
+        onDone(saved.id)
+    }
 
     private fun emptyDraft() = Character(
         id             = "",

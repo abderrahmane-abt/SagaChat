@@ -23,6 +23,8 @@ object TnIcons {
     val ChevronUp by lazy { icon("M6 15L12 9L18 15") }
     val ChevronDown by lazy { icon("M6 9L12 15L18 9") }
     val X by lazy { icon("M6 6L18 18", "M18 6L6 18") }
+    val AlertCircle by lazy { icon("M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0", "M12 8v4", "M12 16h.01") }
+    val Minus by lazy { icon("M5 12h14") }
     val Lock by lazy {
         icon(
             "M8 11V7a4 4 0 0 1 8 0v4",
@@ -274,6 +276,23 @@ object TnIcons {
             "M9 13l6 0",
             "M9 17l6 0",
         )
+    }
+
+    val FileImport by lazy {
+        icon(
+            "M14 3v4a1 1 0 0 0 1 1h4",
+            "M5 13v-8a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2h-5.5m-9.5-2h7m-3-3l3 3l-3 3"
+        )
+    }
+
+    val FolderOpen by lazy {
+        icon(
+            "M5 19l2.757 -7.351a1 1 0 0 1 .936 -.649h12.307a1 1 0 0 1 .986 1.164l-.996 5.211a2 2 0 0 1 -1.964 1.625h-14.026a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2h4l3 3h7a2 2 0 0 1 2 2v2"
+        )
+    }
+
+    val Share by lazy {
+        icon("M8 9l-5 5l5 5", "M3 14l11 0a3 3 0 0 0 3 -3v-6", "M15 8l3 -3l3 3")
     }
 
     val Broom by lazy {

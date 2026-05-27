@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.moorixlabs.sagachat.model.ModelConfig
 import com.moorixlabs.sagachat.model.ModelInfo
@@ -45,6 +46,7 @@ import com.moorixlabs.sagachat.ui.components.StandardCard
 import com.moorixlabs.sagachat.ui.components.SwitchRow
 import com.moorixlabs.sagachat.ui.icons.TnIcons
 import com.moorixlabs.sagachat.ui.theme.LocalDimens
+import com.moorixlabs.sagachat.viewmodel.home_vm.ModelSessionManager
 import com.moorixlabs.download_manager.formatBytes
 import org.json.JSONObject
 import java.io.File
@@ -325,7 +327,7 @@ fun ModelConfigScreen(
                                     label = "System Prompt",
                                     value = systemPrompt,
                                     onValueChange = { systemPrompt = it },
-                                    placeholder = "You are a helpful assistant.",
+                                    placeholder = ModelSessionManager.DEFAULT_SYSTEM_PROMPT,
                                     singleLine = false,
                                     minLines = 3,
                                     maxLines = 8,
@@ -776,7 +778,14 @@ private fun ConfigTextField(
             value = value,
             onValueChange = onValueChange,
             label = { Text(label) },
-            placeholder = { Text(placeholder) },
+            placeholder = {
+                Text(
+                    text = placeholder,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                )
+            },
             singleLine = singleLine,
             minLines = minLines,
             maxLines = maxLines,
