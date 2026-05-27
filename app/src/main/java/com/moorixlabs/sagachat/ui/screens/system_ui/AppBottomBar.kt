@@ -54,63 +54,7 @@ fun AppBottomBar(
         NavScreens.PasswordScreen.route -> PasswordScreenBottomBar()
         NavScreens.SetupTheme.route -> SetupThemeBottomBar(onContinue = onThemeSetupComplete)
         NavScreens.ModelSetup.route -> Unit
-        else -> {
-            val activeTab = getActiveTab(currentRoute)
-            if (activeTab != null) {
-                MainBottomBar(
-                    activeRoute = activeTab,
-                    onTabSelected = { route ->
-                        if (currentRoute != route) {
-                            navController.navigate(route) {
-                                popUpTo(NavScreens.CharacterList.route) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        }
-                    }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun MainBottomBar(
-    activeRoute: String,
-    onTabSelected: (String) -> Unit,
-) {
-    NavigationBar(
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    ) {
-        rpBottomTabs.forEach { tab ->
-            val isSelected = tab.route == activeRoute
-            NavigationBarItem(
-                selected = isSelected,
-                onClick = { onTabSelected(tab.route) },
-                icon = {
-                    Icon(
-                        imageVector = tab.icon,
-                        contentDescription = tab.label,
-                    )
-                },
-                label = {
-                    Text(
-                        text = tab.label,
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                )
-            )
-        }
+        else -> Unit
     }
 }
 

@@ -2,6 +2,7 @@ package com.moorixlabs.sagachat.ui.screens.system_ui
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -115,67 +116,75 @@ private fun AppScaffoldInner() {
     }
 
     val mainScaffold: @Composable () -> Unit = {
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            topBar = {
-                if (!isFullscreen) AppTopBar(
-                    currentRoute = currentRoute,
-                    pillState = pillState,
-                    actionWindowExpanded = false,
-                    downloadProgress = downloadProgress,
-                    onActionWindowToggle = {},
-                    onMenuClick = {
-                        if (!isExpanded) scope.launch { drawerState.open() }
-                    },
-                    onBack = { navController.popBackStack() },
-                    onNavigateToStore = { navController.navigate(NavScreens.ModelStore.route) },
-                )
-            },
-            bottomBar = {
-                if (!isFullscreen) AppBottomBar(
+        Row(modifier = Modifier.fillMaxSize()) {
+            if (!isFullscreen) {
+                AppSideMenu(
                     currentRoute = currentRoute,
                     navController = navController,
-                    onThemeSetupComplete = {
-                        navController.navigate(NavScreens.ModelSetup.route) {
-                            popUpTo(NavScreens.SetupTheme.route) { inclusive = true }
+                )
+            }
+            Scaffold(
+                modifier = Modifier.weight(1f),
+                topBar = {
+                    if (!isFullscreen) AppTopBar(
+                        currentRoute = currentRoute,
+                        pillState = pillState,
+                        actionWindowExpanded = false,
+                        downloadProgress = downloadProgress,
+                        onActionWindowToggle = {},
+                        onMenuClick = {
+                            if (!isExpanded) scope.launch { drawerState.open() }
+                        },
+                        onBack = { navController.popBackStack() },
+                        onNavigateToStore = { navController.navigate(NavScreens.ModelStore.route) },
+                    )
+                },
+                bottomBar = {
+                    if (!isFullscreen) AppBottomBar(
+                        currentRoute = currentRoute,
+                        navController = navController,
+                        onThemeSetupComplete = {
+                            navController.navigate(NavScreens.ModelSetup.route) {
+                                popUpTo(NavScreens.SetupTheme.route) { inclusive = true }
+                            }
+                        },
+                        onTermsAccepted = {
+                            val cameFromOnboarding = navController.previousBackStackEntry == null
+                            scaffoldViewModel.markTermsAccepted()
+                            if (cameFromOnboarding) {
+                                navController.navigate(NavScreens.SetupScreen.route) {
+                                    popUpTo(NavScreens.TermsConditions.route) { inclusive = true }
+                                }
+                            } else {
+                                navController.popBackStack()
+                            }
+                        },
+                    )
+                },
+            ) { innerPadding ->
+                TNavigation(
+                    navController = navController,
+                    innerPadding = innerPadding,
+                    startDestination = NavScreens.IntroScreen.route,
+                    nextDestination = nextDestination,
+                    onUnlocked = {
+                        navController.navigate(NavScreens.CharacterList.route) {
+                            popUpTo(NavScreens.PasswordScreen.route) { inclusive = true }
                         }
                     },
-                    onTermsAccepted = {
-                        val cameFromOnboarding = navController.previousBackStackEntry == null
-                        scaffoldViewModel.markTermsAccepted()
-                        if (cameFromOnboarding) {
-                            navController.navigate(NavScreens.SetupScreen.route) {
-                                popUpTo(NavScreens.TermsConditions.route) { inclusive = true }
-                            }
-                        } else {
-                            navController.popBackStack()
+                    onSetupComplete = {
+                        navController.navigate(NavScreens.SetupTheme.route) {
+                            popUpTo(NavScreens.SetupScreen.route) { inclusive = true }
+                        }
+                    },
+                    onModelSetupComplete = {
+                        scaffoldViewModel.markModelSetupDone()
+                        navController.navigate(NavScreens.CharacterList.route) {
+                            popUpTo(NavScreens.ModelSetup.route) { inclusive = true }
                         }
                     },
                 )
-            },
-        ) { innerPadding ->
-            TNavigation(
-                navController = navController,
-                innerPadding = innerPadding,
-                startDestination = NavScreens.IntroScreen.route,
-                nextDestination = nextDestination,
-                onUnlocked = {
-                    navController.navigate(NavScreens.CharacterList.route) {
-                        popUpTo(NavScreens.PasswordScreen.route) { inclusive = true }
-                    }
-                },
-                onSetupComplete = {
-                    navController.navigate(NavScreens.SetupTheme.route) {
-                        popUpTo(NavScreens.SetupScreen.route) { inclusive = true }
-                    }
-                },
-                onModelSetupComplete = {
-                    scaffoldViewModel.markModelSetupDone()
-                    navController.navigate(NavScreens.CharacterList.route) {
-                        popUpTo(NavScreens.ModelSetup.route) { inclusive = true }
-                    }
-                },
-            )
+            }
         }
     }
 
