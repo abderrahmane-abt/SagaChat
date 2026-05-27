@@ -348,6 +348,7 @@ fun TNavigation(
                 onOpenCharacter = { id -> navController.navigate(NavScreens.CharacterDetail.routeFor(id)) },
                 onCreateCharacter = { navController.navigate(NavScreens.CharacterCreate.route) },
                 onImportCharacter = { navController.navigate(NavScreens.CharacterImport.route) },
+                onMenuClick = onMenuClick,
             )
         }
 

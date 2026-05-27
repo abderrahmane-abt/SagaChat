@@ -29,6 +29,7 @@ fun CharacterListScreen(
     onOpenCharacter: (characterId: String) -> Unit,
     onCreateCharacter: () -> Unit,
     onImportCharacter: () -> Unit,
+    onMenuClick: () -> Unit,
     viewModel: CharacterViewModel = hiltViewModel(),
 ) {
     val characters by viewModel.characters.collectAsStateWithLifecycle()
@@ -38,6 +39,11 @@ fun CharacterListScreen(
             @OptIn(ExperimentalMaterial3Api::class)
             TopAppBar(
                 title = { Text("Characters", fontWeight = FontWeight.SemiBold) },
+                navigationIcon = {
+                    IconButton(onClick = onMenuClick) {
+                        Icon(TnIcons.Menu, contentDescription = "Menu")
+                    }
+                },
                 actions = {
                     IconButton(onClick = onImportCharacter) {
                         Icon(TnIcons.FileImport, contentDescription = "Import character")

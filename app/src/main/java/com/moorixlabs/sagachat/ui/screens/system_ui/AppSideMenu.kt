@@ -9,6 +9,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.moorixlabs.sagachat.model.NavScreens
@@ -20,10 +21,10 @@ data class SideTab(
     val icon: ImageVector,
 )
 
-val rpSideTabs = listOf(
+val mainSideTabs = listOf(
     SideTab(
         route = NavScreens.CharacterList.route,
-        label = "Characters",
+        label = "Home",
         icon = TnIcons.HatGlasses,
     ),
     SideTab(
@@ -42,37 +43,65 @@ val rpSideTabs = listOf(
 fun AppSideMenu(
     currentRoute: String?,
     navController: NavHostController,
+    onCloseDrawer: () -> Unit,
 ) {
-    val activeTab = getActiveTab(currentRoute) ?: return
-
-    NavigationRail(
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        header = {
+    ModalDrawerSheet(
+        modifier = Modifier.width(300.dp),
+        drawerContainerColor = MaterialTheme.colorScheme.surface,
+    ) {
+        Spacer(Modifier.height(12.dp))
+        
+        // Header
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 28.dp, vertical = 24.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
             Box(
                 modifier = Modifier
-                    .padding(vertical = 16.dp)
-                    .size(44.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = TnIcons.Sparkles,
-                    contentDescription = "SagaChat",
+                    contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(24.dp)
                 )
             }
-        },
-        modifier = Modifier.fillMaxHeight(),
-    ) {
-        Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "SagaChat",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
 
-        rpSideTabs.forEach { tab ->
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 28.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+        
+        Spacer(Modifier.height(16.dp))
+
+        val activeTab = getActiveTab(currentRoute)
+
+        mainSideTabs.forEach { tab ->
             val isSelected = tab.route == activeTab
-            NavigationRailItem(
+            NavigationDrawerItem(
+                label = { 
+                    Text(
+                        text = tab.label,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                    ) 
+                },
                 selected = isSelected,
                 onClick = {
+                    onCloseDrawer()
                     if (currentRoute != tab.route) {
                         navController.navigate(tab.route) {
                             popUpTo(NavScreens.CharacterList.route) {
@@ -83,24 +112,18 @@ fun AppSideMenu(
                         }
                     }
                 },
-                icon = {
+                icon = { 
                     Icon(
-                        imageVector = tab.icon,
-                        contentDescription = tab.label,
-                    )
+                        imageVector = tab.icon, 
+                        contentDescription = null,
+                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    ) 
                 },
-                label = {
-                    Text(
-                        text = tab.label,
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                },
-                colors = NavigationRailItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
+                colors = NavigationDrawerItemDefaults.colors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
                     selectedTextColor = MaterialTheme.colorScheme.primary,
-                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             )
         }
