@@ -275,7 +275,7 @@ private fun ProfileSection(
     icon: ImageVector,
     content: String,
 ) {
-    var expanded by remember { mutableStateOf(true) }
+    var expanded by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
@@ -291,6 +291,7 @@ private fun ProfileSection(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clickable { expanded = !expanded }
                     .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
