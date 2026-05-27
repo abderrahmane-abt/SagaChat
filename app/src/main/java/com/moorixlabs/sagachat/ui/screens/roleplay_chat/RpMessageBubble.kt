@@ -62,15 +62,19 @@ private fun RpUserBubble(message: ChatMessage) {
             color = MaterialTheme.colorScheme.primaryContainer,
             modifier = Modifier.widthIn(max = 280.dp),
         ) {
+            val actionColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+            val dialogueColor = MaterialTheme.colorScheme.onPrimaryContainer
+            val proseColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.9f)
+            
             SelectionContainer {
                 Text(
-                    text = message.content,
+                    text = buildRpAnnotatedString(message.content, actionColor, dialogueColor, proseColor),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.padding(
                         horizontal = dimens.spacingMd,
                         vertical = dimens.spacingSm,
                     ),
+                    lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.15f,
                 )
             }
         }
@@ -210,7 +214,7 @@ private fun buildRpAnnotatedString(
                 val end = text.indexOf('*', i + 1)
                 if (end != -1) {
                     pushStyle(SpanStyle(fontStyle = FontStyle.Italic, color = actionColor))
-                    append(text.substring(i, end + 1)) // includes the * markers
+                    append(text.substring(i + 1, end)) // exclude the * markers
                     pop()
                     i = end + 1
                 } else {
