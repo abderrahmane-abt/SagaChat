@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.moorixlabs.sagachat.ui.icons.TnIcons
+import com.moorixlabs.sagachat.ui.components.CharacterAvatar
 import com.moorixlabs.sagachat.util.shareJsonFile
 import com.moorixlabs.sagachat.viewmodel.CharacterViewModel
 
@@ -131,20 +132,16 @@ fun CharacterDetailScreen(
                 .padding(scaffoldPadding)
                 .verticalScroll(rememberScrollState()),
         ) {
-            // ── Hero header ──────────────────────────────────────────
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(220.dp)
-                    .background(MaterialTheme.colorScheme.secondaryContainer),
+                    .height(220.dp),
             ) {
-                Icon(
-                    imageVector = TnIcons.HatGlasses,
+                CharacterAvatar(
+                    avatarUri = character.avatarUri,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier
-                        .size(80.dp)
-                        .align(Alignment.Center),
+                    modifier = Modifier.fillMaxSize(),
+                    fallbackIcon = TnIcons.HatGlasses,
                 )
                 // Back + Delete row
                 Row(

@@ -20,6 +20,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.moorixlabs.sagachat.model.Character
 import com.moorixlabs.sagachat.ui.icons.TnIcons
+import com.moorixlabs.sagachat.ui.components.CharacterAvatar
 import com.moorixlabs.sagachat.viewmodel.CharacterViewModel
 
 @Composable
@@ -115,24 +116,16 @@ private fun CharacterCard(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Avatar placeholder
-            Box(
+            // Avatar
+            CharacterAvatar(
+                avatarUri = character.avatarUri,
+                contentDescription = character.name,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(120.dp)
-                    .background(
-                        MaterialTheme.colorScheme.secondaryContainer,
-                        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = TnIcons.HatGlasses,
-                    contentDescription = character.name,
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.size(48.dp),
-                )
-            }
+                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                fallbackIcon = TnIcons.HatGlasses,
+            )
 
             // Info
             Column(

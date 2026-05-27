@@ -1,10 +1,19 @@
 package com.moorixlabs.sagachat.ui.screens.character_create
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
+import android.content.Intent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import com.moorixlabs.sagachat.ui.icons.TnIcons
+import com.moorixlabs.sagachat.ui.components.CharacterAvatar
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +36,21 @@ fun CharacterCreateScreen(
     val isEditMode = editCharacterId != null
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
+
+    val context = LocalContext.current
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            viewModel.updateDraftAvatarUri(uri.toString())
+        }
+    }
 
     LaunchedEffect(editCharacterId) {
         if (editCharacterId != null) {
@@ -94,6 +118,63 @@ fun CharacterCreateScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Spacer(Modifier.height(4.dp))
+
+            // Avatar picker row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(CircleShape)
+                        .clickable { imagePickerLauncher.launch("image/*") },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CharacterAvatar(
+                        avatarUri = draft.avatarUri,
+                        contentDescription = "Profile Image",
+                        modifier = Modifier.fillMaxSize(),
+                        fallbackIcon = TnIcons.HatGlasses,
+                    )
+                }
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "Character Portrait",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { imagePickerLauncher.launch("image/*") },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Text("Choose Image", style = MaterialTheme.typography.labelMedium)
+                        }
+                        if (draft.avatarUri.isNotBlank()) {
+                            TextButton(
+                                onClick = { viewModel.updateDraftAvatarUri("") },
+                                modifier = Modifier.height(32.dp),
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
+                                )
+                            ) {
+                                Text("Remove", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+                }
+            }
 
             SectionLabel(text = "Identity")
 
