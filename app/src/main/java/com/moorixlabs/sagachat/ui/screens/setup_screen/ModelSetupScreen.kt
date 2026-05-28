@@ -88,7 +88,6 @@ fun ModelSetupScreen(
     var visible by remember { mutableStateOf(false) }
     var selectedPath by remember { mutableStateOf(SetupPath.Packs) }
     var selectedPack by remember { mutableStateOf<String?>(SETUP_PACKS.firstOrNull()?.id) }
-    var pendingImport by remember { mutableStateOf<Triple<Uri, String, Long>?>(null) }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -107,7 +106,7 @@ fun ModelSetupScreen(
                     if (sizeIdx >= 0) size = cursor.getLong(sizeIdx)
                 }
             }
-            pendingImport = Triple(uri, name, size)
+            onLocalImport(uri, name, size, ProviderType.GGUF)
         }
     }
 
@@ -208,17 +207,6 @@ fun ModelSetupScreen(
                 )
             }
         }
-    }
-
-    pendingImport?.let { (uri, name, size) ->
-        ModelImportTypePicker(
-            fileName = name,
-            onPick = { type ->
-                onLocalImport(uri, name, size, type)
-                pendingImport = null
-            },
-            onDismiss = { pendingImport = null },
-        )
     }
 }
 

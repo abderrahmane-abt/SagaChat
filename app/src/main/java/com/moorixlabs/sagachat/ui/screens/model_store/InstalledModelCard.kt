@@ -74,9 +74,7 @@ internal fun InstalledModelsTab(
     val context = LocalContext.current
     var selectedModel by remember { mutableStateOf<ModelInfo?>(null) }
     var showDeleteDialog by remember { mutableStateOf<ModelInfo?>(null) }
-    var pendingImport by remember {
-        mutableStateOf<Triple<android.net.Uri, String, Long>?>(null)
-    }
+
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -94,7 +92,7 @@ internal fun InstalledModelsTab(
                     if (sizeIdx >= 0) size = it.getLong(sizeIdx)
                 }
             }
-            pendingImport = Triple(uri, name, size)
+            viewModel.importLocalModel(uri, name, size, ProviderType.GGUF)
         }
     }
 
@@ -148,17 +146,6 @@ internal fun InstalledModelsTab(
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = null }) { Text("Cancel") }
             }
-        )
-    }
-
-    pendingImport?.let { (uri, name, size) ->
-        ModelImportTypePicker(
-            fileName = name,
-            onPick = { type ->
-                viewModel.importLocalModel(uri, name, size, type)
-                pendingImport = null
-            },
-            onDismiss = { pendingImport = null },
         )
     }
 }
