@@ -73,18 +73,6 @@ private val SETUP_PACKS = listOf(
         subtitle = "LFM2 350M. Around 200 MB. Works on low-RAM phones.",
         icon = TnIcons.Leaf,
     ),
-    SetupPack(
-        id = ModelStoreViewModel.PACK_CHAT_VOICE,
-        title = "Chat with voice",
-        subtitle = "LFM2 350M plus speech in and out. Around 310 MB.",
-        icon = TnIcons.Mic,
-    ),
-    SetupPack(
-        id = ModelStoreViewModel.PACK_LARGE_CHAT_VOICE,
-        title = "Larger chat with voice",
-        subtitle = "Qwen3 0.6B plus speech in and out. Around 530 MB.",
-        icon = TnIcons.Sparkles,
-    ),
 )
 
 @Composable
@@ -99,7 +87,7 @@ fun ModelSetupScreen(
     val context = LocalContext.current
     var visible by remember { mutableStateOf(false) }
     var selectedPath by remember { mutableStateOf(SetupPath.Packs) }
-    var selectedPack by remember { mutableStateOf<String?>(null) }
+    var selectedPack by remember { mutableStateOf<String?>(SETUP_PACKS.firstOrNull()?.id) }
     var pendingImport by remember { mutableStateOf<Triple<Uri, String, Long>?>(null) }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
