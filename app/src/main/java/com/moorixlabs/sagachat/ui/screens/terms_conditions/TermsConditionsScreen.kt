@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,61 +52,70 @@ fun TermsConditionsScreen(
 
     BackHandler(enabled = true) { }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(innerPadding)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = dimens.screenPadding),
-    ) {
-        Spacer(Modifier.height(dimens.spacingXl))
-
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(Motion.entrance()) + slideInVertically(Motion.entrance()) { it / 4 },
-        ) {
-            Column {
-                Icon(
-                    imageVector = TnIcons.Shield,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.height(dimens.spacingLg))
-                Text(
-                    text = "A few things to read first",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Spacer(Modifier.height(dimens.spacingXs))
-                Text(
-                    text = "Plain English. Not lawyer English.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+    Scaffold(
+        bottomBar = {
+            TermsConditionsBottomBar(
+                buttonLabel = "Accept and continue",
+                onAccept = onAccept,
+            )
         }
-
-        Spacer(Modifier.height(dimens.spacingXl))
-
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(Motion.entrance()) + slideInVertically(Motion.entrance()) { it / 3 },
+    ) { pad ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(pad)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = dimens.screenPadding),
         ) {
-            Column {
-                PARAGRAPHS.forEachIndexed { index, paragraph ->
-                    Text(
-                        text = paragraph,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
+            Spacer(Modifier.height(dimens.spacingXl))
+
+            AnimatedVisibility(
+                visible = visible,
+                enter = fadeIn(Motion.entrance()) + slideInVertically(Motion.entrance()) { it / 4 },
+            ) {
+                Column {
+                    Icon(
+                        imageVector = TnIcons.Shield,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.primary,
                     )
-                    if (index != PARAGRAPHS.lastIndex) {
-                        Spacer(Modifier.height(dimens.spacingMd))
+                    Spacer(Modifier.height(dimens.spacingLg))
+                    Text(
+                        text = "A few things to read first",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.height(dimens.spacingXs))
+                    Text(
+                        text = "Plain English. Not lawyer English.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(dimens.spacingXl))
+
+            AnimatedVisibility(
+                visible = visible,
+                enter = fadeIn(Motion.entrance()) + slideInVertically(Motion.entrance()) { it / 3 },
+            ) {
+                Column {
+                    PARAGRAPHS.forEachIndexed { index, paragraph ->
+                        Text(
+                            text = paragraph,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        if (index != PARAGRAPHS.lastIndex) {
+                            Spacer(Modifier.height(dimens.spacingMd))
+                        }
                     }
                 }
             }
-        }
 
-        Spacer(Modifier.height(dimens.spacingXl))
+            Spacer(Modifier.height(dimens.spacingXl))
+        }
     }
 }

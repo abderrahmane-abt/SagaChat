@@ -46,6 +46,7 @@ import com.moorixlabs.sagachat.viewmodel.SettingsViewModel
 import com.moorixlabs.sagachat.viewmodel.ThemingViewModel
 import com.moorixlabs.sagachat.viewmodel.SetupViewModel
 import com.moorixlabs.sagachat.viewmodel.StorageViewModel
+import com.moorixlabs.sagachat.viewmodel.ScaffoldViewModel
 import com.moorixlabs.sagachat.ui.screens.character_list.CharacterListScreen
 import com.moorixlabs.sagachat.ui.screens.character_detail.CharacterDetailScreen
 import com.moorixlabs.sagachat.ui.screens.character_create.CharacterCreateScreen
@@ -90,9 +91,20 @@ fun TNavigation(
         }
 
         composable(NavScreens.TermsConditions.route) {
+            val scaffoldViewModel: ScaffoldViewModel = hiltViewModel()
             TermsConditionsScreen(
                 innerPadding = innerPadding,
-                onAccept = {},
+                onAccept = {
+                    val cameFromOnboarding = navController.previousBackStackEntry == null
+                    scaffoldViewModel.markTermsAccepted()
+                    if (cameFromOnboarding) {
+                        navController.navigate(NavScreens.SetupScreen.route) {
+                            popUpTo(NavScreens.TermsConditions.route) { inclusive = true }
+                        }
+                    } else {
+                        navController.popBackStack()
+                    }
+                },
             )
         }
 
@@ -139,7 +151,14 @@ fun TNavigation(
         }
 
         composable(NavScreens.SetupTheme.route) {
-            SetupThemeScreen(innerPadding = innerPadding)
+            SetupThemeScreen(
+                innerPadding = innerPadding,
+                onContinue = {
+                    navController.navigate(NavScreens.ModelSetup.route) {
+                        popUpTo(NavScreens.SetupTheme.route) { inclusive = true }
+                    }
+                }
+            )
         }
 
         composable(NavScreens.ModelStore.route) {

@@ -22,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -51,6 +52,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun SetupThemeScreen(
     innerPadding: PaddingValues,
+    onContinue: () -> Unit,
     viewModel: SetupThemeViewModel = hiltViewModel(),
 ) {
     val dimens = LocalDimens.current
@@ -60,14 +62,19 @@ fun SetupThemeScreen(
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { delay(80); visible = true }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(innerPadding)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = dimens.screenPadding),
-    ) {
-        Spacer(Modifier.height(dimens.spacingXl))
+    Scaffold(
+        bottomBar = {
+            SetupThemeBottomBar(onContinue = onContinue)
+        }
+    ) { pad ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(pad)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = dimens.screenPadding),
+        ) {
+            Spacer(Modifier.height(dimens.spacingXl))
 
         AnimatedVisibility(
             visible = visible,
@@ -149,6 +156,7 @@ fun SetupThemeScreen(
         }
 
         Spacer(Modifier.height(dimens.spacingLg))
+        }
     }
 }
 
